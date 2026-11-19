@@ -110,6 +110,18 @@ export interface UsageStatsQuery {
   readonly session?: string;
   /** IANA zone for bucket boundaries; defaults to {@link defaultUsageTimeZone}. */
   readonly timeZone?: string;
+  /**
+   * Also sum the totals of this earlier window (`compare: 'previous'`, #1250 第 58 批): the caller
+   * computes it (same length, right before `since`) and may cut it short to keep the total span bounded.
+   */
+  readonly previous?: UsageStatsPreviousWindow;
+}
+
+export interface UsageStatsPreviousWindow {
+  readonly since: number;
+  readonly until: number;
+  /** The window is shorter than the current one (the total span would exceed the limit). */
+  readonly truncated?: boolean;
 }
 
 /**
@@ -117,11 +129,67 @@ export interface UsageStatsQuery {
  * legacy alias) to the service it belongs to. Traces record either the service or the account
  * depending on the call path, so without this one model splits into two rows.
  */
-export type UsageProviderResolver = (provider: string) => Readonly<{ key: string; label: string }> | undefined;
+export type UsageProviderResolver = (provider: string) => UsageResolvedService | undefined;
+
+/** What a {@link UsageProviderResolver} returns: the service's merge key and label, plus its Driver's display name when known. */
+export type UsageResolvedService = Readonly<{ key: string; label: string; driverLabel?: string }>;
+
+/** A model Profile id (`profiles:<id>`) → its readable name; `undefined` when the profile is unknown. */
+export type UsageProfileResolver = (profileId: string) => Readonly<{ label?: string }> | undefined;
+
+/** Recorded IM platform + endpoint (account) of a conversation → the account's readable name. */
+export type UsageAccountResolver = (platform: string, endpoint: string) => string | undefined;
 
 export interface UsageStatsOptions {
   readonly resolveProvider?: UsageProviderResolver;
+  readonly resolveProfile?: UsageProfileResolver;
+  readonly resolveAccount?: UsageAccountResolver;
 }
+
+/** Version of the {@link UsageStats} shape; 2 adds `byAgent`, `byPurpose`, `previous`, profile / driver / account labels. */
+export const USAGE_STATS_SCHEMA_VERSION = 2;
+
+/** `byAgent[].agent` of the main assistant (a turn with a recorded model selection but no sub-agent). */
+export const USAGE_MAIN_AGENT_KEY = '@main';
+/** `byAgent[].agent` / `byPurpose[].purpose` of model calls whose trace recorded no model selection (older traces). */
+export const USAGE_UNRECORDED_KEY = '@unrecorded';
+
+const PURPOSE_LABELS: Readonly<Record<string, string>> = {
+  chat: '对话',
+  agent: '子 Agent',
+  summary: '摘要',
+  ambient: '插话判断',
+  'ambient-judge': '插话判断',
+  perception: '媒体理解',
+  intent: '意图识别',
+  inference: '推理',
+  discovery: '发现',
+  approval: '审批',
+  authorization: '授权判断',
+  preparation: '准备',
+  [USAGE_UNRECORDED_KEY]: '未记录',
+};
+
+/** Readable label of a model purpose (`chat` → 对话); unknown purposes show as-is. */
+export function usagePurposeLabel(purpose: string): string {
+  return PURPOSE_LABELS[purpose] ?? purpose;
+}
+
+export type UsageAgentRow = UsageStatsTokens & {
+  /** Sub-agent name, {@link USAGE_MAIN_AGENT_KEY} or {@link USAGE_UNRECORDED_KEY}. */
+  readonly agent: string;
+  readonly label: string;
+  readonly kind: 'main' | 'agent' | 'unrecorded';
+  /** (Sub-)turns attributed to this Agent. */
+  readonly turns: number;
+};
+
+export type UsagePurposeRow = UsageStatsTokens & {
+  /** Model purpose (`chat`, `agent`, `summary`, …; `agent:<name>` counts as `agent`) or {@link USAGE_UNRECORDED_KEY}. */
+  readonly purpose: string;
+  readonly label: string;
+  readonly turns: number;
+};
 
 export interface UsageStatsTokens {
   readonly calls: number;
@@ -134,6 +202,8 @@ export interface UsageStatsTokens {
 }
 
 export interface UsageStats {
+  /** Shape version ({@link USAGE_STATS_SCHEMA_VERSION}); absent before 2. */
+  readonly schemaVersion: number;
   readonly range: { readonly since: number; readonly until: number; readonly bucket: UsageBucket; readonly timeZone: string };
   readonly totals: UsageStatsTokens & {
     readonly turns: number;
@@ -155,6 +225,12 @@ export interface UsageStats {
     /** `服务名 · 模型`, or just the model when the recorded provider is an opaque id. */
     readonly displayName: string;
     readonly providerLabel?: string;
+    /** Display name of the service's Driver ("Anthropic"), to tell services with the same label apart. */
+    readonly driverLabel?: string;
+    /** The model Profile every attributed call of this row ran on, when there is exactly one. */
+    readonly profileId?: string;
+    /** That Profile's readable name, when it has one. */
+    readonly profileName?: string;
     /** Recorded provider ids merged into this row (e.g. `services:…` and `accounts:…`). */
     readonly providerIds: readonly string[];
     /** Claims without a tool call answered by this model (the turn's last model call, #1270). */
@@ -167,8 +243,22 @@ export interface UsageStats {
     readonly sceneId?: string;
     /** Readable conversation label from the trace origin (`平台 · 群 名称`), when recorded. */
     readonly displayName?: string;
+    /** Recorded IM endpoint (account) of the conversation. */
+    readonly endpoint?: string;
+    /** The account's readable name, when the endpoint is still known. */
+    readonly accountLabel?: string;
     readonly turns: number;
   }>;
+  /** Sessions in range; `bySession` keeps the top {@link USAGE_STATS_SESSION_LIMIT} by input tokens. */
+  readonly sessionsTotal: number;
+  /** Sums of the sessions left out of `bySession` (all zero when none were). */
+  readonly othersTotals: UsageStatsTokens & { readonly sessions: number; readonly turns: number };
+  /** Model calls by Agent (`model_selection.agent`, from each (sub-)turn's own selection). */
+  readonly byAgent: readonly UsageAgentRow[];
+  /** Model calls by purpose (`model_selection.purpose`). */
+  readonly byPurpose: readonly UsagePurposeRow[];
+  /** Totals of the previous window, with `compare: 'previous'`. */
+  readonly previous?: UsageStatsPreviousWindow & { readonly truncated: boolean; readonly totals: UsageStats['totals'] };
   /** `byModel` keys use `${provider}/${model}` of the merged rows; `modelLabels` maps them to display names. */
   readonly series: ReadonlyArray<UsageStatsTokens & { readonly bucketStart: number; readonly byModel: Readonly<Record<string, number>> }>;
   readonly modelLabels: Readonly<Record<string, string>>;
@@ -389,7 +479,66 @@ function nearestRank(sorted: readonly number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))]!;
 }
 
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/** Agent and purpose a (sub-)turn's own `model_selection` attributes its calls to; unrecorded without one. */
+function attributionOf(node: any): { agent: string; kind: UsageAgentRow['kind']; purpose: string } {
+  const selection = node?.model_selection;
+  const purposeRaw = text(selection?.purpose);
+  if (!selection || typeof selection !== 'object' || !purposeRaw) return { agent: USAGE_UNRECORDED_KEY, kind: 'unrecorded', purpose: USAGE_UNRECORDED_KEY };
+  const agentPurpose = /^agent:(.+)$/u.exec(purposeRaw)?.[1]?.trim();
+  const agent = text(selection.agent) ?? agentPurpose;
+  return {
+    agent: agent ?? USAGE_MAIN_AGENT_KEY,
+    kind: agent ? 'agent' : 'main',
+    purpose: agentPurpose ? 'agent' : purposeRaw,
+  };
+}
+
+/** Profiles this (sub-)turn recorded it ran on: its selection, then fallbacks switched to or from. */
+function profileCandidatesOf(node: any): ReadonlyArray<{ profile: string; account: string; model: string }> {
+  const out: { profile: string; account: string; model: string }[] = [];
+  const push = (profile: unknown, account: unknown, model: unknown) => {
+    const p = text(profile); const a = text(account); const m = text(model);
+    if (p && a && m) out.push({ profile: p, account: a, model: m });
+  };
+  const selection = node?.model_selection;
+  if (selection && typeof selection === 'object') push(selection.profile_id, selection.account_id, selection.model);
+  if (Array.isArray(node?.model_fallbacks)) {
+    for (const fallback of node.model_fallbacks) {
+      if (!fallback || typeof fallback !== 'object') continue;
+      push(fallback.to_profile_id, fallback.to_account_id, fallback.to_model);
+      push(fallback.from_profile_id, fallback.from_account_id, fallback.from_model);
+    }
+  }
+  return out;
+}
+
 export async function buildUsageStats(dir: string, query: UsageStatsQuery, options: UsageStatsOptions = {}): Promise<UsageStats> {
+  const current = await aggregateUsage(dir, query, options);
+  if (!query.previous) return current;
+  const window = query.previous;
+  const prior = window.since < window.until
+    ? await aggregateUsage(dir, { since: window.since, until: window.until, bucket: query.bucket, ...(query.session ? { session: query.session } : {}), ...(query.timeZone ? { timeZone: query.timeZone } : {}) }, options)
+    : undefined;
+  const totals = prior?.totals ?? emptyTotals();
+  return { ...current, previous: { since: window.since, until: window.until, truncated: window.truncated === true, totals } };
+}
+
+function emptyTotals(): UsageStats['totals'] {
+  return {
+    turns: 0,
+    ...tokens(tally()),
+    cacheShareByCall: { p50: 0, p90: 0 },
+    inputBasis: 'reported-all-calls',
+    claimsWithoutToolCall: 0,
+    unexecutedToolNotices: 0,
+  };
+}
+
+async function aggregateUsage(dir: string, query: UsageStatsQuery, options: UsageStatsOptions): Promise<UsageStats> {
   const { since, until, bucket } = query;
   const timeZone = query.timeZone && isUsageTimeZone(query.timeZone) ? query.timeZone : defaultUsageTimeZone();
   const total = tally();
@@ -397,9 +546,11 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
   const callShares: number[] = [];
   const segments = { history: 0, fixed: 0, user: 0 };
   const breakdown = { turns: 0, other: 0, firstRequestInputTokens: 0 };
-  const models = new Map<string, Tally & { provider: string; model: string; label?: string; providerIds: Set<string> }>();
-  const resolved = new Map<string, Readonly<{ key: string; label: string }> | undefined>();
-  const sessions = new Map<string, Tally & { turns: number; displayName?: string }>();
+  const models = new Map<string, Tally & { provider: string; model: string; label?: string; driverLabel?: string; providerIds: Set<string>; profiles: Set<string>; unprofiled: number }>();
+  const resolved = new Map<string, UsageResolvedService | undefined>();
+  const sessions = new Map<string, Tally & { turns: number; displayName?: string; platform?: string; endpoint?: string }>();
+  const agents = new Map<string, Tally & { turns: number; kind: UsageAgentRow['kind'] }>();
+  const purposes = new Map<string, Tally & { turns: number }>();
   const buckets = new Map<number, Tally & { byModel: Record<string, number> }>();
   for (let t = bucketStartOf(since, bucket, timeZone); t < until; t = nextBucket(t, bucket, timeZone)) {
     buckets.set(t, { ...tally(), byModel: {} });
@@ -414,11 +565,36 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
   const resolve = (provider: string) => {
     if (!options.resolveProvider) return undefined;
     if (!resolved.has(provider)) {
-      let value: Readonly<{ key: string; label: string }> | undefined;
+      let value: UsageResolvedService | undefined;
       try { value = options.resolveProvider(provider); } catch { value = undefined; }
       resolved.set(provider, value);
     }
     return resolved.get(provider);
+  };
+  const profileLabels = new Map<string, string | undefined>();
+  const profileLabel = (id: string) => {
+    if (!options.resolveProfile) return undefined;
+    if (!profileLabels.has(id)) {
+      let label: string | undefined;
+      try { label = text(options.resolveProfile(id)?.label); } catch { label = undefined; }
+      profileLabels.set(id, label);
+    }
+    return profileLabels.get(id);
+  };
+  const isKnownProfile = (id: string) => {
+    if (!options.resolveProfile) return false;
+    try { return options.resolveProfile(id) !== undefined; } catch { return false; }
+  };
+  /** The profile a call ran on: a recorded `profiles:` provider, else the node's selection / fallback with that account and model. */
+  const profileOfCall = (recorded: string, model: string, candidates: ReadonlyArray<{ profile: string; account: string; model: string }>) => {
+    if (/^profiles:/u.test(recorded) && (isKnownProfile(recorded) || candidates.some(c => c.profile === recorded))) return recorded;
+    const service = resolve(recorded)?.key;
+    for (const candidate of candidates) {
+      if (candidate.model !== model) continue;
+      if (candidate.account === recorded || candidate.profile === recorded) return candidate.profile;
+      if (service !== undefined && resolve(candidate.account)?.key === service) return candidate.profile;
+    }
+    return undefined;
   };
 
   const cacheProbe = new PromptCacheProbe({ resolveProvider: resolve });
@@ -428,47 +604,69 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
     const session = sessions.get(trace.session_key) ?? { ...tally(), turns: 0 };
     session.turns++;
     session.displayName ??= sessionDisplayNameOf(trace);
+    if (trace.origin?.kind === 'im') {
+      session.platform ??= text(trace.origin.platform);
+      session.endpoint ??= text(trace.origin.endpoint);
+    }
     sessions.set(trace.session_key, session);
 
     // Every model call of the turn: the root's, then each sub-agent's (nested, up to MAX_SUBAGENT_DEPTH). A
     // sub-agent trace's own `model_calls` are not repeated in its parent's, so nothing counts twice;
     // its calls count toward the root turn's session. `firstPrompt` is the root's first request.
-    const calls: unknown[] = [];
+    // Each (sub-)turn's calls count toward the Agent / purpose of its own `model_selection`.
+    const nodes: any[] = [];
     const collect = (node: any, depth: number) => {
       if (!node || typeof node !== 'object' || depth > MAX_SUBAGENT_DEPTH) return;
-      if (Array.isArray(node.model_calls)) calls.push(...node.model_calls);
+      nodes.push(node);
       if (Array.isArray(node.subagents)) for (const child of node.subagents) collect(child, depth + 1);
     };
     collect(trace, 0);
-    const rootCalls = Array.isArray(trace.model_calls) ? trace.model_calls.length : 0;
     let firstPrompt: number | undefined;
-    for (const [index, raw] of calls.entries()) {
-      const call = raw as any;
-      const prompt = num(call?.prompt_tokens);
-      if (prompt === undefined) continue;
-      if (index < rootCalls) firstPrompt ??= prompt;
-      const output = num(call?.completion_tokens) ?? 0;
-      const cache = num(call?.cache_read_tokens) ?? 0;
-      const cacheWrite = num(call?.cache_write_tokens) ?? 0;
-      if (prompt > 0) callShares.push(Math.min(1, cache / prompt));
-      const recorded = typeof call?.provider === 'string' && call.provider ? call.provider : 'unknown';
-      const model = typeof call?.model === 'string' && call.model ? call.model : 'unknown';
-      const at = num(call?.started_at) ?? num(call?.at) ?? startedAt;
+    for (const [nodeIndex, node] of nodes.entries()) {
+      const attribution = attributionOf(node);
+      const agentRow = agents.get(attribution.agent) ?? { ...tally(), turns: 0, kind: attribution.kind };
+      agentRow.turns++;
+      agents.set(attribution.agent, agentRow);
+      const purposeRow = purposes.get(attribution.purpose) ?? { ...tally(), turns: 0 };
+      purposeRow.turns++;
+      purposes.set(attribution.purpose, purposeRow);
+      const candidates = profileCandidatesOf(node);
+      const calls: unknown[] = Array.isArray(node.model_calls) ? node.model_calls : [];
+      for (const raw of calls) {
+        const call = raw as any;
+        const prompt = num(call?.prompt_tokens);
+        if (prompt === undefined) continue;
+        if (nodeIndex === 0) firstPrompt ??= prompt;
+        const output = num(call?.completion_tokens) ?? 0;
+        const cache = num(call?.cache_read_tokens) ?? 0;
+        const cacheWrite = num(call?.cache_write_tokens) ?? 0;
+        if (prompt > 0) callShares.push(Math.min(1, cache / prompt));
+        const recorded = typeof call?.provider === 'string' && call.provider ? call.provider : 'unknown';
+        const model = typeof call?.model === 'string' && call.model ? call.model : 'unknown';
+        const at = num(call?.started_at) ?? num(call?.at) ?? startedAt;
 
-      for (const t of [total, session]) { t.calls++; t.input += prompt; t.output += output; t.cache += cache; t.cacheWrite += cacheWrite; }
-      // One row per (service, model): `services:` and `accounts:` ids of the same service merge.
-      const service = resolve(recorded);
-      const groupKey = service ? `${service.key}\n${model}` : isOpaqueProviderId(recorded) ? `\n${model}` : `${recorded}\n${model}`;
-      const m = models.get(groupKey) ?? { ...tally(), provider: service?.key ?? recorded, model, ...(service ? { label: service.label } : {}), providerIds: new Set<string>() };
-      m.calls++; m.input += prompt; m.output += output; m.cache += cache; m.cacheWrite += cacheWrite;
-      m.providerIds.add(recorded);
-      models.set(groupKey, m);
-      const modelKey = `${m.provider}/${m.model}`;
+        for (const t of [total, session, agentRow, purposeRow]) { t.calls++; t.input += prompt; t.output += output; t.cache += cache; t.cacheWrite += cacheWrite; }
+        // One row per (service, model): `services:` and `accounts:` ids of the same service merge.
+        const service = resolve(recorded);
+        const groupKey = service ? `${service.key}\n${model}` : isOpaqueProviderId(recorded) ? `\n${model}` : `${recorded}\n${model}`;
+        const m = models.get(groupKey) ?? {
+          ...tally(), provider: service?.key ?? recorded, model,
+          ...(service ? { label: service.label } : {}),
+          ...(service?.driverLabel ? { driverLabel: service.driverLabel } : {}),
+          providerIds: new Set<string>(), profiles: new Set<string>(), unprofiled: 0,
+        };
+        m.calls++; m.input += prompt; m.output += output; m.cache += cache; m.cacheWrite += cacheWrite;
+        m.providerIds.add(recorded);
+        const profile = profileOfCall(recorded, model, candidates);
+        if (profile) m.profiles.add(profile); else m.unprofiled++;
+        models.set(groupKey, m);
+        const modelKey = `${m.provider}/${m.model}`;
 
-      const slot = buckets.get(bucketStartOf(at, bucket, timeZone)) ?? buckets.get(bucketStartOf(startedAt, bucket, timeZone));
-      if (slot) {
-        slot.calls++; slot.input += prompt; slot.output += output; slot.cache += cache; slot.cacheWrite += cacheWrite;
-        slot.byModel[modelKey] = (slot.byModel[modelKey] ?? 0) + prompt;
+        const slot = buckets.get(bucketStartOf(at, bucket, timeZone)) ?? buckets.get(bucketStartOf(startedAt, bucket, timeZone));
+        if (slot) {
+          slot.calls++; slot.input += prompt; slot.output += output; slot.cache += cache; slot.cacheWrite += cacheWrite;
+          slot.byModel[modelKey] = (slot.byModel[modelKey] ?? 0) + prompt;
+        }
       }
     }
 
@@ -495,17 +693,37 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
 
   callShares.sort((a, b) => a - b);
   const byModel = [...models.entries()]
-    .map(([group, m]) => ({
-      provider: m.provider,
-      model: m.model,
-      displayName: usageModelDisplayName(m.provider, m.model, m.label),
-      ...(m.label ? { providerLabel: m.label } : {}),
-      providerIds: [...m.providerIds].sort(),
-      claimsWithoutToolCall: claimsByGroup.get(group) ?? 0,
-      ...tokens(m),
-    }))
+    .map(([group, m]) => {
+      // A row names its Profile only when every call that could be attributed ran on the same one.
+      const profileId = m.profiles.size === 1 ? [...m.profiles][0]! : undefined;
+      const profileName = profileId ? profileLabel(profileId) : undefined;
+      return {
+        provider: m.provider,
+        model: m.model,
+        displayName: usageModelDisplayName(m.provider, m.model, m.label),
+        ...(m.label ? { providerLabel: m.label } : {}),
+        ...(m.driverLabel ? { driverLabel: m.driverLabel } : {}),
+        ...(profileId ? { profileId } : {}),
+        ...(profileName ? { profileName } : {}),
+        providerIds: [...m.providerIds].sort(),
+        claimsWithoutToolCall: claimsByGroup.get(group) ?? 0,
+        ...tokens(m),
+      };
+    })
     .sort((a, b) => b.inputTokens - a.inputTokens);
+  const accountLabel = (platform: string | undefined, endpoint: string | undefined) => {
+    if (!options.resolveAccount || !platform || !endpoint) return undefined;
+    try { return text(options.resolveAccount(platform, endpoint)); } catch { return undefined; }
+  };
+  const rankedSessions = [...sessions.entries()].sort(([, a], [, b]) => b.input - a.input);
+  const others = { ...tally(), sessions: 0, turns: 0 };
+  for (const [, s] of rankedSessions.slice(USAGE_STATS_SESSION_LIMIT)) {
+    others.sessions++; others.turns += s.turns;
+    others.calls += s.calls; others.input += s.input; others.output += s.output; others.cache += s.cache; others.cacheWrite += s.cacheWrite;
+  }
+  const byInput = <T extends { inputTokens: number; calls: number }>(a: T, b: T) => b.inputTokens - a.inputTokens || b.calls - a.calls;
   return {
+    schemaVersion: USAGE_STATS_SCHEMA_VERSION,
     range: { since, until, bucket, timeZone },
     totals: {
       turns,
@@ -516,10 +734,30 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
       unexecutedToolNotices,
     },
     byModel,
-    bySession: [...sessions.entries()]
-      .map(([sessionKey, s]) => ({ sessionKey, ...parseSessionKey(sessionKey), ...(s.displayName ? { displayName: s.displayName } : {}), turns: s.turns, ...tokens(s) }))
-      .sort((a, b) => b.inputTokens - a.inputTokens)
-      .slice(0, USAGE_STATS_SESSION_LIMIT),
+    bySession: rankedSessions
+      .slice(0, USAGE_STATS_SESSION_LIMIT)
+      .map(([sessionKey, s]) => {
+        const label = accountLabel(s.platform ?? parseSessionKey(sessionKey).platform, s.endpoint);
+        return {
+          sessionKey, ...parseSessionKey(sessionKey),
+          ...(s.displayName ? { displayName: s.displayName } : {}),
+          ...(s.endpoint ? { endpoint: s.endpoint } : {}),
+          ...(label ? { accountLabel: label } : {}),
+          turns: s.turns, ...tokens(s),
+        };
+      }),
+    sessionsTotal: sessions.size,
+    othersTotals: { sessions: others.sessions, turns: others.turns, ...tokens(others) },
+    byAgent: [...agents.entries()]
+      .map(([agent, a]) => ({
+        agent,
+        label: agent === USAGE_MAIN_AGENT_KEY ? '主助手' : agent === USAGE_UNRECORDED_KEY ? '未记录' : agent,
+        kind: a.kind, turns: a.turns, ...tokens(a),
+      }))
+      .sort(byInput),
+    byPurpose: [...purposes.entries()]
+      .map(([purpose, p]) => ({ purpose, label: usagePurposeLabel(purpose), turns: p.turns, ...tokens(p) }))
+      .sort(byInput),
     series: [...buckets.entries()]
       .sort(([a], [b]) => a - b)
       .map(([bucketStart, b]) => ({ bucketStart, ...tokens(b), byModel: b.byModel })),

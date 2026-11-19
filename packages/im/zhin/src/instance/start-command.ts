@@ -626,6 +626,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
   const stopRuntimeFailureSync = startRuntimeFailureSync(runtimeFailureSources);
   if (agentHost) assistantStatus.bindProviderDisplay(() => agentHost.providerDisplay());
+  // `usage-stats` account labels: only each account's id, name and adapter are read (#1250 第 58 批).
+  assistantStatus.bindUsageEndpoints(() => im.endpoints.list().map(row => ({ id: row.id, name: row.name, adapter: row.adapter })));
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
     // and starts a fresh instance once this one has exited.
@@ -1008,7 +1010,22 @@ async function loadConfiguredAgentHost(options: Readonly<{
     providerDisplay: async () => {
       try {
         const graph = await inference.repository.readGraph({ rootId: inference.rootId });
-        return graph ? createProviderDisplayIndex(graph) : undefined;
+        if (!graph) return undefined;
+        // Driver display names ("Anthropic") from the loaded AI provider plugins, read once per index.
+        const driverLabels = new Map<string, string>();
+        if (snapshotReader) {
+          try {
+            const { listSnapshotAiProviders } = await import('@zhin.js/ai/provider');
+            const lease = snapshotReader.acquire();
+            try {
+              for (const { definition } of listSnapshotAiProviders(lease.value)) {
+                const label = typeof definition.label === 'string' ? definition.label.trim() : '';
+                if (label && !driverLabels.has(definition.id)) driverLabels.set(definition.id, label);
+              }
+            } finally { lease.release(); }
+          } catch { /* labels are cosmetic: the Driver id stands in */ }
+        }
+        return createProviderDisplayIndex(graph, { driverLabel: id => driverLabels.get(id) });
       } catch {
         return undefined;
       }

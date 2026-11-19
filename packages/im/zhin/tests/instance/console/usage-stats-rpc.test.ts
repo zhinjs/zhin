@@ -166,7 +166,7 @@ describe('usage model labels, input basis, time zone and session names (#1250)',
       build: async (_d, q, options) => { seen.push(q.timeZone, options.resolveProvider?.(ACC)); return { range: q } as never; },
     });
     await svc.stats({});
-    expect(seen).toEqual(['UTC', { key: SVC, label: 'AG 中转' }]);
+    expect(seen).toEqual(['UTC', { key: SVC, label: 'AG 中转', driverId: 'openai-compatible', driverLabel: 'openai-compatible' }]);
     status.bindProviderDisplay(async () => createProviderDisplayIndex(graph));
   });
 });

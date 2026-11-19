@@ -6,6 +6,15 @@ export interface ProviderServiceDisplay {
   readonly key: string;
   /** Service label, else its driver id. Never a raw `services:<uuid>`. */
   readonly label: string;
+  /** The service's Driver id, when recorded. */
+  readonly driverId?: string;
+  /** The Driver's display name ("Anthropic"), else its id. */
+  readonly driverLabel?: string;
+}
+
+export interface ProviderDisplayOptions {
+  /** Display name of a Driver by id (from the loaded AI provider plugins); `undefined` falls back to the id. */
+  readonly driverLabel?: (driverId: string) => string | undefined;
 }
 
 export interface ProviderProfileDisplay extends ProviderServiceDisplay {
@@ -32,11 +41,19 @@ function nonEmpty(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export function createProviderDisplayIndex(graph: ProviderGraph): ProviderDisplayIndex {
+export function createProviderDisplayIndex(graph: ProviderGraph, options: ProviderDisplayOptions = {}): ProviderDisplayIndex {
+  const driverName = (driverId: string): string => {
+    try { return nonEmpty(options.driverLabel?.(driverId)) ?? driverId; } catch { return driverId; }
+  };
   const service = (id: string | undefined): ProviderServiceDisplay | undefined => {
     const entry = id ? graph.services[id] : undefined;
     if (!entry) return undefined;
-    return { key: entry.id, label: nonEmpty(entry.label) ?? nonEmpty(entry.driver?.id) ?? entry.id };
+    const driverId = nonEmpty(entry.driver?.id);
+    return {
+      key: entry.id,
+      label: nonEmpty(entry.label) ?? driverId ?? entry.id,
+      ...(driverId ? { driverId, driverLabel: driverName(driverId) } : {}),
+    };
   };
   const index: ProviderDisplayIndex = {
     resolveProvider(id) {

@@ -1,10 +1,15 @@
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
-import { DAY_MS, buildUsageStats, defaultUsageTimeZone, isUsageTimeZone, type UsageBucket, type UsageProviderResolver, type UsageStats, type UsageStatsOptions } from '@zhin.js/gateway/usage';
+import {
+  DAY_MS, buildUsageStats, defaultUsageTimeZone, isUsageTimeZone,
+  type UsageAccountResolver, type UsageBucket, type UsageProfileResolver, type UsageProviderResolver, type UsageStats, type UsageStatsOptions, type UsageStatsPreviousWindow,
+} from '@zhin.js/gateway/usage';
 
 /**
  * `plugin.root.usage-stats`（`control:read`）：只读的 token 用量统计，给 Console 图表用。
  * 数据来自 `data/agent-traces/*.jsonl`（与 `zhin usage report` 共用同一套聚合）。
- * 只返回计数、会话键与 provider / model 名，不返回任何消息文本。
+ * 只返回计数、会话键与 provider / model / Profile / Agent / 账号的显示名，不返回任何消息文本。
+ * `compare: 'previous'` 另算紧挨在前、等长的上一周期的 totals（`previous`）；两段合计跨度
+ * 超过 31 天时上一周期从 `until - 31 天` 起截断，并标 `previous.truncated: true`。
  */
 
 export const USAGE_STATS_PERMISSION = 'control:read';
@@ -16,6 +21,9 @@ const MAX_SESSION_PATTERN = 256;
 
 /** Trace directory of the current generation; `undefined` means no Agent is bound. */
 export type UsageTraceDirSource = () => string | undefined;
+
+/** IM accounts of the current generation (only ids, names and adapters are read); `undefined` when unavailable. */
+export type UsageEndpointSource = () => ReadonlyArray<Readonly<{ id: string; name: string; adapter: string }>> | undefined;
 
 function invalid(message: string): never {
   throw new PluginConsoleRpcError('invalid_input', message);
@@ -35,6 +43,17 @@ export interface ResolvedUsageStatsQuery {
   readonly session?: string;
   /** Request `timeZone` (IANA) or the instance zone (`TZ`, else the system zone). */
   readonly timeZone?: string;
+  /** `compare: 'previous'`: the window right before `since`, as long as the current one unless cut short. */
+  readonly previous?: UsageStatsPreviousWindow;
+}
+
+/** The previous window of the same length, cut so that previous + current stay within {@link USAGE_STATS_MAX_RANGE_MS}. */
+export function previousUsageWindow(since: number, until: number, maxSpanMs = USAGE_STATS_MAX_RANGE_MS): UsageStatsPreviousWindow {
+  const length = until - since;
+  const wanted = since - length;
+  const earliest = until - maxSpanMs;
+  const start = Math.max(0, wanted, earliest);
+  return { since: start, until: since, truncated: start > wanted };
 }
 
 export function resolveUsageStatsQuery(input: PluginConsoleRpcInput, now: number, instanceTimeZone?: string): ResolvedUsageStatsQuery {
@@ -52,13 +71,20 @@ export function resolveUsageStatsQuery(input: PluginConsoleRpcInput, now: number
   const rawZone = input.timeZone;
   if (rawZone !== undefined && rawZone !== null && rawZone !== '' && !isUsageTimeZone(rawZone)) invalid('timeZone 必须是 IANA 时区名，如 Asia/Shanghai');
   const timeZone = typeof rawZone === 'string' && rawZone ? rawZone : instanceTimeZone;
-  return { since, until, bucket, ...(typeof session === 'string' && session ? { session } : {}), ...(timeZone ? { timeZone } : {}) };
+  const compare = input.compare;
+  if (compare !== undefined && compare !== null && compare !== '' && compare !== 'previous') invalid("compare 只能是 'previous'");
+  return {
+    since, until, bucket,
+    ...(typeof session === 'string' && session ? { session } : {}),
+    ...(timeZone ? { timeZone } : {}),
+    ...(compare === 'previous' ? { previous: previousUsageWindow(since, until) } : {}),
+  };
 }
 
 /** Normalised cache key from the caller's own fields, so default (`until = now`) requests share an entry. */
 function cacheKey(input: PluginConsoleRpcInput): string {
   const pick = (key: string) => (input[key] === null ? undefined : input[key]);
-  return JSON.stringify([pick('since'), pick('until'), pick('bucket'), pick('session') || undefined, pick('timeZone') || undefined]);
+  return JSON.stringify([pick('since'), pick('until'), pick('bucket'), pick('session') || undefined, pick('timeZone') || undefined, pick('compare') || undefined]);
 }
 
 export interface UsageStatsServiceOptions {
@@ -66,6 +92,10 @@ export interface UsageStatsServiceOptions {
   readonly now?: () => number;
   /** Maps recorded provider ids to their service (`服务名 · 模型`, merged rows); read per uncached request. */
   readonly providerResolver?: () => Promise<UsageProviderResolver | undefined>;
+  /** Maps model Profile ids to their readable names (`byModel[].profileName`); read per uncached request. */
+  readonly profileResolver?: () => Promise<UsageProfileResolver | undefined>;
+  /** Maps recorded platform + endpoint to the account's readable name (`bySession[].accountLabel`). */
+  readonly accountResolver?: () => UsageAccountResolver | undefined;
   /** Instance time zone for buckets when the request names none. */
   readonly timeZone?: () => string;
   /** Test seam. */
@@ -95,7 +125,15 @@ export class UsageStatsService {
     const value = (async () => {
       let resolveProvider: UsageProviderResolver | undefined;
       try { resolveProvider = await this.#options.providerResolver?.(); } catch { resolveProvider = undefined; }
-      return (this.#options.build ?? buildUsageStats)(dir, query, resolveProvider ? { resolveProvider } : {});
+      let resolveProfile: UsageProfileResolver | undefined;
+      try { resolveProfile = await this.#options.profileResolver?.(); } catch { resolveProfile = undefined; }
+      let resolveAccount: UsageAccountResolver | undefined;
+      try { resolveAccount = this.#options.accountResolver?.(); } catch { resolveAccount = undefined; }
+      return (this.#options.build ?? buildUsageStats)(dir, query, {
+        ...(resolveProvider ? { resolveProvider } : {}),
+        ...(resolveProfile ? { resolveProfile } : {}),
+        ...(resolveAccount ? { resolveAccount } : {}),
+      });
     })();
     this.#cache.set(key, { at: now, value });
     while (this.#cache.size > USAGE_STATS_CACHE_MAX_ENTRIES) this.#cache.delete(this.#cache.keys().next().value!);
