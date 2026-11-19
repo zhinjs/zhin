@@ -74,18 +74,24 @@ parentPort.on('message', async (request) => {
 `;
 
 interface PendingRequest {
+  /** The worker the request was posted to; only that worker's exit may answer it in-process. */
+  readonly worker: Worker;
   readonly request: WorkerRequest;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: unknown) => void;
 }
 
 let worker: Worker | undefined;
+/** Whether {@link worker} currently keeps the event loop alive (it does while it owes answers). */
+let workerReferenced = false;
 let workerUnavailable = false;
+let moduleUrlOverride: string | undefined;
 let idleTimer: ReturnType<typeof setTimeout> | undefined;
 let nextId = 1;
 const pending = new Map<number, PendingRequest>();
 
 function staticMetadataModuleUrl(): string {
+  if (moduleUrlOverride !== undefined) return moduleUrlOverride;
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
   return new URL(`./static-metadata${extension}`, import.meta.url).href;
 }
@@ -118,13 +124,29 @@ function stopWorker(): void {
   idleTimer = undefined;
   const current = worker;
   worker = undefined;
+  workerReferenced = false;
   if (current) void current.terminate().catch(() => undefined);
 }
 
-/** The worker died (crash, resource limits): answer what it still owed in-process. */
-function failPending(current: Worker): void {
-  if (worker === current) worker = undefined;
+function hasPendingFor(owner: Worker): boolean {
+  for (const entry of pending.values()) if (entry.worker === owner) return true;
+  return false;
+}
+
+/**
+ * `owner` exited or failed (crash, resource limits, or a terminate after {@link stopWorker}):
+ * answer in-process what it still owed. Requests posted to another (newer) worker are not
+ * touched — that worker answers them itself.
+ */
+function failPending(owner: Worker): void {
+  if (worker === owner) {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = undefined;
+    worker = undefined;
+    workerReferenced = false;
+  }
   for (const [id, entry] of pending) {
+    if (entry.worker !== owner) continue;
     pending.delete(id);
     try {
       entry.resolve(readInProcess(entry.request.kind, entry.request.source, entry.request.fileName));
@@ -161,9 +183,12 @@ function startWorker(): Worker {
   });
   created.on('message', (response: WorkerResponse) => {
     const entry = pending.get(response.id);
-    if (!entry) return;
-    pending.delete(response.id);
-    settle(entry, response);
+    if (entry?.worker === created) {
+      pending.delete(response.id);
+      settle(entry, response);
+    }
+    // Even when the answer was already given elsewhere, this worker may now be idle: it must not
+    // stay referenced (and keep the process alive) or outlive its idle timeout.
     scheduleIdle(created);
   });
   created.on('error', () => failPending(created));
@@ -172,13 +197,14 @@ function startWorker(): Worker {
 }
 
 function scheduleIdle(current: Worker): void {
-  if (worker !== current || pending.size > 0) return;
+  if (worker !== current || hasPendingFor(current)) return;
   // An idle worker must not keep the process alive; a busy one must (a CLI build awaits it).
   current.unref();
+  workerReferenced = false;
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     idleTimer = undefined;
-    if (worker === current && pending.size === 0) stopWorker();
+    if (worker === current && !hasPendingFor(current)) stopWorker();
   }, WORKER_IDLE_MS);
   idleTimer.unref?.();
 }
@@ -202,9 +228,11 @@ export async function readClientMetadata(kind: ClientMetadataKind, source: strin
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = undefined;
   current.ref();
+  workerReferenced = true;
+  const owner = current;
   const request: WorkerRequest = { id: nextId++, kind, source, fileName };
   return new Promise<unknown>((resolve, reject) => {
-    pending.set(request.id, { request, resolve, reject });
+    pending.set(request.id, { worker: owner, request, resolve, reject });
     current.postMessage(request);
   });
 }
@@ -217,4 +245,19 @@ export function stopClientMetadataWorker(): void {
 /** Whether a metadata worker is currently running. Internal; for tests. */
 export function isClientMetadataWorkerRunning(): boolean {
   return worker !== undefined;
+}
+
+/** Whether the running metadata worker keeps the process alive. Internal; for tests. */
+export function isClientMetadataWorkerReferenced(): boolean {
+  return worker !== undefined && workerReferenced;
+}
+
+/**
+ * Resets the worker state and optionally points the worker at another `static-metadata` module
+ * URL (e.g. one that fails to load). Internal; for tests.
+ */
+export function resetClientMetadataWorkerForTests(options: { readonly moduleUrl?: string } = {}): void {
+  stopWorker();
+  workerUnavailable = false;
+  moduleUrlOverride = options.moduleUrl;
 }

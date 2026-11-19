@@ -11,7 +11,18 @@ import { INSTANCE_CHILD_ENV } from '@zhin.js/host-http/bridge';
 
 const args = process.argv.slice(2);
 
-if (process.env[INSTANCE_CHILD_ENV] && args[0] === 'runtime' && args[1] === 'start') {
+/**
+ * Options the instance launcher does not parse itself: help and the program-wide logging flags
+ * are handled by the full command tree, so such invocations take the `program.js` path.
+ */
+const PROGRAM_OPTIONS = new Set(['--help', '-h', '--verbose', '--debug']);
+
+if (
+  process.env[INSTANCE_CHILD_ENV]
+  && args[0] === 'runtime'
+  && args[1] === 'start'
+  && !args.slice(2).some((arg) => PROGRAM_OPTIONS.has(arg))
+) {
   const { runProjectInstance } = await import('./commands/runtime-instance.js');
   try {
     await runProjectInstance(args.slice(2));

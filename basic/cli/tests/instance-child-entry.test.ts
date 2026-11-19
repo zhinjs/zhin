@@ -32,7 +32,14 @@ async function runCli(args: readonly string[], env: Record<string, string>) {
   }
 }
 
-describe.runIf(existsSync(cliPath))('supervised instance child entry', () => {
+const built = existsSync(cliPath);
+
+// These tests run the built executable (lib/cli.js): run `pnpm --filter @zhin.js/cli build` first.
+describe.skipIf(!built)(
+  built
+    ? 'supervised instance child entry'
+    : 'supervised instance child entry (skipped: basic/cli/lib/cli.js missing, run `pnpm --filter @zhin.js/cli build` first)',
+  () => {
   it('starts the instance without loading the CLI command tree', async () => {
     const result = await runCli(['runtime', 'start', '--standalone'], { ZHIN_RUNTIME_CHILD: '1' });
     // No project here: the instance cannot be resolved, reported at the CLI boundary as before.
@@ -48,5 +55,21 @@ describe.runIf(existsSync(cliPath))('supervised instance child entry', () => {
     expect(result.code).toBe(0);
     expect(result.loaded).toContain('program.js');
     expect(result.loaded).toContain('commands/runtime.js');
+  });
+
+  it.each([['--help'], ['-h']])('answers `runtime start %s` from the command tree in the instance child', async (flag) => {
+    const result = await runCli(['runtime', 'start', flag], { ZHIN_RUNTIME_CHILD: '1' });
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toMatch(/Unknown option/u);
+    expect(result.loaded).toContain('program.js');
+    expect(result.loaded).toContain('commands/runtime.js');
+  });
+
+  it.each([['--verbose'], ['--debug']])('accepts the program-wide %s flag in the instance child', async (flag) => {
+    const result = await runCli(['runtime', 'start', '--standalone', flag], { ZHIN_RUNTIME_CHILD: '1' });
+    // No project here either: the start fails, but on the missing instance, not on the flag.
+    expect(result.code).toBe(1);
+    expect(result.stderr).not.toMatch(/Unknown option/u);
+    expect(result.loaded).toContain('program.js');
   });
 });
