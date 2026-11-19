@@ -241,7 +241,6 @@ outline: [2, 3]
 | `ai.agent.persona` | string | 否 | — | — |
 | `ai.agent.maxIterations` | number \| string | 否 | — | — |
 | `ai.agent.timeout` | number \| string | 否 | — | — |
-| `ai.agent.preExecTimeout` | number \| string | 否 | — | — |
 | `ai.agent.maxTools` | number \| string | 否 | — | — |
 | `ai.agent.contextTailMessageLimit` | number \| string | 否 | — | — |
 | `ai.agent.rateLimit` | object | 否 | — | — |

@@ -13,7 +13,7 @@ export interface LlmTool {
    * converted to JSON Schema by the AI SDK.
    */
   inputJsonSchema?: Record<string, unknown>;
-  /** IM layer: run before agentLoop without model invocation */
+  /** @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); tools run only when the model calls them. */
   preExecutable?: boolean;
   /** Anthropic advanced tool use: defer schema from context until referenced */
   deferLoading?: boolean;

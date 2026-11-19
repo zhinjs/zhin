@@ -241,7 +241,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.persona` | string | no | — | — |
 | `ai.agent.maxIterations` | number \| string | no | — | — |
 | `ai.agent.timeout` | number \| string | no | — | — |
-| `ai.agent.preExecTimeout` | number \| string | no | — | — |
 | `ai.agent.maxTools` | number \| string | no | — | — |
 | `ai.agent.contextTailMessageLimit` | number \| string | no | — | — |
 | `ai.agent.rateLimit` | object | no | — | — |

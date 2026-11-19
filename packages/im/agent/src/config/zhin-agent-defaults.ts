@@ -14,7 +14,6 @@ export const DEFAULT_CONFIG = {
   persona: 'You are Zhin, a member of this chat running on Zhin.js. Talk like the people here.',
   maxIterations: 15,
   timeout: 120_000,
-  preExecTimeout: 15_000,
   maxTools: 12,
   contextTailMessageLimit: DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT,
   rateLimit: {},
