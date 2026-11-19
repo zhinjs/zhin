@@ -21,7 +21,7 @@ import {
 import { sessionEventActions, sessionEventQueries, type SessionEventsSource } from './session-events-rpc.js';
 import { groupRuleActions, groupRuleQueries, type GroupRulesSource } from './group-rules-rpc.js';
 
-import { UsageStatsService, usageStatsQueries, type UsageTraceDirSource } from './usage-stats-rpc.js';
+import { UsageStatsService, usageStatsQueries, type UsageEndpointSource, type UsageTraceDirSource } from './usage-stats-rpc.js';
 import type { ProviderDisplayIndex } from '../inference/provider-display.js';
 
 /**
@@ -255,12 +255,33 @@ export class AssistantStatus {
   #readGroupRules: GroupRulesSource = () => undefined;
   #readUsageTraceDir: UsageTraceDirSource = () => undefined;
   #readProviderDisplay: () => Promise<ProviderDisplayIndex | undefined> = async () => undefined;
+  #readUsageEndpoints: UsageEndpointSource = () => undefined;
   readonly #usageStats = new UsageStatsService({
     dir: () => this.#readUsageTraceDir(),
     now: () => this.#now(),
     providerResolver: async () => {
       const display = await this.#readProviderDisplay();
       return display ? (provider: string) => display.resolveProvider(provider) : undefined;
+    },
+    profileResolver: async () => {
+      const display = await this.#readProviderDisplay();
+      return display ? (profileId: string) => {
+        const profile = display.profile(profileId);
+        return profile ? { ...(profile.profileLabel ? { label: profile.profileLabel } : {}) } : undefined;
+      } : undefined;
+    },
+    accountResolver: () => {
+      const endpoints = this.#readUsageEndpoints();
+      if (!endpoints) return undefined;
+      return (platform: string, endpoint: string) => {
+        // Same platform first (an id match beats a name match); across platforms only when the
+        // id / name is unique among all accounts, so same-named accounts on two platforms never mix.
+        const samePlatform = endpoints.filter(row => row.adapter === platform);
+        const found = samePlatform.find(row => row.id === endpoint) ?? samePlatform.find(row => row.name === endpoint);
+        if (found) return found.name;
+        const anywhere = endpoints.filter(row => row.id === endpoint || row.name === endpoint);
+        return anywhere.length === 1 ? anywhere[0]!.name : undefined;
+      };
     },
   });
 
@@ -347,6 +368,14 @@ export class AssistantStatus {
   bindProviderDisplay(read: () => Promise<ProviderDisplayIndex | undefined>): void {
     this.#usageStats.dispose();
     this.#readProviderDisplay = read;
+  }
+
+  /** IM accounts (`id` / `name` / `adapter`) for `usage-stats` account labels (#1250 第 58 批); binding drops the result cache. */
+  bindUsageEndpoints(read: UsageEndpointSource): void {
+    this.#usageStats.dispose();
+    this.#readUsageEndpoints = () => {
+      try { return read(); } catch { return undefined; }
+    };
   }
 
   /** The current generation's trace archive dir for `usage-stats`; binding (or unbinding) drops the result cache. */
