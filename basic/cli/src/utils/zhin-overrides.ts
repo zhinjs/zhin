@@ -8,7 +8,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isMap, isScalar, parseDocument } from 'yaml';
+import { isAlias, isMap, isScalar, parseDocument, Scalar, visit } from 'yaml';
 
 export type ZhinOverrideFile = 'package.json' | 'pnpm-workspace.yaml';
 
@@ -118,6 +118,8 @@ interface OverrideValues {
   readonly values: Record<string, unknown>;
   /** 1-based line of each key, when known. */
   readonly lines: Record<string, number>;
+  /** Keys whose YAML form the text edits cannot release and put back safely, and why. */
+  readonly unsafeForms?: Record<string, string>;
 }
 
 function packageJsonOverrides(text: string | undefined): OverrideValues | undefined {
@@ -140,15 +142,28 @@ function yamlOverrides(text: string | undefined): OverrideValues | undefined {
   if (doc.errors.length) return undefined;
   const node = doc.get('overrides', true);
   if (!isMap(node)) return undefined;
+  // Anchors some alias refers to: cutting the anchored entry out would leave that alias dangling.
+  const referenced = new Set<string>();
+  visit(doc, { Alias(_, alias) { referenced.add(alias.source); } });
   const values: Record<string, unknown> = {};
   const lines: Record<string, number> = {};
+  const unsafeForms: Record<string, string> = {};
   for (const item of node.items) {
     const key = isScalar(item.key) ? String(item.key.value) : String(item.key);
     values[key] = isScalar(item.value) ? item.value.value : item.value === null ? null : (item.value as { toJSON?: () => unknown }).toJSON?.();
     const offset = isScalar(item.key) ? item.key.range?.[0] : undefined;
     if (offset !== undefined) lines[key] = text.slice(0, offset).split('\n').length;
+    // Only one-line plain or quoted scalars are released and put back as text (#1250 第 56 批).
+    if (isAlias(item.value)) {
+      values[key] = `*${item.value.source}`;
+      unsafeForms[key] = `值是 YAML 别名（*${item.value.source}），无法自动同步`;
+    } else if (isScalar(item.value) && (item.value.type === Scalar.BLOCK_FOLDED || item.value.type === Scalar.BLOCK_LITERAL)) {
+      unsafeForms[key] = '值是 YAML 块标量（> / |），无法自动同步';
+    } else if (isScalar(item.value) && item.value.anchor && referenced.has(item.value.anchor)) {
+      unsafeForms[key] = `值带锚点（&${item.value.anchor}）且被别处引用，无法自动同步`;
+    }
   }
-  return { values, lines };
+  return { values, lines, unsafeForms };
 }
 
 /** The Zhin entries of the project's pnpm overrides (both files), classified. */
@@ -163,6 +178,12 @@ export function readZhinOverrides(root: string): ZhinOverridePlan {
     for (const [key, value] of Object.entries(overrides.values)) {
       const classified = classifyZhinOverride(key, value);
       if (classified.kind === 'ignore') continue;
+      const unsafe = overrides.unsafeForms?.[key];
+      if (unsafe) {
+        const line = overrides.lines[key];
+        entries.push({ file, key, value, ...(line ? { line } : {}), class: { kind: 'manual', name: classified.name, reason: unsafe } });
+        continue;
+      }
       const line = overrides.lines[key];
       entries.push({ file, key, value, ...(line ? { line } : {}), class: classified });
     }
