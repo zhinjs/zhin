@@ -197,6 +197,9 @@ describe('TurnToolRuntime hard gate', () => {
     await expect(first.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
     const [card] = queue.list({ status: 'pending' });
     expect(card).toMatchObject({ toolName: 'group_kick', category: 'member', args: { user_id: 1 } });
+    // #1250 b63: the card names the chat the request came from, in the trace session summary's shape.
+    expect(card!.turnOrigin).toEqual({ kind: 'im', platform: 'icqq', endpoint: '10001', scope: 'group', sceneId: '42' });
+    expect(card!.turnOriginLabel).toEqual({ platform: 'icqq', scopeKind: 'group', sceneLabel: '42', displayName: 'icqq · 群聊 · 42' });
     expect(audit.codes()).toEqual([
       'tool_approval:defer:tool_approval_requested',
       'tool_hard_gate:deny:tool_dangerous_no_approval',

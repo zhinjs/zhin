@@ -659,7 +659,7 @@ zhin trace <engagementId>         # a specific collaboration; an id prefix is en
 | Option | Purpose |
 | --- | --- |
 | `-l, --list` | One line per turn: time, end status, turn id, session, tool count, tokens. The session is shown by the same readable name as `zhin usage report` plus a short key (e.g. `sandbox · 私聊 Developer（personal-session:ab12cd34）`), or the short key when no origin was recorded; `--json` keeps the full `session_key` and adds `session_display_name` |
-| `--sessions` | One line per session: turn count, last time and status, total tokens |
+| `--sessions` | One line per session: the chat's name (`platform · 私聊/群聊 · name` plus the short key, e.g. `sandbox · 私聊 · Developer（personal-session:ab12cd34）`), turn count, last time and status, total tokens; when a session's turns came from several chats, each chat (up to 10) is listed indented below it. Older traces without a recorded origin show the full session key; `--json` prints the summary's `origin`, `platform`, `scope_kind`, `scene_label`, `display_name` and `conversations` fields (see below) |
 | `--engagements` | Read multi-Agent collaboration records instead (the `engagement_events` database table; requires SQLite, MySQL, or PostgreSQL): with `--list`, list recent collaborations; otherwise show the participants, mail hops, Blackboard, and budget of the latest or the given collaboration. See [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | Only this session (sessionKey); output switches to the list format |
 | `--since <time>` / `--until <time>` | Time range (`--until` exclusive): `30m`, `2h`, `7d` (how long ago), an ISO date/time, or epoch ms |
@@ -689,6 +689,14 @@ export default TraceArchivePage;
 ```
 
 Behind the page are the read-only endpoints `GET /api/agent/trace-archive/sessions`, `/turns?sessionKey=&since=&until=&limit=`, and `/turn?turnId=`. They require `agent.view`; an account or API token without it gets 403.
+
+Besides `session_key`, `turns`, `first_started_at`, `last_started_at`, `last_status` and `total_tokens`, a session summary (each item of `/sessions`, and the output of `zhin trace --sessions --json`) carries, since #1250 (all optional; absent for older traces without a recorded origin):
+
+- `origin`: the origin of the latest turn that recorded one, in the same shape as a turn's `origin` (for `kind: 'im'`: `platform`, `endpoint`, `scope`, `sceneId`, `conversation`, …, which may hold raw user ids; the same information `/turns` returns, under the same `agent.view` permission).
+- `platform`, `scope_kind`, `scene_label`, `display_name`: the parts of a readable name. `platform` is the IM platform; `scope_kind` is `private` / `group` / `channel`, or `schedule` / `http` / `a2a` / `mcp` / `internal` for other origins; `scene_label` is the group / channel name or the private peer's display name, else the raw conversation id; for a scheduled job's session it is the job's `label` while the instance still knows the job, else the job id; `display_name` is a pre-built Chinese label such as `sandbox · 私聊 · Developer` or `定时任务 · 每日早报`. A Console should build the label from `scope_kind` + `scene_label` in its own language; account names are matched by `origin.platform` / `origin.endpoint`.
+- `conversations`: only when the session's turns came from more than one chat — each chat as `{ origin, turns, last_started_at }` plus the same `platform` / `scope_kind` / `scene_label` / `display_name`, most recent first, at most 10; `conversations_total` gives the number of chats when there were more.
+
+Group names are recorded in traces from this release on (`origin.conversation.name`, at most 128 characters); older traces can only show the group id.
 
 **Eval integration.** A failing case in `pnpm eval:agent` writes its turn trace to `ZHIN_EVAL_TRACE_DIR` (by default `zhin-eval-traces` under the system temp directory), and the report prints one `↪ zhin trace <turnId> --dir …` line per turn that you can copy and run.
 

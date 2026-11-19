@@ -1,7 +1,7 @@
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
 import {
   DAY_MS, buildUsageStats, defaultUsageTimeZone, isUsageTimeZone,
-  type UsageAccountResolver, type UsageBucket, type UsageProfileResolver, type UsageProviderResolver, type UsageStats, type UsageStatsOptions, type UsageStatsPreviousWindow,
+  type UsageAccountResolver, type UsageBucket, type UsageProfileResolver, type UsageProviderResolver, type UsageScheduleJobResolver, type UsageStats, type UsageStatsOptions, type UsageStatsPreviousWindow,
 } from '@zhin.js/gateway/usage';
 
 /**
@@ -105,6 +105,8 @@ export interface UsageStatsServiceOptions {
   readonly profileResolver?: () => Promise<UsageProfileResolver | undefined>;
   /** Maps recorded platform + endpoint to the account's readable name (`bySession[].accountLabel`). */
   readonly accountResolver?: () => UsageAccountResolver | undefined;
+  /** Maps schedule job ids to their labels (`bySession[].sceneLabel` of `schedule:<id>` sessions); read per uncached request. */
+  readonly scheduleJobResolver?: () => Promise<UsageScheduleJobResolver | undefined>;
   /** Instance time zone for buckets when the request names none. */
   readonly timeZone?: () => string;
   /** Test seam. */
@@ -138,10 +140,13 @@ export class UsageStatsService {
       try { resolveProfile = await this.#options.profileResolver?.(); } catch { resolveProfile = undefined; }
       let resolveAccount: UsageAccountResolver | undefined;
       try { resolveAccount = this.#options.accountResolver?.(); } catch { resolveAccount = undefined; }
+      let resolveScheduleJob: UsageScheduleJobResolver | undefined;
+      try { resolveScheduleJob = await this.#options.scheduleJobResolver?.(); } catch { resolveScheduleJob = undefined; }
       return (this.#options.build ?? buildUsageStats)(dir, query, {
         ...(resolveProvider ? { resolveProvider } : {}),
         ...(resolveProfile ? { resolveProfile } : {}),
         ...(resolveAccount ? { resolveAccount } : {}),
+        ...(resolveScheduleJob ? { resolveScheduleJob } : {}),
       });
     })();
     this.#cache.set(key, { at: now, value });

@@ -41,6 +41,7 @@ import {
 } from './tool-approval-queue.js';
 import { opsCooldownTarget, type OpsCooldownView } from './ops-cooldown.js';
 import { hostWriteImpact, type HostProtectedPaths } from './host-config-paths.js';
+import type { ToolInvocationOrigin } from '@zhin.js/tool';
 
 export type ToolRisk = 'dangerous' | 'safe';
 /**
@@ -350,6 +351,9 @@ export interface ToolHardGateContext {
   readonly queue?: ToolApprovalQueue;
   /** 触发会话的原生定位；写进审批卡片，供 IM 审批通道选择 Endpoint、拒绝业务会话内结算。 */
   readonly origin?: ToolApprovalOrigin;
+  /** 发起回合的来源（任意种类）与发起人显示名；写进审批卡片的 `turnOrigin` / 可读名（#1250 b63）。 */
+  readonly turnOrigin?: ToolInvocationOrigin;
+  readonly requesterName?: string;
   /** 控制面；未接时不做控制面判定（与入站 / 出站闸一致）。每次判定现读，回合中途开关变化也生效。 */
   readonly controlPlane?: ToolHardGateControlSource;
   /**
@@ -524,6 +528,9 @@ export class ToolHardGate {
         args: input,
         ttlMs: this.#settings.approvalTimeoutMs,
         ...(this.#context.origin ? { origin: this.#context.origin } : {}),
+        ...(this.#context.turnOrigin ? { turnOrigin: this.#context.turnOrigin } : {}),
+        // The turn initiator's name only: a merged turn may act for another sender (`options.requesterId`).
+        ...(this.#context.requesterName && requesterId === this.#context.requesterId ? { requesterName: this.#context.requesterName } : {}),
       });
     } catch (error) {
       if (!(error instanceof ToolApprovalQueueClosedError)) throw error;

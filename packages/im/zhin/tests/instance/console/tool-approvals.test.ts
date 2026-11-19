@@ -88,6 +88,23 @@ it('lets ops:approve or the older tool_approvals:resolve settle cards (ADR 0037 
     .toMatchObject({ status: 200 });
 });
 
+it('cards carry the asking turn\'s origin and readable label (#1250 b63)', () => {
+  const queue = new ToolApprovalQueue();
+  const approvals = new HostToolApprovals(queue);
+  queue.enqueue({
+    toolName: 'group_kick', category: 'member', sessionKey: 'personal-session:v1:abcdef0123456789', requesterId: 'u1', turnId: 't1', args: {},
+    turnOrigin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'u1' }, requesterName: 'Developer',
+  });
+  queue.enqueue({ toolName: 'group_kick', category: 'member', sessionKey: 'old', requesterId: null, turnId: 't2', args: { a: 1 } });
+  const [withOrigin, without] = [...approvals.snapshot().pending].sort((a, b) => a.sessionKey.localeCompare(b.sessionKey)).reverse();
+  expect(withOrigin).toMatchObject({
+    origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
+    platform: 'sandbox', scopeKind: 'private', sceneLabel: 'Developer', displayName: 'sandbox · 私聊 · Developer',
+  });
+  for (const field of ['origin', 'platform', 'scopeKind', 'sceneLabel', 'displayName']) expect(without).not.toHaveProperty(field);
+  queue.dispose();
+});
+
 it('rejects duplicate Host Console RPC method names', () => {
   const approvals = new HostToolApprovals();
   expect(() => composeHostConsoleRpc(approvals.consoleRpc, approvals.consoleRpc)).toThrow(/Duplicate/);

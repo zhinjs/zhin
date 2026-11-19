@@ -5,7 +5,7 @@
  */
 import { Command } from 'commander';
 import { formatDateTime } from '@zhin.js/plugin-runtime';
-import { sessionDisplayNameOf, sessionLabelOf } from '@zhin.js/gateway/usage';
+import { sessionDisplayNameOf, sessionLabelOf, sessionPartsOf, shortSessionKey } from '@zhin.js/gateway/usage';
 import { importProjectInstanceCli, type InstanceCliModule } from '../utils/project-instance.js';
 
 interface TraceCommandOptions {
@@ -42,6 +42,58 @@ export function parseTraceTime(value: string | undefined, now = Date.now()): num
 function withSessionDisplayName(trace: unknown): unknown {
   const name = sessionDisplayNameOf(trace);
   return name && trace && typeof trace === 'object' ? { ...trace, session_display_name: name } : trace;
+}
+
+/** Readable-name fields of a session summary / chat (`@zhin.js/agent/trace` `TurnTraceSessionLabelFields`). */
+interface TraceSessionLabel {
+  readonly origin?: unknown;
+  readonly platform?: string;
+  readonly scope_kind?: string;
+  readonly scene_label?: string;
+  readonly display_name?: string;
+}
+
+/** One `zhin trace --sessions` row: the summary of `TurnTraceArchive.sessions()`; `origin`, the name fields and `conversations` are newer (#1250 b63). */
+export interface TraceSessionRow extends TraceSessionLabel {
+  readonly session_key: string;
+  readonly turns: number;
+  readonly last_started_at: number;
+  readonly last_status: string;
+  readonly total_tokens: number;
+  readonly conversations?: ReadonlyArray<TraceSessionLabel & { readonly turns: number; readonly last_started_at: number }>;
+  readonly conversations_total?: number;
+}
+
+const SCOPE_TEXT: Readonly<Record<string, string>> = {
+  private: '私聊', group: '群聊', channel: '频道', http: 'HTTP', schedule: '定时任务', a2a: 'A2A', mcp: 'MCP', internal: '内部',
+};
+
+/**
+ * `平台 · 私聊 · 名称` of a session summary or one of its chats: its `display_name`, else built from
+ * its `origin` (an older `@zhin.js/agent` without name fields); `undefined` without either.
+ */
+export function traceSessionName(row: TraceSessionLabel): string | undefined {
+  if (row.display_name) return row.display_name;
+  const origin = row.origin as { kind?: unknown; platform?: unknown } | undefined;
+  if (!origin || typeof origin !== 'object') return undefined;
+  const parts = sessionPartsOf({ origin });
+  const platform = origin.kind === 'im' && typeof origin.platform === 'string' && origin.platform ? origin.platform : undefined;
+  const scope = parts.scopeKind ? SCOPE_TEXT[parts.scopeKind] ?? parts.scopeKind : undefined;
+  const text = [platform, scope, parts.sceneLabel].filter(Boolean).join(' · ');
+  return text || undefined;
+}
+
+/** Lines of one `zhin trace --sessions` row; chats of a session spanning several are indented below it. */
+export function formatTraceSessionRow(row: TraceSessionRow): string[] {
+  const name = traceSessionName(row);
+  const key = name ? `${name}（${shortSessionKey(row.session_key)}）` : row.session_key;
+  const lines = [`${key}  ${row.turns} 回合  最近 ${formatDateTime(row.last_started_at)}  ${row.last_status}  ${row.total_tokens} tokens`];
+  for (const chat of row.conversations ?? []) {
+    lines.push(`  · ${traceSessionName(chat) ?? '未记录来源'}  ${chat.turns} 回合  最近 ${formatDateTime(chat.last_started_at)}`);
+  }
+  const shown = row.conversations?.length ?? 0;
+  if (row.conversations_total && row.conversations_total > shown) lines.push(`  · 另有 ${row.conversations_total - shown} 段聊天`);
+  return lines;
 }
 
 export const traceCommand = new Command('trace')
@@ -157,9 +209,8 @@ export const traceCommand = new Command('trace')
       const sessions = await store.sessions({ since, until });
       if (options.json) console.log(JSON.stringify(sessions, null, 2));
       else if (sessions.length === 0) console.log(`没有 trace 记录（${dir}）。`);
-      else for (const s of sessions) {
-        console.log(`${s.session_key}  ${s.turns} 回合  最近 ${formatDateTime(s.last_started_at)}  ${s.last_status}  ${s.total_tokens} tokens`);
-      }
+      // Readable conversation (`平台 · 私聊 · 名称`) with the short key, as `zhin trace -l` (#1250 b63).
+      else for (const s of sessions as readonly TraceSessionRow[]) console.log(formatTraceSessionRow(s).join('\n'));
       return;
     }
 

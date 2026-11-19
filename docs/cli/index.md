@@ -659,7 +659,7 @@ zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 | 选项 | 作用 |
 | --- | --- |
 | `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数。会话显示为与 `zhin usage report` 相同的可读名称加短键（如 `sandbox · 私聊 Developer（personal-session:ab12cd34）`），没有记录来源时显示短键；`--json` 保留完整的 `session_key`，并加上 `session_display_name` |
-| `--sessions` | 每个会话一行：回合数、最近一次时间与状态、累计 token |
+| `--sessions` | 每个会话一行：会话名（`平台 · 私聊/群聊 · 名称`，加短键，如 `sandbox · 私聊 · Developer（personal-session:ab12cd34）`）、回合数、最近一次时间与状态、累计 token；一个会话跨多段聊天时，下面缩进列出每段聊天（最多 10 段）。没有记录来源的旧 trace 只显示完整会话键；`--json` 输出会话摘要的 `origin`、`platform`、`scope_kind`、`scene_label`、`display_name`、`conversations` 字段（见下文） |
 | `--engagements` | 改为读取多 Agent 协作记录（数据库 `engagement_events` 表，需要 SQLite、MySQL 或 PostgreSQL）：配合 `--list` 列出最近的协作，否则显示最近一次或指定协作的参与者、消息跳数、黑板与预算。见[多 Agent 协作与场所](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | 只看这个会话（sessionKey），会自动按列表输出 |
 | `--since <time>` / `--until <time>` | 时间范围（`--until` 不含）：`30m`、`2h`、`7d`（多久以前）、ISO 日期/时间或毫秒时间戳 |
@@ -689,6 +689,14 @@ export default TraceArchivePage;
 ```
 
 页面背后是只读接口 `GET /api/agent/trace-archive/sessions`、`/turns?sessionKey=&since=&until=&limit=`、`/turn?turnId=`，需要 `agent.view` 权限，没有该权限的账号或 API 令牌会得到 403。
+
+会话摘要（`/sessions` 每一项，也是 `zhin trace --sessions --json` 的输出）除 `session_key`、`turns`、`first_started_at`、`last_started_at`、`last_status`、`total_tokens` 外，从 #1250 起还带（都可能缺省，旧 trace 没有记录来源时不出现）：
+
+- `origin`：最近一个记录了来源的回合的来源，形状与回合的 `origin` 相同（`kind` 为 `im` 时有 `platform`、`endpoint`、`scope`、`sceneId`、`conversation` 等，其中可能含原始用户 id；与 `/turns` 返回的信息相同，权限同为 `agent.view`）。
+- `platform`、`scope_kind`、`scene_label`、`display_name`：可读名的几部分。`platform` 是 IM 平台；`scope_kind` 是 `private` / `group` / `channel`，非 IM 来源时是 `schedule` / `http` / `a2a` / `mcp` / `internal`；`scene_label` 是群名 / 频道名、私聊对方的显示名，都没有时是原始会话 id；定时任务会话在实例还认得该任务时是任务的 `label`，否则是任务 id；`display_name` 是拼好的中文名，如 `sandbox · 私聊 · Developer`、`定时任务 · 每日早报`。Console 应按界面语言用 `scope_kind` + `scene_label` 自己拼名；账号名按 `origin.platform` / `origin.endpoint` 匹配。
+- `conversations`：只在一个会话的回合来自多段聊天时出现，每段 `{ origin, turns, last_started_at }` 加上同样的 `platform` / `scope_kind` / `scene_label` / `display_name`，最近的在前，最多 10 段；超过时 `conversations_total` 给出总段数。
+
+群名从这一版起才写进 trace（`origin.conversation.name`，最长 128 个字符），更早的 trace 里群聊只能显示群号。
 
 **评测联动。** `pnpm eval:agent` 里失败的用例会把它的回合 trace 写进 `ZHIN_EVAL_TRACE_DIR`（默认系统临时目录下的 `zhin-eval-traces`），报告里每个回合一行 `↪ zhin trace <turnId> --dir …`，复制运行即可查看。
 

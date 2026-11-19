@@ -73,6 +73,20 @@ export interface ToolApprovalCard {
   readonly decidedBy: string | null;
   /** Channel that settled the card: `console`, `im_dm`, `im_approver_group`, or null (timeout / in-turn prompt). */
   readonly channel: ToolApprovalEntry['channel'];
+  /**
+   * Origin recorded by the turn that asked (same shape as a trace's `origin` and the trace-archive
+   * session summary's `origin`, #1250 b63); absent for cards without a turn (self-change) or older Agents.
+   */
+  readonly origin?: NonNullable<ToolApprovalEntry['turnOrigin']>;
+  /**
+   * Readable name of that chat (the session summary's `platform` / `scope_kind` / `scene_label` /
+   * `display_name`, camelCase like the rest of the card); from the card's IM origin when the turn
+   * recorded none, absent without either.
+   */
+  readonly platform?: string;
+  readonly scopeKind?: string;
+  readonly sceneLabel?: string;
+  readonly displayName?: string;
 }
 
 export class HostToolApprovals {
@@ -161,5 +175,10 @@ function toCard(entry: ToolApprovalEntry): ToolApprovalCard {
     decidedAt: entry.decidedAt,
     decidedBy: entry.decidedBy,
     channel: entry.channel,
+    ...(entry.turnOrigin ? { origin: entry.turnOrigin } : {}),
+    ...(entry.turnOriginLabel?.platform ? { platform: entry.turnOriginLabel.platform } : {}),
+    ...(entry.turnOriginLabel?.scopeKind ? { scopeKind: entry.turnOriginLabel.scopeKind } : {}),
+    ...(entry.turnOriginLabel?.sceneLabel ? { sceneLabel: entry.turnOriginLabel.sceneLabel } : {}),
+    ...(entry.turnOriginLabel?.displayName ? { displayName: entry.turnOriginLabel.displayName } : {}),
   };
 }

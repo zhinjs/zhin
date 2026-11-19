@@ -16,6 +16,8 @@ export interface RegisterTraceArchiveRoutesOptions {
   readonly projectRoot: string;
   /** Test seam: archive directory (default `<projectRoot>/data/agent-traces`). */
   readonly dir?: string;
+  /** Schedule job id → label; names `schedule:<id>` sessions after their job (#1250 b63). */
+  readonly scheduleJobLabels?: () => Promise<ReadonlyMap<string, string> | undefined>;
 }
 
 type TraceModule = typeof import('@zhin.js/agent/trace');
@@ -66,7 +68,12 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
     const window = range(url);
     if (!window) return jsonResponse(400, { success: false, error: 'since / until 必须是 ISO 时间或毫秒时间戳' });
     const { archive: store, redact } = await open();
-    return jsonResponse(200, { success: true, data: redact(await store.sessions(window)) });
+    const sessions = await store.sessions(window);
+    let labels: ReadonlyMap<string, string> | undefined;
+    if (sessions.some(session => session.scope_kind === 'schedule')) {
+      try { labels = await options.scheduleJobLabels?.(); } catch { labels = undefined; }
+    }
+    return jsonResponse(200, { success: true, data: redact(labels ? mod!.withSessionScheduleLabels(sessions, jobId => labels!.get(jobId)) : sessions) });
   }), { summary: 'List sessions with persisted Agent turn traces', tags: ['agent', 'trace'] });
 
   http.route('GET', `${base}/agent/trace-archive/turns`, guarded(async (url) => {

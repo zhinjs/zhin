@@ -144,10 +144,18 @@ export type UsageProfileResolver = (profileId: string) => Readonly<{ label?: str
  */
 export type UsageAccountResolver = (platform: string, endpoint: string) => string | undefined;
 
+/**
+ * A schedule job id (`origin.jobId`, `schedule:<id>` sessions) → the job's label; `undefined` when the
+ * job has no label or no longer exists (the id is shown then).
+ */
+export type UsageScheduleJobResolver = (jobId: string) => string | undefined;
+
 export interface UsageStatsOptions {
   readonly resolveProvider?: UsageProviderResolver;
   readonly resolveProfile?: UsageProfileResolver;
   readonly resolveAccount?: UsageAccountResolver;
+  /** Names `schedule:<id>` sessions after their job's label (`bySession[].sceneLabel` / `displayName`). */
+  readonly resolveScheduleJob?: UsageScheduleJobResolver;
 }
 
 /** Version of the {@link UsageStats} shape; 2 adds `byAgent`, `byPurpose`, `previous`, profile / driver / account labels. */
@@ -598,7 +606,7 @@ async function aggregateUsage(
   const breakdown = { turns: 0, other: 0, firstRequestInputTokens: 0 };
   const models = new Map<string, Tally & { provider: string; model: string; label?: string; driverLabel?: string; providerIds: Set<string>; profiles: Set<string>; unprofiled: number }>();
   const resolved = new Map<string, UsageResolvedService | undefined>();
-  const sessions = new Map<string, Tally & { turns: number; labelled?: boolean; displayName?: string; parts?: UsageSessionParts; platform?: string; endpoint?: string }>();
+  const sessions = new Map<string, Tally & { turns: number; labelled?: boolean; displayName?: string; parts?: UsageSessionParts; platform?: string; endpoint?: string; jobId?: string }>();
   const agents = new Map<string, Tally & { turns: number; kind: UsageAgentRow['kind'] }>();
   const purposes = new Map<string, Tally & { turns: number }>();
   const buckets = new Map<number, Tally & { byModel: Record<string, number> }>();
@@ -669,6 +677,7 @@ async function aggregateUsage(
         session.platform ??= text(trace.origin.platform);
         session.endpoint ??= text(trace.origin.endpoint);
       }
+      if (trace.origin?.kind === 'schedule') session.jobId ??= text(trace.origin.jobId);
       sessions.set(trace.session_key, session);
     }
 
@@ -783,6 +792,10 @@ async function aggregateUsage(
     // An account whose name is just its raw endpoint id adds nothing next to `endpoint`.
     return label && label !== endpoint ? label : undefined;
   };
+  const scheduleLabel = (jobId: string | undefined) => {
+    if (!options.resolveScheduleJob || !jobId) return undefined;
+    try { return text(options.resolveScheduleJob(jobId)); } catch { return undefined; }
+  };
   const rankedSessions = [...sessions.entries()].sort(([, a], [, b]) => b.input - a.input);
   const others = { ...tally(), sessions: 0, turns: 0 };
   for (const [, s] of rankedSessions.slice(USAGE_STATS_SESSION_LIMIT)) {
@@ -807,13 +820,17 @@ async function aggregateUsage(
       .map(([sessionKey, s]) => {
         const parsed = parseSessionKey(sessionKey);
         const label = accountLabel(s.platform ?? parsed.platform, s.endpoint);
+        // A scheduled job's session is named after the job's label when the instance still knows it (#1250 b63).
+        const jobLabel = s.parts?.scopeKind === 'schedule' ? scheduleLabel(s.jobId) : undefined;
+        const displayName = jobLabel ? `定时任务 ${jobLabel}` : s.displayName;
+        const sceneLabel = jobLabel ?? s.parts?.sceneLabel;
         return {
           sessionKey, ...parsed,
           // Hashed keys (`personal-session:v1:…`) carry no address: take the platform from the recorded origin.
           ...(!parsed.platform && s.platform ? { platform: s.platform } : {}),
-          ...(s.displayName ? { displayName: s.displayName } : {}),
+          ...(displayName ? { displayName } : {}),
           ...(s.parts?.scopeKind ? { scopeKind: s.parts.scopeKind } : {}),
-          ...(s.parts?.sceneLabel ? { sceneLabel: s.parts.sceneLabel } : {}),
+          ...(sceneLabel ? { sceneLabel } : {}),
           shortKey: shortSessionKey(sessionKey),
           ...(s.endpoint ? { endpoint: s.endpoint } : {}),
           ...(label ? { accountLabel: label } : {}),
