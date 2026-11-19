@@ -1,5 +1,12 @@
 # @zhin.js/plugin-calendar
 
+## 0.1.25
+
+### Patch Changes
+
+- Updated dependencies [c7f6285]
+  - @zhin.js/host-http@1.7.0
+
 ## 0.1.24
 
 ### Patch Changes
