@@ -397,28 +397,57 @@ export function usageModelDisplayName(provider: string, model: string, label?: s
   return `${provider} · ${model}`;
 }
 
-const SCOPE_LABELS: Readonly<Record<string, string>> = { private: '私聊', direct: '私聊', group: '群', channel: '频道', guild: '频道' };
+/** Longest platform-given name kept, in code points (same bound as the Agent's trace labels). */
+const SESSION_TEXT_MAX_CODE_POINTS = 128;
 
-/** Readable label for a trace's conversation, from its recorded IM origin; `undefined` otherwise. */
-export function sessionDisplayNameOf(trace: any): string | undefined {
+/**
+ * C0 / C1 controls (ESC sequences, newlines, …), U+2028 / U+2029 and the bidi embedding /
+ * override / isolate controls: a platform-given group or user name with one could rewrite a
+ * terminal line or reorder the Console's text.
+ */
+const UNSAFE_SESSION_TEXT = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+
+/**
+ * A recorded name made safe to show: trimmed, unsafe characters escaped as `\uXXXX`, then cut to
+ * 128 code points (never inside a surrogate pair); `undefined` for a non-string or blank value.
+ * Idempotent. The same rules as `sanitizeOriginText()` of `@zhin.js/agent/trace` (the gateway must
+ * not depend on the Agent; a parity test keeps the two in step).
+ */
+export function sanitizeSessionText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const escaped = value.trim().replace(UNSAFE_SESSION_TEXT, ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  const cut = [...escaped].slice(0, SESSION_TEXT_MAX_CODE_POINTS).join('').trim();
+  return cut || undefined;
+}
+
+/** Type words of {@link sessionDisplayNameOf}, by `scopeKind`. */
+const SCOPE_TEXT: Readonly<Record<string, string>> = {
+  private: '私聊', group: '群', channel: '频道',
+  http: 'HTTP', schedule: '定时任务', a2a: 'A2A', mcp: 'MCP', internal: '内部',
+};
+
+/** IM platform of a trace's recorded origin (the conversation's adapter when `platform` is missing). */
+function sessionPlatformOf(trace: any): string | undefined {
   const origin = trace?.origin;
-  if (!origin || typeof origin !== 'object') return undefined;
-  if (origin.kind === 'im') {
-    const platform = typeof origin.platform === 'string' ? origin.platform : '';
-    const scope = typeof origin.scope === 'string' ? origin.scope : typeof origin.conversation?.kind === 'string' ? origin.conversation.kind : '';
-    const conversationName = typeof origin.conversation?.name === 'string' && origin.conversation.name.trim() ? origin.conversation.name.trim() : undefined;
-    const principalName = typeof trace?.principal?.display_name === 'string' && trace.principal.display_name.trim() ? trace.principal.display_name.trim() : undefined;
-    const sceneId = typeof origin.sceneId === 'string' ? origin.sceneId : typeof origin.conversation?.id === 'string' ? origin.conversation.id : '';
-    const name = conversationName ?? ((scope === 'private' || scope === 'direct') ? principalName : undefined) ?? sceneId;
-    const parts = [platform, `${SCOPE_LABELS[scope] ?? scope}${name ? ` ${name}` : ''}`.trim()].filter(Boolean);
-    return parts.length ? parts.join(' · ') : undefined;
-  }
-  if (origin.kind === 'http') return 'HTTP';
-  if (origin.kind === 'schedule') return `定时任务 ${String(origin.jobId ?? '')}`.trim();
-  if (origin.kind === 'a2a') return 'A2A';
-  if (origin.kind === 'mcp') return 'MCP';
-  if (origin.kind === 'internal') return `内部 ${String(origin.source ?? '')}`.trim();
-  return undefined;
+  if (!origin || typeof origin !== 'object' || origin.kind !== 'im') return undefined;
+  return sanitizeSessionText(origin.platform) ?? sanitizeSessionText(origin.conversation?.endpoint?.adapter);
+}
+
+/** `sandbox · 私聊 Developer`, `定时任务 每日早报`, `HTTP` from a platform and the structured parts. */
+export function formatSessionDisplayName(platform: string | undefined, parts: UsageSessionParts): string | undefined {
+  const scope = parts.scopeKind ? SCOPE_TEXT[parts.scopeKind] ?? parts.scopeKind : undefined;
+  const scene = [scope, parts.sceneLabel].filter(Boolean).join(' ');
+  const text = [platform, scene].filter(Boolean).join(' · ');
+  return text || undefined;
+}
+
+/**
+ * Readable label for a trace's conversation, from its recorded origin (`sandbox · 私聊 Developer`,
+ * `定时任务 sched_1`, `HTTP`); `undefined` without one. Platform-given names are cleaned
+ * ({@link sanitizeSessionText}).
+ */
+export function sessionDisplayNameOf(trace: any): string | undefined {
+  return formatSessionDisplayName(sessionPlatformOf(trace), sessionPartsOf(trace));
 }
 
 /** Structured parts of {@link sessionDisplayNameOf}, for a Console that localizes the label itself. */
@@ -434,13 +463,17 @@ export interface UsageSessionParts {
 
 const SCOPE_KINDS: Readonly<Record<string, string>> = { private: 'private', direct: 'private', group: 'group', channel: 'channel', guild: 'channel' };
 
-/** `scopeKind` + `sceneLabel` of a trace's recorded origin; empty without one. */
+/**
+ * `scopeKind` + `sceneLabel` of a trace's recorded origin; empty without one. Blank values fall
+ * back (a blank `scope` to `conversation.kind`, a blank `sceneId` to `conversation.id`), as in the
+ * Agent's `turnOriginLabelOf()`.
+ */
 export function sessionPartsOf(trace: any): UsageSessionParts {
   const origin = trace?.origin;
   if (!origin || typeof origin !== 'object') return {};
-  const label = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+  const label = sanitizeSessionText;
   if (origin.kind === 'im') {
-    const scope = typeof origin.scope === 'string' ? origin.scope : typeof origin.conversation?.kind === 'string' ? origin.conversation.kind : '';
+    const scope = label(origin.scope) ?? label(origin.conversation?.kind);
     const kind = scope ? SCOPE_KINDS[scope] ?? scope : undefined;
     const name = label(origin.conversation?.name)
       ?? (kind === 'private' ? label(trace?.principal?.display_name) : undefined)
@@ -674,8 +707,8 @@ async function aggregateUsage(
         }
       }
       if (trace.origin?.kind === 'im') {
-        session.platform ??= text(trace.origin.platform);
-        session.endpoint ??= text(trace.origin.endpoint);
+        session.platform ??= sanitizeSessionText(trace.origin.platform);
+        session.endpoint ??= sanitizeSessionText(trace.origin.endpoint);
       }
       if (trace.origin?.kind === 'schedule') session.jobId ??= text(trace.origin.jobId);
       sessions.set(trace.session_key, session);
@@ -794,7 +827,7 @@ async function aggregateUsage(
   };
   const scheduleLabel = (jobId: string | undefined) => {
     if (!options.resolveScheduleJob || !jobId) return undefined;
-    try { return text(options.resolveScheduleJob(jobId)); } catch { return undefined; }
+    try { return sanitizeSessionText(options.resolveScheduleJob(jobId)); } catch { return undefined; }
   };
   const rankedSessions = [...sessions.entries()].sort(([, a], [, b]) => b.input - a.input);
   const others = { ...tally(), sessions: 0, turns: 0 };
@@ -822,7 +855,7 @@ async function aggregateUsage(
         const label = accountLabel(s.platform ?? parsed.platform, s.endpoint);
         // A scheduled job's session is named after the job's label when the instance still knows it (#1250 b63).
         const jobLabel = s.parts?.scopeKind === 'schedule' ? scheduleLabel(s.jobId) : undefined;
-        const displayName = jobLabel ? `定时任务 ${jobLabel}` : s.displayName;
+        const displayName = jobLabel ? formatSessionDisplayName(undefined, { scopeKind: 'schedule', sceneLabel: jobLabel }) : s.displayName;
         const sceneLabel = jobLabel ?? s.parts?.sceneLabel;
         return {
           sessionKey, ...parsed,

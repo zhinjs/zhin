@@ -16,7 +16,7 @@ import { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
 import { projectProviderDiagnostics } from '@zhin.js/ai';
 import type { TurnTraceStore } from './turn-trace-store.js';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
-import { turnOriginKey, turnOriginLabelOf, withScheduleJobLabel, type TurnOriginLabel } from './turn-origin-label.js';
+import { sanitizeOriginText, turnOriginKey, turnOriginLabelOf, withScheduleJobLabel, type TurnOriginLabel } from './turn-origin-label.js';
 
 export const DEFAULT_TRACE_RETENTION_DAYS = 7;
 export { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
@@ -48,7 +48,7 @@ export interface TurnTraceSessionLabelFields {
   readonly scope_kind?: string;
   /** Group / channel name, the private peer's display name, else the raw id; a schedule job's label or id. */
   readonly scene_label?: string;
-  /** Pre-built Chinese name: `sandbox · 私聊 · Developer`, `定时任务 · 每日早报`. */
+  /** Pre-built Chinese name, the gateway usage stats' `displayName` format: `sandbox · 私聊 Developer`, `定时任务 每日早报`. */
   readonly display_name?: string;
 }
 
@@ -339,6 +339,19 @@ type MutableSessionSummary = {
   -readonly [K in keyof Omit<TurnTraceSessionSummary, 'conversations' | 'conversations_total' | keyof TurnTraceSessionLabelFields>]: TurnTraceSessionSummary[K]
 } & { label?: TurnOriginLabel; chats: Map<string, MutableSessionConversation> };
 
+/**
+ * A recorded origin whose conversation name is cleaned ({@link sanitizeOriginText}): traces written
+ * before names were cleaned at record time may hold control or bidi characters.
+ */
+function withCleanConversationName<T>(origin: T): T {
+  const conversation = (origin as { conversation?: { name?: unknown } } | undefined)?.conversation;
+  if (!conversation || typeof conversation !== 'object' || conversation.name === undefined) return origin;
+  const name = sanitizeOriginText(conversation.name);
+  if (name === conversation.name) return origin;
+  const { name: _raw, ...rest } = conversation;
+  return { ...origin, conversation: { ...rest, ...(name ? { name } : {}) } };
+}
+
 /** Per-session summaries of traces (oldest first), newest session first. */
 export function summarizeTraceSessions(traces: Iterable<TurnTrace>): TurnTraceSessionSummary[] {
   const bySession = new Map<string, MutableSessionSummary>();
@@ -355,11 +368,11 @@ export function summarizeTraceSessions(traces: Iterable<TurnTrace>): TurnTraceSe
     if (trace.origin && key) {
       const label = turnOriginLabelOf(trace.origin, trace.principal?.display_name);
       // A later trace without an origin keeps the last recorded one.
-      summary.origin = trace.origin;
+      summary.origin = withCleanConversationName(trace.origin);
       summary.label = label;
       const chat = summary.chats.get(key);
       summary.chats.delete(key);
-      summary.chats.set(key, { origin: trace.origin, label, turns: (chat?.turns ?? 0) + 1, last_started_at: trace.started_at });
+      summary.chats.set(key, { origin: summary.origin, label, turns: (chat?.turns ?? 0) + 1, last_started_at: trace.started_at });
     }
     bySession.set(trace.session_key, summary);
   }

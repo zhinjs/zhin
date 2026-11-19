@@ -127,13 +127,13 @@ it('session summaries carry the latest origin, a readable label and the chats of
   const { data } = await response.json();
   const byKey = new Map(data.map((row: { session_key: string }) => [row.session_key, row]));
   expect(byKey.get('schedule:sched_1')).toMatchObject({ origin: { kind: 'schedule', jobId: 'sched_1' },
-    scope_kind: 'schedule', scene_label: '每日早报', display_name: '定时任务 · 每日早报' });
+    scope_kind: 'schedule', scene_label: '每日早报', display_name: '定时任务 每日早报' });
   const legacy = byKey.get('personal-session:v1:abcdef0123456789') as Record<string, unknown>;
   for (const field of ['origin', 'platform', 'scope_kind', 'scene_label', 'display_name', 'conversations']) expect(legacy).not.toHaveProperty(field);
   const chat = byKey.get(sessionKey) as Record<string, unknown> & { origin: Record<string, unknown>; conversations: Array<{ display_name: string; turns: number; origin: unknown }> };
   // Accounts are matched by `origin.platform` / `origin.endpoint`.
   expect(chat.origin).toMatchObject({ kind: 'im', platform: 'slack', endpoint: 'main', scope: 'channel', sceneId: conversation.id });
-  expect(chat).toMatchObject({ platform: 'slack', scope_kind: 'channel', scene_label: conversation.id, display_name: `slack · 频道 · ${conversation.id}` });
-  expect(chat.conversations.map(c => [c.display_name, c.turns])).toEqual([[`slack · 频道 · ${conversation.id}`, 1], ['slack · 频道 · 值班群', 1]]);
+  expect(chat).toMatchObject({ platform: 'slack', scope_kind: 'channel', scene_label: conversation.id, display_name: `slack · 频道 ${conversation.id}` });
+  expect(chat.conversations.map(c => [c.display_name, c.turns])).toEqual([[`slack · 频道 ${conversation.id}`, 1], ['slack · 频道 值班群', 1]]);
   expect(chat.conversations[1]!.origin).toMatchObject({ platform: 'slack', endpoint: 'main', sceneId: 'other-room' });
 });

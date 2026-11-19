@@ -42,6 +42,7 @@ import {
 import { opsCooldownTarget, type OpsCooldownView } from './ops-cooldown.js';
 import { hostWriteImpact, type HostProtectedPaths } from './host-config-paths.js';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
+import { sanitizeOriginText } from '../trace/turn-origin-label.js';
 
 export type ToolRisk = 'dangerous' | 'safe';
 /**
@@ -530,7 +531,9 @@ export class ToolHardGate {
         ...(this.#context.origin ? { origin: this.#context.origin } : {}),
         ...(this.#context.turnOrigin ? { turnOrigin: this.#context.turnOrigin } : {}),
         // The turn initiator's name only: a merged turn may act for another sender (`options.requesterId`).
-        ...(this.#context.requesterName && requesterId === this.#context.requesterId ? { requesterName: this.#context.requesterName } : {}),
+        // A platform-given display name: cleaned of control / bidi characters and bounded (#1250 b63).
+        ...(requesterId === this.#context.requesterId && sanitizeOriginText(this.#context.requesterName)
+          ? { requesterName: sanitizeOriginText(this.#context.requesterName) } : {}),
       });
     } catch (error) {
       if (!(error instanceof ToolApprovalQueueClosedError)) throw error;

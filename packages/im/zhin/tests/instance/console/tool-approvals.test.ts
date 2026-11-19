@@ -99,9 +99,31 @@ it('cards carry the asking turn\'s origin and readable label (#1250 b63)', () =>
   const [withOrigin, without] = [...approvals.snapshot().pending].sort((a, b) => a.sessionKey.localeCompare(b.sessionKey)).reverse();
   expect(withOrigin).toMatchObject({
     origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
-    platform: 'sandbox', scopeKind: 'private', sceneLabel: 'Developer', displayName: 'sandbox · 私聊 · Developer',
+    platform: 'sandbox', scopeKind: 'private', sceneLabel: 'Developer', displayName: 'sandbox · 私聊 Developer',
   });
   for (const field of ['origin', 'platform', 'scopeKind', 'sceneLabel', 'displayName']) expect(without).not.toHaveProperty(field);
+  queue.dispose();
+});
+
+it('keeps only what approval needs of an IM origin on the card (#1250 b63 A-3)', () => {
+  const queue = new ToolApprovalQueue();
+  const approvals = new HostToolApprovals(queue);
+  queue.enqueue({
+    toolName: 'group_kick', category: 'member', sessionKey: 'scene-task:v1:abcdef0123456789', requesterId: 'u1', turnId: 't1', args: {},
+    turnOrigin: {
+      kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'group', sceneId: 'g1', messageId: 'm-42', threadId: 'th1',
+      conversation: { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'channel', id: 'g1', parent: { kind: 'guild', id: 'srv' }, threadId: 'th1', name: '开发群' },
+    },
+  });
+  queue.enqueue({ toolName: 'group_kick', category: 'member', sessionKey: 'a2a', requesterId: null, turnId: 't2', args: { a: 1 }, turnOrigin: { kind: 'a2a', taskId: 'task-1' } });
+  const cards = approvals.snapshot().pending;
+  const im = cards.find(card => card.sessionKey.startsWith('scene-task'));
+  expect(im!.origin).toEqual({
+    kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'group', sceneId: 'g1',
+    conversation: { kind: 'channel', id: 'g1', name: '开发群' },
+  });
+  expect(im!.displayName).toBe('sandbox · 群 开发群');
+  expect(cards.find(card => card.sessionKey === 'a2a')!.origin).toEqual({ kind: 'a2a', taskId: 'task-1' });
   queue.dispose();
 });
 

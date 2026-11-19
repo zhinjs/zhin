@@ -74,10 +74,13 @@ export interface ToolApprovalCard {
   /** Channel that settled the card: `console`, `im_dm`, `im_approver_group`, or null (timeout / in-turn prompt). */
   readonly channel: ToolApprovalEntry['channel'];
   /**
-   * Origin recorded by the turn that asked (same shape as a trace's `origin` and the trace-archive
-   * session summary's `origin`, #1250 b63); absent for cards without a turn (self-change) or older Agents.
+   * Origin recorded by the turn that asked (#1250 b63), cut to what deciding on the card needs: for
+   * an IM turn `platform`, `endpoint`, `scope`, `sceneId` and `conversation: { kind, id, name? }`
+   * (no `messageId`, `threadId`, conversation endpoint or `parent`); other kinds as the trace records
+   * them (`{ kind, sessionId | taskId | jobId | source | requestId }`). Absent for cards without a
+   * turn (self-change) or older Agents.
    */
-  readonly origin?: NonNullable<ToolApprovalEntry['turnOrigin']>;
+  readonly origin?: ToolApprovalCardOrigin;
   /**
    * Readable name of that chat (the session summary's `platform` / `scope_kind` / `scene_label` /
    * `display_name`, camelCase like the rest of the card); from the card's IM origin when the turn
@@ -87,6 +90,29 @@ export interface ToolApprovalCard {
   readonly scopeKind?: string;
   readonly sceneLabel?: string;
   readonly displayName?: string;
+}
+
+/** {@link ToolApprovalCard.origin}: the asking turn's origin without the fields approval has no use for. */
+export type ToolApprovalCardOrigin =
+  | Readonly<{
+      kind: 'im';
+      platform: string;
+      endpoint: string;
+      scope: string;
+      sceneId: string;
+      conversation?: Readonly<{ kind: string; id: string; name?: string }>;
+    }>
+  | Exclude<NonNullable<ToolApprovalEntry['turnOrigin']>, { kind: 'im' }>;
+
+function cardOrigin(origin: NonNullable<ToolApprovalEntry['turnOrigin']>): ToolApprovalCardOrigin {
+  if (origin.kind !== 'im') return origin;
+  const conversation = origin.conversation;
+  return Object.freeze({
+    kind: 'im', platform: origin.platform, endpoint: origin.endpoint, scope: origin.scope, sceneId: origin.sceneId,
+    ...(conversation ? { conversation: Object.freeze({
+      kind: conversation.kind, id: conversation.id, ...(conversation.name ? { name: conversation.name } : {}),
+    }) } : {}),
+  });
 }
 
 export class HostToolApprovals {
@@ -175,7 +201,7 @@ function toCard(entry: ToolApprovalEntry): ToolApprovalCard {
     decidedAt: entry.decidedAt,
     decidedBy: entry.decidedBy,
     channel: entry.channel,
-    ...(entry.turnOrigin ? { origin: entry.turnOrigin } : {}),
+    ...(entry.turnOrigin ? { origin: cardOrigin(entry.turnOrigin) } : {}),
     ...(entry.turnOriginLabel?.platform ? { platform: entry.turnOriginLabel.platform } : {}),
     ...(entry.turnOriginLabel?.scopeKind ? { scopeKind: entry.turnOriginLabel.scopeKind } : {}),
     ...(entry.turnOriginLabel?.sceneLabel ? { sceneLabel: entry.turnOriginLabel.sceneLabel } : {}),

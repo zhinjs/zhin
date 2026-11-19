@@ -632,6 +632,9 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('GET', '/agent/engagements', P.AGENT_VIEW, true),
   httpRule('GET', '/agent/venues', P.AGENT_VIEW),
   httpRule('GET', '/agent/traces', P.AGENT_VIEW),
+  // `…/trace-archive/sessions` names each session after its chat (#1250 b63) — for a scheduled
+  // job's session the job's `label`, which otherwise needs `ops:schedule:read` (`/assistant/jobs`).
+  // Intended: `agent.view` already shows that job's turns in full (prompt, replies, tool calls).
   httpRule('GET', '/agent/trace-archive', P.AGENT_VIEW, true),
   httpRule('POST', '/agent/tasks/cancel', P.AGENT_CONFIGURE),
   httpRule('GET', '/agent/inference', P.AGENT_VIEW, true),

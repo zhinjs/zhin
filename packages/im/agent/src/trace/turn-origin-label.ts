@@ -1,7 +1,7 @@
 /**
  * Readable label of where a turn came from (#1250 b63): the trace-archive session summaries and the
- * Host tool approval cards share this shape, so the Console shows `sandbox · 私聊 · Developer`
- * instead of a hashed session key.
+ * Host tool approval cards share this shape, so the Console shows `sandbox · 私聊 Developer`
+ * instead of a hashed session key — the same format as the gateway usage stats' `displayName`.
  *
  * The same rules as `sessionPartsOf()` of the gateway usage stats (`@zhin.js/gateway/usage`). The
  * Agent package must not depend on the gateway, and these few lines are not plugin contract, so
@@ -24,24 +24,52 @@ export interface TurnOriginLabel {
    * the schedule job's label (when the host knows it) or id; the internal source.
    */
   readonly sceneLabel?: string;
-  /** `平台 · 私聊 · 名称`, `定时任务 · 名称` — what `zhin trace --sessions` prints. */
+  /**
+   * `平台 · 私聊 名称`, `定时任务 每日早报`, `HTTP` — the gateway usage stats' `displayName` format,
+   * what `zhin trace --sessions` prints.
+   */
   readonly displayName?: string;
 }
 
 const SCOPE_KINDS: Readonly<Record<string, string>> = { private: 'private', direct: 'private', group: 'group', channel: 'channel', guild: 'channel' };
 const SCOPE_TEXT: Readonly<Record<string, string>> = {
-  private: '私聊', group: '群聊', channel: '频道',
+  private: '私聊', group: '群', channel: '频道',
   http: 'HTTP', schedule: '定时任务', a2a: 'A2A', mcp: 'MCP', internal: '内部',
 };
 
-function text(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+/** Longest platform-given name kept, in code points. */
+export const ORIGIN_TEXT_MAX_CODE_POINTS = 128;
+
+/**
+ * C0 / C1 controls (ESC sequences, newlines, …), the line / paragraph separators and the bidi
+ * embedding / override / isolate controls: a platform-given name with one could rewrite a
+ * terminal line or reorder the Console's text.
+ */
+const UNSAFE_TEXT = /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+
+/**
+ * A platform-given name (group name, sender display name, …) made safe to show: trimmed, unsafe
+ * characters escaped as `\uXXXX` (like the usage log line), then cut to
+ * {@link ORIGIN_TEXT_MAX_CODE_POINTS} code points — never inside a surrogate pair. Idempotent, so
+ * names already cleaned when recorded pass unchanged. `undefined` for a non-string or blank value.
+ */
+export function sanitizeOriginText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const escaped = value.trim().replace(UNSAFE_TEXT, ch => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  const cut = [...escaped].slice(0, ORIGIN_TEXT_MAX_CODE_POINTS).join('').trim();
+  return cut || undefined;
 }
 
-/** `平台 · 私聊 · 名称` from the structured parts; `undefined` when there is nothing to show. */
+const text = sanitizeOriginText;
+
+/**
+ * `平台 · 私聊 名称` (`定时任务 每日早报`, `HTTP`) from the structured parts — the gateway usage
+ * stats' `displayName` format; `undefined` when there is nothing to show.
+ */
 export function turnOriginDisplayName(label: Omit<TurnOriginLabel, 'displayName'>): string | undefined {
   const scope = label.scopeKind ? SCOPE_TEXT[label.scopeKind] ?? label.scopeKind : undefined;
-  const parts = [label.platform, scope, label.sceneLabel].filter((part): part is string => Boolean(part));
+  const scene = [scope, label.sceneLabel].filter((part): part is string => Boolean(part)).join(' ');
+  const parts = [label.platform, scene].filter((part): part is string => Boolean(part));
   return parts.length ? parts.join(' · ') : undefined;
 }
 
@@ -104,16 +132,16 @@ export function turnOriginKey(origin: unknown): string | undefined {
     }
     return JSON.stringify(['im', o.platform, o.endpoint, o.scope, o.sceneId, o.threadId ?? null]);
   }
-  const id = o.kind === 'http' ? o.sessionId : o.kind === 'a2a' ? o.taskId : o.kind === 'schedule' ? o.jobId
-    : o.kind === 'internal' ? o.source : o.kind === 'mcp' ? o.requestId : undefined;
+  // Within one session, an A2A context's tasks, MCP requests and HTTP calls are one chat: only IM
+  // conversations and internal sources (and schedule jobs) tell several apart.
+  const id = o.kind === 'schedule' ? o.jobId : o.kind === 'internal' ? o.source : undefined;
   return typeof o.kind === 'string' ? JSON.stringify([o.kind, id ?? null]) : undefined;
 }
 
-const MAX_CONVERSATION_NAME = 128;
-
 /**
  * Frozen copy of an origin with only its known fields (what a trace records). The conversation's
- * display name is kept (bounded) so session lists can show it (#1250 b63); it is never part of the
+ * display name is kept (cleaned of control / bidi characters and bounded, see
+ * {@link sanitizeOriginText}) so session lists can show it (#1250 b63); it is never part of the
  * conversation's identity.
  */
 export function snapshotOrigin(origin: ToolInvocationOrigin): ToolInvocationOrigin {
@@ -141,7 +169,7 @@ export function snapshotOrigin(origin: ToolInvocationOrigin): ToolInvocationOrig
   });
 }
 
+/** The conversation's platform-given name, cleaned and bounded ({@link sanitizeOriginText}). */
 function conversationNameOf(conversation: { readonly name?: unknown }): string | undefined {
-  const name = text(conversation.name);
-  return name ? name.slice(0, MAX_CONVERSATION_NAME) : undefined;
+  return sanitizeOriginText(conversation.name);
 }

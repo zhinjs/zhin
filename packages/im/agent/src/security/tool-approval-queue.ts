@@ -13,7 +13,7 @@
 import { redactDecisionPayload, type DecisionPayload } from '../decision-events.js';
 import type { DangerousToolCategory } from './tool-hard-gate.js';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
-import { snapshotOrigin, turnOriginLabelOf, type TurnOriginLabel } from '../trace/turn-origin-label.js';
+import { sanitizeOriginText, snapshotOrigin, turnOriginLabelOf, type TurnOriginLabel } from '../trace/turn-origin-label.js';
 
 export type ToolApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'consumed';
 export type ToolApprovalSettlement = 'approved' | 'denied' | 'expired';
@@ -63,7 +63,7 @@ export interface ToolApprovalEntry {
    */
   readonly turnOrigin?: ToolInvocationOrigin;
   /**
-   * 来源的可读名（`平台 · 私聊 · 名称`），与 trace 会话摘要的 `label` 同形状；
+   * 来源的可读名（`平台 · 私聊 名称`，与用量统计 `displayName` 同格式），与 trace 会话摘要的 `label` 同形状；
    * 由 {@link turnOrigin}，否则由 {@link origin} 推出，两者都没有时缺省。
    */
   readonly turnOriginLabel?: TurnOriginLabel;
@@ -363,7 +363,8 @@ function originLabelFields(input: ToolApprovalEnqueueInput): { turnOrigin?: Tool
   const fallback = input.origin
     ? { kind: 'im', platform: input.origin.platform, endpoint: input.origin.endpointKey, scope: input.origin.scope, sceneId: input.origin.sceneId }
     : undefined;
-  const label = turnOriginLabelOf(turnOrigin ?? fallback, input.requesterName ?? undefined);
+  // `turnOriginLabelOf` cleans every platform-given part (names, ids) before it is shown.
+  const label = turnOriginLabelOf(turnOrigin ?? fallback, sanitizeOriginText(input.requesterName));
   const hasLabel = Object.keys(label).length > 0;
   return {
     ...(turnOrigin ? { turnOrigin } : {}),
