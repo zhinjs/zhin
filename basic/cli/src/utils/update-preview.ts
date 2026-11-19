@@ -32,15 +32,23 @@ import {
   type ZhinOverrideEntry,
 } from './zhin-overrides.js';
 import { semver } from '../plugin-check/semver.js';
+import { isPinnedSpecifier } from './dependency-specifiers.js';
 import { readInstalledPackageVersion } from './installed-versions.js';
 import { isValidNpmPackageName } from './registry-version.js';
 import { listWorkspacePackageDirs, workspacePackageGlobs } from './workspace-packages.js';
 
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'] as const;
+/** The fields `zhin migrate` upgrades (its `collectZhinDeps`): only these count as migratable locks. */
+const MIGRATE_FIELDS = ['dependencies', 'devDependencies'] as const;
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+/** A declared exact version (`1.2.3`, `=1.2.3`, `v1.2.3`) — what `zhin migrate` calls pinned. */
+const PINNED_VERSION = /^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/u;
 
 /** Published versions of a package (ascending), or undefined when the registry cannot say. */
 export type PublishedVersions = (name: string) => Promise<readonly string[] | undefined>;
+
+/** The `latest` dist-tag of a package, or undefined when the registry cannot say. */
+export type LatestVersion = (name: string) => Promise<string | undefined>;
 
 /** The `dependencies` of one published version, or undefined when the registry cannot say. */
 export type PackageDependencies = (name: string, version: string) => Promise<Readonly<Record<string, string>> | undefined>;
@@ -68,6 +76,28 @@ export interface UpdatePreviewMember {
   readonly notDeclared: readonly string[];
   /** Packages pinned by an override the preview cannot evaluate (`link:`, `npm:` aliases, …), with it. */
   readonly overridden: readonly string[];
+  /**
+   * Zhin packages declared with an exact version in `dependencies` / `devDependencies` whose
+   * `latest` dist-tag is newer (what `zhin migrate` would write): `zhin update` stays on the pinned
+   * version; `zhin migrate --include-pinned` moves the root's, plain `zhin migrate` a member's
+   * (#1250 update-dry-run-hides-pinned-zhin). Absent from older callers' fixtures, hence optional.
+   */
+  readonly pinned?: readonly UpdatePreviewPinned[];
+}
+
+export interface UpdatePreviewPinned {
+  readonly name: string;
+  /** The declared exact version. */
+  readonly range: string;
+  /** Installed version; undefined when the package is not installed. */
+  readonly current: string | undefined;
+  /** The `latest` dist-tag. */
+  readonly latest: string;
+  /**
+   * What moves it: `include-pinned` (a root lock, or a member's when the root locks it too — the
+   * member then keeps the root's version) or `migrate` (a workspace member's lock follows the root).
+   */
+  readonly upgrade: 'migrate' | 'include-pinned';
 }
 
 export interface UpdatePreviewOverrides {
@@ -144,9 +174,9 @@ function readManifest(dir: string): Manifest | undefined {
   try { return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as Manifest; } catch { return undefined; }
 }
 
-function declared(manifest: Manifest): Map<string, string> {
+function declared(manifest: Manifest, fields: readonly string[] = DEPENDENCY_FIELDS): Map<string, string> {
   const out = new Map<string, string>();
-  for (const field of DEPENDENCY_FIELDS) {
+  for (const field of fields) {
     const entries = manifest[field];
     if (!entries || typeof entries !== 'object') continue;
     for (const [name, range] of Object.entries(entries as Record<string, unknown>)) {
@@ -177,6 +207,20 @@ export const npmPublishedVersions: PublishedVersions = (name) => new Promise((re
       const parsed = JSON.parse(stdout) as unknown;
       const list = Array.isArray(parsed) ? parsed : [parsed];
       resolve(list.filter((item): item is string => typeof item === 'string'));
+    } catch { resolve(undefined); }
+  });
+});
+
+/** `npm view <name>@latest version --json`: the `latest` dist-tag, as `zhin migrate` reads it. */
+export const npmLatestVersion: LatestVersion = (name) => new Promise((resolve) => {
+  if (!isValidNpmPackageName(name)) { resolve(undefined); return; }
+  execFile('npm', ['view', `${name}@latest`, 'version', '--json'], {
+    encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024, shell: process.platform === 'win32',
+  }, (error, stdout) => {
+    if (error) { resolve(undefined); return; }
+    try {
+      const parsed = JSON.parse(stdout) as unknown;
+      resolve(typeof parsed === 'string' && semver.valid(parsed) ? parsed : undefined);
     } catch { resolve(undefined); }
   });
 });
@@ -219,6 +263,8 @@ export async function previewUpdate(
   options: {
     readonly publishedVersions?: PublishedVersions;
     readonly packageDependencies?: PackageDependencies;
+    /** The `latest` dist-tag lookup for locked Zhin packages (default `npm view <name>@latest version`). */
+    readonly latestVersion?: LatestVersion;
     readonly concurrency?: number;
   } = {},
 ): Promise<UpdatePreview> {
@@ -238,6 +284,15 @@ export async function previewUpdate(
     if (!cache.has(name)) cache.set(name, lookup(name));
     return cache.get(name)!;
   };
+  const latestLookup = options.latestVersion ?? npmLatestVersion;
+  const latestCache = new Map<string, Promise<string | undefined>>();
+  const latestOf = (name: string) => {
+    if (!latestCache.has(name)) latestCache.set(name, latestLookup(name));
+    return latestCache.get(name)!;
+  };
+  // The root's own locks: without --include-pinned `zhin migrate` keeps them, and a member keeps
+  // its lock on such a package too (migrate.ts `rootKept`).
+  const rootMigratable = declared(readManifest(root) ?? {}, MIGRATE_FIELDS);
 
   /**
    * The members' changes. `final` (second pass): the value each synced Zhin override is written
@@ -250,6 +305,7 @@ export async function previewUpdate(
     if (!manifest) continue;
     const isRoot = dir === root;
     const deps = declared(manifest);
+    const migratable = declared(manifest, MIGRATE_FIELDS);
     const notDeclared: string[] = [];
     const work: { name: string; range: string; exact?: string }[] = [];
     if (requested.length === 0) {
@@ -285,10 +341,27 @@ export async function previewUpdate(
       if (item.exact !== undefined || semver.validRange(item.range) !== null) considered.push(item);
     }
     const unknown: string[] = [];
+    const pinned: UpdatePreviewPinned[] = [];
     const changes = (await mapLimited(considered, options.concurrency ?? 8, async (item): Promise<UpdatePreviewChange | undefined> => {
       const current = readInstalledPackageVersion(dir, item.name) ?? (isRoot ? undefined : readInstalledPackageVersion(root, item.name));
       const published = await versionsOf(item.name);
       if (!published) { unknown.push(item.name); return undefined; }
+      // A Zhin package locked to an exact version (in a field `zhin migrate` upgrades): `zhin update`
+      // keeps it, but say a newer `latest` exists — whatever is installed, or nothing at all.
+      if (item.exact === undefined && item.override === undefined && isZhinPackageName(item.name)
+        && PINNED_VERSION.test(item.range.trim()) && migratable.get(item.name) === item.range) {
+        const locked = semver.valid(item.range.trim().replace(/^=?v?/u, ''));
+        const latest = locked ? await latestOf(item.name) : undefined;
+        if (locked && latest && semver.valid(latest) && semver.gt(latest, locked)) {
+          // The root keeps what `zhin migrate` treats as locked (the same `isPinnedSpecifier`), and a member
+          // never moves past the root's copy: only --include-pinned upgrades it then.
+          const rootSpec = rootMigratable.get(item.name);
+          const rootLocks = !isRoot && rootSpec !== undefined && isPinnedSpecifier(rootSpec);
+          pinned.push({ name: item.name, range: item.range, current, latest, upgrade: isRoot || rootLocks ? 'include-pinned' : 'migrate' });
+        } else if (locked && latest === undefined) {
+          unknown.push(`${item.name}@latest`);
+        }
+      }
       const target = item.exact ?? semver.maxSatisfying(published, item.resolve ?? item.range) ?? undefined;
       if (!target || target === current) return undefined;
       if (item.exact && !published.includes(item.exact)) { unknown.push(`${item.name}@${item.exact}`); return undefined; }
@@ -302,10 +375,12 @@ export async function previewUpdate(
     })).filter((change): change is UpdatePreviewChange => change !== undefined);
     changes.sort((a, b) => a.name.localeCompare(b.name));
     unknown.sort();
+    pinned.sort((a, b) => a.name.localeCompare(b.name));
     members.push({
       path: isRoot ? '.' : path.relative(root, dir).split(path.sep).join('/'),
       name: typeof manifest.name === 'string' ? manifest.name : undefined,
       changes, unknown, notDeclared, overridden: overridden.sort(),
+      ...(pinned.length ? { pinned } : {}),
     });
   }
   return members;
@@ -424,6 +499,21 @@ export function renderUpdatePreview(preview: UpdatePreview, gatewayRunning: bool
   if (!preview.members.some(member => member.path === '.')) renderOverrides();
   if (preview.conditionalOverrides.length) {
     lines.push('', `带条件的 overrides 没有计入预览（实际安装时仍然生效）：${preview.conditionalOverrides.join('、')}`);
+  }
+  const pinned = preview.members.flatMap(member => (member.pinned ?? []).map(item => ({ ...item, path: member.path })));
+  if (pinned.length) {
+    lines.push('', '已锁定、有新版本的 Zhin 包（精确版本，zhin update 不会升级；最新 = registry 的 latest 标签）：');
+    const width = Math.max(...pinned.map(item => item.name.length));
+    for (const item of pinned) {
+      const notes = [
+        ...(item.current === item.range.trim().replace(/^=?v?/u, '') ? [] : [`锁定 ${item.range}`]),
+        ...(item.path === '.' ? [] : [item.path]),
+        // Older fixtures carry no `upgrade`: a member's lock follows the root unless said otherwise.
+        ...(item.path !== '.' ? [item.upgrade === 'include-pinned' ? '根目录也锁定，zhin migrate --include-pinned 时随根升级' : 'zhin migrate 会随根升级'] : []),
+      ];
+      lines.push(`  ${item.name.padEnd(width)}  ${item.current ?? '未安装'} → ${item.latest}${notes.length ? `（${notes.join('；')}）` : ''}`);
+    }
+    if (pinned.some(item => item.path === '.')) lines.push('  升级根项目的锁定：zhin migrate --include-pinned（先加 --dry-run 预览；精确版本保持精确）');
   }
   lines.push('');
   const overrideChanges = preview.overrides.changes.length;
