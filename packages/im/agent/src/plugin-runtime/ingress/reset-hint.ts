@@ -1,7 +1,7 @@
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import { reportInboundOutcome, type Message } from '@zhin.js/core/runtime';
 import { managementCommandReference } from '../../init/command-presentation.js';
-import type { SessionToldLedger } from '../../memory/told-ledger.js';
+import { sessionKeyLedgerId, type SessionToldLedger } from '../../memory/told-ledger.js';
 import { deliveredMessageContextRef, deliveredTextDigest } from '../../session/context-provenance.js';
 import { deliveryOutcomeFromReceipt } from './request.js';
 
@@ -81,24 +81,90 @@ export async function sendFixedReply(input: Readonly<{
   const receipt = await input.reply(input.text);
   const outcome = deliveryOutcomeFromReceipt(receipt, input.text);
   if (outcome.status === 'sent' && outcome.messageContexts?.length) {
-    input.toldLedger?.recordDelivered(input.sessionKey, outcome.messageContexts
+    input.toldLedger?.recordDelivered(sessionKeyLedgerId(input.sessionKey), outcome.messageContexts
       .map(item => deliveredMessageContextRef(item.message, deliveredTextDigest(item.plannedText))));
   }
   return receipt;
 }
 
+/** #1250: one reset hint per conversation and sender within this window (milliseconds). */
+export const RESET_HINT_COOLDOWN_MS = 60_000;
+const RESET_HINT_COOLDOWN_MAX_ENTRIES = 2_000;
+
 /**
- * Answers an unhandled reset spelling (see {@link matchResetSpelling}); `true` when it did. The AI
- * trigger must not have taken the message (`triggered`): a triggered `clear` is the real clear command.
+ * #1250: remembers when a reset hint was last sent to a sender in a conversation, so repeating
+ * `/clear` cannot make the bot answer every message (process memory, bounded).
+ */
+export class ResetHintCooldown {
+  readonly #sent = new Map<string, number>();
+
+  constructor(private readonly windowMs = RESET_HINT_COOLDOWN_MS, private readonly now: () => number = Date.now) {}
+
+  /** `true` (and starts the window) when no hint went to this key within the window. */
+  take(key: string): boolean {
+    const now = this.now();
+    const last = this.#sent.get(key);
+    if (last !== undefined && now - last < this.windowMs) return false;
+    this.#sent.delete(key);
+    this.#sent.set(key, now);
+    while (this.#sent.size > RESET_HINT_COOLDOWN_MAX_ENTRIES) {
+      const oldest = this.#sent.keys().next().value;
+      if (oldest === undefined) break;
+      this.#sent.delete(oldest);
+    }
+    return true;
+  }
+
+  clear(): void {
+    this.#sent.clear();
+  }
+}
+
+/** The trigger and access settings a reset hint must respect (subset of the Agent config). */
+export interface ResetHintPolicy {
+  readonly trigger?: Readonly<{ enabled?: boolean; respondToAt?: boolean; respondToPrivate?: boolean }>;
+  readonly access?: Readonly<{ mode?: string; users?: readonly string[]; groups?: readonly string[] }>;
+}
+
+/**
+ * #1250: the hint is only sent where the AI would have answered a normal message from this sender:
+ * the trigger is on, private chats (or mentions in a group) are answered, and the AI access gate is
+ * open for this sender / group. Anything else stays silent (fail closed).
+ */
+export function resetHintAllowed(message: Pick<Message, 'conversation' | 'mentioned' | 'sender'>, policy: ResetHintPolicy): boolean {
+  const { trigger, access } = policy;
+  if (trigger?.enabled === false) return false;
+  const isPrivate = message.conversation.kind === 'private';
+  if (isPrivate ? trigger?.respondToPrivate === false : (message.mentioned !== true || trigger?.respondToAt === false)) return false;
+  const mode = access?.mode ?? 'open';
+  if (mode === 'open') return true;
+  if (mode !== 'whitelist') return false;
+  const senderId = message.sender?.id?.trim();
+  if (senderId && access?.users?.includes(senderId)) return true;
+  return !isPrivate && (access?.groups?.includes(message.conversation.id) ?? false);
+}
+
+/**
+ * Answers an unhandled reset spelling (see {@link matchResetSpelling}); `true` when it did. Called by
+ * the ingress only after the control-plane, speaking and trigger gates passed and no trigger matched
+ * the message: a triggered `clear` is the real clear command. At most one hint per conversation and
+ * sender within the cooldown; inside it the message falls through unanswered, as before.
  */
 export async function answerResetSpelling(input: Readonly<{
   message: Message;
-  triggered: boolean;
+  policy: ResetHintPolicy;
+  cooldown: ResetHintCooldown;
+  cooldownKey: string;
   isOperator: boolean;
+  /** The control plane stopped outbound messages here: no hint (the message falls through). */
+  outboundBlocked?: () => boolean;
   send: (text: string) => Promise<unknown>;
 }>): Promise<boolean> {
-  const spelling = input.triggered ? undefined : matchResetSpelling(input.message);
-  if (!spelling) return false;
+  const spelling = matchResetSpelling(input.message);
+  if (!spelling || !resetHintAllowed(input.message, input.policy)) return false;
+  if (input.outboundBlocked?.()) return false;
+  // Within the cooldown the message is handled as before the hint existed (no reply).
+  if (!input.cooldown.take(input.cooldownKey)) return false;
   reportInboundOutcome(input.message, { outcome: 'suggested', reason: 'reset_hint', stage: 'agent_gate' });
   await input.send(resetHintText({
     spelling,

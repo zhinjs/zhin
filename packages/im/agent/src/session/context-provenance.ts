@@ -85,11 +85,13 @@ export function ownPrivateInbound(turn: Readonly<{
 }>): OwnPrivateInbound | undefined {
   const { origin, principal } = turn;
   if (origin.kind !== 'im' || origin.scope !== 'private' || !origin.messageId) return undefined;
-  if (principal.origin !== undefined && principal.origin !== 'human') return undefined;
+  // Only a message the IM runtime classified as human (a missing origin is not trusted).
+  if (principal.origin !== 'human') return undefined;
   if (turn.input?.mergedSenders?.length) return undefined;
   const conversation = origin.conversation as ConversationRef | undefined;
   if (!conversation || conversation.kind !== 'private' || !conversation.endpoint?.id || !conversation.endpoint.adapter) return undefined;
-  return principal.subjectId ? Object.freeze({ conversation, subjectId: principal.subjectId }) : undefined;
+  const subjectId = principal.subjectId?.trim();
+  return subjectId ? Object.freeze({ conversation, subjectId }) : undefined;
 }
 
 /**

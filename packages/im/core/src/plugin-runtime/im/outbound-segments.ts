@@ -208,6 +208,28 @@ export function adapterDeclaresLiveDanmaku(adapter: CapabilityId, snapshot: Runt
 }
 
 /**
+ * ADR 0067 D8: the adapter declares `messaging.inboundTextAuthoredBySender` for this conversation
+ * kind — its inbound text segments are always the sender's own words (forwards, quotes and cards
+ * arrive as non-text segments, a `replyTo` or the `forwarded` marker). Undeclared, unknown or an
+ * invalid profile: `false` (fail closed).
+ */
+export function adapterDeclaresInboundTextAuthoredBySender(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+  conversation: OutboundConversationScope,
+): boolean {
+  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  const profile = (slot?.definition as { profile?: unknown } | undefined)?.profile;
+  if (!profile || typeof profile !== 'object') return false;
+  try {
+    return resolveStaticCapabilities(profile as AdapterCapabilityProfile, activeCapabilityKinds(conversation))
+      .messaging?.inboundTextAuthoredBySender === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * What a model may author for this endpoint: every segment type the outbound
  * projection would deliver rather than reject (markdown and keyboards outside the
  * declared list still qualify when the endpoint degrades them to text), plus the

@@ -208,6 +208,12 @@ export interface IncomingMessage {
   readonly mentioned?: boolean;
   /** 引用/回复的原始消息。 */
   readonly replyTo?: { readonly id: string };
+  /**
+   * ADR 0067 D8: the message relays content the sender did not write themselves — a forward, an
+   * inline-bot result, an automatic channel forward, a quote from another chat. The IM runtime never
+   * keeps "original inbound text" evidence for such a message, whatever its segments look like.
+   */
+  readonly forwarded?: boolean;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 

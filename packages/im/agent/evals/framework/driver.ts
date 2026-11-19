@@ -3,7 +3,8 @@ import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context
 import { createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
 import { deliveredTextDigest, plannedReplyTexts } from '../../src/session/context-provenance.js';
-import type { MessageRef } from '@zhin.js/im-contract';
+import type { ConversationContextBlock, ConversationRef, MessageRef } from '@zhin.js/im-contract';
+import { ConversationRuntime } from '../../../core/src/plugin-runtime/im/conversation-runtime.js';
 /**
  * Engine driver: assembles the smallest real host (ZhinAgent + AgentCore +
  * session/context systems) around the scripted model, builds a canonical
@@ -557,7 +558,8 @@ function buildTurn(
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: turnId, turnId },
     origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message`, conversation },
-    principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles },
+    // The IM runtime's origin classifier marks every human message (`createRuntimeTurnAccess`).
+    principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles, origin: 'human' },
     input: {
       text: message.text,
       ...(message.images?.length
@@ -595,9 +597,14 @@ function buildTurn(
       ...(approval ? { approval } : {}),
       ...(message.backgroundEvents?.length || message.backgroundOwnMessages?.length || (message.backgroundOwnReplies && deliveredReplies.length)
         ? { conversationContext: backgroundContext(message.backgroundEvents ?? [], message.backgroundOwnReplies ? [...deliveredReplies] : [],
-          (message.backgroundOwnMessages ?? []).map((text, position) => ({
-            message: { conversation, id: `${turnId}:own-${position + 1}` }, senderId: sender.id, senderName: sender.name ?? sender.id, text,
-          }))) } : {}),
+          conversation, `${turnId}:message`, (message.backgroundOwnMessages ?? []).map((entry, position) => {
+            const own = typeof entry === 'string' ? { text: entry } : entry;
+            return {
+              message: { conversation, id: `${turnId}:own-${position + 1}` },
+              senderId: own.senderId ?? sender.id, senderName: own.senderId ?? sender.name ?? sender.id, text: own.text,
+              ...(own.forwarded ? { forwarded: true } : {}),
+            };
+          })) } : {}),
       ...(message.quote ? { references: quoteReferencePort(message.quote) } : {}),
     },
   });
@@ -706,44 +713,55 @@ function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, inde
 }
 
 type DeliveredEvalReply = Readonly<{ message: MessageRef; plannedText: string }>;
-type OwnEvalMessage = Readonly<{ message: MessageRef; senderId: string; senderName: string; text: string }>;
+type OwnEvalMessage = Readonly<{ message: MessageRef; senderId: string; senderName: string; text: string; forwarded?: boolean }>;
 
 /**
  * Member texts become plain background blocks. `ownReplies` (#1250) are the bot's own earlier
  * replies, projected as the IM runtime projects an actor-less outbound message: label, message
- * reference and the delivered text digest the outbound receipt carries.
+ * reference and the delivered text digest the outbound receipt carries. `ownMessages` (ADR 0067 D8)
+ * go through the real core projection: a `ConversationRuntime` stores them as an adapter declaring
+ * `inboundTextAuthoredBySender` delivers them (with the `forwarded` marker where set) and reads them
+ * back, so the evidence the turn engine sees is exactly what core produces.
  */
 function backgroundContext(
   texts: readonly string[],
   ownReplies: readonly DeliveredEvalReply[] = [],
+  conversation?: ConversationRef,
+  currentMessageId?: string,
   ownMessages: readonly OwnEvalMessage[] = [],
 ): ConversationContextPort {
-  // ADR 0067 D8: the sender's own stored original messages come first (they preceded the replies).
-  const sender = ownMessages.map((own, index) => ({
-    kind: 'conversation_event' as const,
-    sequence: index + 1,
-    eventType: 'message.created' as const,
-    text: `${own.senderName} (${own.senderId}) [message_id=${JSON.stringify(own.message.id)}]: ${own.text}`,
-    message: own.message,
-    inboundActorId: own.senderId,
-    inboundTextDigest: deliveredTextDigest(own.text),
-  }));
-  const own = ownReplies.map((reply, index) => ({
-    kind: 'conversation_event' as const,
-    sequence: sender.length + index + 1,
-    eventType: 'message.created' as const,
-    text: `You (this bot) [message_id=${JSON.stringify(reply.message.id)}]: ${reply.plannedText}`,
-    message: reply.message,
-    messageTextDigest: deliveredTextDigest(reply.plannedText),
-  }));
-  const members = texts.map((text, index) => ({
-    kind: 'conversation_event' as const,
-    sequence: sender.length + own.length + index + 1,
-    eventType: 'message.created' as const,
-    text,
-  }));
+  const projectOwn = async (): Promise<readonly ConversationContextBlock[]> => {
+    if (!ownMessages.length || !conversation || !currentMessageId) return [];
+    const runtime = new ConversationRuntime();
+    for (const own of ownMessages) {
+      await runtime.recordIncoming({
+        conversation, message: own.message, content: own.text, segments: [{ type: 'text', data: { text: own.text } }],
+        ...(own.forwarded ? { forwarded: true } : {}),
+      }, { id: own.senderId, name: own.senderName }, { textAuthoredBySender: true });
+    }
+    const through = await runtime.recordIncoming({ conversation, message: { conversation, id: currentMessageId }, content: '' },
+      { id: 'eval-current' }, { textAuthoredBySender: true });
+    return through === undefined ? [] : (await runtime.readContext(conversation, 'eval', through, 50, currentMessageId)).blocks;
+  };
   return {
-    readPending: async () => ({ cursor: sender.length + own.length + members.length, blocks: [...sender, ...own, ...members] }),
+    readPending: async () => {
+      const sender = await projectOwn();
+      const own = ownReplies.map((reply, index) => ({
+        kind: 'conversation_event' as const,
+        sequence: sender.length + index + 1,
+        eventType: 'message.created' as const,
+        text: `You (this bot) [message_id=${JSON.stringify(reply.message.id)}]: ${reply.plannedText}`,
+        message: reply.message,
+        messageTextDigest: deliveredTextDigest(reply.plannedText),
+      }));
+      const members = texts.map((text, index) => ({
+        kind: 'conversation_event' as const,
+        sequence: sender.length + own.length + index + 1,
+        eventType: 'message.created' as const,
+        text,
+      }));
+      return { cursor: sender.length + own.length + members.length, blocks: [...sender, ...own, ...members] };
+    },
     commit: async () => undefined,
   };
 }

@@ -167,13 +167,15 @@ A profile has sections per conversation kind: `default`, `private`, `group`, `ch
 
 | Group | Content |
 |---|---|
-| `messaging` | `segments` (the former `AdapterDefinition.segments`; both name the same declaration, write it once), `maxLength`, `mention`, `quote`, `reaction`, `recall`, `edit`, `forward`, `maxMessagesPerTurn` |
+| `messaging` | `segments` (the former `AdapterDefinition.segments`; both name the same declaration, write it once), `maxLength`, `mention`, `quote`, `reaction`, `recall`, `edit`, `forward`, `maxMessagesPerTurn`, `inboundTextAuthoredBySender` (below) |
 | `scene` | `groupInfo`, `memberProfile`, `roles` (platform role words to `owner / admin / member`), `platformStanding` (which of `standing` / `roles` / `permissions` the inbound `sender.platform` reports, ADR 0056 §1), `selfStanding` (the bot's own standing in the conversation, looked up through `management.inspectSelfStanding` and cached per conversation by the framework for `bot:*` permits; declaring it requires the method), `mute`, `maxMembers`, `card`, `title` |
 | `actions` | What the Bot can do: `reaction`, `poke`, `mute`, `unmute`, `muteAll`, `kick`, `setCard`, `setTitle`, `recall`, `essence`, `announce`, `invite`, `quoteReply`, `forward`; each `{ scopes, requiresRole?, params? }`, absent means unsupported |
 | `events` | `emit` (standard event names), `liveDanmaku` (the former `capabilities: ['liveDanmaku']`) |
 | `feedback` | How "typing" is shown: `typing` / `reaction` / `status-message` / `none` |
 | `delivery` | `send`, `proactive`, `passiveWindow`, `rateLimitPerMinute`, `mediaMaxBytes`, `spool`, `requiresMessageSeq` |
 | `prompt` | `auto` (generate the platform description), `text` (adapter-authored text) |
+
+**`messaging.inboundTextAuthoredBySender` (ADR 0067 D8)** declares that every inbound `text` segment of this adapter is text the sender wrote: forwards, quotes, cards, merged forwards and inline-bot results arrive as non-text segments (`forward`, `json`, media, …), as `replyTo`, or with the `forwarded: true` marker on the inbound message, and the plain-text view `content` equals the text segments (no embed titles, sticker names or file names appended). Only for an adapter that declares it does the core keep "original text" evidence for a private-chat inbound message, so that the initiator's own earlier original message does not count as an external-content source in the next turn; without it every such message counts (fail closed). Declare it only after checking the adapter's inbound conversion; an adapter whose platform gives no forward marker, or that turns cards or file names into text, must not declare it. Declared today: sandbox, telegram (forwards, `via_bot`, automatic forwards and cross-chat quotes carry `forwarded`), onebot11, napcat, discord.
 
 An icqq-like example:
 

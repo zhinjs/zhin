@@ -166,13 +166,15 @@ SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 
 
 | 组 | 内容 |
 |---|---|
-| `messaging` | `segments`（即原 `AdapterDefinition.segments`，二者是同一份声明，写一处即可）、`maxLength`、`mention`、`quote`、`reaction`、`recall`、`edit`、`forward`、`maxMessagesPerTurn` |
+| `messaging` | `segments`（即原 `AdapterDefinition.segments`，二者是同一份声明，写一处即可）、`maxLength`、`mention`、`quote`、`reaction`、`recall`、`edit`、`forward`、`maxMessagesPerTurn`、`inboundTextAuthoredBySender`（见下） |
 | `scene` | `groupInfo`、`memberProfile`、`roles`（平台角色词到 `owner / admin / member`）、`platformStanding`（入站 `sender.platform` 上报 `standing` / `roles` / `permissions` 中的哪些，ADR 0056 §1）、`selfStanding`（机器人自身在会话中的身份，由 `management.inspectSelfStanding` 查询、框架按会话缓存，供 `bot:*` permit；声明了就必须实现该方法）、`mute`、`maxMembers`、`card`、`title` |
 | `actions` | Bot 能主动做的事：`reaction`、`poke`、`mute`、`unmute`、`muteAll`、`kick`、`setCard`、`setTitle`、`recall`、`essence`、`announce`、`invite`、`quoteReply`、`forward`；每项 `{ scopes, requiresRole?, params? }`，未列出即不支持 |
 | `events` | `emit`（会发出的标准事件名）、`liveDanmaku`（即原 `capabilities: ['liveDanmaku']`） |
 | `feedback` | 「正在输入」方式：`typing` / `reaction` / `status-message` / `none` |
 | `delivery` | `send`、`proactive`、`passiveWindow`、`rateLimitPerMinute`、`mediaMaxBytes`、`spool`、`requiresMessageSeq` |
 | `prompt` | `auto`（自动生成平台说明）、`text`（适配器自定义文本） |
+
+**`messaging.inboundTextAuthoredBySender`（ADR 0067 D8）**：声明本适配器入站的每个 `text` 段都是发送者亲笔写的——转发、引用、卡片、合并转发、inline bot 结果都表示为非文本段（`forward`、`json`、媒体等）、`replyTo`，或在入站消息上加 `forwarded: true` 标记；纯文本视图 `content` 与文本段一致，不往里拼 embed 标题、贴纸名、文件名之类的占位文字。只有声明了它的适配器，核心才会为私聊入站消息记下「原文证据」，让发起人自己更早的原文消息在下一回合不计外部内容来源；没声明一律按外部内容处理（失败关闭）。逐项核实入站转换后再声明；平台给不出转发标记、或把卡片 / 文件名转成文本的适配器不要声明。目前声明的有 sandbox、telegram（转发、`via_bot`、自动转发、跨会话引用带 `forwarded`）、onebot11、napcat、discord。
 
 下面是一个 icqq 风格的例子：
 

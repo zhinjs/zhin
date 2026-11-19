@@ -35,6 +35,9 @@ export default defineAdapter<DiscordEndpointConfig>({
           markdown: 'native',
         },
         quote: true,
+        // ADR 0067 D8：文本段只取 message.content；转发（message_reference）与回复都带 replyTo，附件为媒体段，
+        // embed 标题、贴纸名只进纯文本视图（与段不一致，核心不写证据），按钮是 action 段。
+        inboundTextAuthoredBySender: true,
         recall: {},
       },
       actions: {

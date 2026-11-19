@@ -31,6 +31,8 @@ import {
   type SendRequest,
 } from './contracts.js';
 import { requireAdapters } from './endpoint-runtime.js';
+import type { RecordIncomingOptions } from './conversation-runtime.js';
+import { adapterDeclaresInboundTextAuthoredBySender } from './outbound-segments.js';
 import type { InboundDeduper } from './inbound-dedup.js';
 import type { InboundOriginClassifier } from './inbound-origin.js';
 import {
@@ -96,6 +98,7 @@ interface InboundRuntimeContext {
   recordIncoming(
     input: IncomingMessage,
     sender: MessageSenderRef | undefined,
+    options?: RecordIncomingOptions,
   ): Promise<number | undefined>;
   recordNotice(notice: Notice): Promise<unknown>;
   /** #996: join requests into a group/channel are conversation facts too. */
@@ -413,7 +416,10 @@ export class InboundRuntime {
           },
         );
         // A secret-bearing message never enters the conversation history.
-        const conversationSequence = secret ? undefined : await this.context.recordIncoming(input, enrichedSender);
+        const conversationSequence = secret ? undefined : await this.context.recordIncoming(input, enrichedSender, {
+          // ADR 0067 D8: original-text evidence only where the adapter vouches for its text segments.
+          textAuthoredBySender: adapterDeclaresInboundTextAuthoredBySender(adapter, lease.value, conversation),
+        });
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
         ledger.markAddressed(isAddressedMessage(message));

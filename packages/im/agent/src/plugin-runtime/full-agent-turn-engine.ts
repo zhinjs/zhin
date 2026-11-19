@@ -2,6 +2,7 @@ import type { CoreReplyStream } from '@zhin.js/core/runtime';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { MessageAliasTable } from '@zhin.js/ai';
+import { sessionKeyLedgerId } from '../memory/told-ledger.js';
 import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, ownPrivateInbound, plannedReplyTexts, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
@@ -284,7 +285,7 @@ async function* runInteractiveTurn(
   // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067 D7);
   // so is the initiator's own original message in this private chat (ADR 0067 D8).
   if (background && unrepresentedConversationBlocks(pendingContext!.blocks,
-    ref => (host.toldLedger?.hasDelivered(prep.sessionId, ref) || host.toldLedger?.hasDelivered(context.turn.session.key, ref)) ?? false,
+    ref => (host.toldLedger?.hasDelivered(prep.sessionId, ref) || host.toldLedger?.hasDelivered(sessionKeyLedgerId(context.turn.session.key), ref)) ?? false,
     ownPrivateInbound(context.turn)).length) {
     provenance.record({ kind: 'conversation_context',
       ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}) });

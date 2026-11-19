@@ -36,11 +36,12 @@ export interface EvalInboundMessage {
    */
   readonly backgroundOwnReplies?: boolean;
   /**
-   * #1250 (ADR 0067 D8): earlier messages of this message's own sender in the same chat that nothing
-   * handled (e.g. `/clear`), projected as the IM runtime projects a stored original inbound message:
-   * sender label, message reference and the inbound sender id / text digest evidence.
+   * #1250 (ADR 0067 D8): earlier plain-text messages in the same chat that nothing handled (e.g.
+   * `/clear`), stored and read back through the real core `ConversationRuntime` as an adapter that
+   * declares `inboundTextAuthoredBySender` delivers them. A string is this message's own sender; an
+   * object may name another `senderId` or carry the adapter's `forwarded` marker (a Telegram forward).
    */
-  readonly backgroundOwnMessages?: readonly string[];
+  readonly backgroundOwnMessages?: readonly (string | Readonly<{ text: string; senderId?: string; forwarded?: boolean }>)[];
   /**
    * The message this one replies to, as the IM ingress resolves it (ADR 0043 §4). `text` is the quoted
    * message's content; `sender` is its author. It becomes a message reference the model could inspect.

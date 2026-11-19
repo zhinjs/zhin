@@ -82,6 +82,15 @@ export function extractToldEntries(text: string, source: 'reply' | 'progress'): 
 }
 
 /** Per-session ledger of what the user has already been told. */
+/**
+ * #1250 (ADR 0067 D8): the ledger id under which replies are recorded by Agent session key (runtime
+ * fixed replies that have no session id yet). The `key:` namespace keeps a session key from ever
+ * naming the same entry as a session id.
+ */
+export function sessionKeyLedgerId(sessionKey: string): string {
+  return `key:${sessionKey}`;
+}
+
 export class SessionToldLedger {
   readonly #sessions = new Map<string, ToldEntry[]>();
   /** `delivered-message:` references of replies this agent delivered with exact text evidence. */
