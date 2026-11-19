@@ -45,6 +45,7 @@ import { observeAgentTurnTrace } from '../ingress/ports.js';
 import { createRuntimeProactiveOutbound } from './runtime-factory.js';
 import type { ApprovalPort } from '../../session/approval-port.js';
 import type { SchedulePreviewOptions } from '../../task-executor.js';
+import { DEFAULT_ZHIN_AGENT_NAME } from '../../config/types.js';
 
 const logger = getLogger('agent');
 
@@ -154,6 +155,11 @@ export function createAssistantScheduleRuntime(
     workspaceDir: projectRoot,
   });
 
+  // `zhin` and the `ai.agents` bindings a scheduled job may run on.
+  const scheduleAgentNames = (): readonly string[] => {
+    const names = service.getBindingRegistry().listAgentNames();
+    return names.includes(DEFAULT_ZHIN_AGENT_NAME) ? names : [DEFAULT_ZHIN_AGENT_NAME, ...names];
+  };
   const scheduleManager = {
     scheduleFeature: {
       getStatus: () => [],
@@ -210,7 +216,7 @@ export function createAssistantScheduleRuntime(
           }
         }
         await syncProfileHeartbeatToStore(store, profile);
-        await syncProfileRoutinesToStore(store, profile);
+        await syncProfileRoutinesToStore(store, profile, { agents: scheduleAgentNames() });
         await pruneStaleProfileCronJobs(store, profile);
       } catch (error) {
         logger.warn(formatCompact({ op: 'assistant_profile_load_fail', error: error instanceof Error ? error.message : String(error) }));

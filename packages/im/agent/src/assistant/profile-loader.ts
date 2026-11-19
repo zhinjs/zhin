@@ -224,10 +224,15 @@ const PROFILE_CRON_LABELS: Record<string, string> = {
   weatherReport: '天气早报',
 };
 
-/** 将 Profile routines 中的 cron 调度 Job 同步进 JobStore（含 weatherReport 等扩展 routine） */
+/**
+ * 将 Profile routines 中的 cron 调度 Job 同步进 JobStore（含 weatherReport 等扩展 routine）。
+ * `options.agents`: the configured Agents (`zhin` and `ai.agents`); a routine naming another one is
+ * still synced (its runs fail visibly until fixed) and logged as a warning (#1250 b55).
+ */
 export async function syncProfileRoutinesToStore(
   store: ScheduleJobStore,
   profile: AssistantProfile | null,
+  options: Readonly<{ agents?: readonly string[] }> = {},
 ): Promise<number> {
   if (!profile?.routines) return 0;
   const profileDefaults = profile.defaults?.notify;
@@ -237,6 +242,12 @@ export async function syncProfileRoutinesToStore(
     if (routine.enabled === false || !routine.cron?.trim() || !routine.prompt?.trim()) continue;
     const jobId = profileCronJobId(key);
     const defaultLabel = PROFILE_CRON_LABELS[key] ?? key;
+    const agent = typeof routine.agent === 'string' ? routine.agent.trim() : '';
+    if (agent && options.agents && !options.agents.includes(agent)) {
+      logger.warn(formatCompact({
+        op: 'profile_routine_agent_missing', routine: key, job: jobId, agent, available: options.agents.join(','),
+      }));
+    }
     await upsertProfileJob(store, buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults));
     synced++;
   }

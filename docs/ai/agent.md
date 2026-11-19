@@ -740,10 +740,12 @@ routines:
 - 内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
 - 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
 - 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
+- **聊天里能看到、能管理哪些任务**：所有者（`owner` 角色）的 `schedule_list` 列出全部持久化任务，`schedule_remove` / `schedule_pause` / `schedule_resume` 可以管理任何任务。其他人（群管理员也一样）的 `schedule_list` 只列出**自己在聊天里创建的任务**（同一用户、同一平台账号）和**投递到当前会话的任务**；删除、暂停、恢复只能针对自己创建的任务，别人的任务只会得到「这不是你创建的任务」，不会透露任务内容。在 Console、CLI 或 Profile 创建的任务没有聊天创建者，只有所有者能在聊天里管理。Profile 例程在聊天里不能删除、暂停或恢复（重启时会按 Profile 还原），所有者也会被提示去 Profile 文件（`assistant.profile.file`，默认 `assistant.profile.yml`）修改。列表里任务指定的 Agent 若不在你当前会话能用的 Agent（`@名称` 可见范围加默认 `zhin`）之内，只显示「其他 Agent」（`agent_hidden: true`），不显示名称。插件注册的内存任务只有插件名与 cron 表达式，不含提示词和投递目标，照常列出。
 - **指定执行的 Agent**：任务默认由 `zhin` 执行。要让某个任务（如早报）走 `ai.agents` 里配置的另一个 Agent，用 `zhin schedule add --agent <名称>` 创建，或 `zhin schedule set-agent <id> <名称>` / `--clear` 修改；聊天里 `schedule_add` 也接受可选的 `agent` 参数。名称必须是已配置的 Agent，否则报错并列出可用的 Agent。聊天里只能指定**你在当前会话里能用的** Agent：与 `@名称` 点名 Agent 时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），再加上默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝，不会借此把任务交给它。只在 `ai.agents` 里配置、没有对应 Agent 包的 Agent 聊天里无法 @ 到，因此也只能用 CLI 或 Console 指定。
   - 聊天里的可见性**只在创建任务时检查**。之后即使撤销了你对该 Agent 的权限（改了 Agent 包的 `platforms` / `scopes` / `permissions` 或你的角色），已有任务仍由原 Agent 执行；要收回，用 `zhin schedule set-agent` / Console 修改或删除该任务。
   - `set-agent` 修改的是投递到原目标的任务，因此和创建时一样，要求对任务投递目标账号有 `endpoint.operate`，否则返回 403。
-  - Profile 例程（`assistant.profile.yml` 的 `routines`）每次启动都按 Profile 重新声明，`set-agent` / Console 会拒绝修改它们（错误码 `schedule_agent_profile`），请改 routine 的 `agent` 字段。心跳任务始终由默认 Agent 执行。
+  - Profile 例程（`assistant.profile.yml` 的 `routines`）每次启动都按 Profile 重新声明，`set-agent` / Console 会拒绝修改它们（错误码 `schedule_agent_profile`），请改 routine 的 `agent` 字段。routine 写的 Agent 不在配置里（`zhin` 与 `ai.agents`）时，启动同步会记一条警告日志（`profile_routine_agent_missing`），任务照常同步，但每次运行都会失败。心跳任务始终由默认 Agent 执行。
+  - 名称不存在时，CLI / HTTP 返回 400 `schedule_agent_not_found`，Console 的 `cron:add` / `cron:set-agent` 返回同样的错误文本；两者都带 `data: { code: 'schedule_agent_not_found', agent, available }`（请求的名称与可用的 Agent 列表），前端可以据此给出选择。
   - 任务指定的 Agent 之后从 `ai.agents` 删除时，任务保留，但每次运行都会失败并记录错误；`zhin schedule list` 在该任务的 Agent 后标出「⚠ Agent 不存在」，Console 的 `schedule:list` 给它带上 `agentMissing: true`，用 `set-agent` 改成现有 Agent 或 `--clear` 即可恢复。
 
 ## 按模型调整参数
