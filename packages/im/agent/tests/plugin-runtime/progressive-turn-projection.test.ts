@@ -41,7 +41,7 @@ it.each(['sent', 'partial', 'legacy'] as const)('projects %s delivery facts thro
     rateLimiter: { check: () => ({ allowed: true }) }, usageQuota: new UsageQuota(),
     contextRepository: { getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }), setDeferredToolSnapshot: async () => undefined },
     promptController: new PromptController('one-at-a-time', 'one-at-a-time'), activeBinding: { providerAlias: 'provider', model: 'model' },
-    toldLedger: { record, renderBlocks: () => [] }, finalizeActiveTurn };
+    toldLedger: { record, renderBlocks: () => [], recordDelivered: vi.fn(), hasDelivered: () => false }, finalizeActiveTurn };
   const engine = createFullAgentTurnEngine({ host: host as never,
     core: { runText(input: { replyStream: CoreReplyStream }) { return (async function* () {
       expect(input.replyStream).toBeDefined();
@@ -262,7 +262,7 @@ it.each(['sent', 'failed'] as const)('sends the unexecuted-tool notice as a foll
     rateLimiter: { check: () => ({ allowed: true }) }, usageQuota: new UsageQuota(),
     contextRepository: { getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }), setDeferredToolSnapshot: async () => undefined },
     promptController: new PromptController('one-at-a-time', 'one-at-a-time'), activeBinding: { providerAlias: 'provider', model: 'model' },
-    toldLedger: { record: vi.fn(), renderBlocks: () => [] }, finalizeActiveTurn: vi.fn() };
+    toldLedger: { record: vi.fn(), renderBlocks: () => [], recordDelivered: vi.fn(), hasDelivered: () => false }, finalizeActiveTurn: vi.fn() };
   const engine = createFullAgentTurnEngine({ host: host as never,
     core: { runText(input: { replyStream: CoreReplyStream }) { return (async function* () {
       const snapshot = { revision: 1, messages: [{ key: 'message-0', complete: true,

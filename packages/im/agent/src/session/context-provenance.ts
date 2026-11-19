@@ -65,3 +65,22 @@ export function conversationContextMessage(blocks: readonly ConversationContextB
     contextBlocks,
   };
 }
+
+/**
+ * #1250 `own-reply-counts-as-background`: the background blocks that bring content the session
+ * history does not already carry, i.e. the ones that make a turn read lower-trust content (ADR 0067).
+ * A block of the bot's own message that this agent delivered as its reply in this session — same
+ * platform message, same delivered text digest (`isDelivered`) — is history-equivalent: session
+ * history (earlier replies, tool results, background) is not a provenance source either. The block
+ * stays in the prompt (the model keeps the order of the chat); it only does not count. Every other
+ * block counts: members' messages, scene events, and the bot's own messages sent by other paths
+ * (plugin commands, scheduled deliveries, other sessions), whose text may be third-party content.
+ */
+export function unrepresentedConversationBlocks(
+  blocks: readonly ConversationContextBlock[],
+  isDelivered: (contextRef: string) => boolean,
+): readonly ConversationContextBlock[] {
+  return blocks.filter(block => !((block.eventType === 'message.created' || block.eventType === 'message.updated')
+    && block.message && block.messageTextDigest
+    && isDelivered(deliveredMessageContextRef(block.message, block.messageTextDigest))));
+}
