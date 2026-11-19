@@ -38,6 +38,8 @@ import { listWorkspacePackageDirs, workspacePackageGlobs } from './workspace-pac
 
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'] as const;
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+/** A declared exact version (`1.2.3`, `=1.2.3`, `v1.2.3`) — what `zhin migrate` calls pinned. */
+const PINNED_VERSION = /^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/u;
 
 /** Published versions of a package (ascending), or undefined when the registry cannot say. */
 export type PublishedVersions = (name: string) => Promise<readonly string[] | undefined>;
@@ -68,6 +70,21 @@ export interface UpdatePreviewMember {
   readonly notDeclared: readonly string[];
   /** Packages pinned by an override the preview cannot evaluate (`link:`, `npm:` aliases, …), with it. */
   readonly overridden: readonly string[];
+  /**
+   * Zhin packages declared with an exact version that the registry has a newer stable release of:
+   * `zhin update` stays on the pinned version, `zhin migrate --include-pinned` moves them (#1250
+   * update-dry-run-hides-pinned-zhin). Absent from older callers' fixtures, hence optional.
+   */
+  readonly pinned?: readonly UpdatePreviewPinned[];
+}
+
+export interface UpdatePreviewPinned {
+  readonly name: string;
+  /** The declared exact version. */
+  readonly range: string;
+  /** Installed version (the pinned one when nothing is installed). */
+  readonly current: string;
+  readonly latest: string;
 }
 
 export interface UpdatePreviewOverrides {
@@ -285,12 +302,22 @@ export async function previewUpdate(
       if (item.exact !== undefined || semver.validRange(item.range) !== null) considered.push(item);
     }
     const unknown: string[] = [];
+    const pinned: UpdatePreviewPinned[] = [];
     const changes = (await mapLimited(considered, options.concurrency ?? 8, async (item): Promise<UpdatePreviewChange | undefined> => {
       const current = readInstalledPackageVersion(dir, item.name) ?? (isRoot ? undefined : readInstalledPackageVersion(root, item.name));
       const published = await versionsOf(item.name);
       if (!published) { unknown.push(item.name); return undefined; }
       const target = item.exact ?? semver.maxSatisfying(published, item.resolve ?? item.range) ?? undefined;
-      if (!target || target === current) return undefined;
+      if (target && target === current) {
+        // A Zhin package locked to an exact version: `zhin update` keeps it, but say a newer one exists.
+        const latest = published.filter(version => !version.includes('-')).at(-1);
+        if (item.exact === undefined && item.override === undefined && isZhinPackageName(item.name)
+          && PINNED_VERSION.test(item.range.trim()) && latest && semver.gt(latest, target)) {
+          pinned.push({ name: item.name, range: item.range, current: target, latest });
+        }
+        return undefined;
+      }
+      if (!target) return undefined;
       if (item.exact && !published.includes(item.exact)) { unknown.push(`${item.name}@${item.exact}`); return undefined; }
       const stable = published.filter(version => !version.includes('-'));
       const latest = stable.at(-1);
@@ -302,10 +329,12 @@ export async function previewUpdate(
     })).filter((change): change is UpdatePreviewChange => change !== undefined);
     changes.sort((a, b) => a.name.localeCompare(b.name));
     unknown.sort();
+    pinned.sort((a, b) => a.name.localeCompare(b.name));
     members.push({
       path: isRoot ? '.' : path.relative(root, dir).split(path.sep).join('/'),
       name: typeof manifest.name === 'string' ? manifest.name : undefined,
       changes, unknown, notDeclared, overridden: overridden.sort(),
+      ...(pinned.length ? { pinned } : {}),
     });
   }
   return members;
@@ -424,6 +453,15 @@ export function renderUpdatePreview(preview: UpdatePreview, gatewayRunning: bool
   if (!preview.members.some(member => member.path === '.')) renderOverrides();
   if (preview.conditionalOverrides.length) {
     lines.push('', `带条件的 overrides 没有计入预览（实际安装时仍然生效）：${preview.conditionalOverrides.join('、')}`);
+  }
+  const pinned = preview.members.flatMap(member => (member.pinned ?? []).map(item => ({ ...item, path: member.path })));
+  if (pinned.length) {
+    lines.push('', '已锁定、有新版本的 Zhin 包（精确版本，zhin update 不会升级）：');
+    const width = Math.max(...pinned.map(item => item.name.length));
+    for (const item of pinned) {
+      lines.push(`  ${item.name.padEnd(width)}  ${item.current} → ${item.latest}${item.path === '.' ? '' : `（${item.path}）`}`);
+    }
+    lines.push('  升级：zhin migrate --include-pinned（先加 --dry-run 预览；精确版本保持精确）');
   }
   lines.push('');
   const overrideChanges = preview.overrides.changes.length;

@@ -285,7 +285,7 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
-声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。项目在 `ignoredBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`，旧写法 `neverBuiltDependencies` 同样算）里明确禁止构建的包不会加入任何允许名单（`allowBuilds`、`onlyBuiltDependencies`），计划里显示「已跳过：在 ignoredBuiltDependencies 中」；`--dry-run` 与实际执行写入的内容一致。见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会被留在旧版本（`Already up to date`）。因此 `zhin migrate` 把升级目标以 `name@version` 写进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（与 pnpm 在新脚手架里写的形式相同，已覆盖的条目不重复），安装后逐个读取 `node_modules` 列出每个包升级前后的实际版本；有包没装上声明的版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突等）。`zhin doctor` 也会在已安装版本不满足 `package.json` 声明时给出警告和修复命令。
 
@@ -412,6 +412,8 @@ zhin update [包名 | 包名@精确版本 ...] [--dry-run]
 不带包名时更新全部依赖（`pnpm update`；pnpm 工作区里是 `pnpm update -r`，工作区成员一起更新）。网关在运行时经网关执行同一事务（停实例 → 更新 → 启实例，失败回滚），否则直接执行。
 
 `--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，每组里 Zhin 包（`zhin.js`、`@zhin.js/*`）排在最前面，`@types/node` 等放在「其他依赖」；写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
+
+`package.json` 里写成精确版本（如 `1.8.0`）的 Zhin 包不在 `zhin update` 的范围内；registry 上有更新的正式版时，预览末尾单独列出「已锁定、有新版本的 Zhin 包」（当前 → 最新），并提示用 `zhin migrate --include-pinned` 升级（精确版本保持精确，可先加 `--dry-run`）。registry 查询失败或离线时省略这一段，不报错。
 
 #### 标准升级路径 {#update-path}
 

@@ -169,3 +169,74 @@ describe('a project nested in an enclosing pnpm workspace', () => {
     expect(fs.readFileSync(rootFile, 'utf8')).toBe(original);
   });
 });
+
+// #1250 migrate-overrides-ignored-builds: an explicit ignoredBuiltDependencies entry is never
+// overridden by the gateway's build allowance, in the preview or in the real run.
+describe('packages the project lists in ignoredBuiltDependencies', () => {
+  const ignoredProject = (manifest: Record<string, unknown>, workspace: string) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-ignored-'));
+    roots.push(root);
+    fs.writeFileSync(path.join(root, 'pnpm-workspace.yaml'), workspace);
+    const pkg = { name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' }, ...manifest };
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(pkg));
+    return { root, pkg };
+  };
+  const run = (root: string, pkg: Record<string, any>, dryRun: boolean) => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const changed = syncNativeBuildAllowance(root, pkg, dryRun, { pnpmVersion: () => '11.0.0' });
+      return { changed, output: log.mock.calls.flat().join('\n') };
+    } finally { log.mockRestore(); }
+  };
+
+  it('skips names from package.json#pnpm.ignoredBuiltDependencies in allowBuilds and onlyBuiltDependencies', () => {
+    const { root, pkg } = ignoredProject(
+      { pnpm: { onlyBuiltDependencies: ['esbuild'], ignoredBuiltDependencies: ['cpu-features', 'ssh2'] } },
+      "packages:\n  - '.'\n",
+    );
+    const plan = planNativeBuildAllowance(root, structuredClone(pkg), { pnpmVersion: () => '11.0.0' });
+    expect(plan?.ignored).toEqual([
+      { name: 'ssh2', setting: 'ignoredBuiltDependencies', source: 'package.json pnpm.ignoredBuiltDependencies' },
+      { name: 'cpu-features', setting: 'ignoredBuiltDependencies', source: 'package.json pnpm.ignoredBuiltDependencies' },
+    ]);
+    expect(plan?.changes).toEqual([
+      { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true' },
+      { file: 'package.json', setting: 'pnpm.onlyBuiltDependencies', value: 'node-pty' },
+    ]);
+  });
+
+  it('skips names from pnpm-workspace.yaml ignoredBuiltDependencies (and neverBuiltDependencies)', () => {
+    const { root, pkg } = ignoredProject({}, 'onlyBuiltDependencies:\n  - esbuild\nignoredBuiltDependencies:\n  - ssh2\nneverBuiltDependencies:\n  - cpu-features\n');
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.ignored).toEqual([
+      { name: 'ssh2', setting: 'ignoredBuiltDependencies', source: 'pnpm-workspace.yaml ignoredBuiltDependencies' },
+      { name: 'cpu-features', setting: 'neverBuiltDependencies', source: 'pnpm-workspace.yaml neverBuiltDependencies' },
+    ]);
+    expect(plan?.changes).toEqual([
+      { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true' },
+      { file: 'pnpm-workspace.yaml', setting: 'onlyBuiltDependencies', value: 'node-pty' },
+    ]);
+  });
+
+  it('prints the skip in the dry run, and the real run writes exactly what the dry run listed', () => {
+    const manifest = { pnpm: { onlyBuiltDependencies: ['esbuild'], ignoredBuiltDependencies: ['cpu-features', 'ssh2'] } };
+    const workspace = "packages:\n  - '.'\nallowBuilds:\n  esbuild: true\n";
+    const preview = ignoredProject(manifest, workspace);
+    const dryPkg = structuredClone(preview.pkg);
+    const dry = run(preview.root, dryPkg, true);
+    expect(dry.output).toContain('[dry-run] ssh2: 已跳过：在 ignoredBuiltDependencies 中（package.json pnpm.ignoredBuiltDependencies）');
+    expect(dry.output).toContain('[dry-run] cpu-features: 已跳过：在 ignoredBuiltDependencies 中');
+    expect(dry.output).not.toMatch(/\[dry-run\] .*(allowBuilds\.(ssh2|cpu-features)|onlyBuiltDependencies: \+ (ssh2|cpu-features))/u);
+    expect(fs.readFileSync(path.join(preview.root, 'pnpm-workspace.yaml'), 'utf8')).toBe(workspace);
+
+    const real = run(preview.root, preview.pkg, false);
+    const strip = (text: string) => text.split('\n').map(line => line.replace(/^\s*(\[dry-run\]|·)\s*/u, '')).join('\n');
+    expect(strip(real.output)).toBe(strip(dry.output));
+    expect(real.changed).toBe(dry.changed);
+    expect(preview.pkg).toEqual(dryPkg);
+    expect(preview.pkg.pnpm.onlyBuiltDependencies).toEqual(['esbuild', 'node-pty']);
+    const written = fs.readFileSync(path.join(preview.root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).toContain('node-pty: true');
+    expect(written).not.toMatch(/ssh2|cpu-features/u);
+  });
+});

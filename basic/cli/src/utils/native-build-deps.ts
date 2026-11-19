@@ -103,6 +103,12 @@ export interface NativeBuildAllowancePlan {
   /** Entries the user explicitly denied (`allowBuilds.<name>: false`); left as they are. */
   readonly denied: readonly string[];
   /**
+   * Packages the project keeps from building — `ignoredBuiltDependencies` (or the older
+   * `neverBuiltDependencies`) in `package.json#pnpm` or `pnpm-workspace.yaml`, with where each was
+   * found. They are added to no allow list (#1250 migrate-overrides-ignored-builds).
+   */
+  readonly ignored: readonly NativeBuildIgnoredEntry[];
+  /**
    * The project's `pnpm-workspace.yaml` is missing and was not planned; the caller prints a hint
    * instead. See {@link workspaceSkipReason}.
    */
@@ -110,6 +116,34 @@ export interface NativeBuildAllowancePlan {
   readonly workspaceSkipReason?: WorkspaceSkipReason;
   /** Writes the workspace file (the caller writes `package.json`, already updated in `pkg`). */
   apply(): void;
+}
+
+export interface NativeBuildIgnoredEntry {
+  readonly name: string;
+  /** `ignoredBuiltDependencies` or `neverBuiltDependencies`. */
+  readonly setting: typeof BUILD_DENY_LISTS[number];
+  /** Where the project denies the build, e.g. `package.json pnpm.ignoredBuiltDependencies`. */
+  readonly source: string;
+}
+
+/** pnpm settings listing packages whose build scripts never run. */
+const BUILD_DENY_LISTS = ['ignoredBuiltDependencies', 'neverBuiltDependencies'] as const;
+
+/** Packages of {@link GATEWAY_NATIVE_BUILD_DEPENDENCIES} the project's deny lists name. */
+function ignoredNativeBuilds(pkg: Record<string, any>, doc: Document | undefined): NativeBuildIgnoredEntry[] {
+  const found = new Map<string, Omit<NativeBuildIgnoredEntry, 'name'>>();
+  const note = (names: unknown, setting: typeof BUILD_DENY_LISTS[number], source: string): void => {
+    if (!Array.isArray(names)) return;
+    for (const name of names) {
+      if (typeof name === 'string' && (GATEWAY_NATIVE_BUILD_DEPENDENCIES as readonly string[]).includes(name) && !found.has(name)) found.set(name, { setting, source });
+    }
+  };
+  for (const setting of BUILD_DENY_LISTS) {
+    note(pkg.pnpm?.[setting], setting, `package.json pnpm.${setting}`);
+    const list = doc?.get(setting);
+    if (isSeq(list)) note(list.items.map(item => (isScalar(item) ? item.value : item)), setting, `${WORKSPACE_FILE} ${setting}`);
+  }
+  return GATEWAY_NATIVE_BUILD_DEPENDENCIES.flatMap(name => (found.has(name) ? [{ name, ...found.get(name)! }] : []));
 }
 
 /** Why a missing `pnpm-workspace.yaml` is not created. */
@@ -145,7 +179,9 @@ export interface NativeBuildAllowanceOptions {
 /**
  * Plans the build-script allowance for the gateway's native dependencies in a pnpm project that
  * declares `@zhin.js/gateway`. Existing decisions are kept; only missing ones are appended (a
- * non-boolean value such as pnpm 11's placeholder is replaced):
+ * non-boolean value such as pnpm 11's placeholder is replaced). A package the project lists in
+ * `ignoredBuiltDependencies` / `neverBuiltDependencies` (`package.json#pnpm` or
+ * `pnpm-workspace.yaml`) is added to no list — see {@link NativeBuildAllowancePlan.ignored}:
  * - `allowBuilds.<name>: true` in `pnpm-workspace.yaml` (created when absent, only when the
  *   project is not inside an enclosing pnpm workspace and pnpm 10+ is confirmed — see
  *   {@link findAncestorWorkspaceFile}, {@link confirmsPnpm10});
@@ -174,6 +210,10 @@ export function planNativeBuildAllowance(
 
   const changes: NativeBuildAllowanceChange[] = [];
   const denied: string[] = [];
+  // An explicit deny list wins over the gateway's wish to build (#1250): never allow these.
+  const ignored = ignoredNativeBuilds(pkg, exists ? doc : undefined);
+  const ignoredNames = new Set(ignored.map(entry => entry.name));
+  const wanted = GATEWAY_NATIVE_BUILD_DEPENDENCIES.filter(name => !ignoredNames.has(name));
   let allowBuilds = workspaceSkipped ? undefined : doc.get('allowBuilds', true);
   // An empty `allowBuilds:` key holds a null scalar, which `setIn` cannot descend into.
   if (allowBuilds === null || (isScalar(allowBuilds) && allowBuilds.value === null)) {
@@ -181,7 +221,7 @@ export function planNativeBuildAllowance(
     doc.set('allowBuilds', allowBuilds);
   }
   if (!workspaceSkipped && (allowBuilds === undefined || isMap(allowBuilds))) {
-    for (const name of GATEWAY_NATIVE_BUILD_DEPENDENCIES) {
+    for (const name of wanted) {
       const current = doc.getIn(['allowBuilds', name]);
       if (current === false) denied.push(name);
       // Only an explicit boolean is the project's decision. Anything else — notably the
@@ -201,7 +241,7 @@ export function planNativeBuildAllowance(
   }
   if (isSeq(workspaceList)) {
     const present = new Set(workspaceList.items.map(item => String(isScalar(item) ? item.value : item)));
-    for (const name of GATEWAY_NATIVE_BUILD_DEPENDENCIES) {
+    for (const name of wanted) {
       if (present.has(name) || denied.includes(name)) continue;
       workspaceList.add(doc.createNode(name));
       changes.push({ file: WORKSPACE_FILE, setting: 'onlyBuiltDependencies', value: name });
@@ -210,7 +250,7 @@ export function planNativeBuildAllowance(
 
   const packageList = pkg.pnpm?.onlyBuiltDependencies;
   if (Array.isArray(packageList)) {
-    for (const name of GATEWAY_NATIVE_BUILD_DEPENDENCIES) {
+    for (const name of wanted) {
       if (packageList.includes(name) || denied.includes(name)) continue;
       packageList.push(name);
       changes.push({ file: 'package.json', setting: 'pnpm.onlyBuiltDependencies', value: name });
@@ -221,6 +261,7 @@ export function planNativeBuildAllowance(
   return {
     changes,
     denied,
+    ignored,
     workspaceSkipped,
     ...(workspaceSkipReason ? { workspaceSkipReason } : {}),
     apply() {
@@ -242,19 +283,25 @@ export function syncNativeBuildAllowance(
 ): boolean {
   const plan = planNativeBuildAllowance(dir, pkg, options);
   if (!plan) return false;
-  const entries = `allowBuilds: { ${GATEWAY_NATIVE_BUILD_DEPENDENCIES.join(': true, ')}: true }`;
-  if (plan.workspaceSkipReason?.kind === 'nested-workspace') {
+  const ignoredNames = new Set(plan.ignored.map(entry => entry.name));
+  const wanted = GATEWAY_NATIVE_BUILD_DEPENDENCIES.filter(name => !ignoredNames.has(name));
+  const entries = `allowBuilds: { ${wanted.join(': true, ')}: true }`;
+  if (plan.workspaceSkipReason?.kind === 'nested-workspace' && wanted.length > 0) {
     console.log(chalk.yellow(
       `  ! 项目位于 pnpm workspace 内，未在项目中创建 ${WORKSPACE_FILE}（会使它成为独立的 workspace 根）；`
       + `请在 ${plan.workspaceSkipReason.workspaceFile} 中加入 ${entries}`
       + `（nested in a pnpm workspace: add these allowBuilds entries to the root file）`,
     ));
-  } else if (plan.workspaceSkipped) {
+  } else if (plan.workspaceSkipped && wanted.length > 0) {
     console.log(chalk.gray(
       `  · 未确认 pnpm >= 10，未创建 ${WORKSPACE_FILE}（pnpm 9 本身会运行依赖构建脚本；升级到 pnpm 10+ 后再运行 zhin migrate，`
       + `或手动在 ${WORKSPACE_FILE} 加入 ${entries}）`
       + `（pnpm 10+ not confirmed, ${WORKSPACE_FILE} not created）`,
     ));
+  }
+  for (const entry of plan.ignored) {
+    const text = `${entry.name}: 已跳过：在 ${entry.setting} 中（${entry.source}），不加入任何允许名单 / skipped: listed in ${entry.setting}`;
+    console.log(chalk.yellow(dryRun ? `  [dry-run] ${text}` : `  · ${text}`));
   }
   for (const name of plan.denied) {
     console.log(chalk.yellow(`  ! ${WORKSPACE_FILE}: allowBuilds.${name} 为 false（项目已拒绝），保留；Console 终端需要 node-pty 的原生模块`));
