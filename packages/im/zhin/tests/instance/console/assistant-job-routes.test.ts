@@ -266,6 +266,26 @@ describe('schedule delivery target permission (#1250)', () => {
     expect((await post('scheduler', { id: 'im' }, '/remove')).status).toBe(200);
   });
 
+  it('a delivery target without an account is refused without naming an "undefined" account (#1250 b61)', async () => {
+    const accountless = { channel: 'im', scene: { kind: 'group', sceneId: 'g1' } };
+    const resume = vi.fn(async () => true);
+    const setAgent = vi.fn(async (id: string) => ({ id }));
+    state.assistant = { jobs: { ...jobs, resume, setAgent, agents: () => ['zhin'], list: async () => [
+      { id: 'bare', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target: accountless } },
+    ] } };
+    const post = await startAs();
+    const refusal = { status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '投递目标需要指明账号（scene.platform 与 scene.endpointKey）' } };
+    expect(await post('scheduler', { id: 'bare' }, '/resume')).toEqual(refusal);
+    expect(await post('scheduler', { id: 'bare', agent: 'zhin' }, '/set-agent')).toEqual(refusal);
+    expect(resume).not.toHaveBeenCalled();
+    expect(setAgent).not.toHaveBeenCalled();
+    // add validates the target's shape before the permission check: 400, not an account to grant.
+    expect(await post('scheduler', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, notify: { channel: 'im', target: accountless } }))
+      .toMatchObject({ status: 400, body: { code: 'schedule_target_invalid' } });
+    expect(jobs.add).not.toHaveBeenCalled();
+  });
+
   it('resume is refused to a signed-in caller when the job list is unavailable (#1250 b55)', async () => {
     const { list: _list, ...withoutList } = jobs;
     state.assistant = { jobs: withoutList };
