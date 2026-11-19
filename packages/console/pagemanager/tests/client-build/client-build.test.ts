@@ -156,7 +156,7 @@ describe('Client build adapter', () => {
       dataSource: { action: 'status' },
     });
     const declChunk = await readFile(join(root, 'dist/client', declArtifact.module.split('/').at(-1)!), 'utf8');
-    expect(declChunk).toContain('zero-esbuild synthesized module');
+    expect(declChunk).toContain('unbundled synthesized module');
     expect(declChunk).not.toMatch(/from\s+["']@zhin\.js\/(?:console-contract|client|page)["']/);
     expect(declChunk).toContain('createDeclarativePage');
 
@@ -186,7 +186,7 @@ describe('Client build adapter', () => {
       dataSource: { action: 'status' },
     });
     const adapterChunk = await readFile(join(root, 'dist/client', adapterArtifact.module.split('/').at(-1)!), 'utf8');
-    expect(adapterChunk).toContain('zero-esbuild synthesized module');
+    expect(adapterChunk).toContain('unbundled synthesized module');
     expect(adapterChunk).not.toMatch(/from\s+["']@zhin\.js\/(?:console-contract|client|page)["']/);
     expect(adapterChunk).toContain('createAdapterConsolePage');
 

@@ -1,5 +1,5 @@
 import { wizardText } from './messages.js';
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
 import {
   ADAPTERS_DOCS_URL,

@@ -1,5 +1,5 @@
 import { wizardText } from './messages.js';
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import { DatabaseConfig } from './types.js';
 import {
   DATABASE_DIALECT_DEFINITIONS,
