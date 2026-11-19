@@ -138,7 +138,7 @@ export function createDelegatedReads(harness: Harness): DelegatedReads {
         registry.reads.delete(oldest);
       }
     },
-    commit(options) {
+    commit(options?: Readonly<{ final?: boolean }>) {
       if (options?.final) decided = true;
       const committed: Mail[] = [];
       for (const [id, mail] of mine) {
