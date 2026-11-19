@@ -8,6 +8,7 @@ import { isConsoleFeatureDisabled } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
 import { reportHostFailure } from '../utils/host-error.js';
+import { isCliDebug } from '../utils/cli-flags.js';
 import {
   type ScheduleJobRecordCli,
   type JobScheduleCli,
@@ -34,9 +35,82 @@ async function requireHost(): Promise<HostHttpConfig> {
   return requireHostHttpConfig({ host, allowUnverifiedHost }, message => logger.error(message));
 }
 
-async function requireOk<T>(result: HostFetchResult<T>): Promise<T | undefined> {
+/** Which write a refusal answers, for {@link describeScheduleRefusal}. */
+export type ScheduleWriteAction =
+  | { readonly kind: 'add' }
+  | { readonly kind: 'resume' | 'set-agent'; readonly id: string };
+
+const AGENT_NOT_FOUND = /Agent 不存在：(.+?)。可用的 Agent：(.*)$/u;
+
+function names(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((name): name is string => typeof name === 'string').map(name => name.trim()).filter(Boolean))];
+}
+
+/**
+ * Explanation of a schedule write the Host refused for a known reason (#1250 b55 / b61), or
+ * `undefined` to report it as any other failure. The first line is the error, the rest are hints.
+ *
+ * - `schedule_target_forbidden` (403): the job delivers to an account the caller may not send from
+ *   (`endpoint.operate`); resuming it, changing its Agent or creating it would send on their behalf.
+ * - `schedule_agent_not_found` (400): `data: { code, agent, available }`; the usable Agents are listed
+ *   (read from the message for an older Host that sends no `data`).
+ */
+export function describeScheduleRefusal(result: HostFetchResult<unknown>, action: ScheduleWriteAction): string[] | undefined {
+  if (result.ok) return undefined;
+  const detail = result.detail && typeof result.detail === 'object' ? result.detail as Record<string, unknown> : {};
+  const code = typeof detail.code === 'string' ? detail.code : result.code;
+  const message = result.error ?? '';
+  if (code === 'schedule_target_forbidden') {
+    const account = /需要 (.+?) 上的 endpoint\.operate/u.exec(message)?.[1];
+    const need = account ? `（需要 ${account} 上的 endpoint.operate）` : '';
+    if (action.kind === 'resume') {
+      return [
+        `无法恢复任务 ${action.id}：你没有权限向它的投递目标发消息${need}`,
+        `请让管理员授予你投递账号的 endpoint.operate 权限；或删除该任务（zhin schedule remove ${action.id}）后，以你有权限的投递目标重新创建`,
+      ];
+    }
+    if (action.kind === 'set-agent') {
+      return [
+        `无法修改任务 ${action.id} 的 Agent：你没有权限向它的投递目标发消息${need}`,
+        '请让管理员授予你投递账号的 endpoint.operate 权限',
+      ];
+    }
+    return [
+      `无法创建任务：你没有权限向投递目标发消息${need}`,
+      '请让管理员授予你该账号的 endpoint.operate 权限，或用 --target 改投你有权限的账号',
+    ];
+  }
+  const parsed = AGENT_NOT_FOUND.exec(message);
+  if (code !== 'schedule_agent_not_found' && !parsed) return undefined;
+  const agent = typeof detail.agent === 'string' && detail.agent.trim() ? detail.agent.trim() : parsed?.[1];
+  const available = Array.isArray(detail.available) ? names(detail.available) : names(parsed?.[2]?.split('、'));
+  const head = agent ? `Agent 不存在：${agent}` : 'Agent 不存在';
+  if (available.length === 0) {
+    return [
+      `${head}。当前没有可用的 Agent`,
+      action.kind === 'add'
+        ? '请先在配置的 ai.agents 中添加 Agent，或省略 --agent 使用默认 Agent（zhin）'
+        : `请先在配置的 ai.agents 中添加 Agent，或用 zhin schedule set-agent ${action.id} --clear 恢复默认 Agent（zhin）`,
+    ];
+  }
+  return [
+    `${head}。可用的 Agent：${available.join('、')}`,
+    action.kind === 'add'
+      ? '用 --agent <名称> 指定其中之一，或省略 --agent 使用默认 Agent'
+      : `用 zhin schedule set-agent ${action.id} <名称> 改选其中之一，或加 --clear 恢复默认 Agent`,
+  ];
+}
+
+async function requireOk<T>(result: HostFetchResult<T>, action?: ScheduleWriteAction): Promise<T | undefined> {
   if (result.ok) return result.data;
-  if (result.status === 404 && result.error === 'assistant.enabled is false') {
+  const refusal = action ? describeScheduleRefusal(result, action) : undefined;
+  if (refusal) {
+    const [first, ...hints] = refusal;
+    logger.error(first!);
+    for (const hint of hints) logger.info(`  ${hint}`);
+    if (isCliDebug() && result.code) logger.info(`  错误码: ${result.code}（HTTP ${result.status}）`);
+  } else if (result.status === 404 && result.error === 'assistant.enabled is false') {
     // Newer instances name the reason in `data` (ConsoleFeatureDisabled, #1250).
     const disabled = result.detail;
     logger.error(isConsoleFeatureDisabled(disabled)
@@ -49,7 +123,7 @@ async function requireOk<T>(result: HostFetchResult<T>): Promise<T | undefined> 
 }
 
 async function mutateJob(action: 'remove' | 'pause' | 'resume', id: string): Promise<void> {
-  await requireOk(await hostPost(await requireHost(), `/assistant/jobs/${action}`, { id }));
+  await requireOk(await hostPost(await requireHost(), `/assistant/jobs/${action}`, { id }), action === 'resume' ? { kind: 'resume', id } : undefined);
 }
 
 function parseEveryMs(s: string): number {
@@ -211,7 +285,7 @@ const addCommand = new Command('add')
       await requireHost(),
       '/assistant/jobs',
       { label: opts.label, schedule, prompt, notify, ...(agent ? { agent } : {}) },
-    ));
+    ), { kind: 'add' });
     output.line(`已添加调度任务: ${data?.job?.id ?? ''}`);
   });
 
@@ -226,7 +300,7 @@ const setAgentCommand = new Command('set-agent')
       logger.error(opts.clear ? '--clear 与 Agent 名称只能二选一' : '请提供 Agent 名称，或用 --clear 恢复默认 Agent');
       process.exit(1);
     }
-    await requireOk(await hostPost(await requireHost(), '/assistant/jobs/set-agent', { id, agent: opts.clear ? null : agent }));
+    await requireOk(await hostPost(await requireHost(), '/assistant/jobs/set-agent', { id, agent: opts.clear ? null : agent }), { kind: 'set-agent', id });
     output.line(opts.clear ? `已恢复默认 Agent: ${id}` : `已将任务 ${id} 的 Agent 设为: ${agent}`);
   });
 
@@ -247,7 +321,7 @@ const pauseCommand = new Command('pause')
   });
 
 const resumeCommand = new Command('resume')
-  .description('恢复已暂停的任务')
+  .description('恢复已暂停的任务；任务的投递目标你无权发送时会被拒绝并说明原因')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
     await mutateJob('resume', id);
