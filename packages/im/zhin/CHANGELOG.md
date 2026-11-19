@@ -1,5 +1,54 @@
 # zhin.js
 
+## 1.8.0
+
+### Minor Changes
+
+- c7f6285: 定时任务可以指定由哪个 Agent 执行（#1250 第 52 批 `schedule-agent-no-creation-path`）。运行时早已支持 `action.agent`，但没有任何入口能设置它，只能停服改数据库 `agent_schedule_jobs.agent`。不指定 Agent 时行为不变（默认 `zhin`）。
+
+  - CLI：`zhin schedule add --agent <名称>`；新增 `zhin schedule set-agent <id> <名称>` 与 `set-agent <id> --clear`（恢复默认）。`zhin schedule list` 每个任务多一行 `Agent:`（未指定时为「zhin（默认）」）。
+  - 实例接口：`POST /api/assistant/jobs` 接受可选 `agent`；新增 `POST /api/assistant/jobs/set-agent`（`{ id, agent }`，`agent: null` 清除）。名称必须是已配置的 Agent（`zhin` 与 `ai.agents` 的键），否则 400 `schedule_agent_not_found`，错误里列出可用的 Agent；心跳任务不能指定 Agent。权限沿用 `ops.schedule.write`。`GET /api/assistant/jobs` 新增 `agents`（可用的 Agent 名称）。
+  - Console RPC：`cron:add` 接受可选 `agent`（同样校验）；新增 `cron:set-agent`（`ops.schedule.write`，已登记到 `CONSOLE_RPC_PERMISSIONS`）；`schedule:list` 的持久化任务行新增 `agent`，返回值新增 `agents`。`ConsoleScheduleEngine` 新增可选 `listAgents()` / `setJobAgent()`。
+  - 对话工具：`schedule_add` 新增可选参数 `agent`，`schedule_list` 的持久化任务带 `agent`。聊天里只能指定当前会话里自己能用的 Agent：与 `@名称` 点名时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），外加默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝。不在运行时回合内调用（如外部工具协议）时只接受默认 Agent。
+  - `@zhin.js/agent`：`AgentTurnConfiguration` 新增可选 `availableAgents`（回合内可见的专家 Agent 名称）；`TimerScheduler` 新增 `setJobAgent()`；`AssistantRuntimeHandle.jobs` 新增可选 `agents()` / `setAgent()`；`ScheduleManager` 新增可选 `agents`；`ScheduleAddInput` 新增可选 `agent`。
+  - `set-agent`（CLI / `POST /api/assistant/jobs/set-agent` / `cron:set-agent`）与创建时一样检查任务投递目标账号上的 `endpoint.operate`，没有时 403 `schedule_target_forbidden`（RPC：`data.code` 同名、`data.status: 403`）；`cron:add` 的同一拒绝也带上这个 `data`。
+  - Profile 例程（`source: profile`）拒绝 `set-agent`（400 `schedule_agent_profile`，错误里说明去 Profile 文件改）：它们每次启动按 Profile 重新声明，原地修改会被静默还原。Profile 的 cron 例程新增可选 `agent` 字段，同步时写入 `action.agent`。心跳任务的拒绝码为 `schedule_agent_heartbeat`；调度器抛出的这两类拒绝在 HTTP 路由返回 400，不再是 500。`TimerScheduler.setJobAgent()` 对这两类抛 `ScheduleJobAgentError`（带 `code`）。
+  - Agent 已从 `ai.agents` 删除的任务：`zhin schedule list` 标出「⚠ Agent 不存在」；`schedule:list` 的持久化任务行带 `agentMissing: true`；`schedule_list` 工具带 `agent_missing: true`。
+  - 文档：CLI 与 Agent 文档（中英文）补充 `--agent`、`set-agent`、Profile 例程的 `agent`、聊天里的权限规则（可见性只在创建时检查，撤销权限后任务仍由原 Agent 执行）。
+  - `TimerScheduler.stop()` 等正在进行的任务写完状态、投递与历史再返回（以前只等队列，关闭存储或删除数据目录时可能还有写入）。
+
+### Patch Changes
+
+- 83ab59d: Console 群聊插话状态（`plugin.root.ambient` RPC）返回值新增可选字段 `judgeToday`（`YYYY-MM-DD`）：实例时钟在 `judgeTimeZone` 下的今天，与 `judgeDaily` 按同一 `dayKeyOf` 切天，没有任何判断调用时也返回（#1250 第 48 批）。Console 的「最近 7 天」窗口应以它为准（保留截止日 = `judgeToday` 往前 6 天），不再用浏览器时钟推算，避免浏览器与实例时钟有偏差时漏掉实例上的今天、或把已清理的日期显示成 0。
+- 7131501: 出站 / 入站媒体下载只连默认端口（#1250 第 48 批，第 46 批安全审查 L3；**行为变化**）。
+
+  - `fetchPublicMediaBytes()`（kernel）与 `fetchOutboundMedia()`（core）默认只接受 https 的 443，以及 `allowHttp` 时 http 的 80（URL 不写端口或写默认端口都算）；其他端口（如 `https://public-host:22/`、`:8443`、`:0`）一律拒绝，重定向的每一跳同样检查，防止借实例对任意公网主机和端口发起 TLS 握手做端口探测。
+  - 被拒时沿用 `blocked` / `outbound_media_url_blocked`，附 `reason: 'port'`（`PublicMediaFetchResult` 与 `OutboundMediaFetchError` 新增可选 `reason`，日志行带 `reason=port`）；说明文字和日志只含主机名，不含完整 URL。
+  - 新增可选参数 `allowedPorts?: readonly number[]`（`PublicMediaFetchOptions` / `OutboundMediaFetchOptions`）用于注入额外端口；只对首个 URL 的 origin（scheme、host、port 都相同，`allowHttp` 时的 http 同样）生效，重定向到其他 origin 仍只允许默认端口；默认不放开，不提供配置项。
+  - `ai.imageStorage.publicBaseUrl`（R2）带非默认端口时，启动时直接报错（`imageStorage.publicBaseUrl must use the default HTTPS port 443`），不再等到发布的图片逐张被拒。
+  - 入站识图 `fetchUrlAsBase64()`（agent）与语音转写下载随之生效；语音下载失败日志的 `reason` 为 `blocked:port`。
+
+  **可能出现回退的场景**：公网部署的协议端（OneBot / Satori / Milky 等）在非默认端口上提供语音或文件服务；自建图床使用非默认端口；R2 `publicBaseUrl` 带了端口。这些下载现在会被拒绝。排查：媒体下载日志里出现 `reason=port`（`outbound_media_url_blocked`），或语音下载日志里出现 `blocked:port`。协议端可信来源（为平台自带地址放行端口）的支持会在后续 PR 补上。
+
+- 1414572: 协议端自己端口上的媒体地址不再因端口限制被拒（#1250 第 48 批端口限制的后续）。
+
+  - 端点的 `inboundMedia` 新增可选 `origins()`：声明 Endpoint 配置的协议端地址（`http(s)://` 或 `ws(s)://`，后者按同主机同端口的 `http(s)://` 处理）。`roots()` 改为可选，只声明 `origins()` 的端点同样有效。
+  - `fetchPublicMediaBytes()`（kernel）新增 `trustedOrigins`：URL 本身就在其中某个 origin 上（scheme、主机、端口完全相同）时，这个 origin 内的各跳不受默认端口限制；从别处重定向进来、或重定向到别的端口，仍只认默认端口。私网 / 回环、scheme 与 DNS 固定检查照旧。
+  - 适用范围：协议端部署在**公网**主机的非默认端口上。协议端与实例同机或在内网时，地址因私网规则被拒，与本次无关；识图下载仍只走 https，平台语音链接允许 http。
+  - 入站识图与平台语音转写会带上产出端点声明的 origin；用户输入的地址（`[audio:URL]`、`voice_stt`）不受影响。
+  - Satori、Milky 声明 `baseUrl`；OneBot11、NapCat 的正向 WebSocket 声明 `url`，NapCat 的 HTTP 方式声明 `http_url`；反向连接没有配置地址，不声明。
+
+- Updated dependencies [7131501]
+- Updated dependencies [1414572]
+- Updated dependencies [c7f6285]
+- Updated dependencies [257d289]
+  - @zhin.js/kernel@1.5.0
+  - @zhin.js/core@1.13.0
+  - @zhin.js/adapter@1.5.0
+  - @zhin.js/host-http@1.7.0
+  - @zhin.js/console-protocol@1.7.0
+  - @zhin.js/command@1.4.2
+
 ## 1.7.0
 
 ### Minor Changes
