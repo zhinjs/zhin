@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
-import { createScheduleCapabilityPlan, isEmptyExecutionPlan } from '../../src/plugin-runtime/schedule-capability-plan.js';
+import { createScheduleCapabilityPlan, isEmptyExecutionPlan, isScheduleManagementTool } from '../../src/plugin-runtime/schedule-capability-plan.js';
 import { describeUnattendedApproval } from '../../src/plugin-runtime/turn-engine-helpers.js';
 import { createAutoApprovalPort, ApprovalReviewAgent } from '../../src/session/approval-review-agent.js';
 
@@ -71,5 +71,46 @@ describe('describeUnattendedApproval (#1250 b33)', () => {
 
   it('says nothing for attended turns', () => {
     expect(describeUnattendedApproval(tools, { policy: { unattended: false }, ports: {} })).toBeUndefined();
+  });
+});
+
+describe('schedule_preview runs offer no schedule_* tool (#1250 b55)', () => {
+  const scheduleAdd = tool('schedule_add', '添加持久化调度任务 定时 提醒 创建任务', { keywords: ['提醒', '定时', '任务'] });
+  const scheduleList = tool('schedule_list', '列出调度任务 定时 提醒', { keywords: ['提醒', '定时'] });
+  const reminder = tool('send_reminder', '发送提醒 提醒我 喝水', { keywords: ['提醒', '喝水'] });
+  // What a model passed to `schedule_preview` instead of the job's content: the whole request.
+  const request = '明天 8 点提醒我喝水，创建一个定时任务';
+
+  it('drops schedule_* tools from a preview run, chosen by affinity or named by the plan', () => {
+    const live = createScheduleCapabilityPlan({ prompt: request, tools: [scheduleAdd, scheduleList, reminder], skills: [] });
+    expect(live.resolvedTools.map(t => t.name)).toContain('schedule_add');
+
+    const preview = createScheduleCapabilityPlan({ prompt: request, tools: [scheduleAdd, scheduleList, reminder], skills: [], preview: true });
+    const names = [...preview.allTools, ...preview.resolvedTools, ...preview.capabilities].map(t => t.name);
+    expect(names.some(name => name.startsWith('schedule_'))).toBe(false);
+    expect(preview.resolvedTools.map(t => t.name)).toContain('send_reminder');
+
+    const planned = createScheduleCapabilityPlan({ prompt: request, executionPlan: { prompt: request, tools: ['schedule_add', 'send_reminder'] },
+      tools: [scheduleAdd, reminder], skills: [], preview: true });
+    expect(planned.capabilities.map(t => t.name)).toEqual(['send_reminder']);
+    expect(planned.missingTools).toEqual(['schedule_add']);
+  });
+
+  it('matches qualified names too', () => {
+    const qualified = tool('agent__tools__schedule_add', '添加调度任务 提醒', { keywords: ['提醒'] });
+    const plan = createScheduleCapabilityPlan({ prompt: request, tools: [qualified, reminder], skills: [], preview: true });
+    expect(plan.allTools.map(t => t.name)).toEqual(['send_reminder']);
+  });
+
+  it('keeps third-party tools that merely start with schedule_', () => {
+    const meeting = tool('mcp__srv__schedule_meeting', '安排会议 提醒 定时', { keywords: ['提醒', '会议'] });
+    const plan = createScheduleCapabilityPlan({ prompt: request, tools: [meeting, scheduleAdd, reminder], skills: [], preview: true });
+    expect(plan.allTools.map(t => t.name)).toEqual(['mcp__srv__schedule_meeting', 'send_reminder']);
+    expect(isScheduleManagementTool('mcp__srv__schedule_meeting')).toBe(false);
+    expect(isScheduleManagementTool('schedule_meeting')).toBe(false);
+    for (const name of ['schedule_list', 'schedule_add', 'schedule_preview', 'schedule_remove', 'schedule_pause', 'schedule_resume']) {
+      expect(isScheduleManagementTool(name)).toBe(true);
+      expect(isScheduleManagementTool(`plugin__tools__${name}`)).toBe(true);
+    }
   });
 });

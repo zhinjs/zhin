@@ -20,7 +20,12 @@ export function assistantDisabledWriteResponse(reason: ConsoleFeatureDisabledRea
   return expectedErrorResponse(404, 'unavailable', ASSISTANT_DISABLED_ERROR, consoleFeatureDisabled(reason));
 }
 /** Rejected job body: a stable code and a user-facing (Chinese) explanation (#1250). */
-export interface AssistantJobInputError { readonly error: string; readonly code: AssistantJobInputErrorCode }
+export interface AssistantJobInputError {
+  readonly error: string;
+  readonly code: AssistantJobInputErrorCode;
+  /** `schedule_agent_not_found` (#1250 b55): `{ code, agent, available }`. */
+  readonly data?: Readonly<Record<string, unknown>>;
+}
 const invalidInput = (error: string): AssistantJobInputError => ({ error, code: 'invalid_argument' });
 
 function record(value: unknown): Record<string, unknown> {
@@ -45,7 +50,7 @@ const DEFAULT_AGENT = 'zhin';
 
 /**
  * `agent` of a job body (#1250 b52): absent / `null` / empty = the default Agent; otherwise one of
- * `available` (the configured bindings), else `schedule_agent_not_found` naming the usable ones.
+ * `available` (the configured bindings), else `schedule_agent_not_found` naming the usable ones (also as `data.agent` / `data.available`).
  */
 export function parseScheduleAgentField(
   value: unknown,
@@ -56,8 +61,12 @@ export function parseScheduleAgentField(
   const name = value.trim();
   if (!name) return {};
   if (available.includes(name)) return { agent: name };
-  const list = (available.length ? available : [DEFAULT_AGENT]).join('、');
-  return { code: 'schedule_agent_not_found', error: `Agent 不存在：${name}。可用的 Agent：${list}` };
+  const listed = available.length ? [...available] : [DEFAULT_AGENT];
+  return {
+    code: 'schedule_agent_not_found',
+    error: `Agent 不存在：${name}。可用的 Agent：${listed.join('、')}`,
+    data: Object.freeze({ code: 'schedule_agent_not_found', agent: name, available: listed }),
+  };
 }
 
 const TARGET_REQUIRED = '投递渠道为 im 时需要指定投递目标：zhin schedule add --target <adapter>:<endpoint>:<kind>:<id>，'
@@ -150,6 +159,16 @@ function mayDeliverTo(principal: ConsolePrincipal | undefined, target: unknown):
   return principalAllows(principal, 'endpoint.operate', Object.freeze({ kind: 'endpoint', adapter, endpoint }));
 }
 
+function agentErrorBody(error: AssistantJobInputError): Record<string, unknown> {
+  return { success: false, error: error.error, code: error.code, ...(error.data ? { data: error.data } : {}) };
+}
+
+function targetForbiddenBody(target: unknown): Record<string, unknown> {
+  const scene = record(record(target).scene);
+  return { success: false, code: 'schedule_target_forbidden',
+    error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` };
+}
+
 /** Write side of `/assistant/jobs`, used by `zhin schedule`; the live scheduler owns persistence. */
 export function registerAssistantJobRoutes(options: Readonly<{
   http: Pick<HttpHost, 'route'>;
@@ -199,7 +218,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     const action = record(job.action);
     if (action.agent !== undefined) {
       const agent = parseScheduleAgentField(action.agent, jobs.agents?.() ?? [DEFAULT_AGENT]);
-      if ('error' in agent) return { status: 400, body: { success: false, error: agent.error, code: agent.code } };
+      if ('error' in agent) return { status: 400, body: agentErrorBody(agent) };
     }
     const notify = record(job.notify);
     if (notify.channel === 'im') {
@@ -207,9 +226,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
       // operator would need to `/message/send` there, on top of `ops.schedule.write`. The instance
       // default target is the owner's configuration and needs no extra grant.
       if (notify.target && !mayDeliverTo(principal, notify.target)) {
-        const scene = record(record(notify.target).scene);
-        return { status: 403, body: { success: false, code: 'schedule_target_forbidden',
-          error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` } };
+        return { status: 403, body: targetForbiddenBody(notify.target) };
       }
       // No explicit target: the instance's default IM target (assistant / profile defaults.notify).
       const effective = notify.target ? notify : record(jobs.defaultImNotify?.());
@@ -230,10 +247,26 @@ export function registerAssistantJobRoutes(options: Readonly<{
   }), { summary: 'Add an assistant job', tags: ['assistant'] });
 
   for (const action of ['remove', 'pause', 'resume'] as const) {
-    http.route('POST', `${base}/assistant/jobs/${action}`, guarded(async (jobs, body) => {
+    http.route('POST', `${base}/assistant/jobs/${action}`, guarded(async (jobs, body, principal) => {
       const id = record(body).id;
       if (typeof id !== 'string' || !id.trim()) {
         return { status: 400, body: { success: false, code: 'invalid_argument', error: '缺少任务 ID（id）' } };
+      }
+      if (action === 'resume') {
+        // #1250 b55: a resumed job delivers to its explicit target again on every run: the same
+        // `endpoint.operate` `POST /assistant/jobs` and `set-agent` require. Pause and remove stop
+        // deliveries and need `ops.schedule.write` only. Without `list` a signed-in caller's
+        // permission cannot be checked, so only a trusted in-process caller may go on.
+        if (!jobs.list && principal) {
+          return { status: 404, body: { success: false, code: 'unavailable', error: '运行中的 Agent 包不支持按投递目标检查恢复权限，请升级 @zhin.js/agent' } };
+        }
+        const existing = (await jobs.list?.())?.find(job => job.id === id.trim());
+        if (jobs.list && !existing) {
+          return { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id.trim()}` } };
+        }
+        const notify = record(existing?.notify);
+        const target = notify.channel === 'im' ? notify.target : undefined;
+        if (target && !mayDeliverTo(principal, target)) return { status: 403, body: targetForbiddenBody(target) };
       }
       const found = await jobs[action](id.trim());
       return found
@@ -256,7 +289,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
       return { status: 404, body: { success: false, code: 'unavailable', error: '运行中的 Agent 包不支持修改任务的 Agent，请升级 @zhin.js/agent' } };
     }
     const agent = parseScheduleAgentField(data.agent, jobs.agents?.() ?? [DEFAULT_AGENT]);
-    if ('error' in agent) return { status: 400, body: { success: false, error: agent.error, code: agent.code } };
+    if ('error' in agent) return { status: 400, body: agentErrorBody(agent) };
     const existing = (await jobs.list?.())?.find(job => job.id === id);
     if (jobs.list && !existing) {
       return { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
@@ -269,11 +302,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     // `endpoint.operate` `POST /assistant/jobs` requires for that target.
     const notify = record(existing?.notify);
     const target = notify.channel === 'im' ? notify.target : undefined;
-    if (target && !mayDeliverTo(principal, target)) {
-      const scene = record(record(target).scene);
-      return { status: 403, body: { success: false, code: 'schedule_target_forbidden',
-        error: `没有向该账号投递的权限：需要 ${String(scene.platform)} / ${String(scene.endpointKey)} 上的 endpoint.operate` } };
-    }
+    if (target && !mayDeliverTo(principal, target)) return { status: 403, body: targetForbiddenBody(target) };
     let job: Record<string, unknown> | null;
     try {
       job = await jobs.setAgent(id, agent.agent);

@@ -253,6 +253,11 @@ export type TurnExecutionProfile =
       createdBy?: Readonly<ScheduleJobCreator>;
       /** ADR 0067 D2.1: the job was created after recorded content; the run starts tainted. */
       provenance?: Readonly<ScheduleJobProvenance>;
+      /**
+       * #1250 b55: a `schedule_preview` run. It offers no `schedule_*` tool: the preview only tries
+       * out the job's prompt, it never creates, changes or previews jobs itself.
+       */
+      preview?: boolean;
       security: Readonly<{
         execPreset: 'readonly' | 'network';
         allowedDomains: readonly string[];
