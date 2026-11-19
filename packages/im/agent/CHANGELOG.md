@@ -1,5 +1,83 @@
 # @zhin.js/agent
 
+## 1.9.0
+
+### Minor Changes
+
+- 1414572: 协议端自己端口上的媒体地址不再因端口限制被拒（#1250 第 48 批端口限制的后续）。
+
+  - 端点的 `inboundMedia` 新增可选 `origins()`：声明 Endpoint 配置的协议端地址（`http(s)://` 或 `ws(s)://`，后者按同主机同端口的 `http(s)://` 处理）。`roots()` 改为可选，只声明 `origins()` 的端点同样有效。
+  - `fetchPublicMediaBytes()`（kernel）新增 `trustedOrigins`：URL 本身就在其中某个 origin 上（scheme、主机、端口完全相同）时，这个 origin 内的各跳不受默认端口限制；从别处重定向进来、或重定向到别的端口，仍只认默认端口。私网 / 回环、scheme 与 DNS 固定检查照旧。
+  - 适用范围：协议端部署在**公网**主机的非默认端口上。协议端与实例同机或在内网时，地址因私网规则被拒，与本次无关；识图下载仍只走 https，平台语音链接允许 http。
+  - 入站识图与平台语音转写会带上产出端点声明的 origin；用户输入的地址（`[audio:URL]`、`voice_stt`）不受影响。
+  - Satori、Milky 声明 `baseUrl`；OneBot11、NapCat 的正向 WebSocket 声明 `url`，NapCat 的 HTTP 方式声明 `http_url`；反向连接没有配置地址，不声明。
+
+- a73fd9c: #1250 第 50 批：委派结果只给一次结论；新建模型服务不再叫 `service`。
+
+  - `delegate` 新增参数 `wait`，默认在本回合内等待子 Agent 的结果：结果按时回来，就直接出现在工具结果里，主模型据此回答一次，这条结果不会在之后再唤醒主 Agent（看图这类短任务走这条路）。同一步里的多个 `delegate` 一起发出、一起等待；每个回合的等待合计最多 20 秒，并扣除回合已用的时间，不会把回合拖到超时。传 `wait: false`（长任务）或等待超时，结果仍作为结果邮件稍后到达；工具结果要求模型期间不要自己回答被委派的部分、也不要猜结果。回合被停止时立即停止等待。
+  - 等待中读到的结果只在回合成功把回复送达后才算已用；回合失败、超时、被顶替或被停止时撤销，结果照原路唤醒入口 Agent，子 Agent 的结论不会丢。嵌套委派里，子 Agent 自己等到的结果同样不会再唤醒它。等待中读到的失败结果算作已告知一次。
+  - 本次请求已经回复过用户之后，迟到的委派结果唤醒主 Agent 时，会先看到它之前回复的原文（作为数据展示，不当作指令）；结果没有新内容时模型输出 `[[no_reply]]`（忽略大小写、首尾空白与反引号），什么都不发；确有新内容才发一条，开头标「补充：」（英文会话为「Update: 」）。失败结果没有这个出口，模型仍拒答时发固定的失败话术；补充回合被取消时不算已告知。根回合输出的 `[[no_reply]]` 标记也会被去掉，不会发给用户。
+  - `zhin ai account add` 新建服务时用驱动的显示名（如「Anthropic」）作服务名称，与已有服务重名时自动加序号（「Anthropic 2」）；账号名称（`--name`）同时作为新建服务的名称；不再把计划别名 `service` 存成服务名称。
+  - 插话判断等日志里的服务名遇到泛化名称 `service` / `account` 时改用驱动的显示名（如 `language:Anthropic/claude-haiku-5-5`）；`ambientLanguageSource()` 与 `CreateEngagementJudgeMemberInput` 新增可选 `driverLabel`。
+
+- c7f6285: 定时任务可以指定由哪个 Agent 执行（#1250 第 52 批 `schedule-agent-no-creation-path`）。运行时早已支持 `action.agent`，但没有任何入口能设置它，只能停服改数据库 `agent_schedule_jobs.agent`。不指定 Agent 时行为不变（默认 `zhin`）。
+
+  - CLI：`zhin schedule add --agent <名称>`；新增 `zhin schedule set-agent <id> <名称>` 与 `set-agent <id> --clear`（恢复默认）。`zhin schedule list` 每个任务多一行 `Agent:`（未指定时为「zhin（默认）」）。
+  - 实例接口：`POST /api/assistant/jobs` 接受可选 `agent`；新增 `POST /api/assistant/jobs/set-agent`（`{ id, agent }`，`agent: null` 清除）。名称必须是已配置的 Agent（`zhin` 与 `ai.agents` 的键），否则 400 `schedule_agent_not_found`，错误里列出可用的 Agent；心跳任务不能指定 Agent。权限沿用 `ops.schedule.write`。`GET /api/assistant/jobs` 新增 `agents`（可用的 Agent 名称）。
+  - Console RPC：`cron:add` 接受可选 `agent`（同样校验）；新增 `cron:set-agent`（`ops.schedule.write`，已登记到 `CONSOLE_RPC_PERMISSIONS`）；`schedule:list` 的持久化任务行新增 `agent`，返回值新增 `agents`。`ConsoleScheduleEngine` 新增可选 `listAgents()` / `setJobAgent()`。
+  - 对话工具：`schedule_add` 新增可选参数 `agent`，`schedule_list` 的持久化任务带 `agent`。聊天里只能指定当前会话里自己能用的 Agent：与 `@名称` 点名时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），外加默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝。不在运行时回合内调用（如外部工具协议）时只接受默认 Agent。
+  - `@zhin.js/agent`：`AgentTurnConfiguration` 新增可选 `availableAgents`（回合内可见的专家 Agent 名称）；`TimerScheduler` 新增 `setJobAgent()`；`AssistantRuntimeHandle.jobs` 新增可选 `agents()` / `setAgent()`；`ScheduleManager` 新增可选 `agents`；`ScheduleAddInput` 新增可选 `agent`。
+  - `set-agent`（CLI / `POST /api/assistant/jobs/set-agent` / `cron:set-agent`）与创建时一样检查任务投递目标账号上的 `endpoint.operate`，没有时 403 `schedule_target_forbidden`（RPC：`data.code` 同名、`data.status: 403`）；`cron:add` 的同一拒绝也带上这个 `data`。
+  - Profile 例程（`source: profile`）拒绝 `set-agent`（400 `schedule_agent_profile`，错误里说明去 Profile 文件改）：它们每次启动按 Profile 重新声明，原地修改会被静默还原。Profile 的 cron 例程新增可选 `agent` 字段，同步时写入 `action.agent`。心跳任务的拒绝码为 `schedule_agent_heartbeat`；调度器抛出的这两类拒绝在 HTTP 路由返回 400，不再是 500。`TimerScheduler.setJobAgent()` 对这两类抛 `ScheduleJobAgentError`（带 `code`）。
+  - Agent 已从 `ai.agents` 删除的任务：`zhin schedule list` 标出「⚠ Agent 不存在」；`schedule:list` 的持久化任务行带 `agentMissing: true`；`schedule_list` 工具带 `agent_missing: true`。
+  - 文档：CLI 与 Agent 文档（中英文）补充 `--agent`、`set-agent`、Profile 例程的 `agent`、聊天里的权限规则（可见性只在创建时检查，撤销权限后任务仍由原 Agent 执行）。
+  - `TimerScheduler.stop()` 等正在进行的任务写完状态、投递与历史再返回（以前只等队列，关闭存储或删除数据目录时可能还有写入）。
+
+- 2f49a9c: 读取外部内容后的高危动作确认按类别分级，第一方声明 `readOnly` 的工具结果算受信输出（#1250 第 53 批，[ADR 0067](https://github.com/zhinjs/zhin/blob/main/docs/adr/0067-high-risk-confirm-tiers.md)）。
+
+  - `ai.agent.injectionGuard.confirmHighRisk` 改为按类别分级：执行命令 `shell`、写文件 `fileWrite`（新增类别）、外发 / 跨会话发送 `outbound`、修改配置 `config`、定时任务 / 提醒 `schedule`，每类可设 `off` / `untrusted_content` / `any_content` / `always`。默认 `schedule: untrusted_content`，其余 `any_content`。
+  - 工具结果的来源判定：第一方插件（包名为 `zhin.js` 或在 `@zhin.js/` 作用域下）声明了有效 `readOnly: true`（无 `risk: 'dangerous'`、无 `riskCategory`、名称不属于高危类别）、且不是 MCP 工具、没有 `external_content` 标签的工具，其结果算**受信输出**；MCP 工具（即使上游 `readOnlyHint: true`）、网页、文件、记忆、子 Agent 报告、群聊背景仍算外部内容。
+  - `@zhin.js/agent/config` 新增类型导出 `InjectionGuardConfig`、`ConfirmHighRiskSetting`、`HighRiskConfirmTiers`、`HighRiskConfirmLevel`（`injectionGuard.confirmHighRisk` 的配置形状）；`ZhinAgentConfig.injectionGuard` 改为 `InjectionGuardConfig`；`ToolCapability` 新增可选 `firstParty`；审批策略指纹 `APPROVAL_POLICY_REVISION` 升为 3（旧规则下被拒的调用会提示「策略已变更」）。级别解析、来源判定等函数属于内部实现，不对外导出。
+  - `@zhin.js/runtime`：`host-config-schema.json` 中 `confirmHighRisk` 改为「字符串 | 按类别对象」，字符串新增 `always`，并去掉 `default`（让「没写」与「显式写了 `external_content`」可以区分）。
+  - `@zhin.js/cli`：`zhin doctor`「审批渠道」一项按类别描述；所有类别都关闭时报 `warn` 并给出更窄的替代写法，部分关闭时列出关闭的类别，显式写了字符串 `external_content` 时提示迁移方式；默认说明里写明定时任务放宽的范围（只放宽创建，到点运行与预演仍按读过外部内容处理，`schedule_preview` 不放宽）；无法识别的级别（如 `Always`）或未知类别（如 `file_write`）报 `warn`。
+  - 定时任务记住创建时的来源（ADR 0067 D2.1）：模型在读过任何内容（含受信输出）的回合里用 `schedule_add` / `schedule_preview` 建的任务带上 `ScheduleJob.provenance`，到点运行与预演一开始就按读过外部内容处理（来源 `scheduled_prompt`）；SQL 存储新增可空列 `provenance_json`（启动时自动给旧表补列），JSON 存储同样保存；没有该字段的旧任务按原行为运行。`schedule_preview` 至少按 `any_content` 确认。`@zhin.js/agent` 新增类型导出 `ScheduleJobProvenance`、`SchedulePreviewOptions`。
+  - `confirmHighRisk` 的解析改为幂等：已解析的策略（`file_write` 键）再解析一次不再把 `always` / `off` 改回默认值。
+  - 官方插件：`@zhin.js/plugin-60s` 的天气、汇率、金价、油价、摸鱼日历工具补 `readOnly: true`，其中摸鱼日历、油价、金价原样拼接上游自由文本，另加 `external_content`（不算受信输出）；`@zhin.js/plugin-ledger` 的 `ledger_list`、`ledger_summary` 加 `external_content`（分类名、备注是以前回合写入的文本）；`@zhin.js/adapter-qq` 的群信息 / 群成员 / 禁言列表 / 黑名单 / 加群申请 / 会话信息工具与 `@zhin.js/plugin-content-moderation` 的 `moderation_check` 补 `external_content` 标签（返回他人可写的文本，不算受信输出）。
+
+  **兼容性**：原来的字符串写法照旧可用——`external_content` 保持原来的严格程度（映射为所有类别 `any_content`，不享受定时任务的放宽，并同样覆盖新增的写文件类别），`off` 映射为所有类别 `off`，新增的 `always` 映射为所有类别 `always`；无法识别的值按 `any_content` 处理。已有的显式配置都不会被放宽。
+
+  **行为变化**：
+
+  - 默认配置（不写 `confirmHighRisk`）下，「查天气 + 建提醒」不用再确认：只读过第一方只读工具的结果后建定时任务 / 提醒，不确认、也不会因为没有确认渠道或无人值守而被拒。读过网页、MCP 结果、文件内容等外部内容后建提醒仍要确认；执行命令、写文件、外发、改配置在读过任何内容（含受信输出）后仍要确认。
+  - 收紧：写文件新增为高危类别，读过任何内容后要确认，无人值守回合中直接拒绝；已有的「读网页后写文件」的无人值守任务会被拒绝，需要恢复原行为可设 `confirmHighRisk: { fileWrite: off }`。
+  - 收紧：模型在读过任何内容（网页，或天气这类受信输出）之后新建的定时任务，每次到点运行时写文件、外发、改配置、执行命令都会被拒绝（无人值守，审核 Agent 不能放行），任务记为 `degraded`；需要无人值守写文件 / 外发的任务请在 Console 创建。`schedule_preview` 不享受定时任务的放宽：读过任何内容后预演要确认，预演回合同样带着来源运行。
+  - 收紧：`@zhin.js/plugin-60s` 的摸鱼日历、油价、金价与 `@zhin.js/plugin-ledger` 的账目列表 / 汇总算外部内容：读过它们之后建定时任务也要确认（无确认渠道或无人值守时拒绝）。
+  - 收紧：工具失败的文本也算来源（ADR 0067 D1 第 5 条）。工具抛出的错误（如 `web_fetch` 的 `HTTP 503: <服务端给的原因短语>`、MCP 服务端的 JSON-RPC 错误消息）、返回的 `{ error }` 或 MCP `isError` 结果会交给模型，以前抛错的路径不记来源；现在不在受信清单（`trustedOutputTools`、`trusted_output` 标签、harness 工具）里的工具失败一律记为外部内容，第一方受信工具的失败也不例外。随后建定时任务要确认，执行命令、写文件、外发、改配置照常确认，无人值守时拒绝。本地策略拒绝（网络白名单、MCP 权限）、回合取消与超时中止不计入。
+
+### Patch Changes
+
+- 7131501: 出站 / 入站媒体下载只连默认端口（#1250 第 48 批，第 46 批安全审查 L3；**行为变化**）。
+
+  - `fetchPublicMediaBytes()`（kernel）与 `fetchOutboundMedia()`（core）默认只接受 https 的 443，以及 `allowHttp` 时 http 的 80（URL 不写端口或写默认端口都算）；其他端口（如 `https://public-host:22/`、`:8443`、`:0`）一律拒绝，重定向的每一跳同样检查，防止借实例对任意公网主机和端口发起 TLS 握手做端口探测。
+  - 被拒时沿用 `blocked` / `outbound_media_url_blocked`，附 `reason: 'port'`（`PublicMediaFetchResult` 与 `OutboundMediaFetchError` 新增可选 `reason`，日志行带 `reason=port`）；说明文字和日志只含主机名，不含完整 URL。
+  - 新增可选参数 `allowedPorts?: readonly number[]`（`PublicMediaFetchOptions` / `OutboundMediaFetchOptions`）用于注入额外端口；只对首个 URL 的 origin（scheme、host、port 都相同，`allowHttp` 时的 http 同样）生效，重定向到其他 origin 仍只允许默认端口；默认不放开，不提供配置项。
+  - `ai.imageStorage.publicBaseUrl`（R2）带非默认端口时，启动时直接报错（`imageStorage.publicBaseUrl must use the default HTTPS port 443`），不再等到发布的图片逐张被拒。
+  - 入站识图 `fetchUrlAsBase64()`（agent）与语音转写下载随之生效；语音下载失败日志的 `reason` 为 `blocked:port`。
+
+  **可能出现回退的场景**：公网部署的协议端（OneBot / Satori / Milky 等）在非默认端口上提供语音或文件服务；自建图床使用非默认端口；R2 `publicBaseUrl` 带了端口。这些下载现在会被拒绝。排查：媒体下载日志里出现 `reason=port`（`outbound_media_url_blocked`），或语音下载日志里出现 `blocked:port`。协议端可信来源（为平台自带地址放行端口）的支持会在后续 PR 补上。
+
+- 257d289: 等待中的提问不再吞掉消息（#1250 `interaction-prompt-swallows-messages`，ADR 0061 决定 11 修订）：`select`、多选、数字、列表提问认取消词「取消」「退出」「cancel」「exit」「quit」（中英文通用，提示里写明「回复『取消』退出」；列表回复恰好是一个取消词时按取消处理，多项里的「取消」仍是数据；带校验规则的 `text` 在回答没通过校验时也认取消词），取消后 `ask()` 以 `UserInteractionCancelledError` 结束并回复「已取消」；等待期间被问者发了能匹配到指令的消息或带图片 / 文件 / 语音 / 视频的消息（单独 @ 机器人不算退出：有的平台必须 @ 才投递或把回复当作 @，「@机器人 3」这类无效回答照样重发提问；去掉开头 @ 后能匹配到指令才退出；指令匹配同样检查 `adapter` 限制；已收下的有效回答不会被顶掉），提问结束、回复一次「已退出上一个选择」（每人每分钟最多一次），这条消息按正常流程处理；其余无效回答限频提醒（每次提问最多 2 次、间隔至少 20 秒），不再静默等待。
+
+  提问超时、取消、被打断、被顶替不再记成 `internal_error`（#1250 `interaction-timeout-reported-as-internal-error`）：入站结局新增 `interaction_timeout` 与 `interaction_cancelled`，日志为 INFO，不算故障；指令阶段的结局记下提问方插件，诊断里不算一次指令执行，被新提问顶替时说明「被新提问替代」。Agent 工具审批的提问被取消或打断时按用户拒绝处理；提醒插件把被打断的提问当作已结束。
+
+- Updated dependencies [7131501]
+- Updated dependencies [1414572]
+- Updated dependencies [257d289]
+  - @zhin.js/kernel@1.5.0
+  - @zhin.js/core@1.13.0
+  - @zhin.js/adapter@1.5.0
+  - @zhin.js/ai@1.8.1
+
 ## 1.8.0
 
 ### Minor Changes

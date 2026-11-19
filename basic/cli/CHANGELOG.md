@@ -1,5 +1,60 @@
 # @zhin.js/cli
 
+## 1.9.0
+
+### Minor Changes
+
+- c7f6285: 定时任务可以指定由哪个 Agent 执行（#1250 第 52 批 `schedule-agent-no-creation-path`）。运行时早已支持 `action.agent`，但没有任何入口能设置它，只能停服改数据库 `agent_schedule_jobs.agent`。不指定 Agent 时行为不变（默认 `zhin`）。
+
+  - CLI：`zhin schedule add --agent <名称>`；新增 `zhin schedule set-agent <id> <名称>` 与 `set-agent <id> --clear`（恢复默认）。`zhin schedule list` 每个任务多一行 `Agent:`（未指定时为「zhin（默认）」）。
+  - 实例接口：`POST /api/assistant/jobs` 接受可选 `agent`；新增 `POST /api/assistant/jobs/set-agent`（`{ id, agent }`，`agent: null` 清除）。名称必须是已配置的 Agent（`zhin` 与 `ai.agents` 的键），否则 400 `schedule_agent_not_found`，错误里列出可用的 Agent；心跳任务不能指定 Agent。权限沿用 `ops.schedule.write`。`GET /api/assistant/jobs` 新增 `agents`（可用的 Agent 名称）。
+  - Console RPC：`cron:add` 接受可选 `agent`（同样校验）；新增 `cron:set-agent`（`ops.schedule.write`，已登记到 `CONSOLE_RPC_PERMISSIONS`）；`schedule:list` 的持久化任务行新增 `agent`，返回值新增 `agents`。`ConsoleScheduleEngine` 新增可选 `listAgents()` / `setJobAgent()`。
+  - 对话工具：`schedule_add` 新增可选参数 `agent`，`schedule_list` 的持久化任务带 `agent`。聊天里只能指定当前会话里自己能用的 Agent：与 `@名称` 点名时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），外加默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝。不在运行时回合内调用（如外部工具协议）时只接受默认 Agent。
+  - `@zhin.js/agent`：`AgentTurnConfiguration` 新增可选 `availableAgents`（回合内可见的专家 Agent 名称）；`TimerScheduler` 新增 `setJobAgent()`；`AssistantRuntimeHandle.jobs` 新增可选 `agents()` / `setAgent()`；`ScheduleManager` 新增可选 `agents`；`ScheduleAddInput` 新增可选 `agent`。
+  - `set-agent`（CLI / `POST /api/assistant/jobs/set-agent` / `cron:set-agent`）与创建时一样检查任务投递目标账号上的 `endpoint.operate`，没有时 403 `schedule_target_forbidden`（RPC：`data.code` 同名、`data.status: 403`）；`cron:add` 的同一拒绝也带上这个 `data`。
+  - Profile 例程（`source: profile`）拒绝 `set-agent`（400 `schedule_agent_profile`，错误里说明去 Profile 文件改）：它们每次启动按 Profile 重新声明，原地修改会被静默还原。Profile 的 cron 例程新增可选 `agent` 字段，同步时写入 `action.agent`。心跳任务的拒绝码为 `schedule_agent_heartbeat`；调度器抛出的这两类拒绝在 HTTP 路由返回 400，不再是 500。`TimerScheduler.setJobAgent()` 对这两类抛 `ScheduleJobAgentError`（带 `code`）。
+  - Agent 已从 `ai.agents` 删除的任务：`zhin schedule list` 标出「⚠ Agent 不存在」；`schedule:list` 的持久化任务行带 `agentMissing: true`；`schedule_list` 工具带 `agent_missing: true`。
+  - 文档：CLI 与 Agent 文档（中英文）补充 `--agent`、`set-agent`、Profile 例程的 `agent`、聊天里的权限规则（可见性只在创建时检查，撤销权限后任务仍由原 Agent 执行）。
+  - `TimerScheduler.stop()` 等正在进行的任务写完状态、投递与历史再返回（以前只等队列，关闭存储或删除数据目录时可能还有写入）。
+
+### Patch Changes
+
+- a73fd9c: #1250 第 50 批：`zhin doctor` 列出名称是泛化的 `service` 的模型服务（旧版 `zhin ai account add` 留下的），给出建议名称（驱动名，与已有服务或其他建议重名时加序号，如「Anthropic 2」）和 Console「模型」页的改名入口；`zhin ai account add --name` 的说明写明名称也用于新建的服务。
+- e234015: `zhin update` 同步 pnpm overrides 里 Zhin 包的版本锁（`update-overrides-not-synced`）。原来带 `pnpm.overrides` 锁住 Zhin 包的项目执行 `zhin update` 后，要么什么都没升级（override 把版本留在旧值），要么 `zhin update zhin.js@x.y.z` 装上新版 zhin.js、其依赖却被旧锁固定，`zhin doctor` 的「Zhin 包单实例」检查失败。现在更新涉及 Zhin 包（不带包名，或指定了 `zhin.js` / `@zhin.js/*`）时，网关在包管理器运行前去掉能同步的 Zhin 条目（`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml#overrides`，按包名的键和单级 `>` 选择器），运行后按已安装版本写回（保留 `1.2.3` / `^` / `~` 写法与条目顺序）并重新安装一次；非 Zhin 条目与 `link:` 等本地接线不动，无法自动同步的写法打印要手改的文件、行号和键。改动在事务快照里，失败时一起回滚。`zhin update --dry-run` 按「Zhin 包」「其他依赖」分组（Zhin 包在前），并单独列出 overrides 会怎么改。
+
+  只在用 pnpm 安装的项目里同步（npm / yarn / bun 不读 pnpm overrides）。写回后的重装带 `--no-frozen-lockfile`，`CI=true` 时 pnpm 不再以 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` 拒绝（npm / yarn / bun 没有这个参数，子进程里去掉 `CI`）。`zhin update @zhin.js/x@版本` 而 override 会把它钉回 zhin.js 依赖的版本时，直接失败并回滚，提示改为升级 zhin.js 或要手改的文件与行；重装后还会核对请求的包实际装上的版本，不符同样失败回滚。`pnpm-workspace.yaml` 按文本原位改写，引号、注释、flow 序列与无关条目的格式保持不变，只有版本号变化。手改提示的行号定位到 `pnpm.overrides` 里的条目。`--dry-run` 对会被同步的 override 按写回后的值显示最终版本，单包升级会冲突时提前说明。
+
+- 2f49a9c: 读取外部内容后的高危动作确认按类别分级，第一方声明 `readOnly` 的工具结果算受信输出（#1250 第 53 批，[ADR 0067](https://github.com/zhinjs/zhin/blob/main/docs/adr/0067-high-risk-confirm-tiers.md)）。
+
+  - `ai.agent.injectionGuard.confirmHighRisk` 改为按类别分级：执行命令 `shell`、写文件 `fileWrite`（新增类别）、外发 / 跨会话发送 `outbound`、修改配置 `config`、定时任务 / 提醒 `schedule`，每类可设 `off` / `untrusted_content` / `any_content` / `always`。默认 `schedule: untrusted_content`，其余 `any_content`。
+  - 工具结果的来源判定：第一方插件（包名为 `zhin.js` 或在 `@zhin.js/` 作用域下）声明了有效 `readOnly: true`（无 `risk: 'dangerous'`、无 `riskCategory`、名称不属于高危类别）、且不是 MCP 工具、没有 `external_content` 标签的工具，其结果算**受信输出**；MCP 工具（即使上游 `readOnlyHint: true`）、网页、文件、记忆、子 Agent 报告、群聊背景仍算外部内容。
+  - `@zhin.js/agent/config` 新增类型导出 `InjectionGuardConfig`、`ConfirmHighRiskSetting`、`HighRiskConfirmTiers`、`HighRiskConfirmLevel`（`injectionGuard.confirmHighRisk` 的配置形状）；`ZhinAgentConfig.injectionGuard` 改为 `InjectionGuardConfig`；`ToolCapability` 新增可选 `firstParty`；审批策略指纹 `APPROVAL_POLICY_REVISION` 升为 3（旧规则下被拒的调用会提示「策略已变更」）。级别解析、来源判定等函数属于内部实现，不对外导出。
+  - `@zhin.js/runtime`：`host-config-schema.json` 中 `confirmHighRisk` 改为「字符串 | 按类别对象」，字符串新增 `always`，并去掉 `default`（让「没写」与「显式写了 `external_content`」可以区分）。
+  - `@zhin.js/cli`：`zhin doctor`「审批渠道」一项按类别描述；所有类别都关闭时报 `warn` 并给出更窄的替代写法，部分关闭时列出关闭的类别，显式写了字符串 `external_content` 时提示迁移方式；默认说明里写明定时任务放宽的范围（只放宽创建，到点运行与预演仍按读过外部内容处理，`schedule_preview` 不放宽）；无法识别的级别（如 `Always`）或未知类别（如 `file_write`）报 `warn`。
+  - 定时任务记住创建时的来源（ADR 0067 D2.1）：模型在读过任何内容（含受信输出）的回合里用 `schedule_add` / `schedule_preview` 建的任务带上 `ScheduleJob.provenance`，到点运行与预演一开始就按读过外部内容处理（来源 `scheduled_prompt`）；SQL 存储新增可空列 `provenance_json`（启动时自动给旧表补列），JSON 存储同样保存；没有该字段的旧任务按原行为运行。`schedule_preview` 至少按 `any_content` 确认。`@zhin.js/agent` 新增类型导出 `ScheduleJobProvenance`、`SchedulePreviewOptions`。
+  - `confirmHighRisk` 的解析改为幂等：已解析的策略（`file_write` 键）再解析一次不再把 `always` / `off` 改回默认值。
+  - 官方插件：`@zhin.js/plugin-60s` 的天气、汇率、金价、油价、摸鱼日历工具补 `readOnly: true`，其中摸鱼日历、油价、金价原样拼接上游自由文本，另加 `external_content`（不算受信输出）；`@zhin.js/plugin-ledger` 的 `ledger_list`、`ledger_summary` 加 `external_content`（分类名、备注是以前回合写入的文本）；`@zhin.js/adapter-qq` 的群信息 / 群成员 / 禁言列表 / 黑名单 / 加群申请 / 会话信息工具与 `@zhin.js/plugin-content-moderation` 的 `moderation_check` 补 `external_content` 标签（返回他人可写的文本，不算受信输出）。
+
+  **兼容性**：原来的字符串写法照旧可用——`external_content` 保持原来的严格程度（映射为所有类别 `any_content`，不享受定时任务的放宽，并同样覆盖新增的写文件类别），`off` 映射为所有类别 `off`，新增的 `always` 映射为所有类别 `always`；无法识别的值按 `any_content` 处理。已有的显式配置都不会被放宽。
+
+  **行为变化**：
+
+  - 默认配置（不写 `confirmHighRisk`）下，「查天气 + 建提醒」不用再确认：只读过第一方只读工具的结果后建定时任务 / 提醒，不确认、也不会因为没有确认渠道或无人值守而被拒。读过网页、MCP 结果、文件内容等外部内容后建提醒仍要确认；执行命令、写文件、外发、改配置在读过任何内容（含受信输出）后仍要确认。
+  - 收紧：写文件新增为高危类别，读过任何内容后要确认，无人值守回合中直接拒绝；已有的「读网页后写文件」的无人值守任务会被拒绝，需要恢复原行为可设 `confirmHighRisk: { fileWrite: off }`。
+  - 收紧：模型在读过任何内容（网页，或天气这类受信输出）之后新建的定时任务，每次到点运行时写文件、外发、改配置、执行命令都会被拒绝（无人值守，审核 Agent 不能放行），任务记为 `degraded`；需要无人值守写文件 / 外发的任务请在 Console 创建。`schedule_preview` 不享受定时任务的放宽：读过任何内容后预演要确认，预演回合同样带着来源运行。
+  - 收紧：`@zhin.js/plugin-60s` 的摸鱼日历、油价、金价与 `@zhin.js/plugin-ledger` 的账目列表 / 汇总算外部内容：读过它们之后建定时任务也要确认（无确认渠道或无人值守时拒绝）。
+  - 收紧：工具失败的文本也算来源（ADR 0067 D1 第 5 条）。工具抛出的错误（如 `web_fetch` 的 `HTTP 503: <服务端给的原因短语>`、MCP 服务端的 JSON-RPC 错误消息）、返回的 `{ error }` 或 MCP `isError` 结果会交给模型，以前抛错的路径不记来源；现在不在受信清单（`trustedOutputTools`、`trusted_output` 标签、harness 工具）里的工具失败一律记为外部内容，第一方受信工具的失败也不例外。随后建定时任务要确认，执行命令、写文件、外发、改配置照常确认，无人值守时拒绝。本地策略拒绝（网络白名单、MCP 权限）、回合取消与超时中止不计入。
+
+- Updated dependencies [e234015]
+- Updated dependencies [c7f6285]
+- Updated dependencies [2f49a9c]
+  - @zhin.js/gateway@1.6.2
+  - @zhin.js/host-http@1.7.0
+  - @zhin.js/console-protocol@1.7.0
+  - @zhin.js/runtime@1.7.0
+  - @zhin.js/pagemanager@1.2.3
+  - @zhin.js/scaffold-wizard@1.4.3
+
 ## 1.8.0
 
 ### Minor Changes
