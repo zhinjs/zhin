@@ -136,4 +136,63 @@ describe('qq webhook raw-body signature', () => {
     const response = await fetch(url, { method: 'POST', body: '{}' });
     expect(response.status).toBe(503);
   });
+
+  it('rejects a missing or mismatched signature before dispatch', async () => {
+    const dispatched = vi.fn();
+    const url = await startWebhook(createLibraryLikeBot(dispatched));
+    const raw = '{"op":0,"t":"GROUP_AT_MESSAGE_CREATE"}';
+    const missing = await fetch(url, { method: 'POST', body: raw });
+    expect(missing.status).toBe(400);
+    expect(await missing.text()).toBe('Missing signature');
+    const timestamp = '1700000002';
+    const mismatched = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-signature-ed25519': sign(timestamp, '{"op":1}'),
+        'x-signature-timestamp': timestamp,
+      },
+      body: raw,
+    });
+    expect(mismatched.status).toBe(401);
+    expect(await mismatched.text()).toBe('Invalid signature');
+    expect(dispatched).not.toHaveBeenCalled();
+  });
+
+  it('isolates callback paths and hands a repeated body to that receiver again', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const left = vi.fn();
+    const right = vi.fn();
+    const register = (path: string, onDispatch: (packet: Record<string, unknown>) => void) => {
+      const config: ResolvedQqHttpConfig = {
+        context: 'qq', mode: 'webhook', id: path, appid: 'appid', secret: 'secret', webhookPath: path, sandbox: false,
+      };
+      registerQqWebhookRoutes(http, { config, getBot: () => createLibraryLikeBot(onDispatch) });
+    };
+    register('/qq/left', left);
+    register('/qq/right', right);
+    const { port } = await http.listen();
+    const raw = '{"op":0,"d":{"id":"m-1"}}';
+    const timestamp = '1700000003';
+    const post = (path: string, signature = sign(timestamp, raw)) => fetch(`http://127.0.0.1:${port}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-signature-ed25519': signature,
+        'x-signature-timestamp': timestamp,
+      },
+      body: raw,
+    });
+    expect((await post('/qq/left')).status).toBe(200);
+    expect((await post('/qq/left')).status).toBe(200);
+    expect(left).toHaveBeenCalledTimes(2);
+    expect(right).not.toHaveBeenCalled();
+    expect((await post('/qq/right', sign(timestamp, '{"op":9}'))).status).toBe(401);
+    expect(right).not.toHaveBeenCalled();
+    expect((await post('/qq/right')).status).toBe(200);
+    expect(right).toHaveBeenCalledTimes(1);
+    expect((await fetch(`http://127.0.0.1:${port}/qq/missing`, { method: 'POST', body: raw })).status).toBe(404);
+    expect(left).toHaveBeenCalledTimes(2);
+  });
 });
