@@ -2,7 +2,7 @@ import type { CoreReplyStream } from '@zhin.js/core/runtime';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { MessageAliasTable } from '@zhin.js/ai';
-import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
+import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -281,7 +281,12 @@ async function* runInteractiveTurn(
     media,
   );
   actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
-  if (background) provenance.record({ kind: 'conversation_context' });
+  // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067).
+  if (background && unrepresentedConversationBlocks(pendingContext!.blocks,
+    ref => host.toldLedger?.hasDelivered(prep.sessionId, ref) ?? false).length) {
+    provenance.record({ kind: 'conversation_context',
+      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}) });
+  }
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
     provenance.record({ kind: 'media_perception' });
@@ -354,6 +359,19 @@ async function* runInteractiveTurn(
   let replyStream: CoreReplyStream | undefined;
   const replyStreams = new Map<string, CoreReplyStream>();
   const phaseFacts = new Map<string, ReplyPhaseFacts>();
+  const phaseDeliveredRefs: string[] = [];
+  /**
+   * #1250 (ADR 0067 D7): a delivered reply is history only when the turn that wrote it read no
+   * recorded content. The final provenance of this turn decides (tool results and failures,
+   * background, perception, delegated agents, a scheduled prompt): a reply of a tainted turn may
+   * repeat what it read, so it stays out of the delivery record and the next turn counts it as
+   * background (the reply inherits the taint).
+   */
+  const recordOwnDeliveries = (refs: readonly string[] | undefined) => {
+    if (provenance.tainted) return;
+    const all = [...new Set([...phaseDeliveredRefs, ...(refs ?? [])])];
+    if (all.length) host.toldLedger?.recordDelivered(prep.sessionId, all);
+  };
   const executions: BufferedExecution[] = [];
   let phaseSequence = 0;
   const replyLifetime = new AbortController();
@@ -401,6 +419,8 @@ async function* runInteractiveTurn(
       ...(stopped ? { stopped: true } : {}),
     };
     phaseFacts.set(phase.id, facts);
+    // Recorded at projection, and only when the whole turn stayed clean (see recordOwnDeliveries).
+    if (facts.contextRefs) phaseDeliveredRefs.push(...facts.contextRefs);
     const told = renderAgentOutput(confirmedOutput);
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
@@ -555,6 +575,7 @@ async function* runInteractiveTurn(
             }
             await deliverUnexecutedFollowup(completion.result.unexecutedNotice, reply, context.turn.identity.turnId);
           }
+          recordOwnDeliveries(deliveredContextRefs);
           // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
           recordRelationTurn(host.userProfiles?.relations, context.turn, completion.result);
           if (context.turn.intent.kind === 'observe') {

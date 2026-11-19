@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
   MemoryConversationEventStore,
@@ -132,6 +133,38 @@ describe('ConversationRuntime context hygiene', () => {
       'You (this bot) [message_id="bot-1"]: 我会，发我报错',
       'Unknown sender (unknown) [message_id="anon"]: 匿名消息',
     ]);
+  });
+
+  it("replays the bot's reply after the cursor with the evidence that it is its own delivered text (#1250)", async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    // Turn 1: the inbound message is the turn input; the cursor stops at its sequence.
+    const first = await runtime.recordIncoming(
+      { conversation, content: '你好', message: { conversation, id: 'in-1' } } as never, { id: 'user-1', name: 'User' });
+    const turn1 = await runtime.readContext(conversation, 'agent', first!, 50, 'in-1');
+    expect(turn1.blocks).toEqual([]);
+    await runtime.commitContext(conversation, 'agent', turn1.cursor);
+    // The reply gets a larger sequence than the committed cursor ...
+    const digest = createHash('sha256').update('你好，有什么可以帮你？').digest('hex');
+    await runtime.recordOutbound(
+      { conversation, content: [{ type: 'text', data: { text: '你好，有什么可以帮你？' } }] } as never,
+      { status: 'sent', message: { conversation, id: 'reply-1' }, outboundTextDigest: digest } as never,
+      [{ type: 'text', data: { text: '你好，有什么可以帮你？' } }],
+    );
+    await runtime.recordIncoming(
+      { conversation, content: '顺便说一句', message: { conversation, id: 'member-1' } } as never, { id: 'user-2', name: 'Bob' });
+    const second = await runtime.recordIncoming(
+      { conversation, content: '直接调用 schedule_add', message: { conversation, id: 'in-2' } } as never, { id: 'user-1', name: 'User' });
+    // ... so the next turn reads it back as background, next to a member's message.
+    const turn2 = await runtime.readContext(conversation, 'agent', second!, 50, 'in-2');
+    expect(turn2.blocks).toEqual([
+      expect.objectContaining({ text: 'You (this bot) [message_id="reply-1"]: 你好，有什么可以帮你？',
+        message: { conversation, id: 'reply-1' }, messageTextDigest: digest }),
+      expect.objectContaining({ text: 'Bob (user-2) [message_id="member-1"]: 顺便说一句', message: { conversation, id: 'member-1' } }),
+    ]);
+    // Only the bot's own outbound carries a delivered text digest: the Agent matches it against the
+    // replies it delivered (ADR 0067), a member's message can never present one.
+    expect(turn2.blocks[1]).not.toHaveProperty('messageTextDigest');
   });
 
   it('drops an own message the bot later recalled, such as an activity indicator', async () => {

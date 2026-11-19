@@ -2,7 +2,8 @@ import { createEvalInference } from './inference.js';
 import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
-import { plannedReplyTexts } from '../../src/session/context-provenance.js';
+import { deliveredTextDigest, plannedReplyTexts } from '../../src/session/context-provenance.js';
+import type { MessageRef } from '@zhin.js/im-contract';
 /**
  * Engine driver: assembles the smallest real host (ZhinAgent + AgentCore +
  * session/context systems) around the scripted model, builds a canonical
@@ -274,6 +275,8 @@ async function runInWorkspace(
       ...native.tools,
     ];
     const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
+    // #1250: replies delivered so far in this case, for `backgroundOwnReplies`.
+    const deliveredReplies: DeliveredEvalReply[] = [];
 
     // ADR 0048 H3: every inbound is a human Mail of the host Mailbox, and each
     // `run` admission is one Mail turn, exactly as the IM ingress route does.
@@ -350,7 +353,7 @@ async function runInWorkspace(
         // A superseded / stopped turn never sends; a stale reply is dropped (ADR 0038 §4).
         blocked: () => turnSignal.aborted || admission.staleCheck().kind === 'discard',
         delivered: () => admission.markDelivered(),
-      }, entryActor);
+      }, entryActor, deliveredReplies);
       const context: AgentTurnExecutionContext = {
         turn,
         capabilities: {
@@ -525,6 +528,7 @@ function buildTurn(
   trace: TurnTraceCollector,
   gate: Readonly<{ signal: AbortSignal; blocked: () => boolean; delivered: () => void }>,
   entryActor = 'zhin',
+  deliveredReplies: DeliveredEvalReply[] = [],
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
@@ -582,11 +586,13 @@ function buildTurn(
             message: { conversation: { endpoint: { adapter: PLATFORM, id: ENDPOINT }, kind: scope, id: sceneId }, id: `${turnId}:reply-${++replySequence}` },
             plannedText,
           }]);
+          deliveredReplies.push(...messageContexts);
           return { status: 'sent' as const, ...(messageContexts.length ? { messageContexts } : {}) };
         },
       },
       ...(approval ? { approval } : {}),
-      ...(message.backgroundEvents?.length ? { conversationContext: backgroundContext(message.backgroundEvents) } : {}),
+      ...(message.backgroundEvents?.length || (message.backgroundOwnReplies && deliveredReplies.length)
+        ? { conversationContext: backgroundContext(message.backgroundEvents ?? [], message.backgroundOwnReplies ? [...deliveredReplies] : []) } : {}),
       ...(message.quote ? { references: quoteReferencePort(message.quote) } : {}),
     },
   });
@@ -694,17 +700,30 @@ function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, inde
   });
 }
 
-function backgroundContext(texts: readonly string[]): ConversationContextPort {
+type DeliveredEvalReply = Readonly<{ message: MessageRef; plannedText: string }>;
+
+/**
+ * Member texts become plain background blocks. `ownReplies` (#1250) are the bot's own earlier
+ * replies, projected as the IM runtime projects an actor-less outbound message: label, message
+ * reference and the delivered text digest the outbound receipt carries.
+ */
+function backgroundContext(texts: readonly string[], ownReplies: readonly DeliveredEvalReply[] = []): ConversationContextPort {
+  const own = ownReplies.map((reply, index) => ({
+    kind: 'conversation_event' as const,
+    sequence: index + 1,
+    eventType: 'message.created' as const,
+    text: `You (this bot) [message_id=${JSON.stringify(reply.message.id)}]: ${reply.plannedText}`,
+    message: reply.message,
+    messageTextDigest: deliveredTextDigest(reply.plannedText),
+  }));
+  const members = texts.map((text, index) => ({
+    kind: 'conversation_event' as const,
+    sequence: own.length + index + 1,
+    eventType: 'message.created' as const,
+    text,
+  }));
   return {
-    readPending: async () => ({
-      cursor: texts.length,
-      blocks: texts.map((text, index) => ({
-        kind: 'conversation_event' as const,
-        sequence: index + 1,
-        eventType: 'message.created' as const,
-        text,
-      })),
-    }),
+    readPending: async () => ({ cursor: own.length + members.length, blocks: [...own, ...members] }),
     commit: async () => undefined,
   };
 }
