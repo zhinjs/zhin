@@ -34,7 +34,7 @@ import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { currentMailTurn } from '../collaboration/mail-turn-context.js';
-import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput } from '../collaboration/turn-collaboration.js';
+import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput, stripNoReplySnapshot } from '../collaboration/turn-collaboration.js';
 import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
@@ -363,9 +363,15 @@ async function* runInteractiveTurn(
     if (stream) { replyStreams.set(id, stream); replyStream = stream; }
     return { id, ...(stream ? { stream } : {}) };
   };
-  const settlePhase: ReplyPhaseLifecycle['settle'] = async phase => {
-    const existing = phaseFacts.get(phase.id);
+  const settlePhase: ReplyPhaseLifecycle['settle'] = async settled => {
+    const existing = phaseFacts.get(settled.id);
     if (existing) return existing;
+    // #1250 第 56 批: a root turn's answer phases, streamed or not, never show `[[no_reply]]` either.
+    const phase = collaboration ? {
+      ...settled,
+      output: stripNoReplyOutput(settled.output),
+      snapshot: settled.snapshot ? stripNoReplySnapshot(settled.snapshot) : undefined,
+    } : settled;
     if (!reply) throw new Error('Answer phase has no reply port');
     const answer = { intent: 'answer' as const, phaseId: phase.id };
     let delivery: DeliveryOutcome, confirmedOutput: AgentOutputElement[];
@@ -520,7 +526,9 @@ async function* runInteractiveTurn(
             const progressive = completion.result.progressive;
             if (!progressive && !phaseFacts.size) await replyStream?.cancel();
             const progressiveDelivery = phaseFacts.size ? aggregateReplyPhases([...phaseFacts.values()])
-              : progressive ? await deliverProgressiveReply(progressive, outbound, reply, context.turn.input.locale) : undefined;
+              : progressive ? await deliverProgressiveReply(collaboration && progressive.snapshot
+                ? { ...progressive, snapshot: stripNoReplySnapshot(progressive.snapshot) } : progressive,
+              outbound, reply, context.turn.input.locale) : undefined;
             confirmedOutput = progressiveDelivery?.confirmedOutput;
             const actualOutput = confirmedOutput ?? outbound;
             const plannedTexts = plannedReplyTexts(actualOutput);

@@ -5,7 +5,7 @@
  */
 import type { Mail } from '@zhin.js/harness';
 import {
-  NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, isNoReply, planSupplement, stripNoReplyMarker, stripNoReplyOutput, supplementFailureLine, supplementPreface,
+  NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, isNoReply, planSupplement, stripNoReplyMarker, stripNoReplyOutput, stripNoReplySnapshot, supplementFailureLine, supplementPreface,
 } from '../../src/collaboration/turn-collaboration.js';
 
 type Status = 'completed' | 'failed' | 'cancelled' | 'budget_exceeded' | 'denied';
@@ -168,6 +168,20 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
       .toEqual([{ type: 'text', content: '这是一只橘猫。' }]);
     expect(supplementFailureLine('zh-CN')).toBe('补充：后台任务没有完成。');
     expect(supplementFailureLine('en-US')).toBe('Update: the background task did not finish.');
+  });
+
+  it('strips the marker from a streamed snapshot, dropping what is left empty (#1250 第 56 批)', () => {
+    const part = (key: string, value: Record<string, unknown>) => ({ key, complete: true, value: value as never });
+    const snapshot = { revision: 3, messages: [
+      { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案 [[no_reply]]' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
+      { key: 'm1', complete: true, segments: [part('s0', { type: 'markdown', data: { content: '`[[NO_REPLY]]`' } })] },
+    ] };
+    expect(stripNoReplySnapshot(snapshot)).toEqual({ revision: 3, messages: [
+      { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
+    ] });
+    const clean = { revision: 1, messages: [{ key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案' } })] }] };
+    expect(stripNoReplySnapshot(clean)).toBe(clean);
+    expect(stripNoReplySnapshot({ revision: 1, messages: [{ key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '[[no_reply]]' } })] }] })).toBeUndefined();
   });
 
   it('sends nothing when the model declines or says nothing', () => {

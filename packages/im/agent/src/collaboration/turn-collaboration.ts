@@ -16,6 +16,7 @@
  * outside a Mail turn) nothing is added (D3).
  */
 import type { VenueProjector } from '@zhin.js/core';
+import type { ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import type {
   ActorTurnResult,
   EscalationNotice,
@@ -545,6 +546,30 @@ export function stripNoReplyOutput(output: readonly AgentOutputElement[]): Agent
     kept.push(element);
   }
   return kept;
+}
+
+/**
+ * A streamed answer snapshot without {@link NO_REPLY_MARKER} (#1250 第 56 批): the root turn's progressive
+ * phases settle from snapshots, not from the output {@link stripNoReplyOutput} cleans. Text left empty is
+ * dropped, then empty messages; `undefined` when nothing is left (the stream is cancelled instead).
+ */
+export function stripNoReplySnapshot(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot | undefined {
+  if (!snapshot.messages.some(message => message.segments.some(part => markerIn(part.value)))) return snapshot;
+  const messages = snapshot.messages.flatMap((message) => {
+    const segments = message.segments.flatMap((part) => {
+      if (!markerIn(part.value)) return [part];
+      const key = part.value.type === 'text' ? 'text' : 'content';
+      const stripped = stripNoReplyMarker(String((part.value.data as Record<string, unknown>)[key] ?? ''));
+      return stripped ? [{ ...part, value: { ...part.value, data: { ...part.value.data, [key]: stripped } } }] : [];
+    });
+    return segments.length ? [{ ...message, segments }] : [];
+  });
+  return messages.length ? { ...snapshot, messages } : undefined;
+}
+
+function markerIn(segment: ReplyStreamSnapshot['messages'][number]['segments'][number]['value']): boolean {
+  if (segment.type !== 'text' && segment.type !== 'markdown') return false;
+  return /no_reply/iu.test(String((segment.data as Record<string, unknown>)[segment.type === 'text' ? 'text' : 'content'] ?? ''));
 }
 
 const SUPPLEMENT_ANSWER_MAX_CHARS = 1_200;
