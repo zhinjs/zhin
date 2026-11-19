@@ -377,6 +377,37 @@ describe('collaboration tools: delegate and tell', () => {
     expect(await taken).toBe(false);
   });
 
+  it('a read noted after the final commit is not recorded: its result runs at once (#1250 第 56 批)', async () => {
+    vi.useFakeTimers();
+    try {
+      const harness = {} as Harness;
+      const result = (id: string) => ({ id, body: { kind: 'result', inReplyTo: `d-${id}`, status: 'completed', content: id } }) as unknown as Mail;
+      // A root turn's answer phase commits, then a later phase of the same turn reads another result:
+      // that read stays pending until the turn's next decision.
+      const root = createDelegatedReads(harness);
+      root.note(result('r1'));
+      expect(root.commit()).toHaveLength(1);
+      root.note(result('r2'));
+      const pending = takeConsumedResult(harness, result('r2'));
+      expect(root.commit({ final: true }).map((mail) => mail.id)).toEqual(['r2']);
+      expect(await pending).toBe(true);
+      // After the final commit (the turn ended) a late tool's read is not recorded: no 120 s wait.
+      root.note(result('r3'));
+      let settled = false;
+      const late = takeConsumedResult(harness, result('r3')).then((consumed) => { settled = true; return consumed; });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(true);
+      expect(await late).toBe(false);
+      // The same holds for an actor turn's reads.
+      const actor = createDelegatedReads(harness);
+      actor.commit({ final: true });
+      actor.note(result('a1'));
+      expect(await takeConsumedResult(harness, result('a1'))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps no early result once no delegate is sending (#1250)', async () => {
     const { attached, harness } = await setup([ceiling('zhin'), ceiling('vision')]);
     const stray = { ...attached.root, id: 'stray-result', body: { kind: 'result', inReplyTo: 'nobody', status: 'completed', content: 'x' } } as unknown as Mail;

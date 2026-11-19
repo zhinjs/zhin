@@ -1,5 +1,4 @@
 import type { AgentTool } from '@zhin.js/ai';
-import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { ToolFilter, ToolSource, ToolSystemConfig } from './contracts.js';
 import {
@@ -81,26 +80,27 @@ export class ToolSystem {
   }
 }
 
+/**
+ * @deprecated Tool pre-execution was removed (#1250 第 56 批); kept for one release with no effect and
+ * removed in the next minor. `preExecution` is always empty and nothing runs before the model.
+ */
 export interface ToolRunPlan {
   preExecTools: AgentTool[];
-  preExecution: PreExecuteResult;
+  preExecution: { tools: AgentTool[]; data: string };
   hasNonPreExecTools: boolean;
   mode: 'chat' | 'pre-exec-fast-path' | 'agent';
 }
 
-export async function planToolRun(
-  tools: AgentTool[],
-  timeoutMs: number,
-): Promise<ToolRunPlan> {
-  const preExecution = await runPreExecutableTools(tools, timeoutMs);
-  const hasNonPreExecTools = tools.some(tool => !tool.preExecutable);
+/**
+ * @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); removed in the next minor.
+ * Executes nothing and returns the plan of a turn without pre-executable tools.
+ */
+export async function planToolRun(tools: AgentTool[], _timeoutMs?: number): Promise<ToolRunPlan> {
   return {
-    preExecTools: preExecution.tools,
-    preExecution,
-    hasNonPreExecTools,
-    mode: tools.length === 0
-      ? 'chat'
-      : (!hasNonPreExecTools && preExecution.data ? 'pre-exec-fast-path' : 'agent'),
+    preExecTools: [],
+    preExecution: { tools: [], data: '' },
+    hasNonPreExecTools: tools.length > 0,
+    mode: tools.length === 0 ? 'chat' : 'agent',
   };
 }
 

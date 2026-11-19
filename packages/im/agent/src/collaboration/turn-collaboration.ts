@@ -16,6 +16,8 @@
  * outside a Mail turn) nothing is added (D3).
  */
 import type { VenueProjector } from '@zhin.js/core';
+import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
+import type { Segment } from '@zhin.js/im-contract';
 import type {
   ActorTurnResult,
   EscalationNotice,
@@ -33,7 +35,7 @@ import type { ContextFile } from '../bootstrap.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentCapabilities, ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import type { TurnProvenance } from '../security/provenance.js';
-import type { TurnIngress } from '../turn/turn-ingress.js';
+import type { ReplyAnswerContext, ReplyPort, TurnIngress } from '../turn/turn-ingress.js';
 import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';
 import { currentMailTurn } from './mail-turn-context.js';
@@ -230,7 +232,8 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
       let readsDecided = false;
       const commitReads = (): void => {
         readsDecided = true;
-        const committed = reads.commit();
+        // The actor turn has ended: a read noted later never reached its answer (#1250 第 56 批).
+        const committed = reads.commit({ final: true });
         if (entry) noteFailuresRead(committed);
       };
       const resultsOnly = entry && batch.length > 0 && batch.every((mail) => mail.body.kind === 'result');
@@ -309,7 +312,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   // #1250: results the root turn's waiting `delegate` calls read count as answered only once its reply
   // reached the human; a failed, timed-out, superseded or stopped root turn lets them wake the entry agent.
   const rootReads = createDelegatedReads(harness);
-  const commitRootReads = (): void => { noteFailuresRead(rootReads.commit()); };
+  const commitRootReads = (final = false): void => { noteFailuresRead(rootReads.commit({ final })); };
   const tools = createCollaborationTools(
     { harness, directory, actor: entryName, mail: root },
     {
@@ -329,7 +332,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     },
     // The Mailbox settles the turn; delegated work keeps running and reports back on the lane.
     async finish(status) {
-      if (status === 'completed') commitRootReads();
+      if (status === 'completed') commitRootReads(true);
       else rootReads.revoke();
       if (rootFinished) return;
       rootFinished = true;
@@ -502,6 +505,8 @@ export const NO_REPLY_MARKER = '[[no_reply]]';
 
 /** {@link NO_REPLY_MARKER} as models write it: any case, inner spaces, wrapped in backticks. */
 const NO_REPLY_PATTERN = /`*\[\[\s*no_reply\s*\]\]`*/giu;
+/** Non-global {@link NO_REPLY_PATTERN}, for `test`. */
+const NO_REPLY_FOUND = /\[\[\s*no_reply\s*\]\]/iu;
 
 /**
  * True when `text` declines with {@link NO_REPLY_MARKER}: it is the marker, or starts with it (whitespace,
@@ -545,6 +550,113 @@ export function stripNoReplyOutput(output: readonly AgentOutputElement[]): Agent
     kept.push(element);
   }
   return kept;
+}
+
+/** A suffix that may still grow into {@link NO_REPLY_MARKER} (`[`, `[[`, `[[ no_`, `[[no_reply]` …). */
+const PARTIAL_NO_REPLY = /^\[(?:\[\s*(?:n(?:o(?:_(?:r(?:e(?:p(?:l(?:y\s*\]?)?)?)?)?)?)?)?)?)?$/iu;
+/** Longest suffix held back while it can still become a marker (inner whitespace included). */
+const MAX_PENDING_MARKER = 64;
+
+/**
+ * Start of the suffix of `text` that may still become a marker (`text.length` when none), never before
+ * `floor`: what precedes it was already settled when an earlier marker was removed, so it was shown.
+ */
+function pendingMarkerStart(text: string, floor = 0): number {
+  let start = text.length;
+  const from = Math.max(floor, text.length - MAX_PENDING_MARKER);
+  for (const candidate of [text.lastIndexOf('[['), text.endsWith('[') ? text.length - 1 : -1]) {
+    if (candidate >= from && candidate < start && PARTIAL_NO_REPLY.test(text.slice(candidate))) start = candidate;
+  }
+  // Backticks right before it (or trailing backticks alone) may open a wrapped marker.
+  while (start > from && text[start - 1] === '`') start -= 1;
+  return start;
+}
+
+/**
+ * `text` as a root turn's stream may show it (#1250 第 56 批): every {@link NO_REPLY_MARKER} removed and,
+ * while the part is still growing, a tail that may become one held back. Only text after the last removed
+ * marker is held (`x [` stays shown once `x [[[no_reply]]` completes). Never trimmed, so each result is a
+ * prefix of the next one: the core reply stream only accepts content appended to what it published.
+ */
+export function streamTextWithoutNoReply(text: string, complete: boolean): string {
+  let cleaned = '';
+  let settled = 0;
+  let last = 0;
+  for (const match of text.matchAll(NO_REPLY_PATTERN)) {
+    cleaned += text.slice(last, match.index);
+    last = match.index + match[0].length;
+    settled = cleaned.length;
+  }
+  cleaned += text.slice(last);
+  return complete ? cleaned : cleaned.slice(0, pendingMarkerStart(cleaned, settled));
+}
+
+function markerText(value: Segment): string | undefined {
+  if (value.type !== 'text' && value.type !== 'markdown') return undefined;
+  return String((value.data as Record<string, unknown>)[value.type === 'text' ? 'text' : 'content'] ?? '');
+}
+
+/**
+ * A streamed answer snapshot as a root turn may publish it: text parts through
+ * {@link streamTextWithoutNoReply}; a part (then a message) this leaves empty is left out, and so is a
+ * part that is still only whitespace while it grows or once a marker was removed from it.
+ */
+export function stripNoReplySnapshot(snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot {
+  let changed = false;
+  const messages = snapshot.messages.flatMap((message) => {
+    let emptied = false;
+    const segments = message.segments.flatMap((part) => {
+      const text = markerText(part.value);
+      if (text === undefined) return [part];
+      let shown = streamTextWithoutNoReply(text, part.complete);
+      // Whitespace alone is held while the part grows (it may be all that is left once a marker
+      // completes, as in `\n[[no_reply]]`) and dropped when a removed marker leaves nothing else.
+      if (!shown.trim() && (!part.complete || shown !== text)) shown = '';
+      if (shown === text) return [part];
+      changed = true;
+      if (!shown) { emptied = true; return []; }
+      const key = part.value.type === 'text' ? 'text' : 'content';
+      return [{ ...part, value: { ...part.value, data: { ...part.value.data, [key]: shown } } as Segment }];
+    });
+    return segments.length || !emptied ? [{ ...message, segments }] : [];
+  });
+  return changed ? { ...snapshot, messages } : snapshot;
+}
+
+function confirmedShowsMarker(stream: CoreReplyStream): boolean {
+  return stream.confirmed.some(part => part.segments.some(segment => NO_REPLY_FOUND.test(markerText(segment) ?? '')));
+}
+
+/**
+ * The reply port of a root turn with collaboration (#1250 第 56 批): its streams publish every update and
+ * the finish through {@link stripNoReplySnapshot}, so `[[no_reply]]` never reaches the platform, not even
+ * in an intermediate update. Should a marker already have been published anyway, the finish is passed on
+ * unchanged (rewriting a published prefix would turn the reply into a rejected delivery) and logged.
+ */
+export function withoutNoReplyStream(port: ReplyPort): ReplyPort {
+  if (!port.openStream) return port;
+  return Object.freeze({
+    send: (output: readonly AgentOutputElement[], context?: ReplyAnswerContext) => context ? port.send(output, context) : port.send(output),
+    ...(port.segments ? { segments: port.segments } : {}),
+    openStream: (context?: Pick<ReplyAnswerContext, 'phaseId'>) => {
+      const stream = context ? port.openStream!(context) : port.openStream!();
+      if (!stream) return undefined;
+      return Object.freeze({
+        get receipt() { return stream.receipt; },
+        get confirmed() { return stream.confirmed; },
+        get minIntervalMs() { return stream.minIntervalMs; },
+        update: (snapshot: ReplyStreamSnapshot) => stream.update(stripNoReplySnapshot(snapshot)),
+        finish: (snapshot: ReplyStreamSnapshot) => {
+          if (confirmedShowsMarker(stream)) {
+            logger.warn('reply stream already published [[no_reply]]; its finish is passed on unchanged');
+            return stream.finish(snapshot);
+          }
+          return stream.finish(stripNoReplySnapshot(snapshot));
+        },
+        cancel: () => stream.cancel(),
+      }) as CoreReplyStream;
+    },
+  });
 }
 
 const SUPPLEMENT_ANSWER_MAX_CHARS = 1_200;

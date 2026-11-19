@@ -139,7 +139,6 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `masterShellApprovalMode` | keep | For owner DM with `masterShell: isolated` only; defaults to `ask` (ask the owner), `auto` uses review and escalates rejection to the owner, `inherit` follows `execApprovalMode` |
 | `compaction` | keep | Common switch, kept |
 | `rateLimit` | keep | Common switch, kept |
-| `preExecTimeout` | preset | Advanced tuning; defaults are recommended |
 | `maxTools` | preset | Advanced tuning; defaults are recommended |
 | `contextTailMessageLimit` | preset | Advanced tuning; defaults are recommended |
 | `toneAwareness` | preset | Advanced tuning; defaults are recommended |
@@ -173,6 +172,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `policyDenialStopAfter` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |
 | `deferredToolMaxResults` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |
 | `taskExecApprovalMode` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |
+| `preExecTimeout` | deprecated | Tool pre-execution was removed (#1250); unused at runtime, removed by --fix |
 
 ## Deprecation path and compatibility
 
