@@ -1,5 +1,47 @@
 # @zhin.js/gateway
 
+## 1.7.0
+
+### Minor Changes
+
+- c922f64: Console 用量统计 `plugin.root.usage-stats` 补维度字段（#1250 第 58 批，Token 用量页重新设计第 3 步的后端部分）。全部是新增的可选字段，已有字段含义不变，权限仍是 `control:read`，不返回提示词或消息内容。
+
+  - 返回顶层新增 `schemaVersion`（当前为 2），Console 可按它降级。
+  - `byModel[]` 新增 `driverLabel`（服务所用驱动的显示名）与 `profileId` / `profileName`（这一行的调用都落在同一个模型 Profile 上时），两个服务同名时可以区分。
+  - 新增 `byAgent[]`（主助手 / 子 Agent / 未记录）与 `byPurpose[]`（`chat`、`agent`、`summary`、`ambient`、`perception` 等，带可读 `label`），数据来自每个（子）回合 trace 的 `model_selection`；没有记录模型选择的旧 trace 归入「未记录」（`@unrecorded`）。
+  - `bySession[]` 新增结构化会话名字段 `scopeKind`（`group` / `private` / `channel` / `schedule` / `internal` / `http` / `a2a` / `mcp`）、`sceneLabel`（不含类型词的群名 / 用户名等）与 `shortKey`（与 `zhin usage report` 同规则的短键），Console 可按界面语言拼名、重名时追加短键；`displayName` 不变。
+  - `bySession[]` 新增 `endpoint` 与 `accountLabel`（账号现在的名称）；顶层新增 `sessionsTotal` 与 `othersTotals`（前 50 个之外的会话合计）。
+  - 请求参数新增可选 `compare: 'previous'`：返回 `previous: { since, until, truncated, totals }`，即紧挨在前、等长的上一周期的汇总（不含明细）；上一周期按毫秒长度平移（不按日历），`session` 过滤同样作用于它；当前区间与上一周期各自最多 31 天（总扫描最多 62 天），只算上一周期的 totals，上一周期被截短时标 `truncated: true`。`compare` 写别的值返回 `invalid_input`。
+  - `@zhin.js/gateway/usage` 新增导出：常量 `USAGE_STATS_SCHEMA_VERSION`、`USAGE_MAIN_AGENT_KEY`、`USAGE_UNRECORDED_KEY`，函数 `usagePurposeLabel()`、`sessionPartsOf()`，类型 `UsageSessionParts`、`UsageAgentRow`、`UsagePurposeRow`、`UsageStatsPreviousWindow`、`UsageResolvedService`、`UsageProfileResolver`、`UsageAccountResolver`；`UsageStatsQuery` 新增可选 `previous`，`UsageStatsOptions` 新增可选 `resolveProfile` / `resolveAccount`，`UsageProviderResolver` 的返回值可带 `driverLabel`，`UsageStats` 新增上述字段。
+  - `zhin.js` 实例：`createProviderDisplayIndex()` 新增可选参数 `{ driverLabel }`，`ProviderServiceDisplay` 新增可选 `driverId` / `driverLabel`，服务既无名称又无驱动时省略 `label`（不再把 `services:<id>` 当名称，显示名只剩模型名）；`AssistantStatus` 新增 `bindUsageEndpoints()`；`UsageStatsService` 新增可选 `profileResolver` / `accountResolver`；新增 `previousUsageWindow()` 与类型 `UsageEndpointSource`。
+
+- 19eeb90: 网关新增只读版本检查 RPC `gateway.version.check`（zhinjs/console#64 version-update），供 Console 显示当前版本与「有新版本」提示。
+
+  - 报告 `zhin.js`、`@zhin.js/gateway`、`@zhin.js/console-*` 与已安装的 `@zhin.js/*` 插件（`package.json#zhin.type: "plugin"`）：每行 `name` / `range` / `installed` / `latest` / `wanted`（声明范围内的最高版本）/ `latestInRange` / `updateAvailable` / `needsMigrate`，外加 `gateway`（运行中的网关版本）、`checkedAt`、`registryReachable`、`truncated`、`incomplete`（到截止时间还有包没查，这些行 `latest: null`，与 `registryReachable: false` 区分）。核心行固定按 `zhin.js` → `@zhin.js/gateway` → `@zhin.js/console-*` 排列。插件超过 64 个时 `truncated` 为 true，`zhin.js`、`@zhin.js/gateway` 与 `@zhin.js/console-*` 仍留在报告里。网关不是项目直接依赖时也单列一行（`range: null`）。
+  - 权限 `status.view`（与实例状态相同），已登记到 `GATEWAY_RPC_PERMISSIONS` / `CONSOLE_RPC_PERMISSIONS`。由网关自己回答，实例停止时也可用。
+  - 在项目根目录执行 `npm view <包> dist-tags versions --json`，沿用项目的 npm 配置（`.npmrc`、镜像）；结果在内存缓存约 6 小时，失败的查询 10 分钟后重试，单次超时 5 秒，整次查询（含第一次探测）不超过约 8 秒（留在 Console 默认 10 秒请求超时之内）：每次查询的超时取单次超时与剩余时间中较短的一个，截止前一直可以开始新查询；到点就返回已经查到的结果，来不及查的为 `latest: null` 并标 `incomplete`。因截止被缩短而失败的查询不记作 registry 失败、不进失败缓存。先探测一个包，registry 不可达时其余包不再逐个等超时。离线、超时都得到 `latest: null` 与 `registryReachable: false`，从不报错；没有新增配置开关。
+  - 只报告不升级：超出声明范围的新版本标为 `needsMigrate`，Console 只提示 `npx zhin migrate --dry-run`（新导出常量 `GATEWAY_VERSION_MIGRATE_COMMAND`），框架升级仍只走 `zhin migrate`（ADR 0062）。
+  - `@zhin.js/console-protocol` 新增 `GATEWAY_VERSION_RPC`、类型 `GatewayVersionReport` / `GatewayVersionPackage`。`@zhin.js/gateway` 新增公开导出 `GatewayVersionChecker`、`classifyPackageVersion()`、`isVersionCheckedPackage()`、`parseNpmViewVersions()`、`npmViewRegistryFetcher`（/packages），`GatewayPackageService` 新增 `inventory()`（不做授权的依赖清单，供已自行授权的网关服务使用）；网关新增依赖 `semver`。
+  - 文档：Console「运维」页（中英文）补充「版本」说明，CLI 文档的 `migrate` 小节加锚点 `#migrate`。
+
+### Patch Changes
+
+- 23eb6ef: 前几批审查遗留的低危项（#1250 第 56 批）。
+
+  - **移除工具预执行**（ADR 0067 遗留）：`preExecutable` 工具原先在模型调用前被执行，输出作为「Pre-fetched data」注入提示词，不经工具运行时、不记来源。Plugin Runtime 路径本就不保留这个标记，只有旧的 `ZhinAgent.process` / `processTurn` / `processStream` 能走到，而这条路径没有来源门禁，因此直接删除该机制：回合不再注入预取数据；`@zhin.js/agent/tool` 的 `planToolRun()` 与 `ToolRunPlan` 已弃用、不再起作用（不执行任何工具，总是返回空的预执行结果），下一个 minor 删除；`AgentTool.preExecutable`（`@zhin.js/ai`）、`Tool.preExecutable` 与 `SceneManagementMethodSpec.preExecutable`（`@zhin.js/core`）保留为 `@deprecated`、不再起作用，成员列表 / 场景信息工具不再标记它。`ai.agent.preExecTimeout` 改为已弃用键（启动告警、`zhin config check` 报告、`--fix` 删除），从 `@zhin.js/runtime` 的配置 schema 与默认配置中移除。
+  - `TriggerTimeoutError` 合并为一个类：`@zhin.js/agent/runtime` 重新导出 `@zhin.js/agent/turn` 的实现，工具运行时把入站超时正确认作 harness 错误。构造函数以超时毫秒数为主（`new TriggerTimeoutError(60000)`），旧的 `(sessionKey, timeoutMs)` 写法仍可用（已弃用），消息统一为「AI 处理超时（Nms）」。
+  - 网络请求被重定向到不允许的地址，或重定向那一跳出现其他网络错误（DNS 解析失败、TLS 证书主机名不符等）时，错误原因改为固定文案，不再带出重定向目标的主机名或解析出的地址（原因只写 debug 日志）；首个 URL 的错误原因不变。
+  - `zhin update` 的 pnpm overrides 同步（`@zhin.js/gateway`，`zhin update --dry-run` 的 `@zhin.js/cli` 同步一致）：`pnpm-workspace.yaml` 中值为 YAML 块标量（`>-` / `|`）、带锚点且被别名引用、或本身是别名的 Zhin 条目，一律列为「需要手动修改」并给出文件行号，不再自动剪下（块标量原先会多剪下一条，锚点剪掉后别名悬空）。
+  - 协作：有协作的根回合在流式回复的每次中间更新和收尾时都过滤 `[[no_reply]]` 标记（含大小写、反引号变体；生成中结尾可能成为标记的残片先暂缓发出，只暂缓最后一个已删标记之后新增的内容；只剩空白的段在生成中也先暂缓，前导空白加纯标记的回答不再发出空白消息），已发内容不被改写，不会因前缀变化被平台流拒绝；actor 回合结束和根回合结束后迟到的委派读取不再登记，结果邮件立即照常处理，不再空等 120 秒。
+
+- Updated dependencies [dff78e6]
+- Updated dependencies [23eb6ef]
+- Updated dependencies [19eeb90]
+  - @zhin.js/host-http@1.7.1
+  - @zhin.js/runtime@1.7.1
+  - @zhin.js/console-protocol@1.8.0
+  - @zhin.js/scaffold-wizard@1.4.4
+
 ## 1.6.2
 
 ### Patch Changes

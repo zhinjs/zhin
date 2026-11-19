@@ -1,5 +1,15 @@
 # @zhin.js/adapter-qq
 
+## 1.1.36
+
+### Patch Changes
+
+- Updated dependencies [dff78e6]
+- Updated dependencies [23eb6ef]
+  - @zhin.js/host-http@1.7.1
+  - @zhin.js/core@1.13.1
+  - @zhin.js/adapter-onebot-events@0.0.15
+
 ## 1.1.35
 
 ### Patch Changes
