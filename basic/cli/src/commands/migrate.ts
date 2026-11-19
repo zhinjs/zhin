@@ -29,6 +29,7 @@ import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } fr
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
 import { syncNativeBuildAllowance, usesPnpm } from '../utils/native-build-deps.js';
+import { isExactVersionSpecifier, isLocalDependencySpecifier, isPinnedSpecifier } from '../utils/dependency-specifiers.js';
 import {
   compareInstalledVersions,
   declaredZhinDependencies,
@@ -88,29 +89,11 @@ function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boole
   return out;
 }
 
-/**
- * A specifier the user deliberately locked: exact versions, aliases, links, paths, git and tarballs.
- * Ranges (^, ~, >=, *, x) and dist-tags are considered "follow upstream" and may move to latest.
- */
-export function isPinnedSpecifier(specifier: string): boolean {
-  const value = specifier.trim();
-  if (isExactVersionSpecifier(value)) return true;
-  return /^(?:link:|file:|portal:|npm:|catalog:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(value);
-}
-
-/** An exact version (`1.2.3`, `=1.2.3`, `v1.2.3-beta.1`): an upgrade keeps it exact. */
-export function isExactVersionSpecifier(specifier: string): boolean {
-  return /^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(specifier.trim());
-}
+export { isExactVersionSpecifier, isLocalDependencySpecifier, isPinnedSpecifier };
 
 /** Local or referenced override values (`workspace:`, `link:`, `file:`, `$dep`) are the user's own wiring. */
 function isLocalOverride(value: string): boolean {
   return /^(?:workspace:|link:|file:|portal:|\$|\.{0,2}\/)/.test(value.trim());
-}
-
-/** Local sources a workspace member's dependency keeps (`workspace:`, `link:`, `file:`, …): never rewritten. */
-export function isLocalDependencySpecifier(specifier: string): boolean {
-  return /^(?:workspace:|link:|file:|portal:|catalog:|npm:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(specifier.trim());
 }
 
 export interface UpgradePackageJsonOptions {
@@ -217,6 +200,13 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     // must not move past it, or the root, the member and the overrides end up on different versions.
     if (member && options.rootKept?.has(dep)) {
       console.log(chalk.gray(`  · ${label}${dep}: 根目录保留了 ${dep} 的当前版本，${existing} 也保留`));
+      continue;
+    }
+    // An `npm:` alias, a local path, git or tarball source is not a registry version of `dep`: even
+    // --include-pinned keeps it (writing `^x.y.z` would drop the alias or the source).
+    if (!member && options.includePinned && isLocalDependencySpecifier(String(existing))) {
+      console.log(chalk.gray(`  · ${dep}: ${existing} 是别名或本地/非 registry 来源，--include-pinned 不改写，保留（需要时请手动修改）`));
+      options.kept?.add(dep);
       continue;
     }
     // A workspace member's exact pin is what leaves a second copy next to the root's (#1250): it
