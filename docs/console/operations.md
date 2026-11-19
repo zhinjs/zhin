@@ -125,7 +125,9 @@ allowBuilds:
 - `create-zhin-app` 生成的项目已写好这一段；已有项目运行 `zhin migrate`（`--dry-run` 先预览）补齐，已有条目保留，写成 `false` 的不改。只有 pnpm 11 留下的占位值 `set this to true or false` 和空值会改成 `true`；`'false'`、`no` 这类非布尔值原样保留并给出警告，这些包也不加入其他允许名单。
 - 项目明确禁止构建的包，`zhin migrate` 一律跳过：列在 `ignoredBuiltDependencies` 或 `neverBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`）中，或 `allowBuilds` 里写成 `false`（含带版本的键，如 `ssh2@1.16.0: false`）。名单项按包名比较（`ssh2@1.16.0` 算 `ssh2`）。项目位于上层 pnpm workspace 内时，也读取 workspace 根目录的 `pnpm-workspace.yaml` 与 `package.json`，提示里只列没有被拒绝的包。
 - 被禁止的包同时出现在允许名单里（`allowBuilds: true` 或 `onlyBuiltDependencies`）时，`zhin migrate` 两处都不改，只打印冲突警告，写明两处位置，由你决定保留哪一处。pnpm 10 以允许名单为准（`ignoredBuiltDependencies` 只是不再提示，`neverBuiltDependencies` 在存在 `onlyBuiltDependencies` 时被忽略）；pnpm 11 只读 `allowBuilds`，同一个包 `false` 优先于 `true`。
-- pnpm 11 只读 `allowBuilds`，不再读取 `package.json` 的 `pnpm` 字段；pnpm 10.26 之前的版本读 `onlyBuiltDependencies`。项目已有 `onlyBuiltDependencies` 列表（`pnpm-workspace.yaml` 或 `package.json#pnpm`）时，`zhin migrate` 也往里追加。
+- pnpm 11 只读 `allowBuilds`，不再读取 `package.json` 的 `pnpm` 字段；pnpm 10.26 之前的版本读 `onlyBuiltDependencies`。项目已有 `onlyBuiltDependencies` 列表（`pnpm-workspace.yaml` 或 `package.json#pnpm`）时，`zhin migrate` 也往里追加；项目是上层 workspace 的成员时不改成员 `package.json` 的这个列表（pnpm 只读 workspace 根的设置），只提示到根目录配置。
+- `allowBuilds` 里既不是布尔值、也不是占位值或空值的写法（如 `'false'`、`no`、`1`），无论写在项目的 `pnpm-workspace.yaml`、`package.json#pnpm`，还是上层 workspace 根的这两个文件里，都视为未决：原样保留、给出警告，该包不加入任何允许名单。只认与包名完全相同的键：带首尾空白的键（如 `' node-pty '`）不改写也不另建新键，只给警告。`allowBuilds` 不是映射（如 `allowBuilds: true`）时警告并不改动；存在 `onlyBuiltDependenciesFile` 时提示 `zhin migrate` 不会读或改它。
+- 项目或上层 workspace 根的 `pnpm-workspace.yaml` 无法读取（如权限不足）或无法解析时，`zhin migrate` 整体跳过这一步、不做任何修改并给出提示；上层 workspace 根的 `package.json` 无法解析时给出警告。
 - 放行后运行 `pnpm install`（或 `pnpm rebuild node-pty`）重新构建；没有预编译包的平台需要 Python 与 C/C++ 编译工具链。
 - `zhin doctor` 在项目目录里加载网关的 `node-pty`，失败时给出警告和修复命令；项目没装 `@zhin.js/gateway` 时跳过。npm 默认执行构建脚本，失败时用 `npm rebuild node-pty`。
 

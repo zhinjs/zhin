@@ -279,6 +279,17 @@ describe('previewUpdate', () => {
       expect(lines).toContain('  zhin.js        1.4.0 → 2.0.0（plugins/foo；根目录也锁定，zhin migrate --include-pinned 时随根升级）');
     });
 
+    it('treats every root specifier zhin migrate keeps (v1.4.0, =1.4.0, link:, gitlab:) as the root\'s lock, as migrate does (#1250 B-6)', async () => {
+      write('pnpm-workspace.yaml', 'packages:\n  - plugins/*\n');
+      write('plugins/foo/package.json', { name: 'foo', dependencies: { 'zhin.js': '1.4.0' } });
+      for (const [rootSpec, upgrade] of [['v1.4.0', 'include-pinned'], ['=1.4.0', 'include-pinned'], ['link:../zhin', 'include-pinned'], ['gitlab:me/zhin', 'include-pinned'], ['^1.4.0', 'migrate']] as const) {
+        write('package.json', { name: 'bot', dependencies: { 'zhin.js': rootSpec } });
+        const preview = await previewUpdate(root, [], { publishedVersions: lookup, latestVersion });
+        const member = preview.members.find(entry => entry.path === 'plugins/foo');
+        expect(member?.pinned, rootSpec).toEqual([{ name: 'zhin.js', range: '1.4.0', current: '1.4.0', latest: '2.0.0', upgrade }]);
+      }
+    });
+
     it('skips locks decided by an override, in optionalDependencies, or written as npm: / workspace:', async () => {
       write('package.json', {
         name: 'bot',

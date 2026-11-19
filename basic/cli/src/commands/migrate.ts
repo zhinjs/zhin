@@ -29,6 +29,7 @@ import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } fr
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
 import { syncNativeBuildAllowance, usesPnpm } from '../utils/native-build-deps.js';
+import { isExactVersionSpecifier, isLocalDependencySpecifier, isPinnedSpecifier } from '../utils/dependency-specifiers.js';
 import {
   compareInstalledVersions,
   declaredZhinDependencies,
@@ -88,29 +89,11 @@ function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boole
   return out;
 }
 
-/**
- * A specifier the user deliberately locked: exact versions, aliases, links, paths, git and tarballs.
- * Ranges (^, ~, >=, *, x) and dist-tags are considered "follow upstream" and may move to latest.
- */
-export function isPinnedSpecifier(specifier: string): boolean {
-  const value = specifier.trim();
-  if (isExactVersionSpecifier(value)) return true;
-  return /^(?:link:|file:|portal:|npm:|catalog:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(value);
-}
-
-/** An exact version (`1.2.3`, `=1.2.3`, `v1.2.3-beta.1`): an upgrade keeps it exact. */
-export function isExactVersionSpecifier(specifier: string): boolean {
-  return /^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(specifier.trim());
-}
+export { isExactVersionSpecifier, isLocalDependencySpecifier, isPinnedSpecifier };
 
 /** Local or referenced override values (`workspace:`, `link:`, `file:`, `$dep`) are the user's own wiring. */
 function isLocalOverride(value: string): boolean {
   return /^(?:workspace:|link:|file:|portal:|\$|\.{0,2}\/)/.test(value.trim());
-}
-
-/** Local sources a workspace member's dependency keeps (`workspace:`, `link:`, `file:`, …): never rewritten. */
-export function isLocalDependencySpecifier(specifier: string): boolean {
-  return /^(?:workspace:|link:|file:|portal:|catalog:|npm:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(specifier.trim());
 }
 
 export interface UpgradePackageJsonOptions {

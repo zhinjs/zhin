@@ -21,6 +21,7 @@ import {
   upgradeBootstrapFiles,
   upgradePackageJson,
   isPinnedSpecifier,
+  isLocalDependencySpecifier,
   isNewerThanRelease,
   syncWorkspaceYamlOverrides,
   upgradeProjectDependencies,
@@ -632,6 +633,15 @@ describe('migrate', () => {
     }
     for (const floating of ['^1.1.0', '~1.1.0', '>=1.0.0', '*', 'latest', 'next', '1.x']) {
       expect(isPinnedSpecifier(floating), floating).toBe(false);
+    }
+  });
+
+  it('isLocalDependencySpecifier / isPinnedSpecifier 识别 gitlab:、bitbucket:、gist:、jsr: 与 user/repo#ref 简写，不误伤范围与 dist-tag (#1250 B-7)', () => {
+    const sources = ['gitlab:me/repo', 'bitbucket:me/repo#v1', 'gist:11081aaa', 'jsr:@std/path@^1.0.0', 'zhinjs/zhin', 'zhinjs/zhin#main', 'zhinjs/zhin#semver:^1.0.0', ' user/repo.js#v1.2.3 ', 'workspace:*', 'catalog:', 'npm:zhin.js@1.0.0', 'git+ssh://git@github.com/a/b.git', '../x', '/abs/x'];
+    for (const source of sources) expect(isLocalDependencySpecifier(source), source).toBe(true);
+    for (const source of sources.filter(value => !value.startsWith('workspace:'))) expect(isPinnedSpecifier(source), source).toBe(true);
+    for (const range of ['^1.1.0', '~1.1.0', '>=1.0.0 <2.0.0', '1.x || 2.x', '*', 'latest', 'next', '1.2.3', '@scope/name', 'beta']) {
+      expect(isLocalDependencySpecifier(range), range).toBe(false);
     }
   });
 

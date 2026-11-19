@@ -388,4 +388,100 @@ describe('build denials the gateway allowance must honour', () => {
     expect(output).toContain(`请在 ${rootFile} 中加入 allowBuilds: { node-pty: true }`);
     expect(output).not.toMatch(/allowBuilds: \{[^}]*(ssh2|cpu-features)/u);
   });
+
+  // #1250 B-1..B-5 (batch 64).
+  const nestedProject = (rootFiles: Record<string, string>, member: Record<string, unknown> = {}) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-nested-b64-'));
+    roots.push(root);
+    for (const [name, content] of Object.entries(rootFiles)) fs.writeFileSync(path.join(root, name), content);
+    const dir = path.join(root, 'bots', 'bot');
+    fs.mkdirSync(dir, { recursive: true });
+    return { root, dir, pkg: gatewayPkg(member) };
+  };
+
+  it('keeps undecided values in package.json#pnpm.allowBuilds off every allow list (B-1)', () => {
+    const { root, pkg } = projectWith('allowBuilds:\n  esbuild: true\n', { pnpm: { allowBuilds: { ssh2: 'yes' }, onlyBuiltDependencies: ['esbuild'] } });
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.undecided).toEqual([{ name: 'ssh2', source: 'package.json pnpm.allowBuilds.ssh2', value: 'yes' }]);
+    expect(plan?.wanted).toEqual(['node-pty', 'cpu-features']);
+    expect(allowed(plan)).toEqual(['node-pty', 'cpu-features']);
+    expect(pkg.pnpm.onlyBuiltDependencies).toEqual(['esbuild', 'node-pty', 'cpu-features']);
+  });
+
+  it('reads undecided values from the enclosing workspace yaml and package.json, and never writes a member\'s onlyBuiltDependencies (B-1)', () => {
+    const { dir, pkg, root } = nestedProject({
+      'pnpm-workspace.yaml': "packages:\n  - 'bots/*'\nallowBuilds:\n  node-pty: 'true'\n",
+      'package.json': JSON.stringify({ name: 'mono', pnpm: { allowBuilds: { 'cpu-features@0.0.10': 1 } } }),
+    }, { pnpm: { onlyBuiltDependencies: ['esbuild'] } });
+    const plan = planNativeBuildAllowance(dir, pkg, { pnpmVersion: () => '11.0.0', homeDir: '/nonexistent-home' });
+    expect(plan?.undecided).toEqual([
+      { name: 'node-pty', source: `${path.join(root, 'pnpm-workspace.yaml')} allowBuilds.node-pty`, value: 'true' },
+      { name: 'cpu-features', source: `${path.join(root, 'package.json')} pnpm.allowBuilds.cpu-features@0.0.10`, value: '1' },
+    ]);
+    expect(plan?.wanted).toEqual(['ssh2']);
+    expect(plan?.changes).toEqual([]);
+    expect(pkg.pnpm.onlyBuiltDependencies).toEqual(['esbuild']);
+    expect(plan?.warnings).toEqual([expect.stringContaining('package.json pnpm.onlyBuiltDependencies 未修改：项目是')]);
+    const { changed, output } = sync(dir, pkg, false, '/nonexistent-home');
+    expect(changed).toBe(false);
+    expect(output).toContain('pnpm 不读成员的这个列表');
+    expect(output).toContain('allowBuilds: { ssh2: true }');
+    expect(output).not.toMatch(/allowBuilds: \{[^}]*(node-pty|cpu-features)/u);
+  });
+
+  it('trims the name part of a spaced versioned entry (B-2)', () => {
+    expect(buildEntryPackageName('ssh2 @1.16.0')).toBe('ssh2');
+    expect(buildEntryPackageName(' @scope/name @^1 ')).toBe('@scope/name');
+    const { root, pkg } = projectWith('ignoredBuiltDependencies:\n  - "ssh2 @1.16.0"\n');
+    expect(planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' })?.ignored.map(entry => entry.name)).toEqual(['ssh2']);
+  });
+
+  it('warns about an unparsable enclosing package.json (B-3)', () => {
+    const { dir, pkg, root } = nestedProject({ 'pnpm-workspace.yaml': "packages:\n  - 'bots/*'\n", 'package.json': '{ not json' });
+    const plan = planNativeBuildAllowance(dir, pkg, { pnpmVersion: () => '11.0.0', homeDir: '/nonexistent-home' });
+    expect(plan?.warnings).toEqual([expect.stringContaining(`${path.join(root, 'package.json')} 不是有效的 JSON`)]);
+  });
+
+  it('abandons the plan with a readable hint when the enclosing workspace file cannot be read (B-3)', () => {
+    const { dir, pkg, root } = nestedProject({});
+    // A directory where the file is expected: reading it throws (EISDIR), like EACCES would.
+    fs.mkdirSync(path.join(root, 'pnpm-workspace.yaml'));
+    const reasons: string[] = [];
+    expect(planNativeBuildAllowance(dir, pkg, { pnpmVersion: () => '11.0.0', homeDir: '/nonexistent-home', onAbandon: reason => reasons.push(reason) })).toBeUndefined();
+    expect(reasons).toEqual([expect.stringContaining(`无法读取 ${path.join(root, 'pnpm-workspace.yaml')}（EISDIR）`)]);
+    const { changed, output } = sync(dir, pkg, false, '/nonexistent-home');
+    expect(changed).toBe(false);
+    expect(output).toContain('未检查原生依赖构建许可，也不做任何修改');
+  });
+
+  it('abandons the plan with a hint when a workspace file cannot be parsed (B-3)', () => {
+    const { root, pkg } = projectWith('allowBuilds: [\n');
+    const reasons: string[] = [];
+    expect(planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0', onAbandon: reason => reasons.push(reason) })).toBeUndefined();
+    expect(reasons).toEqual([expect.stringContaining('pnpm-workspace.yaml 无法解析')]);
+  });
+
+  it('leaves a placeholder under a key with surrounding whitespace alone and adds no second key (B-4)', () => {
+    const { root, pkg } = projectWith("allowBuilds:\n  ' node-pty ': set this to true or false\n  ssh2: true\n  cpu-features: true\n");
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.changes).toEqual([]);
+    expect(plan?.warnings).toEqual([expect.stringContaining('allowBuilds 的键 " node-pty " 带首尾空白')]);
+    sync(root, pkg, false);
+    const written = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).not.toMatch(/^ {2}node-pty:/mu);
+    expect(written).toContain("' node-pty ': set this to true or false");
+  });
+
+  it('warns about a non-map allowBuilds and an onlyBuiltDependenciesFile, and changes neither (B-5)', () => {
+    const { root, pkg } = projectWith('allowBuilds: true\nonlyBuiltDependenciesFile: build-allow.json\n');
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.warnings).toEqual([
+      expect.stringContaining('pnpm-workspace.yaml onlyBuiltDependenciesFile 指向 build-allow.json：zhin migrate 不会读取或修改该文件'),
+      expect.stringContaining('pnpm-workspace.yaml allowBuilds 是 true，不是「包名: true/false」的映射'),
+    ]);
+    expect(plan?.changes).toEqual([]);
+    const before = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(sync(root, pkg, false).output).toContain('allowBuilds is not a map');
+    expect(fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8')).toBe(before);
+  });
 });

@@ -32,6 +32,7 @@ import {
   type ZhinOverrideEntry,
 } from './zhin-overrides.js';
 import { semver } from '../plugin-check/semver.js';
+import { isPinnedSpecifier } from './dependency-specifiers.js';
 import { readInstalledPackageVersion } from './installed-versions.js';
 import { isValidNpmPackageName } from './registry-version.js';
 import { listWorkspacePackageDirs, workspacePackageGlobs } from './workspace-packages.js';
@@ -352,7 +353,10 @@ export async function previewUpdate(
         const locked = semver.valid(item.range.trim().replace(/^=?v?/u, ''));
         const latest = locked ? await latestOf(item.name) : undefined;
         if (locked && latest && semver.valid(latest) && semver.gt(latest, locked)) {
-          const rootLocks = !isRoot && PINNED_VERSION.test((rootMigratable.get(item.name) ?? '').trim());
+          // The root keeps what `zhin migrate` treats as locked (the same `isPinnedSpecifier`), and a member
+          // never moves past the root's copy: only --include-pinned upgrades it then.
+          const rootSpec = rootMigratable.get(item.name);
+          const rootLocks = !isRoot && rootSpec !== undefined && isPinnedSpecifier(rootSpec);
           pinned.push({ name: item.name, range: item.range, current, latest, upgrade: isRoot || rootLocks ? 'include-pinned' : 'migrate' });
         } else if (locked && latest === undefined) {
           unknown.push(`${item.name}@latest`);
