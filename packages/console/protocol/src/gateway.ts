@@ -31,7 +31,15 @@ export const GATEWAY_PLUGINS_RPC = Object.freeze({
   DISABLE: 'gateway.plugins.disable',
 } as const);
 
-export const GATEWAY_RPC = Object.freeze({ ...GATEWAY_PACKAGES_RPC, ...GATEWAY_INSTANCE_RPC, ...GATEWAY_PLUGINS_RPC });
+/**
+ * Read-only version check (zhinjs/console#64): installed vs. published versions of the Zhin
+ * packages. The Console only shows it; framework upgrades stay with `zhin migrate` (ADR 0062).
+ */
+export const GATEWAY_VERSION_RPC = Object.freeze({
+  CHECK: 'gateway.version.check',
+} as const);
+
+export const GATEWAY_RPC = Object.freeze({ ...GATEWAY_PACKAGES_RPC, ...GATEWAY_INSTANCE_RPC, ...GATEWAY_PLUGINS_RPC, ...GATEWAY_VERSION_RPC });
 
 export type GatewayRpcType = (typeof GATEWAY_RPC)[keyof typeof GATEWAY_RPC];
 
@@ -39,6 +47,7 @@ export type GatewayRpcType = (typeof GATEWAY_RPC)[keyof typeof GATEWAY_RPC];
  * Required permission per gateway RPC. Package plans and mutations need `plugin.manage`
  * (ADR 0054 §4; the bootstrap token may still install database drivers, ADR 0053 §3); listing is
  * a read (`feature.view`). Instance `status` / `logs` need `status.view`, the rest `ops.restart` (§5).
+ * The version check is a status read (`status.view`).
  */
 export const GATEWAY_RPC_PERMISSIONS = Object.freeze({
   'gateway.packages.list': 'feature.view',
@@ -54,6 +63,7 @@ export const GATEWAY_RPC_PERMISSIONS = Object.freeze({
   'gateway.plugins.declare': 'plugin.manage',
   'gateway.plugins.enable': 'plugin.manage',
   'gateway.plugins.disable': 'plugin.manage',
+  'gateway.version.check': 'status.view',
 } as const satisfies Readonly<Record<GatewayRpcType, string>>);
 
 /**
@@ -299,6 +309,47 @@ export type GatewayPackageEvent =
   | Readonly<{ type: 'phase'; id: string; phase: GatewayPackagePhase }>
   | Readonly<{ type: 'output'; id: string; stream: 'stdout' | 'stderr'; chunk: string }>
   | Readonly<{ type: 'result'; id: string; result: GatewayPackageTransactionResult }>;
+
+// ---- gateway.version.check ----
+
+/**
+ * One Zhin package of the project (`zhin.js`, `@zhin.js/gateway`, `@zhin.js/console-*`, installed
+ * `@zhin.js/*` plugins) compared with the registry the project's npm configuration points to.
+ */
+export interface GatewayVersionPackage {
+  readonly name: string;
+  /** Range declared in package.json; null when the package is not a direct dependency (the running gateway). */
+  readonly range: string | null;
+  /** Version found in node_modules (the running gateway's own version for `@zhin.js/gateway`); null when missing. */
+  readonly installed: string | null;
+  /** The registry's `latest` dist-tag; null when the registry could not be checked. */
+  readonly latest: string | null;
+  /** Highest published version within {@link range}; null when unknown or the range is not a semver range. */
+  readonly wanted: string | null;
+  /** `latest` satisfies the declared range (the dependency update reaches it). */
+  readonly latestInRange: boolean;
+  /** A version newer than `installed` exists within the declared range (the dependency update applies). */
+  readonly updateAvailable: boolean;
+  /**
+   * `latest` is newer than `installed` but outside the declared range: reaching it changes the
+   * range and may need migrations, which only `zhin migrate` does (ADR 0062), never the Console.
+   */
+  readonly needsMigrate: boolean;
+}
+
+/** `gateway.version.check` (`status.view`): answered from a cache (about 6 h); never fails when offline. */
+export interface GatewayVersionReport {
+  /** Version of the gateway answering. */
+  readonly gateway: string | null;
+  readonly packages: readonly GatewayVersionPackage[];
+  /** When the registry was last queried for this report (ms since epoch). */
+  readonly checkedAt: number;
+  /** False when no registry query succeeded (offline, timeout): every `latest` is then null. */
+  readonly registryReachable: boolean;
+}
+
+/** The command the Console shows for upgrades that need a range change or migrations (ADR 0062). */
+export const GATEWAY_VERSION_MIGRATE_COMMAND = 'npx zhin migrate --dry-run' as const;
 
 // ---- forwarded requests while the instance cannot answer (ADR 0054 §3) ----
 

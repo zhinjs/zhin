@@ -13,6 +13,8 @@ import { projectIdentity } from '../project/identity.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { InstanceSupervisor, type InstanceSupervisorOptions } from '../supervisor/instance-supervisor.js';
 import { GatewayPackageService } from '../packages/service.js';
+import { GatewayVersionChecker } from '../packages/version-check.js';
+import { gatewayVersion } from './gateway-version.js';
 import { createGatewayRpcDispatcher, type GatewayRpcDispatcher, type GatewayRpcInstance } from '../packages/rpc.js';
 import { createGatewayConsoleRpc } from './console-rpc.js';
 import { createGatewayPluginSwitchRpc } from './plugin-switch-rpc.js';
@@ -186,8 +188,17 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     status: () => supervisor.status(),
     logs: supervisor.logs,
   };
+  // zhinjs/console#64: answered by the gateway itself, so it works while the instance is stopped.
+  const version = packages
+    ? new GatewayVersionChecker({
+      projectRoot: options.projectRoot,
+      inventory: async () => (await packages.inventory()).packages,
+      gatewayVersion,
+    })
+    : undefined;
   const rpc = createGatewayRpcDispatcher({
     ...(packages ? { packages } : {}),
+    ...(version ? { version } : {}),
     instance: lifecycle,
   });
   const server = new GatewayHttpServer({
