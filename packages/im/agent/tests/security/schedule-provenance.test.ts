@@ -38,6 +38,7 @@ import { createNativeWebToolFeatures } from '../../src/plugin-runtime/native-web
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 import { McpPermitDeniedError } from '../../src/tool/mcp-permit-denial.js';
 import { TurnCancelledError } from '../../src/turn/prompt-controller.js';
+import { TriggerTimeoutError as IngressTriggerTimeoutError } from '../../src/plugin-runtime/ingress/unified-mailbox-spine.js';
 
 describe('ADR 0067 D2.1: provenance kept by scheduled tasks', () => {
   it('snapshots any recorded source, trusted output included, and nothing on a clean turn', () => {
@@ -251,6 +252,8 @@ describe('#1250 F8: a thrown error is a source when its text reaches the model',
       new NetworkAccessDeniedError('host not allowed'),
       new McpPermitDeniedError('mcp_tool', ['owner@global']),
       new TurnCancelledError('http:http-session'),
+      // #1250 第 56 批: the ingress deadline throws the one TriggerTimeoutError the runtime excludes.
+      new IngressTriggerTimeoutError(60_000),
       new DOMException('This operation was aborted', 'AbortError'),
       new DOMException('The operation timed out.', 'TimeoutError'),
     ];
