@@ -1,4 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+const warn = vi.hoisted(() => vi.fn());
+vi.mock('@zhin.js/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@zhin.js/logger')>()),
+  getLogger: () => ({ info: vi.fn(), warn, debug: vi.fn(), error: vi.fn() }),
+  formatCompact: (fields: Record<string, unknown>) => JSON.stringify(fields),
+}));
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -237,6 +244,31 @@ agents: |
       expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.action).toEqual({ kind: 'agent', prompt: '早报', agent: 'news' });
       await syncProfileRoutinesToStore(store, profile());
       expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.action).toEqual({ kind: 'agent', prompt: '早报' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('warns when a routine names an Agent that is not configured, and still syncs it (#1250 b55)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-agent-missing-'));
+    try {
+      warn.mockClear();
+      const store = new ScheduleJobStore({ dataDir: dir });
+      const profile = { version: 1, routines: {
+        morningBrief: { cron: '0 0 8 * * *', prompt: '早报', agent: 'ghost' },
+        bedtimeCheck: { cron: '0 0 22 * * *', prompt: '巡检', agent: 'news' },
+        weatherReport: { cron: '0 0 7 * * *', prompt: '天气' },
+      } };
+      expect(await syncProfileRoutinesToStore(store, profile, { agents: ['zhin', 'news'] })).toBe(3);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(JSON.parse(warn.mock.calls[0]![0] as string)).toEqual({
+        op: 'profile_routine_agent_missing', routine: 'morningBrief', job: PROFILE_MORNING_BRIEF_JOB_ID, agent: 'ghost', available: 'zhin,news',
+      });
+      expect((await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID))?.action).toEqual({ kind: 'agent', prompt: '早报', agent: 'ghost' });
+      // Without the configured Agents nothing is checked.
+      warn.mockClear();
+      await syncProfileRoutinesToStore(store, profile);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

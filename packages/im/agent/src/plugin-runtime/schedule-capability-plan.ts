@@ -3,6 +3,7 @@ import type { SkillDescriptor } from '@zhin.js/skill';
 import type { ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ToolCapability } from './capability-ingress.js';
 import { capabilityAsAgentTool } from './deferred-capability-plan.js';
+import { RESERVED_TOOL_NAMES } from '../reserved-tools.js';
 
 const UNATTENDED_FORBIDDEN_TOOLS = new Set([
   'discover', 'load_tool', 'load_skill', 'ask_user',
@@ -30,13 +31,32 @@ export function isEmptyExecutionPlan(plan: Readonly<ScheduleJobExecutionPlan> | 
   return plan !== undefined && !(plan.tools?.length) && !(plan.skills?.length);
 }
 
+/** The built-in schedule tools (`reserved-tools.ts`); a third-party `schedule_meeting` is not one. */
+const SCHEDULE_MANAGEMENT_TOOLS: ReadonlySet<string> = new Set(
+  RESERVED_TOOL_NAMES.filter((name) => name.startsWith('schedule_')),
+);
+
+/**
+ * #1250 b55: a `schedule_preview` run gets no `schedule_*` tool. A model that passes a whole
+ * request ("remind me at 8 tomorrow to drink water") to the preview would otherwise call
+ * `schedule_add` from the unattended preview run, which is refused, and the user is told the job
+ * was not created although they allowed it. The preview only tries out what runs when the job is due.
+ */
+export function isScheduleManagementTool(name: string): boolean {
+  return SCHEDULE_MANAGEMENT_TOOLS.has(localName(name));
+}
+
+
 export function createScheduleCapabilityPlan(input: {
   readonly prompt: string;
   readonly executionPlan?: Readonly<ScheduleJobExecutionPlan>;
   readonly tools: readonly ToolCapability[];
   readonly skills: readonly SkillDescriptor[];
+  /** A `schedule_preview` run: no `schedule_*` tool is offered, even when the plan names one. */
+  readonly preview?: boolean;
 }): ScheduleCapabilityPlan {
-  const eligible = input.tools.filter((tool) => !UNATTENDED_FORBIDDEN_TOOLS.has(localName(tool.name)));
+  const eligible = input.tools.filter((tool) => !UNATTENDED_FORBIDDEN_TOOLS.has(localName(tool.name))
+    && !(input.preview && isScheduleManagementTool(tool.name)));
   const allTools = eligible.map(capabilityAsAgentTool);
   // #1250 b33: a plan written without tools or skills (`schedule_add` without `tools`) used to leave the
   // turn with no tool at all; it now falls back to the same prompt-based selection as a job without plan.
