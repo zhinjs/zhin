@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { confirmsPnpm10, findAncestorWorkspaceFile, nativeModuleFixCommand, planNativeBuildAllowance, probeGatewayNativeModule, syncNativeBuildAllowance, usesPnpm } from '../../src/utils/native-build-deps.js';
+import { buildEntryPackageName, confirmsPnpm10, findAncestorWorkspaceFile, nativeModuleFixCommand, planNativeBuildAllowance, probeGatewayNativeModule, syncNativeBuildAllowance, usesPnpm } from '../../src/utils/native-build-deps.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -116,7 +116,7 @@ describe('pnpm 11 placeholder values in allowBuilds', () => {
     fs.writeFileSync(file, 'allowBuilds:\n  node-pty: set this to true or false\n  ssh2: false\n');
     const pkg = { name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' } };
     const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
-    expect(plan?.denied).toEqual(['ssh2']);
+    expect(plan?.denied).toEqual([{ name: 'ssh2', source: 'pnpm-workspace.yaml allowBuilds.ssh2' }]);
     expect(plan?.changes).toEqual(expect.arrayContaining([
       { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true', replaced: 'set this to true or false' },
       { file: 'pnpm-workspace.yaml', setting: 'allowBuilds.cpu-features', value: 'true' },
@@ -238,5 +238,154 @@ describe('packages the project lists in ignoredBuiltDependencies', () => {
     const written = fs.readFileSync(path.join(preview.root, 'pnpm-workspace.yaml'), 'utf8');
     expect(written).toContain('node-pty: true');
     expect(written).not.toMatch(/ssh2|cpu-features/u);
+  });
+});
+
+// #1250 review: denials are compared by package name, read from every file pnpm reads, and never
+// overridden; values that are not pnpm's placeholder are never rewritten.
+describe('build denials the gateway allowance must honour', () => {
+  const gatewayPkg = (manifest: Record<string, unknown> = {}) =>
+    ({ name: 'bot', packageManager: 'pnpm@11.0.0', dependencies: { '@zhin.js/gateway': '^1.0.0' }, ...manifest });
+  const projectWith = (workspace: string | undefined, manifest: Record<string, unknown> = {}) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-deny-'));
+    roots.push(root);
+    if (workspace !== undefined) fs.writeFileSync(path.join(root, 'pnpm-workspace.yaml'), workspace);
+    return { root, pkg: gatewayPkg(manifest) };
+  };
+  const sync = (root: string, pkg: Record<string, any>, dryRun: boolean, homeDir?: string) => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const changed = syncNativeBuildAllowance(root, pkg, dryRun, { pnpmVersion: () => '11.0.0', ...(homeDir ? { homeDir } : {}) });
+      return { changed, output: log.mock.calls.flat().join('\n') };
+    } finally { log.mockRestore(); }
+  };
+  const allowed = (plan: ReturnType<typeof planNativeBuildAllowance>) => [...new Set(plan!.changes.map(change => change.setting === 'onlyBuiltDependencies' || change.setting === 'pnpm.onlyBuiltDependencies' ? change.value : change.setting.slice('allowBuilds.'.length)))];
+
+  it('matches versioned and padded deny-list entries by package name (scoped names too)', () => {
+    expect(buildEntryPackageName('ssh2@1.16.0')).toBe('ssh2');
+    expect(buildEntryPackageName(' ssh2 ')).toBe('ssh2');
+    expect(buildEntryPackageName('@scope/name@^1.2.0')).toBe('@scope/name');
+    expect(buildEntryPackageName('@scope/name')).toBe('@scope/name');
+    const { root, pkg } = projectWith("packages:\n  - '.'\nignoredBuiltDependencies:\n  - ssh2@1.16.0\n  - ' cpu-features '\n");
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.ignored).toEqual([
+      { name: 'ssh2', setting: 'ignoredBuiltDependencies', source: 'pnpm-workspace.yaml ignoredBuiltDependencies' },
+      { name: 'cpu-features', setting: 'ignoredBuiltDependencies', source: 'pnpm-workspace.yaml ignoredBuiltDependencies' },
+    ]);
+    expect(allowed(plan)).toEqual(['node-pty']);
+  });
+
+  it('reads a scalar deny list as one entry and warns', () => {
+    const { root, pkg } = projectWith('ignoredBuiltDependencies: ssh2\n');
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.ignored.map(entry => entry.name)).toEqual(['ssh2']);
+    expect(plan?.warnings).toEqual([expect.stringContaining('pnpm-workspace.yaml ignoredBuiltDependencies 是单个字符串而不是列表')]);
+    expect(allowed(plan)).toEqual(['node-pty', 'cpu-features']);
+    expect(sync(root, pkg, true).output).toContain('[dry-run] pnpm-workspace.yaml ignoredBuiltDependencies 是单个字符串');
+  });
+
+  it('counts a versioned allowBuilds key set to false as a denial and adds no bare key', () => {
+    const { root, pkg } = projectWith("allowBuilds:\n  'ssh2@1.16.0': false\n  'cpu-features@0.0.10': true\n");
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.denied).toEqual([{ name: 'ssh2', source: 'pnpm-workspace.yaml allowBuilds.ssh2@1.16.0' }]);
+    // The versioned `true` is the project's own decision: no bare key widens it.
+    expect(plan?.changes).toEqual([{ file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true' }]);
+    expect(sync(root, structuredClone(pkg), true).output).toContain('  [dry-run] pnpm-workspace.yaml allowBuilds.ssh2@1.16.0 为 false（项目已拒绝），保留');
+    plan!.apply();
+    const written = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).not.toMatch(/^ {2}ssh2: /mu);
+    expect(written).toContain("'ssh2@1.16.0': false");
+  });
+
+  it.each([
+    ['a quoted "false"', "  ssh2: 'false'\n", 'false'],
+    ['a YAML 1.1 no', '  ssh2: no\n', 'no'],
+    ['a number', '  ssh2: 0\n', '0'],
+  ])('leaves %s unchanged, warns and adds it to no allow list', (_label, entry, value) => {
+    const workspace = `onlyBuiltDependencies:\n  - esbuild\nallowBuilds:\n${entry}`;
+    const { root, pkg } = projectWith(workspace);
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.undecided).toEqual([{ name: 'ssh2', source: 'pnpm-workspace.yaml allowBuilds.ssh2', value }]);
+    expect(allowed(plan)).toEqual(['node-pty', 'cpu-features']);
+    const { output } = sync(root, pkg, false);
+    expect(output).toContain(`! pnpm-workspace.yaml allowBuilds.ssh2 的值 ${JSON.stringify(value)} 不是布尔值`);
+    const written = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).toContain(entry.trimEnd());
+    expect(written).not.toMatch(/- ssh2/u);
+  });
+
+  it('replaces an empty allowBuilds value (null) like the placeholder', () => {
+    const { root, pkg } = projectWith('allowBuilds:\n  node-pty:\n  ssh2: true\n  cpu-features: true\n');
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.changes).toEqual([{ file: 'pnpm-workspace.yaml', setting: 'allowBuilds.node-pty', value: 'true' }]);
+  });
+
+  it('reports a denied package that an allow list names, and edits neither', () => {
+    const workspace = "allowBuilds:\n  ssh2: true\nonlyBuiltDependencies:\n  - cpu-features\n";
+    const { root, pkg } = projectWith(workspace, { pnpm: { ignoredBuiltDependencies: ['ssh2', 'cpu-features@0.0.10'] } });
+    const plan = planNativeBuildAllowance(root, structuredClone(pkg), { pnpmVersion: () => '11.0.0' });
+    expect(plan?.conflicts).toEqual([
+      { name: 'ssh2', deniedBy: ['package.json pnpm.ignoredBuiltDependencies'], allowedBy: ['pnpm-workspace.yaml allowBuilds.ssh2: true'] },
+      { name: 'cpu-features', deniedBy: ['package.json pnpm.ignoredBuiltDependencies（cpu-features@0.0.10）'], allowedBy: ['pnpm-workspace.yaml onlyBuiltDependencies'] },
+    ]);
+    const { output } = sync(root, pkg, false);
+    expect(output).toContain('! ssh2: 冲突——package.json pnpm.ignoredBuiltDependencies 禁止构建，但 pnpm-workspace.yaml allowBuilds.ssh2: true 允许构建');
+    expect(output).toContain('pnpm 11 只读 allowBuilds（false 优先于 true）');
+    expect(output).toContain('请自行决定保留哪一处');
+    expect(output).not.toContain('不加入任何允许名单');
+    expect(output).not.toMatch(/(ssh2|cpu-features): 已跳过/u);
+    const written = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).toContain('ssh2: true');
+    expect(written).toContain('- cpu-features');
+    expect(pkg.pnpm.ignoredBuiltDependencies).toEqual(['ssh2', 'cpu-features@0.0.10']);
+  });
+
+  it('reports allowBuilds: false next to onlyBuiltDependencies as a conflict too', () => {
+    const { root, pkg } = projectWith('allowBuilds:\n  ssh2: false\n', { pnpm: { onlyBuiltDependencies: ['ssh2'] } });
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.conflicts).toEqual([
+      { name: 'ssh2', deniedBy: ['pnpm-workspace.yaml allowBuilds.ssh2: false'], allowedBy: ['package.json pnpm.onlyBuiltDependencies'] },
+    ]);
+    expect(pkg.pnpm.onlyBuiltDependencies).toEqual(['ssh2', 'node-pty', 'cpu-features']);
+  });
+
+  it('honours package.json#pnpm.neverBuiltDependencies', () => {
+    const { root, pkg } = projectWith("packages:\n  - '.'\n", { pnpm: { neverBuiltDependencies: ['node-pty'] } });
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '11.0.0' });
+    expect(plan?.ignored).toEqual([{ name: 'node-pty', setting: 'neverBuiltDependencies', source: 'package.json pnpm.neverBuiltDependencies' }]);
+    expect(allowed(plan)).toEqual(['ssh2', 'cpu-features']);
+    expect(sync(root, pkg, true).output).toContain('[dry-run] node-pty: 已跳过：在 neverBuiltDependencies 中（package.json pnpm.neverBuiltDependencies）');
+  });
+
+  it('creates onlyBuiltDependencies for pnpm < 10.26 without the denied packages', () => {
+    const { root, pkg } = projectWith("packages:\n  - '.'\nignoredBuiltDependencies:\n  - cpu-features\n", { packageManager: 'pnpm@10.12.1' });
+    const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '10.12.1' });
+    expect(plan?.changes.filter(change => change.setting === 'onlyBuiltDependencies').map(change => change.value)).toEqual(['node-pty', 'ssh2']);
+    plan!.apply();
+    const written = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(written).toContain('onlyBuiltDependencies:\n  - node-pty\n  - ssh2\n');
+    expect(written.split('onlyBuiltDependencies:')[1]).not.toContain('cpu-features');
+    expect(written).not.toContain('cpu-features: true');
+  });
+
+  it('reads the enclosing workspace root\'s denials and leaves them out of the hint', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-nested-deny-'));
+    roots.push(root);
+    const rootFile = path.join(root, 'pnpm-workspace.yaml');
+    fs.writeFileSync(rootFile, "packages:\n  - 'bots/*'\nignoredBuiltDependencies:\n  - ssh2@1.16.0\nallowBuilds:\n  cpu-features: false\n");
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'mono', pnpm: { neverBuiltDependencies: ['esbuild'] } }));
+    const dir = path.join(root, 'bots', 'bot');
+    fs.mkdirSync(dir, { recursive: true });
+    const pkg = gatewayPkg();
+    const plan = planNativeBuildAllowance(dir, pkg, { pnpmVersion: () => '11.0.0', homeDir: '/nonexistent-home' });
+    expect(plan).toMatchObject({
+      workspaceSkipped: true,
+      wanted: ['node-pty'],
+      ignored: [{ name: 'ssh2', setting: 'ignoredBuiltDependencies', source: `${rootFile} ignoredBuiltDependencies` }],
+      denied: [{ name: 'cpu-features', source: `${rootFile} allowBuilds.cpu-features` }],
+    });
+    const { output } = sync(dir, pkg, false, '/nonexistent-home');
+    expect(output).toContain(`请在 ${rootFile} 中加入 allowBuilds: { node-pty: true }`);
+    expect(output).not.toMatch(/allowBuilds: \{[^}]*(ssh2|cpu-features)/u);
   });
 });

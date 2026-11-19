@@ -122,7 +122,9 @@ allowBuilds:
   cpu-features: true
 ```
 
-- `create-zhin-app` 生成的项目已写好这一段；已有项目运行 `zhin migrate`（`--dry-run` 先预览）补齐，已有条目保留，写成 `false` 的不改。
+- `create-zhin-app` 生成的项目已写好这一段；已有项目运行 `zhin migrate`（`--dry-run` 先预览）补齐，已有条目保留，写成 `false` 的不改。只有 pnpm 11 留下的占位值 `set this to true or false` 和空值会改成 `true`；`'false'`、`no` 这类非布尔值原样保留并给出警告，这些包也不加入其他允许名单。
+- 项目明确禁止构建的包，`zhin migrate` 一律跳过：列在 `ignoredBuiltDependencies` 或 `neverBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`）中，或 `allowBuilds` 里写成 `false`（含带版本的键，如 `ssh2@1.16.0: false`）。名单项按包名比较（`ssh2@1.16.0` 算 `ssh2`）。项目位于上层 pnpm workspace 内时，也读取 workspace 根目录的 `pnpm-workspace.yaml` 与 `package.json`，提示里只列没有被拒绝的包。
+- 被禁止的包同时出现在允许名单里（`allowBuilds: true` 或 `onlyBuiltDependencies`）时，`zhin migrate` 两处都不改，只打印冲突警告，写明两处位置，由你决定保留哪一处。pnpm 10 以允许名单为准（`ignoredBuiltDependencies` 只是不再提示，`neverBuiltDependencies` 在存在 `onlyBuiltDependencies` 时被忽略）；pnpm 11 只读 `allowBuilds`，同一个包 `false` 优先于 `true`。
 - pnpm 11 只读 `allowBuilds`，不再读取 `package.json` 的 `pnpm` 字段；pnpm 10.26 之前的版本读 `onlyBuiltDependencies`。项目已有 `onlyBuiltDependencies` 列表（`pnpm-workspace.yaml` 或 `package.json#pnpm`）时，`zhin migrate` 也往里追加。
 - 放行后运行 `pnpm install`（或 `pnpm rebuild node-pty`）重新构建；没有预编译包的平台需要 Python 与 C/C++ 编译工具链。
 - `zhin doctor` 在项目目录里加载网关的 `node-pty`，失败时给出警告和修复命令；项目没装 `@zhin.js/gateway` 时跳过。npm 默认执行构建脚本，失败时用 `npm rebuild node-pty`。

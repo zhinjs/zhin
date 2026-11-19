@@ -219,6 +219,13 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
       console.log(chalk.gray(`  · ${label}${dep}: 根目录保留了 ${dep} 的当前版本，${existing} 也保留`));
       continue;
     }
+    // An `npm:` alias, a local path, git or tarball source is not a registry version of `dep`: even
+    // --include-pinned keeps it (writing `^x.y.z` would drop the alias or the source).
+    if (!member && options.includePinned && isLocalDependencySpecifier(String(existing))) {
+      console.log(chalk.gray(`  · ${dep}: ${existing} 是别名或本地/非 registry 来源，--include-pinned 不改写，保留（需要时请手动修改）`));
+      options.kept?.add(dep);
+      continue;
+    }
     // A workspace member's exact pin is what leaves a second copy next to the root's (#1250): it
     // moves with the root (staying exact); only the root keeps exact versions unless --include-pinned.
     if (!member && !options.includePinned && isPinnedSpecifier(String(existing))) {

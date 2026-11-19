@@ -380,7 +380,7 @@ export const logsCommand = new Command('logs')
 export const updateCommand = new Command('update')
   .description('更新依赖（网关运行时经网关：停实例 → 包管理器 → 启实例，失败回滚）')
   .argument('[packages...]', '包名，或 name@精确版本；省略时更新全部依赖')
-  .option('--dry-run', '只列出会升级的包与版本（Zhin 包在前，含 pnpm 工作区成员）及 pnpm overrides 的同步，另列已锁定精确版本、有新版本的 Zhin 包（用 zhin migrate --include-pinned 升级），不写任何文件，也不停止或重启实例')
+  .option('--dry-run', '只列出会升级的包与版本（Zhin 包在前，含 pnpm 工作区成员）及 pnpm overrides 的同步，另列已锁定精确版本、registry latest 更新的 Zhin 包（根项目用 zhin migrate --include-pinned 升级，工作区成员随 zhin migrate 升级），不写任何文件，也不停止或重启实例')
   .action(async (packages: string[], options: { dryRun?: boolean }) => {
     const { root } = target();
     if (options.dryRun) {

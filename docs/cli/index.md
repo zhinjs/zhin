@@ -281,11 +281,11 @@ zhin onboard [--quick] [--flow quickstart|full]
 zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides:` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。pnpm 工作区（`pnpm-workspace.yaml` 的 `packages`）里的每个包也一并升级 zhin 依赖：精确版本同样升级（保持精确），`workspace:`、`link:`、`file:` 等本地来源不动；scripts、engines 只改根目录。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并升级。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides:` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。pnpm 工作区（`pnpm-workspace.yaml` 的 `packages`）里的每个包也一并升级 zhin 依赖：精确版本同样升级（保持精确），`workspace:`、`link:`、`file:` 等本地来源不动；scripts、engines 只改根目录。精确版本（如 `1.1.6`）默认保留，`--include-pinned` 才会一并升级；`npm:` 别名、`link:`、`file:`、git 等非 registry 来源即使加 `--include-pinned` 也保留（改写成 `^x.y.z` 会丢掉别名或来源）。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
-声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。项目在 `ignoredBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`，旧写法 `neverBuiltDependencies` 同样算）里明确禁止构建的包不会加入任何允许名单（`allowBuilds`、`onlyBuiltDependencies`），计划里显示「已跳过：在 ignoredBuiltDependencies 中」；`--dry-run` 与实际执行写入的内容一致。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。项目明确禁止构建的包不会加入任何允许名单（`allowBuilds`、`onlyBuiltDependencies`）：列在 `ignoredBuiltDependencies` 或 `neverBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`；项目在上层 pnpm workspace 内时也读根目录的这两个文件）中，或 `allowBuilds` 里写成 `false`（含 `ssh2@1.16.0: false` 这类带版本的键）。计划里按所在名单显示「已跳过：在 ignoredBuiltDependencies 中」或「已跳过：在 neverBuiltDependencies 中」；被禁止的包同时在允许名单里时两处都不改，只打印冲突警告。`set this to true or false` 占位值之外的非布尔值（如 `'false'`、`no`）原样保留并警告。`--dry-run` 与实际执行写入的内容一致。见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会被留在旧版本（`Already up to date`）。因此 `zhin migrate` 把升级目标以 `name@version` 写进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（与 pnpm 在新脚手架里写的形式相同，已覆盖的条目不重复），安装后逐个读取 `node_modules` 列出每个包升级前后的实际版本；有包没装上声明的版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突等）。`zhin doctor` 也会在已安装版本不满足 `package.json` 声明时给出警告和修复命令。
 
@@ -413,7 +413,7 @@ zhin update [包名 | 包名@精确版本 ...] [--dry-run]
 
 `--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，每组里 Zhin 包（`zhin.js`、`@zhin.js/*`）排在最前面，`@types/node` 等放在「其他依赖」；写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
 
-`package.json` 里写成精确版本（如 `1.8.0`）的 Zhin 包不在 `zhin update` 的范围内；registry 上有更新的正式版时，预览末尾单独列出「已锁定、有新版本的 Zhin 包」（当前 → 最新），并提示用 `zhin migrate --include-pinned` 升级（精确版本保持精确，可先加 `--dry-run`）。registry 查询失败或离线时省略这一段，不报错。
+`dependencies` / `devDependencies` 里写成精确版本（如 `1.8.0`、`=1.8.0`、`v1.8.0`）的 Zhin 包不在 `zhin update` 的范围内；registry 的 `latest` 标签（与 `zhin migrate` 写入的版本相同）比锁定版本新时，预览末尾单独列出「已锁定、有新版本的 Zhin 包」：实际安装的版本 → 最新（未安装时显示「未安装」，安装版本与锁定版本不同时注明锁定值）。根项目的锁定用 `zhin migrate --include-pinned` 升级（精确版本保持精确，可先加 `--dry-run`）；工作区成员的锁定标出成员路径，普通 `zhin migrate` 就会让它随根升级（根项目也锁定了同一个包时除外，那时要加 `--include-pinned`）。由 overrides 决定的包、`optionalDependencies` 里的包（`zhin migrate` 不升级它们）以及 `npm:`、`workspace:` 等写法不列出。registry 查询失败或离线时省略这一段，不报错。
 
 #### 标准升级路径 {#update-path}
 

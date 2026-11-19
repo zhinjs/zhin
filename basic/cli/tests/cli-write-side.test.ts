@@ -351,6 +351,34 @@ describe('migrate', () => {
     expect(JSON.stringify(pkg)).not.toContain('latest');
   });
 
+  it('--include-pinned keeps npm: aliases and local sources instead of writing ^x.y.z (#1250 review)', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    const dependencies = {
+      'zhin.js': '1.1.0',
+      '@zhin.js/core': 'npm:@zhin.js/core@1.1.0',
+      '@zhin.js/agent': 'npm:my-fork-agent@^1.0.0',
+      '@zhin.js/calendar': 'link:../calendar',
+      '@zhin.js/local': 'file:./vendor/local.tgz',
+    };
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies,
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true, includePinned: true });
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('@zhin.js/core: npm:@zhin.js/core@1.1.0 是别名或本地/非 registry 来源，--include-pinned 不改写，保留');
+    expect(preview).not.toMatch(/@zhin\.js\/(core|agent|calendar|local): \S+ → /u);
+
+    const kept = new Set<string>();
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true, kept });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toMatchObject({ ...dependencies, 'zhin.js': '9.4.2' });
+    expect([...kept].sort()).toEqual(['@zhin.js/agent', '@zhin.js/calendar', '@zhin.js/core', '@zhin.js/local']);
+  });
+
   it('keeps a dependency and says so when the registry cannot be reached', () => {
     registry.offline = true;
     const pkgPath = path.join(tmp, 'package.json');
