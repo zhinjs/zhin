@@ -154,7 +154,8 @@ export class SessionToldLedger {
    * #1250: remembers the platform messages this agent delivered as its reply in `sessionId`
    * (references from `deliveredReplyContextRefs`; only exact plain-text evidence produces one).
    * A later background block of the same message and text is the session history's own words,
-   * not new content (ADR 0067 安全分析). Process memory only: after a restart such a block
+   * not new content (ADR 0067 安全分析). The turn engine records only replies of turns that read no
+   * recorded content (ADR 0067 D7, decision 5). Process memory only: after a restart such a block
    * counts as background again (fail closed).
    */
   recordDelivered(sessionId: string, contextRefs: readonly string[] | undefined): void {

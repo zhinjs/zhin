@@ -359,6 +359,19 @@ async function* runInteractiveTurn(
   let replyStream: CoreReplyStream | undefined;
   const replyStreams = new Map<string, CoreReplyStream>();
   const phaseFacts = new Map<string, ReplyPhaseFacts>();
+  const phaseDeliveredRefs: string[] = [];
+  /**
+   * #1250 (ADR 0067 D7): a delivered reply is history only when the turn that wrote it read no
+   * recorded content. The final provenance of this turn decides (tool results and failures,
+   * background, perception, delegated agents, a scheduled prompt): a reply of a tainted turn may
+   * repeat what it read, so it stays out of the delivery record and the next turn counts it as
+   * background (the reply inherits the taint).
+   */
+  const recordOwnDeliveries = (refs: readonly string[] | undefined) => {
+    if (provenance.tainted) return;
+    const all = [...new Set([...phaseDeliveredRefs, ...(refs ?? [])])];
+    if (all.length) host.toldLedger?.recordDelivered(prep.sessionId, all);
+  };
   const executions: BufferedExecution[] = [];
   let phaseSequence = 0;
   const replyLifetime = new AbortController();
@@ -406,7 +419,8 @@ async function* runInteractiveTurn(
       ...(stopped ? { stopped: true } : {}),
     };
     phaseFacts.set(phase.id, facts);
-    host.toldLedger?.recordDelivered(prep.sessionId, facts.contextRefs);
+    // Recorded at projection, and only when the whole turn stayed clean (see recordOwnDeliveries).
+    if (facts.contextRefs) phaseDeliveredRefs.push(...facts.contextRefs);
     const told = renderAgentOutput(confirmedOutput);
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
@@ -535,7 +549,6 @@ async function* runInteractiveTurn(
               deliveredMessageId = delivery.messageId;
               deliveredMessageIds = delivery.messages?.map(message => message?.id ?? null);
               deliveredContextRefs = deliveredReplyContextRefs(prep.sessionId, context.turn.identity.turnId, plannedTexts, delivery);
-              host.toldLedger?.recordDelivered(prep.sessionId, deliveredContextRefs);
             }
             if (
               delivery.status === 'failed'
@@ -562,6 +575,7 @@ async function* runInteractiveTurn(
             }
             await deliverUnexecutedFollowup(completion.result.unexecutedNotice, reply, context.turn.identity.turnId);
           }
+          recordOwnDeliveries(deliveredContextRefs);
           // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
           recordRelationTurn(host.userProfiles?.relations, context.turn, completion.result);
           if (context.turn.intent.kind === 'observe') {
