@@ -1,5 +1,13 @@
 # @zhin.js/adapter-icqq
 
+## 1.2.5
+
+### Patch Changes
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/core@1.13.1
+  - @zhin.js/adapter-onebot-events@0.0.15
+
 ## 1.2.4
 
 ### Patch Changes

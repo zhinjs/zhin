@@ -1,5 +1,12 @@
 # @zhin.js/adapter-ipad-wechat
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/core@1.13.1
+
 ## 0.0.3
 
 ### Patch Changes

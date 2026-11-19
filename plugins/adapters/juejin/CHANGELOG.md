@@ -1,5 +1,12 @@
 # @zhin.js/adapter-juejin
 
+## 0.1.15
+
+### Patch Changes
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/core@1.13.1
+
 ## 0.1.14
 
 ### Patch Changes
