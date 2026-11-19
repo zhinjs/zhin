@@ -5,7 +5,7 @@
  */
 import type { Mail } from '@zhin.js/harness';
 import {
-  NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, isNoReply, planSupplement, stripNoReplyMarker, stripNoReplyOutput, stripNoReplySnapshot, supplementFailureLine, supplementPreface,
+  NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, isNoReply, planSupplement, stripNoReplyMarker, stripNoReplyOutput, stripNoReplySnapshot, streamTextWithoutNoReply, supplementFailureLine, supplementPreface,
 } from '../../src/collaboration/turn-collaboration.js';
 
 type Status = 'completed' | 'failed' | 'cancelled' | 'budget_exceeded' | 'denied';
@@ -170,18 +170,35 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
     expect(supplementFailureLine('en-US')).toBe('Update: the background task did not finish.');
   });
 
-  it('strips the marker from a streamed snapshot, dropping what is left empty (#1250 第 56 批)', () => {
-    const part = (key: string, value: Record<string, unknown>) => ({ key, complete: true, value: value as never });
+  it('filters the marker out of a streamed snapshot without rewriting what may already be shown (#1250 第 56 批)', () => {
+    const part = (key: string, value: Record<string, unknown>, complete = true) => ({ key, complete, value: value as never });
     const snapshot = { revision: 3, messages: [
       { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案 [[no_reply]]' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
       { key: 'm1', complete: true, segments: [part('s0', { type: 'markdown', data: { content: '`[[NO_REPLY]]`' } })] },
     ] };
+    // Never trimmed: what an update published stays a prefix of the finish.
     expect(stripNoReplySnapshot(snapshot)).toEqual({ revision: 3, messages: [
-      { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
+      { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案 ' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
     ] });
     const clean = { revision: 1, messages: [{ key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案' } })] }] };
     expect(stripNoReplySnapshot(clean)).toBe(clean);
-    expect(stripNoReplySnapshot({ revision: 1, messages: [{ key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '[[no_reply]]' } })] }] })).toBeUndefined();
+    // A growing part holds back a tail that may still become the marker, in any spelling.
+    for (const tail of ['`', '``[', '[', '[[', '[[ No_', '[[no_reply', '[[no_reply ]']) {
+      expect(streamTextWithoutNoReply(`答案 ${tail}`, false)).toBe('答案 ');
+      expect(streamTextWithoutNoReply(`答案 ${tail}`, true)).toBe(`答案 ${tail}`);
+    }
+    expect(streamTextWithoutNoReply('答案 [[note]]', false)).toBe('答案 [[note]]');
+    expect(streamTextWithoutNoReply('`code` 后', false)).toBe('`code` 后');
+    // Each shown text is a prefix of the next one while the reply grows.
+    const full = '这是一只橘猫。 `[[No_Reply]]` 以上';
+    let shown = '';
+    for (let end = 1; end <= full.length; end += 1) {
+      const next = streamTextWithoutNoReply(full.slice(0, end), false);
+      expect(next.startsWith(shown)).toBe(true);
+      expect(next).not.toMatch(/no_re/iu);
+      shown = next;
+    }
+    expect(streamTextWithoutNoReply(full, true)).toBe('这是一只橘猫。  以上');
   });
 
   it('sends nothing when the model declines or says nothing', () => {
