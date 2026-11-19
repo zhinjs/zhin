@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/pagemanager",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Zhin PageManager Host runtime: entries, esbuild pipeline (no UI; contract in @zhin.js/contract)",
   "type": "module",
   "exports": {

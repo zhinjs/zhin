@@ -1,5 +1,44 @@
 # zhin.js
 
+## 1.9.0
+
+### Minor Changes
+
+- c922f64: Console 用量统计 `plugin.root.usage-stats` 补维度字段（#1250 第 58 批，Token 用量页重新设计第 3 步的后端部分）。全部是新增的可选字段，已有字段含义不变，权限仍是 `control:read`，不返回提示词或消息内容。
+
+  - 返回顶层新增 `schemaVersion`（当前为 2），Console 可按它降级。
+  - `byModel[]` 新增 `driverLabel`（服务所用驱动的显示名）与 `profileId` / `profileName`（这一行的调用都落在同一个模型 Profile 上时），两个服务同名时可以区分。
+  - 新增 `byAgent[]`（主助手 / 子 Agent / 未记录）与 `byPurpose[]`（`chat`、`agent`、`summary`、`ambient`、`perception` 等，带可读 `label`），数据来自每个（子）回合 trace 的 `model_selection`；没有记录模型选择的旧 trace 归入「未记录」（`@unrecorded`）。
+  - `bySession[]` 新增结构化会话名字段 `scopeKind`（`group` / `private` / `channel` / `schedule` / `internal` / `http` / `a2a` / `mcp`）、`sceneLabel`（不含类型词的群名 / 用户名等）与 `shortKey`（与 `zhin usage report` 同规则的短键），Console 可按界面语言拼名、重名时追加短键；`displayName` 不变。
+  - `bySession[]` 新增 `endpoint` 与 `accountLabel`（账号现在的名称）；顶层新增 `sessionsTotal` 与 `othersTotals`（前 50 个之外的会话合计）。
+  - 请求参数新增可选 `compare: 'previous'`：返回 `previous: { since, until, truncated, totals }`，即紧挨在前、等长的上一周期的汇总（不含明细）；上一周期按毫秒长度平移（不按日历），`session` 过滤同样作用于它；当前区间与上一周期各自最多 31 天（总扫描最多 62 天），只算上一周期的 totals，上一周期被截短时标 `truncated: true`。`compare` 写别的值返回 `invalid_input`。
+  - `@zhin.js/gateway/usage` 新增导出：常量 `USAGE_STATS_SCHEMA_VERSION`、`USAGE_MAIN_AGENT_KEY`、`USAGE_UNRECORDED_KEY`，函数 `usagePurposeLabel()`、`sessionPartsOf()`，类型 `UsageSessionParts`、`UsageAgentRow`、`UsagePurposeRow`、`UsageStatsPreviousWindow`、`UsageResolvedService`、`UsageProfileResolver`、`UsageAccountResolver`；`UsageStatsQuery` 新增可选 `previous`，`UsageStatsOptions` 新增可选 `resolveProfile` / `resolveAccount`，`UsageProviderResolver` 的返回值可带 `driverLabel`，`UsageStats` 新增上述字段。
+  - `zhin.js` 实例：`createProviderDisplayIndex()` 新增可选参数 `{ driverLabel }`，`ProviderServiceDisplay` 新增可选 `driverId` / `driverLabel`，服务既无名称又无驱动时省略 `label`（不再把 `services:<id>` 当名称，显示名只剩模型名）；`AssistantStatus` 新增 `bindUsageEndpoints()`；`UsageStatsService` 新增可选 `profileResolver` / `accountResolver`；新增 `previousUsageWindow()` 与类型 `UsageEndpointSource`。
+
+### Patch Changes
+
+- dff78e6: #1250 第 55 批：定时任务权限收紧。
+
+  **行为变化：普通用户在聊天里只能看到、管理自己的任务。**
+
+  - 聊天工具 `schedule_list`：所有者（`owner` 角色）照旧看到全部持久化任务；其他人（群管理员也一样）只看到自己在聊天里创建的任务（同一用户、同一平台账号与 endpoint，与 `createdBy` 记录的规则相同）和投递到当前会话的任务，不再看到别人的提示词、投递目标与 Agent；投递到当前会话的他人任务，会话成员能看到其提示词与标签。非 IM 来源（A2A、MCP、到点运行、远程 Mail 等，`createdBy` 没有聊天地址）创建的任务不认创建者，只有所有者能在聊天里看到和管理，避免共用的 `a2a-client` / `mcp-client` / `schedule` 或对端自报的 id 互相冒充。任务指定的 Agent 不在当前会话可用的 Agent（`@名称` 可见范围加默认 `zhin`）之内时，只显示「其他 Agent」（`agent_hidden: true`）；已从配置删除的 Agent 只对所有者显示名称，其他人看到「其他 Agent」（仍带 `agent_missing: true`）。插件内存任务（只有插件名与 cron）照常列出。
+  - 聊天工具 `schedule_remove` / `schedule_pause` / `schedule_resume`：所有者可以管理任何任务；其他人只能管理自己创建的任务；任务不存在与不是自己的任务得到同一句「未找到你能管理的任务：<id>」，不透露任务是否存在（所有者仍得到「未找到」）。Console / CLI / Profile 创建的任务（没有 `createdBy`）只有所有者能在聊天里管理。Profile 例程（`source: profile`）在聊天里一律不能删除、暂停或恢复（重启会还原），提示去 Profile 文件（`assistant.profile.file`，默认 `assistant.profile.yml`）修改。
+  - Console `cron:resume` 与 `POST /api/assistant/jobs/resume`：恢复后任务会再次投递，因此与 `cron:add` / `cron:set-agent` / `POST /api/assistant/jobs` 一样，任务有 IM 投递目标时要求该账号上的 `endpoint.operate`，否则 403 `schedule_target_forbidden`（RPC：`data.code` / `data.status: 403`）。暂停与删除仍只需 `ops.schedule.write`。
+  - Agent 不存在时，`cron:add`、`cron:set-agent` 与 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent` 的错误新增 `data: { code: 'schedule_agent_not_found', agent, available }`，错误文本不变。
+  - 预演不再自己建任务（所有者反馈 `schedule-preview-prompt-creates-schedule`）：预演回合不提供内建的 6 个调度工具（`schedule_list` / `add` / `preview` / `remove` / `pause` / `resume`，带插件前缀的同名限定名与执行计划里点名的也排除；第三方的 `schedule_meeting` 等照常提供），模型把「明天 8 点提醒我喝水」这类建任务请求原样传给 `schedule_preview` 时，预演不会再调用 `schedule_add` 并被无人值守规则拒绝、让用户点了允许却收到「任务没建成」。`schedule_preview` / `schedule_add` 的 `prompt` 参数说明改为「到点要执行的内容（例如『提醒我喝水』），不是建任务的请求，不要包含时间安排」。调度回合的执行画像（`TurnExecutionProfile` 的 `schedule` 分支）新增可选 `preview`。
+  - Profile 例程写的 Agent 不在配置中（`zhin` 与 `ai.agents`）时，启动同步记一条警告日志 `profile_routine_agent_missing`；任务照常同步。`syncProfileRoutinesToStore` 新增可选的第三个参数 `{ agents }`。
+
+- 8e34118: `zhin schedule resume` 被投递目标拒绝（403 `schedule_target_forbidden`）时说明原因（你没有权限向该任务的投递目标发消息，需要哪个账号上的 `endpoint.operate`）并以非零状态退出；`add` / `set-agent` 遇到 `schedule_agent_not_found` 时列出实例返回的可用 Agent（`data.available`）并提示如何改选（zhinjs/zhin#1250 第 61 批）。
+
+  `/assistant/jobs` 的 `schedule_target_forbidden` 对没有指明账号（缺 `scene.platform` / `scene.endpointKey`）的投递目标不再拼出「需要 undefined / undefined 上的 endpoint.operate」，改为与 Console RPC 一致的「投递目标需要指明账号」。
+
+- Updated dependencies [dff78e6]
+- Updated dependencies [23eb6ef]
+- Updated dependencies [19eeb90]
+  - @zhin.js/host-http@1.7.1
+  - @zhin.js/core@1.13.1
+  - @zhin.js/console-protocol@1.8.0
+
 ## 1.8.0
 
 ### Minor Changes

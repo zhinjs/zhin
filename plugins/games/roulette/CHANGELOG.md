@@ -1,5 +1,13 @@
 # @zhin.js/plugin-roulette
 
+## 0.1.24
+
+### Patch Changes
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/core@1.13.1
+  - @zhin.js/game-kit@1.1.35
+
 ## 0.1.23
 
 ### Patch Changes

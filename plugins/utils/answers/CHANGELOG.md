@@ -1,5 +1,12 @@
 # @zhin.js/plugin-answers
 
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/core@1.13.1
+
 ## 0.0.23
 
 ### Patch Changes

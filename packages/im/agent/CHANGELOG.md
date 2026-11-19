@@ -1,5 +1,39 @@
 # @zhin.js/agent
 
+## 1.9.1
+
+### Patch Changes
+
+- dff78e6: #1250 第 55 批：定时任务权限收紧。
+
+  **行为变化：普通用户在聊天里只能看到、管理自己的任务。**
+
+  - 聊天工具 `schedule_list`：所有者（`owner` 角色）照旧看到全部持久化任务；其他人（群管理员也一样）只看到自己在聊天里创建的任务（同一用户、同一平台账号与 endpoint，与 `createdBy` 记录的规则相同）和投递到当前会话的任务，不再看到别人的提示词、投递目标与 Agent；投递到当前会话的他人任务，会话成员能看到其提示词与标签。非 IM 来源（A2A、MCP、到点运行、远程 Mail 等，`createdBy` 没有聊天地址）创建的任务不认创建者，只有所有者能在聊天里看到和管理，避免共用的 `a2a-client` / `mcp-client` / `schedule` 或对端自报的 id 互相冒充。任务指定的 Agent 不在当前会话可用的 Agent（`@名称` 可见范围加默认 `zhin`）之内时，只显示「其他 Agent」（`agent_hidden: true`）；已从配置删除的 Agent 只对所有者显示名称，其他人看到「其他 Agent」（仍带 `agent_missing: true`）。插件内存任务（只有插件名与 cron）照常列出。
+  - 聊天工具 `schedule_remove` / `schedule_pause` / `schedule_resume`：所有者可以管理任何任务；其他人只能管理自己创建的任务；任务不存在与不是自己的任务得到同一句「未找到你能管理的任务：<id>」，不透露任务是否存在（所有者仍得到「未找到」）。Console / CLI / Profile 创建的任务（没有 `createdBy`）只有所有者能在聊天里管理。Profile 例程（`source: profile`）在聊天里一律不能删除、暂停或恢复（重启会还原），提示去 Profile 文件（`assistant.profile.file`，默认 `assistant.profile.yml`）修改。
+  - Console `cron:resume` 与 `POST /api/assistant/jobs/resume`：恢复后任务会再次投递，因此与 `cron:add` / `cron:set-agent` / `POST /api/assistant/jobs` 一样，任务有 IM 投递目标时要求该账号上的 `endpoint.operate`，否则 403 `schedule_target_forbidden`（RPC：`data.code` / `data.status: 403`）。暂停与删除仍只需 `ops.schedule.write`。
+  - Agent 不存在时，`cron:add`、`cron:set-agent` 与 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent` 的错误新增 `data: { code: 'schedule_agent_not_found', agent, available }`，错误文本不变。
+  - 预演不再自己建任务（所有者反馈 `schedule-preview-prompt-creates-schedule`）：预演回合不提供内建的 6 个调度工具（`schedule_list` / `add` / `preview` / `remove` / `pause` / `resume`，带插件前缀的同名限定名与执行计划里点名的也排除；第三方的 `schedule_meeting` 等照常提供），模型把「明天 8 点提醒我喝水」这类建任务请求原样传给 `schedule_preview` 时，预演不会再调用 `schedule_add` 并被无人值守规则拒绝、让用户点了允许却收到「任务没建成」。`schedule_preview` / `schedule_add` 的 `prompt` 参数说明改为「到点要执行的内容（例如『提醒我喝水』），不是建任务的请求，不要包含时间安排」。调度回合的执行画像（`TurnExecutionProfile` 的 `schedule` 分支）新增可选 `preview`。
+  - Profile 例程写的 Agent 不在配置中（`zhin` 与 `ai.agents`）时，启动同步记一条警告日志 `profile_routine_agent_missing`；任务照常同步。`syncProfileRoutinesToStore` 新增可选的第三个参数 `{ agents }`。
+
+- 23eb6ef: 前几批审查遗留的低危项（#1250 第 56 批）。
+
+  - **移除工具预执行**（ADR 0067 遗留）：`preExecutable` 工具原先在模型调用前被执行，输出作为「Pre-fetched data」注入提示词，不经工具运行时、不记来源。Plugin Runtime 路径本就不保留这个标记，只有旧的 `ZhinAgent.process` / `processTurn` / `processStream` 能走到，而这条路径没有来源门禁，因此直接删除该机制：回合不再注入预取数据；`@zhin.js/agent/tool` 的 `planToolRun()` 与 `ToolRunPlan` 已弃用、不再起作用（不执行任何工具，总是返回空的预执行结果），下一个 minor 删除；`AgentTool.preExecutable`（`@zhin.js/ai`）、`Tool.preExecutable` 与 `SceneManagementMethodSpec.preExecutable`（`@zhin.js/core`）保留为 `@deprecated`、不再起作用，成员列表 / 场景信息工具不再标记它。`ai.agent.preExecTimeout` 改为已弃用键（启动告警、`zhin config check` 报告、`--fix` 删除），从 `@zhin.js/runtime` 的配置 schema 与默认配置中移除。
+  - `TriggerTimeoutError` 合并为一个类：`@zhin.js/agent/runtime` 重新导出 `@zhin.js/agent/turn` 的实现，工具运行时把入站超时正确认作 harness 错误。构造函数以超时毫秒数为主（`new TriggerTimeoutError(60000)`），旧的 `(sessionKey, timeoutMs)` 写法仍可用（已弃用），消息统一为「AI 处理超时（Nms）」。
+  - 网络请求被重定向到不允许的地址，或重定向那一跳出现其他网络错误（DNS 解析失败、TLS 证书主机名不符等）时，错误原因改为固定文案，不再带出重定向目标的主机名或解析出的地址（原因只写 debug 日志）；首个 URL 的错误原因不变。
+  - `zhin update` 的 pnpm overrides 同步（`@zhin.js/gateway`，`zhin update --dry-run` 的 `@zhin.js/cli` 同步一致）：`pnpm-workspace.yaml` 中值为 YAML 块标量（`>-` / `|`）、带锚点且被别名引用、或本身是别名的 Zhin 条目，一律列为「需要手动修改」并给出文件行号，不再自动剪下（块标量原先会多剪下一条，锚点剪掉后别名悬空）。
+  - 协作：有协作的根回合在流式回复的每次中间更新和收尾时都过滤 `[[no_reply]]` 标记（含大小写、反引号变体；生成中结尾可能成为标记的残片先暂缓发出，只暂缓最后一个已删标记之后新增的内容；只剩空白的段在生成中也先暂缓，前导空白加纯标记的回答不再发出空白消息），已发内容不被改写，不会因前缀变化被平台流拒绝；actor 回合结束和根回合结束后迟到的委派读取不再登记，结果邮件立即照常处理，不再空等 120 秒。
+
+- a4b52bd: #1250 第 60 批：机器人自己的上一条回复不再让下一回合算作「读过外部内容」（`own-reply-counts-as-background`，ADR 0067 D7）。
+
+  - 行为变化：会话游标停在本回合的入站消息上，回复会作为背景消息出现在下一回合。现在本会话里 Agent 按原文投递的回复再以背景消息出现时，不再记来源 `conversation_context`：只发过一句话的私聊里，下一回合直接 `schedule_add` 不再弹确认（默认分级下），执行命令、写文件、外发、改配置也不再因为「机器人说过话」而确认。背景块仍保留在提示里，模型照旧知道自己说过什么；会话历史本身不算来源，自己的回复与历史同等对待。
+  - 仍算来源：成员的消息、场景事件，以及机器人经插件命令、定时任务投递、其他会话发出或被中间件改写过的消息（证据是出站回执的文本摘要与本会话的投递记录，缺任一项都按外部内容处理）；投递记录只在进程内存里，重启后以前的回复重新算作外部内容。
+  - 来源链文案按场景：私聊写「私聊里的背景消息」，群聊 / 频道仍写「群聊背景消息」；持久化在定时任务上的来源键不变（`conversation_context`），显示为「会话背景消息」。
+  - 安全审查修订：只有没读过外部内容的回合写的回复才进投递记录；读过网页、工具结果、成员消息等的回合，其回复可能复述注入内容，下一回合照旧算来源（回复继承污染），用户回一句「好」不能让 `schedule_add` 跳过确认。重置会话（`/clear`）时一并清空该会话的已告知与投递记录。
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/ai@1.8.2
+  - @zhin.js/core@1.13.1
+
 ## 1.9.0
 
 ### Minor Changes

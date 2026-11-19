@@ -1,5 +1,12 @@
 # @zhin.js/service-typesafe
 
+## 1.0.28
+
+### Patch Changes
+
+- Updated dependencies [23eb6ef]
+  - @zhin.js/ai@1.8.2
+
 ## 1.0.27
 
 ### Patch Changes
