@@ -25,6 +25,8 @@ const logger = getLogger('TurnNetworkClient');
 
 /** Fixed reason for a refused redirect hop: the target's host stays in the debug log only. */
 export const REDIRECT_DENIED_REASON = '网络请求被重定向到不允许访问的地址，已拦截';
+/** Fixed reason for any other failure of a redirect hop (DNS, TLS, connection). */
+export const REDIRECT_FAILED_REASON = '网络请求在重定向后失败';
 
 export interface NetworkRequestOptions {
   readonly headers?: Readonly<Record<string, string>>;
@@ -80,9 +82,12 @@ export class TurnNetworkClient {
         return { parsed, response: await request({ url: parsed, headers, signal, maxBytes }) };
       };
       const { parsed, response } = redirect === 0 ? await hop() : await hop().catch((error: unknown) => {
-        if (!(error instanceof NetworkAccessDeniedError)) throw error;
-        logger.debug(`redirect hop ${redirect} denied: ${error.message}`);
-        throw new NetworkAccessDeniedError(REDIRECT_DENIED_REASON);
+        // Cancellation, the deadline and the body limit name no host: they pass through as they are.
+        if (signal.aborted || error instanceof DOMException || (error instanceof Error && /exceeds \d+ bytes/u.test(error.message))) throw error;
+        logger.debug(`redirect hop ${redirect} failed: ${error instanceof Error ? error.message : String(error)}`);
+        if (error instanceof NetworkAccessDeniedError) throw new NetworkAccessDeniedError(REDIRECT_DENIED_REASON);
+        // DNS (ENOTFOUND), TLS altname and other transport errors quote the redirect target too.
+        throw new Error(REDIRECT_FAILED_REASON);
       });
       if (response.status < 300 || response.status >= 400) {
         return Object.freeze({ url: parsed.href, ...response });

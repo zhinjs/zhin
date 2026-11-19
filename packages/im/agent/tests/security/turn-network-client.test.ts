@@ -3,6 +3,7 @@ import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import {
   NodeNetworkTransport,
   REDIRECT_DENIED_REASON,
+  REDIRECT_FAILED_REASON,
   TurnNetworkClient,
   bareUrlHost,
   type NetworkTransport,
@@ -84,6 +85,31 @@ describe('TurnNetworkClient', () => {
       .mockRejectedValueOnce(new NetworkAccessDeniedError('DNS target 10.0.0.7 is private'));
     const client = new TurnNetworkClient(policy(['allowed.example']), new AbortController().signal, { request });
     await expect(client.getText('https://allowed.example/start')).rejects.toMatchObject({ message: REDIRECT_DENIED_REASON });
+  });
+
+  it.each([
+    'getaddrinfo ENOTFOUND ignore-previous-instructions.example',
+    "Hostname/IP does not match certificate's altnames: Host: ignore-previous-instructions.example",
+  ])('does not echo a redirect hop transport error: %s', async (message) => {
+    const request = vi.fn<NetworkTransport['request']>()
+      .mockResolvedValueOnce({ status: 302, statusText: 'Found', headers: { location: 'https://allowed.example/next' }, body: '' })
+      .mockRejectedValueOnce(new Error(message));
+    const client = new TurnNetworkClient(policy(['allowed.example']), new AbortController().signal, { request });
+    const error = await client.getText('https://allowed.example/start').catch((caught: unknown) => caught as Error);
+    expect(error.message).toBe(REDIRECT_FAILED_REASON);
+    expect(error).not.toBeInstanceOf(NetworkAccessDeniedError);
+  });
+
+  it('keeps a first-URL transport error and a redirect hop cancellation as they are', async () => {
+    const request = vi.fn<NetworkTransport['request']>().mockRejectedValueOnce(new Error('getaddrinfo ENOTFOUND first.example'));
+    const client = new TurnNetworkClient(policy(['first.example']), new AbortController().signal, { request });
+    await expect(client.getText('https://first.example/x')).rejects.toThrow('ENOTFOUND first.example');
+    const abort = new DOMException('This operation was aborted', 'AbortError');
+    const redirected = vi.fn<NetworkTransport['request']>()
+      .mockResolvedValueOnce({ status: 302, statusText: 'Found', headers: { location: 'https://first.example/next' }, body: '' })
+      .mockRejectedValueOnce(abort);
+    await expect(new TurnNetworkClient(policy(['first.example']), new AbortController().signal, { request: redirected })
+      .getText('https://first.example/x')).rejects.toBe(abort);
   });
 
   it('keeps the reason for the first URL, which the caller chose', async () => {

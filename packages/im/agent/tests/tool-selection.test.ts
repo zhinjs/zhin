@@ -1,3 +1,4 @@
+import { planToolRun } from '../src/tool/index.js';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@zhin.js/core', async (importOriginal) => {
@@ -117,5 +118,17 @@ describe('normalizeTool', () => {
     const tool = makeTool({ source: 'builtin:agent' });
     const agentTool = normalizeTool(tool);
     expect(agentTool.source).toBe('builtin:agent');
+  });
+});
+
+describe('planToolRun (deprecated, #1250 第 56 批)', () => {
+  it('executes nothing, even for a tool still marked preExecutable', async () => {
+    const execute = vi.fn(async () => 'fresh context');
+    const preTool = { ...normalizeTool(makeTool({ name: 'context_fetch', description: 'fetch context' })), preExecutable: true, execute };
+    await expect(planToolRun([preTool], 100)).resolves.toEqual({
+      preExecTools: [], preExecution: { tools: [], data: '' }, hasNonPreExecTools: true, mode: 'agent',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await expect(planToolRun([])).resolves.toMatchObject({ mode: 'chat', hasNonPreExecTools: false });
   });
 });

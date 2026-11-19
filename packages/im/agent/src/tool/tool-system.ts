@@ -80,6 +80,30 @@ export class ToolSystem {
   }
 }
 
+/**
+ * @deprecated Tool pre-execution was removed (#1250 第 56 批); kept for one release with no effect and
+ * removed in the next minor. `preExecution` is always empty and nothing runs before the model.
+ */
+export interface ToolRunPlan {
+  preExecTools: AgentTool[];
+  preExecution: { tools: AgentTool[]; data: string };
+  hasNonPreExecTools: boolean;
+  mode: 'chat' | 'pre-exec-fast-path' | 'agent';
+}
+
+/**
+ * @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); removed in the next minor.
+ * Executes nothing and returns the plan of a turn without pre-executable tools.
+ */
+export async function planToolRun(tools: AgentTool[], _timeoutMs?: number): Promise<ToolRunPlan> {
+  return {
+    preExecTools: [],
+    preExecution: { tools: [], data: '' },
+    hasNonPreExecTools: tools.length > 0,
+    mode: tools.length === 0 ? 'chat' : 'agent',
+  };
+}
+
 /** Stamps the owning generation so ToolRuntime can reject retired-generation tools. */
 export function stampToolGeneration<T extends { generation?: number }>(
   tools: T[],
