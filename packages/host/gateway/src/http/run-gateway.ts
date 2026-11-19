@@ -48,16 +48,9 @@ export interface RunningGatewayProcess {
   shutdown(exitCode?: number): void;
 }
 
-let cachedVersion: string | undefined;
-/** `@zhin.js/gateway` version. */
-export function gatewayVersion(): string {
-  if (cachedVersion) return cachedVersion;
-  try {
-    const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: unknown };
-    cachedVersion = typeof manifest.version === 'string' ? manifest.version : '0.0.0';
-  } catch { cachedVersion = '0.0.0'; }
-  return cachedVersion;
-}
+import { gatewayVersion } from './gateway-version.js';
+
+export { gatewayVersion };
 
 /** Console link in the ADR 0053 format: `?apiBaseUrl=`, the token only after `#`. */
 export function consoleLink(origin: string, token?: string): string {

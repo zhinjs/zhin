@@ -1145,6 +1145,9 @@ importers:
       fs-extra:
         specifier: ^11.4.0
         version: 11.4.0
+      semver:
+        specifier: ^7.8.5
+        version: 7.8.5
       tsx:
         specifier: ^4.23.1
         version: 4.23.1

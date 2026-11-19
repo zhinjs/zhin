@@ -255,6 +255,14 @@ export class GatewayPackageService {
   /** Declared dependencies with their installed versions. */
   async list(principal: GatewayPrincipal | undefined): Promise<GatewayPackageList> {
     await this.authorize(principal, 'list');
+    return this.inventory();
+  }
+
+  /**
+   * {@link list} without authorization, for gateway services that authorize on their own (the
+   * version check, `status.view`). Never hand its result to a caller that was not authorized.
+   */
+  async inventory(): Promise<GatewayPackageList> {
     const manifest = JSON.parse(await readFile(join(this.#root, 'package.json'), 'utf8')) as Record<string, unknown>;
     const allowlist = await this.allowlist();
     const packages: GatewayInstalledPackage[] = [];
