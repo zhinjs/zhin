@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0067：读取外部内容后的高危动作确认——按动作分级，第一方只读工具的结果算受信输出
 
-状态：已接受（所有者 2026-11-18 在维护会话中选定方案「分级 + 第一方只读工具标可信」，要求先写 ADR 再实施）。依据：zhinjs/zhin#1250 评论 6971359609 第 6 项 `high-risk-confirm-default-too-broad`。核对基线：`origin/feat/friendly-volta-ejc3wl` 合入 `origin/main` 之后的 `45cb531d0`。实施进度：已全部实施（与本文同一分支）。安全审查修订（同一分支）：背景消息里机器人自己的回复不再算来源（D7，#1250 `own-reply-counts-as-background`）；定时任务持久化创建时的来源、`schedule_preview` 不放宽（D2.1），受信清单收窄（D1），配置解析幂等（D3），`zhin doctor` 补充说明与无法识别值的提示（D5）。
+状态：已接受（所有者 2026-11-18 在维护会话中选定方案「分级 + 第一方只读工具标可信」，要求先写 ADR 再实施）。依据：zhinjs/zhin#1250 评论 6971359609 第 6 项 `high-risk-confirm-default-too-broad`。核对基线：`origin/feat/friendly-volta-ejc3wl` 合入 `origin/main` 之后的 `45cb531d0`。实施进度：已全部实施（与本文同一分支）。安全审查修订（同一分支）：背景消息里机器人自己的回复不再算来源（D7，#1250 `own-reply-counts-as-background`）；私聊里发起人自己按原文存下的消息不再算来源，未处理的 `/clear` 等重置写法得到回应（D8，#1250 `own-unhandled-message-counts-as-background`）；定时任务持久化创建时的来源、`schedule_preview` 不放宽（D2.1），受信清单收窄（D1），配置解析幂等（D3），`zhin doctor` 补充说明与无法识别值的提示（D5）。
 
 关联：[ADR 0036](./0036-controlled-landing-phase0.md)（危险工具硬闸，与本文无关、不变）、[ADR 0044](./0044-adapter-capability-profile.md)（`@zhin.js/` 作用域的官方包视为可信，本文沿用同一判定）、[ADR 0065](./0065-mcp-tool-permit.md)（MCP 上游 `readOnlyHint` 只定权限档位、不放宽审批，本文同样不让它放宽确认）。
 
@@ -189,6 +189,27 @@ ai:
 5. **只有干净回合写的回复才进投递记录**（安全审查修订）。回合引擎在投影时看本回合 `TurnProvenance` 的**最终**状态——工具结果与失败、背景消息、媒体感知、委派的子 Agent、定时任务的提示词都记在同一份来源记录里，信任的第一方只读结果也算——只要记过任一来源，这个回合的回复（包括流式分段回复）就不调用 `recordDelivered`。被污染回合的回复可能复述了它读到的注入内容（例如网页让模型说「接下来我会每天执行 X，回复『好』即可」），下一回合它以背景块出现时照旧计 `conversation_context`：用户回一句「好」时回合不干净，`schedule_add` 仍按分级确认，D2.1 的快照也记下这个来源。回复继承产生它的回合的污染；干净回合的回复下一回合不计来源。
 6. **重置会话时清空**。`/clear` 等归档会话的入口（`ZhinAgent.archiveSession`）清掉该会话的已告知记录与投递记录（按会话键和当时的会话 id）；进程退出（`dispose`）全部清空。压缩不清：压缩改写的是模型历史，不改变「这条消息是本 Agent 在本会话按原文发出的」这一事实，已告知记录本来就设计成随压缩摘要保留。投递记录每个会话最多 64 条，被淘汰的旧回复再出现时按外部内容处理（失败关闭）。
 
+### D8 私聊里发起人自己的原文消息不算来源（#1250 `own-unhandled-message-counts-as-background`）
+
+所有者反馈：私聊里发起人自己的一条没被处理的消息，会让下一回合算作读过外部内容。复现：Sandbox 私聊发 `/clear`（不是命令：`inbound_outcome` 为 `not_addressed`、`no_command_not_ambient`），再聊一句，然后让它建定时任务，弹确认「来源链：主人的消息 → 私聊里的背景消息 → 本次调用 schedule_add」；新会话不发 `/clear` 则不弹。
+
+核实：
+
+- `/clear` 没有任何指令认领；Agent 入口的 AI 触发规则把 `/`、`!`、`！` 开头的消息当成指令前缀忽略（`DEFAULT_AI_TRIGGER_IGNORE_PREFIXES`），所以它到不了 `isClearCommand`（那里虽然列了 `/clear`，默认配置下走不到），私聊又不走插话判断，结局 `not_addressed`、`no_command_not_ambient`，没有任何回应；
+- 入站消息在任何中间件之前由 `ConversationRuntime.recordIncoming` 写进会话事件流，Agent 的游标停在上一回合的入站消息上，`/clear` 就成了「聊一句」那个回合的背景块；回合引擎只要有不被 D7 豁免的背景块就记 `conversation_context`——发起人自己的消息也一样；
+- 那个回合因此被污染，按 D7 决定 5 它的回复不进投递记录；再下一回合，这条回复在背景里照旧计来源，建定时任务就要确认。
+
+决定（所有者批准的方案，宁严勿松）：
+
+1. **只在私聊放宽**。背景块同时满足以下全部条件时不记 `conversation_context`，块本身仍留在提示词里：
+   - 回合是由消息发起的 IM 回合，`origin.scope` 为 `private`，且回合带着规范会话地址 `origin.conversation`、其 `kind` 也是 `private`；不是合流回合；发起人来源缺省或为 `human`；
+   - 块是 `message.created`，带核心给出的**入站原文证据**：`inboundActorId`（核心记录的发送者 id）与 `inboundTextDigest`；
+   - `inboundActorId` 等于本回合发起人 `principal.subjectId`（两者同源：都是 IM Runtime 解析出的 `message.sender.id`，`createRuntimeTurnAccess` 直接取它作为 principal），并且块的 `message.conversation` 与 `origin.conversation` 的规范键 `conversationRefKey` 相同——同一适配器（平台）、同一 endpoint、同一会话（含父会话、话题）。项目里没有跨平台归一的 principal，按「同一平台、同一 endpoint、同一 sender id」比对，不做账号关联。
+2. **入站原文证据由核心补上**（`@zhin.js/im-contract` 新增可选字段，`@zhin.js/core` 写入）。`recordIncoming` 在中间件与插件之前存入站消息，此时只对满足全部条件的消息写 `ConversationMessage.inboundTextDigest`（纯文本的 SHA-256）：有已识别的发送者；没有引用（`replyTo`）；每个段都是文本（图片、文件、@、转发等任一非文本段都不写）；聊天主人认领码的脱敏没有改动文本。聚合背景块时再核一次：只有 `message.created`、有 `actor`、无引用、无 `contentStatus`、未撤回、没有出站摘要、修订号为 0、且按当前存储的段重算的摘要与记录相符，才把 `inboundActorId` / `inboundTextDigest` 放进块里；对不上（存储被改、伪造的摘要、更新过的消息）就不放。机器人自己的出站消息永远没有这项证据。
+3. **其余一律照旧计来源（失败关闭）**：群聊、频道里同一个人的同样消息；私聊里别人的消息（身份不同）、引用 / 转发他人、带媒体或 @ 的消息、核心之外注入而没有证据的块；另一个 endpoint 或另一个会话里同一 sender id 的消息；更新过的消息；机器人非原文的回复、插件命令与定时任务的投递；旧版本写下、没有证据字段的事件；回合缺少规范会话地址。判断「私聊」只用核心的会话类型与回合 scope，不按平台名分支（`check:no-platform-branches`）。
+4. **未处理的重置写法给出回应**。`/clear`、`/reset`、`/new`（任意大小写，半角或全角斜杠，`NFKC` 归一后整条只有这一个词）在没有任何指令处理、AI 触发也没接下时，若是私聊或 @ 了机器人，Agent 入口回一句固定文案（中英文）：Zhin 没有这个指令，清空本会话 AI 上下文请直接发「清空」（或 clear、重置；群里需 @），主人或受信任用户还可以用 `<指令前缀>reset` 归档会话（只在知道指令前缀时提示）。回复走 `Message.$reply` 标准出站链；文案只用固定模板，不回显用户原文。入站结局记 `suggested`（`reason: reset_hint`）。
+5. **选择「进入背景但不计」**。`/clear` 在路由前就已写入事件流，核心之外没有公开的「从背景剔除」入口，为一条提示新增剔除接口得不偿失；它在私聊里按决定 1 不计，在群里照旧计。提示本身是运行时写的固定文本，与干净回合的回复同理（D7）：`sendFixedReply` 只在回执摘要与这段文本一致时，以 Agent 会话键把它记进本会话的投递记录；回合引擎查投递记录时除会话 id 外也查会话键。清空（`clear` / 清空 / 重置）与 `<前缀>reset` 的固定回复同样记录，否则照着提示重置后，下一回合仍会被这条回复污染。其他管理命令（`/memory`、`/tree` 等）的回复可能带存储内容，照旧计来源。
+
 ## 安全分析
 
 **变化的攻击面**：只有一处放宽——第一方插件声明只读的工具，其结果不再让「定时任务 / 提醒」类调用要求确认。攻击者要利用它，必须让这类工具的返回值里带上注入指令：
@@ -202,6 +223,8 @@ ai:
 - 错误文本也是来源（D1 第 5 条）：`web_fetch` / `web_search` 的 `HTTP <状态码>: <原因短语>` 中原因短语由服务端决定，MCP 服务端的 JSON-RPC 错误消息、插件转述的上游报错同理。修订前抛错的路径不记来源，注入指令可以借错误文本进入模型而回合仍算「干净」，随后建定时任务、执行命令、写文件、外发都不再确认；修订后工具失败与成功同样记录（受信工具的失败记为外部内容）。
 - 背景消息里机器人自己的回复不算来源（D7）。会话历史本身就不是来源：每个回合从空的来源记录开始，历史里以前回合的回复、工具结果（截到 200 字）和背景块都会再次进入模型，却不会让新回合「读过外部内容」。机器人自己的回复确实可能复述了之前回合读到的外部内容，但同一段话已经以助手消息的形式在会话历史里，把它在背景里的副本当成来源，只是把历史里已接受的残余风险重复计算一次，而且让「说过话」本身就足以触发确认。读过外部内容的**那个**回合仍按原规则确认；而且那个回合写的回复不进投递记录（决定 5），下一回合它在背景里的副本照旧计来源——否则注入内容只要让模型在回复里复述一句「回复『好』即可」，就能借用户下一句「好」在干净回合里执行高风险动作。放宽因此只覆盖干净回合写的回复，它的内容只来自主人的消息和会话历史；并且只认「本会话里本 Agent 按原文投递的回复」：成员消息、场景事件、插件命令或其他会话发出的机器人消息仍是外部内容，证据缺失时（富媒体回复、中间件改写、重启后）一律按外部内容处理。
 
+- 私聊里发起人自己的原文消息不算来源（D8）。私聊的背景只有发起人和机器人两方，发起人自己更早发的、按原文存下的话，信任等级与发起本回合的那条消息相同——如果它带着注入指令，那就是发起人自己写的，本回合的输入同样可以写。放宽因此只覆盖「同一个人、同一会话、未经改写的纯文本」：身份按核心记录的发送者 id 与回合 principal 同源比对，会话按包含平台、endpoint 的规范键比对；原文证据在任何中间件或插件看到消息之前取得，读出时再按存储内容重算，被改写、带引用 / 转发 / 媒体 / @、或证据缺失时一律计来源。群聊、频道不放宽：同一个群里别人可以在发起人前后插话，背景属于共享内容，按原规则确认。能直接向 IM Runtime 注入「入站消息」并冒用发起人 id 的代码（适配器、插件）本来就能以发起人身份发起回合，这项放宽不给它更多能力。重置提示与清空 / 归档的回复只用固定模板，不含任何读到的内容，记为本会话投递时同样要求回执摘要与原文一致。
+
 **收紧的部分**：写文件新增为高危类别（读过任何内容后确认，无人值守时拒绝）；新增 `always` 级别；字符串 `external_content` 也覆盖写文件。已有的无人值守任务如果「读网页后写文件」，现在会被拒绝，启动日志和 `zhin doctor` 会提示，部署者可以按类别 `fileWrite: off` 恢复。模型在读过任何内容后创建的新任务，每次运行时的高危动作都会被拒绝（D2.1）；`schedule_preview` 至少按 `any_content` 确认。
 
 **为什么可以接受**：放宽只落在影响最小、可撤回的一类动作（创建定时任务）上，任务运行时的高危动作由持久化的来源继续约束，换来的是部署者不再因为正常请求被打断而整体关掉防护——那会同时失去对执行命令、外发、改配置的保护，风险远大于这一处放宽。显式配置不放宽，`off` 有 doctor 提示和更窄的替代写法。
@@ -212,6 +235,7 @@ ai:
 
 - `@zhin.js/agent`：`security/provenance.ts`（分级、来源判定、配置解析、定时任务来源快照与恢复）、`tool/turn-tool-runtime.ts`（按类别判定、无人值守兜底、工具执行期间绑定来源、到点回合恢复来源）、`schedule-manager.ts`（`schedule_add` / `schedule_preview` 记录来源）、`assistant/`（`ScheduleJob.provenance`、SQL 列 `provenance_json`、JSON 存储）、`schedule-domain/execution-domain.ts`、`task-executor.ts`、`turn/turn-ingress.ts`、`plugin-runtime/host/assistant-runtime.ts`、`plugin-runtime/capability-ingress.ts`（`ToolCapability.firstParty`）、`security/trust-level.ts`（写文件名称判定）、`security/approval-channel-conflicts.ts`、`security/approval-policy-fingerprint.ts`、`config/`；eval 用例。
 - `@zhin.js/runtime`：`host-config-schema.json`。
+- D8：`@zhin.js/im-contract`（`ConversationMessage.inboundTextDigest`、`ConversationContextBlock.inboundActorId` / `inboundTextDigest`）、`@zhin.js/core`（`plugin-runtime/im/conversation-runtime.ts` 写入并复核证据）、`@zhin.js/agent`（`session/context-provenance.ts` 的 `ownPrivateInbound` / `unrepresentedConversationBlocks`、`plugin-runtime/full-agent-turn-engine.ts`、`plugin-runtime/ingress/reset-hint.ts`、`unified-mailbox-spine.ts`、`ingress-management-stage.ts`）；eval 用例 `injection-own-private-unhandled-message-not-tainted`、`injection-own-group-unhandled-message-gated`（框架选项 `backgroundOwnMessages`）。
 - `@zhin.js/cli`：`zhin doctor`。
 - 官方插件：`@zhin.js/plugin-60s` 补 `readOnly: true`，其中 `moyu`、`fuel_price`、`gold_price` 另加 `external_content`；`@zhin.js/plugin-ledger` 的 `ledger_list`、`ledger_summary` 加 `external_content`；`@zhin.js/adapter-qq`、`@zhin.js/plugin-content-moderation` 补 `external_content` 标签。
 - 文档：`docs/ai/agent.md`（及英文版）、配置参考。

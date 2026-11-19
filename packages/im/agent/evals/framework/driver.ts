@@ -550,11 +550,13 @@ function buildTurn(
   const policy = trust.policy;
   const turnTools = trust.tools;
   const turnId = `${definition.id}:turn-${index + 1}`;
+  // The canonical address the IM ingress supplies with every IM origin.
+  const conversation = { endpoint: { adapter: PLATFORM, id: ENDPOINT }, kind: scope, id: sceneId } as const;
   let replySequence = 0;
   const turn = createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: turnId, turnId },
-    origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message` },
+    origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message`, conversation },
     principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles },
     input: {
       text: message.text,
@@ -583,7 +585,7 @@ function buildTurn(
           // This local port delivers the captured output unchanged. Supply the same
           // plain-text evidence the production receipt bridge verifies after sending.
           const messageContexts = plannedReplyTexts(output).flatMap(plannedText => plannedText === undefined ? [] : [{
-            message: { conversation: { endpoint: { adapter: PLATFORM, id: ENDPOINT }, kind: scope, id: sceneId }, id: `${turnId}:reply-${++replySequence}` },
+            message: { conversation, id: `${turnId}:reply-${++replySequence}` },
             plannedText,
           }]);
           deliveredReplies.push(...messageContexts);
@@ -591,8 +593,11 @@ function buildTurn(
         },
       },
       ...(approval ? { approval } : {}),
-      ...(message.backgroundEvents?.length || (message.backgroundOwnReplies && deliveredReplies.length)
-        ? { conversationContext: backgroundContext(message.backgroundEvents ?? [], message.backgroundOwnReplies ? [...deliveredReplies] : []) } : {}),
+      ...(message.backgroundEvents?.length || message.backgroundOwnMessages?.length || (message.backgroundOwnReplies && deliveredReplies.length)
+        ? { conversationContext: backgroundContext(message.backgroundEvents ?? [], message.backgroundOwnReplies ? [...deliveredReplies] : [],
+          (message.backgroundOwnMessages ?? []).map((text, position) => ({
+            message: { conversation, id: `${turnId}:own-${position + 1}` }, senderId: sender.id, senderName: sender.name ?? sender.id, text,
+          }))) } : {}),
       ...(message.quote ? { references: quoteReferencePort(message.quote) } : {}),
     },
   });
@@ -701,16 +706,31 @@ function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, inde
 }
 
 type DeliveredEvalReply = Readonly<{ message: MessageRef; plannedText: string }>;
+type OwnEvalMessage = Readonly<{ message: MessageRef; senderId: string; senderName: string; text: string }>;
 
 /**
  * Member texts become plain background blocks. `ownReplies` (#1250) are the bot's own earlier
  * replies, projected as the IM runtime projects an actor-less outbound message: label, message
  * reference and the delivered text digest the outbound receipt carries.
  */
-function backgroundContext(texts: readonly string[], ownReplies: readonly DeliveredEvalReply[] = []): ConversationContextPort {
-  const own = ownReplies.map((reply, index) => ({
+function backgroundContext(
+  texts: readonly string[],
+  ownReplies: readonly DeliveredEvalReply[] = [],
+  ownMessages: readonly OwnEvalMessage[] = [],
+): ConversationContextPort {
+  // ADR 0067 D8: the sender's own stored original messages come first (they preceded the replies).
+  const sender = ownMessages.map((own, index) => ({
     kind: 'conversation_event' as const,
     sequence: index + 1,
+    eventType: 'message.created' as const,
+    text: `${own.senderName} (${own.senderId}) [message_id=${JSON.stringify(own.message.id)}]: ${own.text}`,
+    message: own.message,
+    inboundActorId: own.senderId,
+    inboundTextDigest: deliveredTextDigest(own.text),
+  }));
+  const own = ownReplies.map((reply, index) => ({
+    kind: 'conversation_event' as const,
+    sequence: sender.length + index + 1,
     eventType: 'message.created' as const,
     text: `You (this bot) [message_id=${JSON.stringify(reply.message.id)}]: ${reply.plannedText}`,
     message: reply.message,
@@ -718,12 +738,12 @@ function backgroundContext(texts: readonly string[], ownReplies: readonly Delive
   }));
   const members = texts.map((text, index) => ({
     kind: 'conversation_event' as const,
-    sequence: own.length + index + 1,
+    sequence: sender.length + own.length + index + 1,
     eventType: 'message.created' as const,
     text,
   }));
   return {
-    readPending: async () => ({ cursor: own.length + members.length, blocks: [...own, ...members] }),
+    readPending: async () => ({ cursor: sender.length + own.length + members.length, blocks: [...sender, ...own, ...members] }),
     commit: async () => undefined,
   };
 }

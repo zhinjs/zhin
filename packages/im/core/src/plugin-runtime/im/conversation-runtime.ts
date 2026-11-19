@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   MemoryConversationEventStore,
   conversationRefKey,
@@ -141,6 +142,10 @@ export class ConversationRuntime {
   ): Promise<number | undefined> {
     if (!input.message?.id) return undefined;
     const timestamp = Date.now();
+    const segments = Object.freeze(input.segments?.length
+      ? input.segments.map(redactClaimSegment)
+      : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]);
+    const inboundTextDigest = sender ? originalInboundTextDigest(input, segments) : undefined;
     const appended = await this.#events.append(Object.freeze({
       eventId: `message:${messageRefKey(input.message)}`,
       conversation: input.conversation,
@@ -153,9 +158,8 @@ export class ConversationRuntime {
           ? Object.freeze({ id: sender.id, ...(sender.name ? { displayName: sender.name } : {}) })
           : UNKNOWN_SENDER,
         // Backstop (ADR 0060 §3.3): an open chat-owner claim code is stored as `***`.
-        segments: Object.freeze(input.segments?.length
-          ? input.segments.map(redactClaimSegment)
-          : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]),
+        segments,
+        ...(inboundTextDigest ? { inboundTextDigest } : {}),
         timestamp,
         ...(input.replyTo
           ? { replyTo: Object.freeze({ conversation: input.conversation, id: input.replyTo.id }) }
@@ -191,7 +195,7 @@ export class ConversationRuntime {
     if (receipt.status !== 'sent' || !receipt.message?.id) return undefined;
     const original = await this.#events.getMessage(receipt.message);
     if (!original) throw new Error('Cannot record an update before its original message');
-    const { contentStatus: _status, outboundTextDigest: _digest, ...identity } = original;
+    const { contentStatus: _status, outboundTextDigest: _digest, inboundTextDigest: _inbound, ...identity } = original;
     const appended = await this.#events.append(Object.freeze({
       eventId: `message:${messageRefKey(receipt.message)}:revision:${revision}`,
       conversation: request.conversation, timestamp: Date.now(), type: 'message.updated',
@@ -396,6 +400,7 @@ function aggregateConversationContext(
         text,
         message: event.message.ref,
         ...(event.message.outboundTextDigest ? { messageTextDigest: event.message.outboundTextDigest } : {}),
+        ...(event.type === 'message.created' ? originalInboundEvidence(event.message) : {}),
       }));
       continue;
     }
@@ -481,6 +486,45 @@ function describeConversationMessage(message: ConversationMessage): string {
     : '';
   return `${actor} [message_id=${JSON.stringify(message.ref.id)}]: ${message.contentStatus === 'unavailable'
     ? '[Message content unavailable; inspect its reference.]' : text || '(no plain-text content)'}${attachmentNote}`;
+}
+
+function plainTextDigest(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+/** Plain text of a text-only body; `undefined` when any segment is not text (media, mention, forward, …). */
+function textOnlyBody(segments: readonly { readonly type: unknown; readonly data?: unknown }[]): string | undefined {
+  if (!segments.length) return undefined;
+  let text = '';
+  for (const segment of segments) {
+    const value = (segment.data as { text?: unknown } | undefined)?.text;
+    if (segment.type !== 'text' || typeof value !== 'string') return undefined;
+    text += value;
+  }
+  return text;
+}
+
+/**
+ * #1250 (ADR 0067 D8): the evidence that a stored inbound message is the sender's original text, taken
+ * before any middleware or plugin runs. Only a plain-text body that quotes nothing and that the claim
+ * redaction left unchanged gets one; anything else stays without evidence (it counts as background).
+ */
+function originalInboundTextDigest(input: IncomingMessage, stored: readonly Segment[]): string | undefined {
+  if (input.replyTo) return undefined;
+  const original = input.segments?.length ? textOnlyBody(input.segments) : input.content;
+  const kept = textOnlyBody(stored);
+  if (original === undefined || kept === undefined || original !== kept) return undefined;
+  return plainTextDigest(kept);
+}
+
+/** Re-checks the evidence against the body this block shows; a stale or mismatched digest is dropped. */
+function originalInboundEvidence(message: ConversationMessage): Partial<Pick<ConversationContextBlock, 'inboundActorId' | 'inboundTextDigest'>> {
+  const digest = message.inboundTextDigest;
+  if (!digest || !message.actor || message.replyTo || message.contentStatus || message.recalled
+    || message.outboundTextDigest || (message.revision ?? 0) !== 0) return {};
+  const text = textOnlyBody(message.segments);
+  if (text === undefined || plainTextDigest(text) !== digest) return {};
+  return { inboundActorId: message.actor.id, inboundTextDigest: digest };
 }
 
 function segmentsFromContent(content: unknown): readonly Segment[] {

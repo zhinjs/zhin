@@ -30,6 +30,7 @@ import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
+import { answerResetSpelling, sendFixedReply } from './reset-hint.js';
 import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
@@ -633,6 +634,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
       return receipt;
     };
 
+    // #1250 (ADR 0067 D8): fixed runtime replies are this session's own delivery, not background.
+    const replyFixed = (key: string, text: string) => sendFixedReply({ reply, toldLedger: zhinAgent.toldLedger, sessionKey: key, text });
+
     if (turnAccess.origin.kind === 'im') {
       observeFloodMessage({
         im: options.im, enforcer: this.#groupRuleEnforcer, floodDetector: this.#floodDetector,
@@ -646,10 +650,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
       toolApprovalIm: options.toolApprovalIm,
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
       withModelScope: options.withModelScope, reply,
+      replyFixed: text => replyFixed(initialSessionKey, text),
     })) {
       reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'agent_gate', command: 'agent' });
       return true;
     }
+
+    // #1250: `/clear`-style spellings nobody handled get the actual reset ways instead of silence.
+    if (await answerResetSpelling({
+      message, triggered: initialMatched != null, isOperator: senderRoles.isMaster || senderRoles.isTrusted,
+      send: text => replyFixed(initialSessionKey, text),
+    })) return true;
 
     const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
     const turnId = randomUUID();
@@ -699,7 +710,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     if (isClearCommand(matched.content)) {
       await zhinAgent.archiveSession(sessionKey);
       reportInboundOutcome(message, { outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate', turnId });
-      await reply(t(message.locale, 'cleared'));
+      await replyFixed(sessionKey, t(message.locale, 'cleared'));
       return true;
     }
 
