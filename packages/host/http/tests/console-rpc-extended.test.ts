@@ -329,7 +329,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       const ctx = makeCtx({ scheduleHost: { list: () => [] }, resolveScheduleEngine: () => engine });
       const add = (agent?: unknown) => dispatchExtendedConsoleRpc('cron:add',
         { cronExpression: '0 0 9 * * *', prompt: 'p', ...(agent === undefined ? {} : { agent }) }, ctx);
-      expect(await add('ghost')).toEqual({ error: 'Agent 不存在：ghost。可用的 Agent：zhin、news' });
+      expect(await add('ghost')).toEqual({ error: 'Agent 不存在：ghost。可用的 Agent：zhin、news',
+        data: { code: 'schedule_agent_not_found', agent: 'ghost', available: ['zhin', 'news'] } });
       expect(await add(7)).toMatchObject({ error: expect.stringContaining('Agent 名称') });
       expect(engine.addJob).not.toHaveBeenCalled();
       await add('news');
@@ -357,7 +358,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(engine.setJobAgent).toHaveBeenLastCalledWith('p1', 'zhin');
       expect(await set({ id: 'p1', agent: null })).toMatchObject({ data: { success: true } });
       expect(engine.setJobAgent).toHaveBeenLastCalledWith('p1', undefined);
-      expect(await set({ id: 'p1', agent: 'ghost' })).toMatchObject({ error: expect.stringContaining('可用的 Agent：zhin、news') });
+      expect(await set({ id: 'p1', agent: 'ghost' })).toEqual({ error: 'Agent 不存在：ghost。可用的 Agent：zhin、news',
+        data: { code: 'schedule_agent_not_found', agent: 'ghost', available: ['zhin', 'news'] } });
       expect(await set({ id: 'p1' })).toMatchObject({ error: expect.stringContaining('agent is required') });
       expect(await set({ id: 'ghost', agent: 'news' })).toEqual({ error: '任务不存在: ghost' });
       expect(await set({ id: 'hb', agent: 'news' })).toMatchObject({ error: expect.stringContaining('心跳任务') });
@@ -386,6 +388,35 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(await set('a')).toMatchObject({ data: { success: true } });
       expect(await set('quiet')).toMatchObject({ data: { success: true } });
       expect(engine.setJobAgent.mock.calls.map(call => call[0])).toEqual(['a', 'quiet']);
+    });
+
+    it('cron:resume needs endpoint.operate on the job\'s delivery account; pause and remove do not (#1250 b55)', async () => {
+      const scene = (endpointKey: string) => ({ channel: 'im', scene: { platform: 'sandbox', endpointKey, sceneId: 'g1', kind: 'group' } });
+      const rows = [
+        { id: 'a', action: { kind: 'agent', prompt: 'x' }, notify: { channel: 'im', target: scene('bot-a') } },
+        { id: 'b', action: { kind: 'agent', prompt: 'x' }, notify: { channel: 'im', target: scene('bot-b') } },
+        { id: 'quiet', action: { kind: 'agent', prompt: 'x' }, notify: { channel: 'silent' } },
+      ];
+      const engine = { listJobs: vi.fn().mockResolvedValue(rows), addJob: vi.fn(), removeJob: vi.fn(async () => true),
+        pauseJob: vi.fn(async () => true), resumeJob: vi.fn(async () => true) };
+      const canOperateEndpoint = vi.fn((adapter: string, endpoint: string) => adapter === 'sandbox' && endpoint === 'bot-a');
+      const ctx = makeCtx({ resolveScheduleEngine: () => engine, canOperateEndpoint });
+      const run = (type: string, id: string) => dispatchExtendedConsoleRpc(type, { id }, ctx);
+      expect(await run('cron:resume', 'b')).toEqual({
+        error: '没有向该账号投递的权限：需要 sandbox / bot-b 上的 endpoint.operate',
+        data: { code: 'schedule_target_forbidden', status: 403 },
+      });
+      expect(engine.resumeJob).not.toHaveBeenCalled();
+      expect(await run('cron:resume', 'ghost')).toEqual({ error: '任务不存在: ghost' });
+      expect(await run('cron:resume', 'a')).toEqual({ data: { success: true } });
+      expect(await run('cron:resume', 'quiet')).toEqual({ data: { success: true } });
+      expect(engine.resumeJob.mock.calls.map(call => call[0])).toEqual(['a', 'quiet']);
+      // Pausing and removing stop deliveries: ops.schedule.write (the permission map) is enough.
+      expect(await run('cron:pause', 'b')).toEqual({ data: { success: true } });
+      expect(await run('cron:remove', 'b')).toEqual({ data: { success: true } });
+      // A trusted in-process caller (no endpoint check) resumes anything.
+      expect(await dispatchExtendedConsoleRpc('cron:resume', { id: 'b' }, makeCtx({ resolveScheduleEngine: () => engine })))
+        .toEqual({ data: { success: true } });
     });
 
     it('cron:set-agent passes on the scheduler\'s refusal of a profile routine with its code (#1250 b52)', async () => {

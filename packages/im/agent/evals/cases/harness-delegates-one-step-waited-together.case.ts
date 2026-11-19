@@ -10,6 +10,9 @@ export default defineEvalCase({
   description: 'Several default-path delegates in one step are waited for together; one answer from all results.',
   source: '#1250 delegate-result-double-reply',
   tags: ['collaboration'],
+  // The eval driver runs tools sequentially by default; the default path (`tiered`) is what puts the two
+  // delegates in the parallel bucket (#1250 第 56 批).
+  agentConfig: { toolExecution: 'tiered' },
   inbound: { text: '查一下 Node 22 和 Node 24 分别什么时候停止维护', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   agents: [
     { name: 'node22', description: 'Looks up Node.js 22 release facts; read-only.', tools: [] },
@@ -35,5 +38,7 @@ export default defineEvalCase({
     modelInputNotContains: ['[mail from node22 · result]', '[mail from node24 · result]', 'is still working after'],
     // entry: delegates, answer; one call per sub-agent. The trap is never requested.
     modelSteps: 4,
+    // Both delegates start before either result: they really run in the parallel bucket.
+    streamToolEvents: ['tool_call:delegate', 'tool_call:delegate', 'tool_result:delegate', 'tool_result:delegate'],
   },
 });

@@ -2,7 +2,7 @@ import type { CoreReplyStream } from '@zhin.js/core/runtime';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { MessageAliasTable } from '@zhin.js/ai';
-import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
+import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -34,7 +34,7 @@ import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { currentMailTurn } from '../collaboration/mail-turn-context.js';
-import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput } from '../collaboration/turn-collaboration.js';
+import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput, withoutNoReplyStream } from '../collaboration/turn-collaboration.js';
 import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
@@ -281,7 +281,12 @@ async function* runInteractiveTurn(
     media,
   );
   actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
-  if (background) provenance.record({ kind: 'conversation_context' });
+  // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067).
+  if (background && unrepresentedConversationBlocks(pendingContext!.blocks,
+    ref => host.toldLedger?.hasDelivered(prep.sessionId, ref) ?? false).length) {
+    provenance.record({ kind: 'conversation_context',
+      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}) });
+  }
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
     provenance.record({ kind: 'media_perception' });
@@ -292,7 +297,9 @@ async function* runInteractiveTurn(
   const leakInspector = new OutboundLeakInspector({
     promptTexts: [effectivePersona, options.bootstrapContext ?? ''],
   });
-  const reply = guardedReply(host, context.turn, leakInspector);
+  const guarded = guardedReply(host, context.turn, leakInspector);
+  // #1250 第 56 批: a root turn with collaboration filters `[[no_reply]]` out of its streams, updates included.
+  const reply = collaboration && guarded ? withoutNoReplyStream(guarded) : guarded;
   const messageAliases = new MessageAliasTable();
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
     messageAliases,
@@ -354,6 +361,19 @@ async function* runInteractiveTurn(
   let replyStream: CoreReplyStream | undefined;
   const replyStreams = new Map<string, CoreReplyStream>();
   const phaseFacts = new Map<string, ReplyPhaseFacts>();
+  const phaseDeliveredRefs: string[] = [];
+  /**
+   * #1250 (ADR 0067 D7): a delivered reply is history only when the turn that wrote it read no
+   * recorded content. The final provenance of this turn decides (tool results and failures,
+   * background, perception, delegated agents, a scheduled prompt): a reply of a tainted turn may
+   * repeat what it read, so it stays out of the delivery record and the next turn counts it as
+   * background (the reply inherits the taint).
+   */
+  const recordOwnDeliveries = (refs: readonly string[] | undefined) => {
+    if (provenance.tainted) return;
+    const all = [...new Set([...phaseDeliveredRefs, ...(refs ?? [])])];
+    if (all.length) host.toldLedger?.recordDelivered(prep.sessionId, all);
+  };
   const executions: BufferedExecution[] = [];
   let phaseSequence = 0;
   const replyLifetime = new AbortController();
@@ -363,9 +383,12 @@ async function* runInteractiveTurn(
     if (stream) { replyStreams.set(id, stream); replyStream = stream; }
     return { id, ...(stream ? { stream } : {}) };
   };
-  const settlePhase: ReplyPhaseLifecycle['settle'] = async phase => {
-    const existing = phaseFacts.get(phase.id);
+  const settlePhase: ReplyPhaseLifecycle['settle'] = async settled => {
+    const existing = phaseFacts.get(settled.id);
     if (existing) return existing;
+    // #1250 第 56 批: a root turn's answer phases never show `[[no_reply]]` either (its streams filter
+    // every update and the finish, see withoutNoReplyStream).
+    const phase = collaboration ? { ...settled, output: stripNoReplyOutput(settled.output) } : settled;
     if (!reply) throw new Error('Answer phase has no reply port');
     const answer = { intent: 'answer' as const, phaseId: phase.id };
     let delivery: DeliveryOutcome, confirmedOutput: AgentOutputElement[];
@@ -401,7 +424,11 @@ async function* runInteractiveTurn(
       ...(stopped ? { stopped: true } : {}),
     };
     phaseFacts.set(phase.id, facts);
-    const told = renderAgentOutput(confirmedOutput);
+    // Recorded at projection, and only when the whole turn stayed clean (see recordOwnDeliveries).
+    if (facts.contextRefs) phaseDeliveredRefs.push(...facts.contextRefs);
+    // A collaborating root turn's stream keeps the space a stripped marker leaves; what it told does not.
+    const rendered = renderAgentOutput(confirmedOutput);
+    const told = collaboration ? rendered.trim() : rendered;
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
     if (told.trim()) collaboration?.replied(told);
@@ -541,8 +568,9 @@ async function* runInteractiveTurn(
               if (!progressive && !phaseFacts.size) throw error;
               projectionError = error;
             }
-            const told = confirmedOutput ? renderAgentOutput(confirmedOutput)
+            const rendered = confirmedOutput ? renderAgentOutput(confirmedOutput)
               : delivery.status === 'sent' ? (collaboration ? stripNoReplyMarker(completion.result.reply) : completion.result.reply) : '';
+            const told = collaboration ? rendered.trim() : rendered;
             if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
             // #1250 delegate-result-double-reply: later delegated results only supplement this answer.
             // A failure line (the model request failed) is no answer: delegated results read in the turn
@@ -555,6 +583,7 @@ async function* runInteractiveTurn(
             }
             await deliverUnexecutedFollowup(completion.result.unexecutedNotice, reply, context.turn.identity.turnId);
           }
+          recordOwnDeliveries(deliveredContextRefs);
           // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
           recordRelationTurn(host.userProfiles?.relations, context.turn, completion.result);
           if (context.turn.intent.kind === 'observe') {

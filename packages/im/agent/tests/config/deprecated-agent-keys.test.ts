@@ -18,6 +18,13 @@ describe('deprecated ai.agent keys (#735)', () => {
     expect(fixes).toContain('removed deprecated ai.agent.policyDenialStopAfter');
   });
 
+  it('preExecTimeout 随工具预执行移除而弃用（#1250 第 56 批）', () => {
+    expect(findDeprecatedAgentConfigKeys({ preExecTimeout: 15000 }).map((f) => f.key)).toEqual(['preExecTimeout']);
+    const { ai, fixes } = applyAiConfigFixes({ agent: { preExecTimeout: 15000, timeout: 1000 } });
+    expect(ai?.agent).toEqual({ timeout: 1000 });
+    expect(fixes).toContain('removed deprecated ai.agent.preExecTimeout');
+  });
+
   it('默认配置不含已弃用键', () => {
     expect(findDeprecatedAgentConfigKeys(DEFAULT_CONFIG)).toEqual([]);
   });

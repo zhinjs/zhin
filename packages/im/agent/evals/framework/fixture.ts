@@ -30,6 +30,12 @@ export interface EvalInboundMessage {
   /** Background conversation events rendered as untrusted data before the message. */
   readonly backgroundEvents?: readonly string[];
   /**
+   * #1250: the replies the bot delivered in earlier turns of this case come back as its own
+   * background messages (actor-less outbound, with the delivered text digest), as the IM runtime
+   * replays them when the conversation cursor stops at the inbound message.
+   */
+  readonly backgroundOwnReplies?: boolean;
+  /**
    * The message this one replies to, as the IM ingress resolves it (ADR 0043 §4). `text` is the quoted
    * message's content; `sender` is its author. It becomes a message reference the model could inspect.
    */

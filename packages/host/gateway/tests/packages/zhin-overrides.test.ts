@@ -202,6 +202,48 @@ describe('release and pin', () => {
     expect(pinZhinOverrides(root, plan).then(result => result.manual)).resolves.toEqual([expect.stringContaining('请手动修改 package.json:11')]);
   });
 
+  it('leaves a block-scalar value for a manual edit and cuts nothing else (#1250 第 56 批)', async () => {
+    await put('package.json', { name: 'bot' });
+    const yaml = "overrides:\n  zhin.js: >-\n    1.6.0\n  '@zhin.js/core': 1.11.0\n  left-pad: |\n    1.3.0\n  '@zhin.js/kernel': ~1.3.0\npackages:\n  - plugins/*\n";
+    await put('pnpm-workspace.yaml', yaml);
+    const plan = readZhinOverrides(root);
+    expect(plan.entries.map(entry => [entry.key, entry.line, entry.class.kind])).toEqual([
+      ['zhin.js', 2, 'manual'], ['@zhin.js/core', 4, 'sync'], ['@zhin.js/kernel', 7, 'sync'],
+    ]);
+    const release = await releaseZhinOverrides(root, plan);
+    // Only the two one-line entries are cut; the block scalars and the entries after them stay whole.
+    expect(await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8'))
+      .toBe("overrides:\n  zhin.js: >-\n    1.6.0\n  left-pad: |\n    1.3.0\npackages:\n  - plugins/*\n");
+    const result = await pinZhinOverrides(root, plan, { release });
+    expect(result.manual).toEqual([expect.stringContaining('请手动修改 pnpm-workspace.yaml:2')]);
+    expect(result.manual[0]).toContain('块标量');
+    expect(result.changes.map(change => [change.key, change.to])).toEqual([['@zhin.js/core', '1.12.0'], ['@zhin.js/kernel', '~1.4.0']]);
+    expect(await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8'))
+      .toBe(yaml.replace('1.11.0', '1.12.0').replace('~1.3.0', '~1.4.0'));
+  });
+
+  it('leaves an anchored value that an alias uses, and the alias, for a manual edit (#1250 第 56 批)', async () => {
+    await put('package.json', { name: 'bot' });
+    const yaml = "overrides:\n  '@zhin.js/core': &core 1.11.0\n  'zhin.js>@zhin.js/core': *core\n  '@zhin.js/kernel': &k 1.3.0\npackages:\n  - plugins/*\n";
+    await put('pnpm-workspace.yaml', yaml);
+    const plan = readZhinOverrides(root);
+    expect(plan.entries.map(entry => [entry.key, entry.line, entry.class.kind])).toEqual([
+      ['@zhin.js/core', 2, 'manual'], ['zhin.js>@zhin.js/core', 3, 'manual'], ['@zhin.js/kernel', 4, 'sync'],
+    ]);
+    const release = await releaseZhinOverrides(root, plan);
+    // The anchor stays, so the alias still resolves; an anchor nobody uses is released as usual.
+    const released = await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8');
+    expect(released).toBe("overrides:\n  '@zhin.js/core': &core 1.11.0\n  'zhin.js>@zhin.js/core': *core\npackages:\n  - plugins/*\n");
+    const result = await pinZhinOverrides(root, plan, { release });
+    expect(result.manual).toEqual([
+      expect.stringContaining('请手动修改 pnpm-workspace.yaml:2'),
+      expect.stringContaining('请手动修改 pnpm-workspace.yaml:3'),
+    ]);
+    expect(result.manual[0]).toContain('锚点（&core）且被别处引用');
+    expect(result.manual[1]).toContain('别名（*core）');
+    expect(await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8')).toBe(yaml.replace('&k 1.3.0', '&k 1.4.0'));
+  });
+
   it('keeps the old value and says so when no installed version is found', async () => {
     await put('package.json', { name: 'bot', pnpm: { overrides: { '@zhin.js/agent': '1.0.0' } } });
     const plan = readZhinOverrides(root);

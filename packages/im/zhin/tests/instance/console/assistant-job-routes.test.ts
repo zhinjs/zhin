@@ -22,6 +22,7 @@ const jobs = {
   remove: vi.fn(async (id: string) => id === 'known'),
   pause: vi.fn(async (id: string) => id === 'known'),
   resume: vi.fn(async (id: string) => id === 'known'),
+  list: vi.fn(async () => [{ id: 'known', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } }]),
 };
 const cleanups: (() => Promise<unknown>)[] = [];
 beforeEach(() => { state.assistant = { jobs }; state.generation = true; state.reason = 'agent-not-installed'; vi.clearAllMocks(); });
@@ -242,6 +243,56 @@ describe('schedule delivery target permission (#1250)', () => {
     expect((await post('scheduler', { id: 'ha', agent: 'news' }, '/set-agent')).status).toBe(200);
     expect(setAgent).toHaveBeenCalledTimes(4);
   });
+
+  it('resume needs endpoint.operate on the stored job\'s delivery account; pause and remove do not (#1250 b55)', async () => {
+    const target = { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', sceneId: 'g1', kind: 'group' } };
+    const resume = vi.fn(async () => true);
+    const pause = vi.fn(async () => true);
+    const remove = vi.fn(async () => true);
+    state.assistant = { jobs: { ...jobs, resume, pause, remove, list: async () => [
+      { id: 'im', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target } },
+      { id: 'quiet', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } },
+    ] } };
+    const post = await startAs();
+    expect(await post('scheduler', { id: 'im' }, '/resume')).toEqual({ status: 403, body: { success: false,
+      code: 'schedule_target_forbidden', error: '没有向该账号投递的权限：需要 sandbox / sandbox-bot 上的 endpoint.operate' } });
+    expect(resume).not.toHaveBeenCalled();
+    expect(await post('scheduler', { id: 'ghost' }, '/resume')).toMatchObject({ status: 404, body: { code: 'not_found' } });
+    expect((await post('scoped', { id: 'im' }, '/resume')).status).toBe(200);
+    expect((await post('owner', { id: 'im' }, '/resume')).status).toBe(200);
+    expect((await post('scheduler', { id: 'quiet' }, '/resume')).status).toBe(200);
+    expect(resume).toHaveBeenCalledTimes(3);
+    expect((await post('scheduler', { id: 'im' }, '/pause')).status).toBe(200);
+    expect((await post('scheduler', { id: 'im' }, '/remove')).status).toBe(200);
+  });
+
+  it('a delivery target without an account is refused without naming an "undefined" account (#1250 b61)', async () => {
+    const accountless = { channel: 'im', scene: { kind: 'group', sceneId: 'g1' } };
+    const resume = vi.fn(async () => true);
+    const setAgent = vi.fn(async (id: string) => ({ id }));
+    state.assistant = { jobs: { ...jobs, resume, setAgent, agents: () => ['zhin'], list: async () => [
+      { id: 'bare', action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target: accountless } },
+    ] } };
+    const post = await startAs();
+    const refusal = { status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '投递目标需要指明账号（scene.platform 与 scene.endpointKey）' } };
+    expect(await post('scheduler', { id: 'bare' }, '/resume')).toEqual(refusal);
+    expect(await post('scheduler', { id: 'bare', agent: 'zhin' }, '/set-agent')).toEqual(refusal);
+    expect(resume).not.toHaveBeenCalled();
+    expect(setAgent).not.toHaveBeenCalled();
+    // add validates the target's shape before the permission check: 400, not an account to grant.
+    expect(await post('scheduler', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, notify: { channel: 'im', target: accountless } }))
+      .toMatchObject({ status: 400, body: { code: 'schedule_target_invalid' } });
+    expect(jobs.add).not.toHaveBeenCalled();
+  });
+
+  it('resume is refused to a signed-in caller when the job list is unavailable (#1250 b55)', async () => {
+    const { list: _list, ...withoutList } = jobs;
+    state.assistant = { jobs: withoutList };
+    const post = await startAs();
+    expect(await post('owner', { id: 'known' }, '/resume')).toMatchObject({ status: 404, body: { code: 'unavailable' } });
+    expect(jobs.resume).not.toHaveBeenCalled();
+  });
 });
 
 
@@ -270,7 +321,8 @@ describe('job Agent (#1250 b52)', () => {
     const post = await start();
     const response = await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: 'ghost' });
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ success: false, code: 'schedule_agent_not_found', error: 'Agent 不存在：ghost。可用的 Agent：zhin、news' });
+    expect(await response.json()).toEqual({ success: false, code: 'schedule_agent_not_found', error: 'Agent 不存在：ghost。可用的 Agent：zhin、news',
+      data: { code: 'schedule_agent_not_found', agent: 'ghost', available: ['zhin', 'news'] } });
     expect((await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: 60_000 }, agent: 3 })).status).toBe(400);
     expect(agentJobs.add).not.toHaveBeenCalled();
   });
@@ -292,7 +344,8 @@ describe('job Agent (#1250 b52)', () => {
     expect((await post('/set-agent', { id: 'known', agent: null })).status).toBe(200);
     expect(agentJobs.setAgent).toHaveBeenLastCalledWith('known', undefined);
     response = await post('/set-agent', { id: 'known', agent: 'ghost' });
-    expect(await response.json()).toMatchObject({ code: 'schedule_agent_not_found', error: expect.stringContaining('可用的 Agent：zhin、news') });
+    expect(await response.json()).toMatchObject({ code: 'schedule_agent_not_found', error: expect.stringContaining('可用的 Agent：zhin、news'),
+      data: { code: 'schedule_agent_not_found', agent: 'ghost', available: ['zhin', 'news'] } });
     expect((await post('/set-agent', { id: 'known' })).status).toBe(400);
     expect((await post('/set-agent', { agent: 'news' })).status).toBe(400);
     expect(await (await post('/set-agent', { id: 'beat', agent: 'news' })).json()).toMatchObject({ code: 'schedule_agent_heartbeat', error: expect.stringContaining('心跳任务') });
@@ -321,7 +374,8 @@ describe('job Agent (#1250 b52)', () => {
   });
 
   it('a signed-in caller is refused when the job list is unavailable (its target cannot be checked)', async () => {
-    state.assistant = { jobs: { ...jobs, agents: () => ['zhin', 'news'], setAgent: agentJobs.setAgent } };
+    const { list: _list, ...withoutList } = jobs;
+    state.assistant = { jobs: { ...withoutList, agents: () => ['zhin', 'news'], setAgent: agentJobs.setAgent } };
     const post = await start();
     const response = await post('/set-agent', { id: 'known', agent: 'news' });
     expect(response.status).toBe(404);

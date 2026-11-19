@@ -139,7 +139,6 @@ ai:
 | `masterShellApprovalMode` | keep | 仅用于 `masterShell: isolated` 的主人私聊；默认 `ask` 询问主人，`auto` 自动审核（拒绝时转问主人），`inherit` 沿用 `execApprovalMode` |
 | `compaction` | keep | 常用开关，保留 |
 | `rateLimit` | keep | 常用开关，保留 |
-| `preExecTimeout` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `maxTools` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `contextTailMessageLimit` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `toneAwareness` | preset | 高级调优，默认值即推荐值，不建议修改 |
@@ -173,6 +172,7 @@ ai:
 | `policyDenialStopAfter` | deprecated | 运行时无读取，已弃用（#735），--fix 可移除 |
 | `deferredToolMaxResults` | deprecated | 运行时无读取，已弃用（#735），--fix 可移除 |
 | `taskExecApprovalMode` | deprecated | 运行时无读取，已弃用（#735），--fix 可移除 |
+| `preExecTimeout` | deprecated | 工具预执行已移除（#1250），运行时无读取，--fix 可移除 |
 
 ## 弃用路径与兼容
 

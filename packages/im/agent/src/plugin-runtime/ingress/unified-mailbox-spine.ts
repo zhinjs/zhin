@@ -21,6 +21,7 @@ import { HostMailbox } from '../../collaboration/host-mailbox.js';
 import { chatFailureLine, splitOutputMessages, type AgentOutputElement, type DeliveryOutcome } from '../../index.js';
 import type { ApprovalPort } from '../../session/approval-port.js';
 import { isCancelIntent, normalizeMailboxConfig, type TurnAdmission } from '../../turn/index.js';
+import { TriggerTimeoutError } from '../../turn/trigger-cancelled-error.js';
 import type { AgentRuntime } from '../agent-runtime.js';
 import type { CapabilityIngress } from '../capability-ingress.js';
 import type { AgentCapabilities } from '../index.js';
@@ -141,12 +142,8 @@ export function renderChatTurnError(trigger: AITriggerConfig | undefined, error:
   return chatFailureLine(error instanceof TriggerTimeoutError ? 'turn_timeout' : 'turn_error', { master, detail, locale });
 }
 
-export class TriggerTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`AI 处理超时（${timeoutMs}ms）`);
-    this.name = 'TriggerTimeoutError';
-  }
-}
+// One class for both entry points (#1250 第 56 批): `@zhin.js/agent/runtime` re-exports the turn one.
+export { TriggerTimeoutError };
 
 /** Runs one ingress-owned turn with cancellation propagated through the entire turn. */
 export function withTriggerTimeout<T>(

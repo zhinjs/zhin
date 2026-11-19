@@ -85,7 +85,7 @@ sequenceDiagram
 模型可能多次调用工具、再根据结果继续推理，每一次叫做一轮**迭代**。需要记住的几点：
 
 - **迭代上限**：`maxIterations` 默认 15（`DEFAULT_CONFIG.maxIterations`），可以按模型单独调整，见 [按模型调整参数](#按模型调整参数)。
-- **超时有三层**：触发侧单回合受 `ai.trigger.timeout` 限制（默认 60000ms）；Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`）；工具预执行另有 15000ms 上限（`preExecTimeout`）。
+- **超时有两层**：触发侧单回合受 `ai.trigger.timeout` 限制（默认 60000ms）；Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`）。工具预执行（`preExecutable` / `preExecTimeout`）已移除，工具只在模型调用时执行。
 - **回合运行中又来了消息**：同一会话同时只跑一个回合，后到的消息按下面的默认规则处理（`ai.agent.mailbox`），保证不重复回复、不丢消息、不串回合：
   - **同一个人追加**：如果当前回合还没回复，就停掉它，把两条消息合在一起重新回答（`groupMode: fifo` 时改为排队）；如果已经回复过，就排到后面。他已经在排队的话，新消息直接并进排队的那一条，不会多一次回复。
   - **其他人的消息**：一律按到达顺序排队，绝不打断、也不并入别人的回合，所以权限也不会串到别人身上。
@@ -362,6 +362,8 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 级别：`off` 不因来源确认；`untrusted_content` 读过外部内容后确认，**第一方只读工具的结果不算**；`any_content` 读过任何内容后确认（含第一方只读工具的结果）；`always` 每次都确认。普通工具和只读工具不受这道闸影响。
 
 **受信输出**：第一方插件（包名是 `zhin.js` 或在 `@zhin.js/` 作用域下）里声明了 `readOnly: true` 的工具，结果算受信输出，例如天气、汇率。所以默认配置下「查一下天气，然后建个提醒」不需要确认，没有确认渠道的会话里也能完成；查完天气再执行命令、写文件、外发、改配置，仍然要确认。放宽只针对「创建」这一步：模型在读过任何内容（含受信输出）之后建的定时任务会记住这一点，每次到点运行（以及 `schedule_preview` 预演）都按读过外部内容处理，其中的执行命令、写文件、外发、改配置会被拒绝；`schedule_preview` 会当场执行提示词，不享受放宽（至少按 `any_content` 确认）。下面这些即使声明了只读也算外部内容：MCP 工具（包括上游标注 `readOnlyHint` 的）、`web_fetch` / `web_search`、文件与知识库工具（`read_file`、`grep`、`glob`、`list_dir`、`knowledge_search`、`get_local_assets`）、`memory_search`、`todo_read`、`get_self_profile`，以及带 `external_content` 标签的工具（如摸鱼日历、油价、金价、账目列表 / 汇总）。插件作者：只读工具如果会返回别人能写的文本（群成员昵称、入群申请留言等）、原样拼接上游自由文本或以前回合写入的文本，请加 `external_content` 标签。
+
+**背景消息里机器人自己的回复不算来源（#1250）**：上一回合的回复会作为背景消息出现在下一回合（会话游标停在入站消息上），模型仍能看到它，但它不会让回合算作「读过外部内容」——会话历史本身就不算来源，自己的回复与历史同等对待。只认本会话里 Agent 按原文投递的回复；成员的消息、场景事件，以及机器人经插件命令、定时任务、其他会话发出或被中间件改写过的消息仍算外部内容，进程重启后以前的回复也重新算作外部内容。读过外部内容（工具结果、成员消息等）的回合写的回复不在此列：它可能复述了注入内容，下一回合照旧计来源；重置会话（`/clear`）时投递记录一并清空。私聊里来源链写「私聊里的背景消息」，群聊写「群聊背景消息」（[ADR 0067 D7](../adr/0067-high-risk-confirm-tiers.md#d7-背景消息里机器人自己的回复不算来源1250-own-reply-counts-as-background)）。
 
 审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批每次单独确认，不会沿用会话里已记住的批准。无人值守的回合（定时任务、后台事件等）没有人能确认，会直接拒绝，策略名为 `external-content-confirmation`。
 
@@ -740,10 +742,13 @@ routines:
 - 内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
 - 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
 - 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
+- **预演只试运行任务内容**：`schedule_preview` 与 `schedule_add` 的 `prompt` 是到点要执行的内容（例如「提醒我喝水」），不是建任务的请求，不含时间安排（时间放在 `cron` / `delay_minutes`）。预演回合不提供任何 `schedule_*` 工具，即使模型把「明天 8 点提醒我喝水」整句传进预演，预演也不会自己去建任务（以前会在无人值守下被拒，用户点了允许却收到「任务没建成」）。
+- **聊天里能看到、能管理哪些任务**：所有者（`owner` 角色）的 `schedule_list` 列出全部持久化任务，`schedule_remove` / `schedule_pause` / `schedule_resume` 可以管理任何任务。其他人（群管理员也一样）的 `schedule_list` 只列出**自己在聊天里创建的任务**（同一用户、同一平台账号与 endpoint）和**投递到当前会话的任务**——投递到当前会话的他人任务，会话成员都能看到它的提示词（prompt）和标签（label），不要在这类任务里写不想让会话成员看到的内容；删除、暂停、恢复只能针对自己创建的任务，任务不存在和不是自己的任务得到同一句`未找到你能管理的任务：<id>`，不会透露任务是否存在（所有者仍得到「未找到」）。在 Console、CLI 或 Profile 创建的任务没有聊天创建者，非 IM 来源（A2A、MCP、到点运行、远程 Mail 等）创建的任务也不认创建者（这些来源的身份是共用的 `a2a-client` / `mcp-client` / `schedule` 或对端自报的 id），都只有所有者能在聊天里看到和管理。Profile 例程在聊天里不能删除、暂停或恢复（重启时会按 Profile 还原），所有者也会被提示去 Profile 文件（`assistant.profile.file`，默认 `assistant.profile.yml`）修改。列表里任务指定的 Agent 若不在你当前会话能用的 Agent（`@名称` 可见范围加默认 `zhin`）之内，只显示「其他 Agent」（`agent_hidden: true`），不显示名称；任务指定的 Agent 已从配置删除时带 `agent_missing: true`，只有所有者能看到它的名称，其他人看到「其他 Agent」。插件注册的内存任务只有插件名与 cron 表达式，不含提示词和投递目标，照常列出。
 - **指定执行的 Agent**：任务默认由 `zhin` 执行。要让某个任务（如早报）走 `ai.agents` 里配置的另一个 Agent，用 `zhin schedule add --agent <名称>` 创建，或 `zhin schedule set-agent <id> <名称>` / `--clear` 修改；聊天里 `schedule_add` 也接受可选的 `agent` 参数。名称必须是已配置的 Agent，否则报错并列出可用的 Agent。聊天里只能指定**你在当前会话里能用的** Agent：与 `@名称` 点名 Agent 时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），再加上默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝，不会借此把任务交给它。只在 `ai.agents` 里配置、没有对应 Agent 包的 Agent 聊天里无法 @ 到，因此也只能用 CLI 或 Console 指定。
   - 聊天里的可见性**只在创建任务时检查**。之后即使撤销了你对该 Agent 的权限（改了 Agent 包的 `platforms` / `scopes` / `permissions` 或你的角色），已有任务仍由原 Agent 执行；要收回，用 `zhin schedule set-agent` / Console 修改或删除该任务。
   - `set-agent` 修改的是投递到原目标的任务，因此和创建时一样，要求对任务投递目标账号有 `endpoint.operate`，否则返回 403。
-  - Profile 例程（`assistant.profile.yml` 的 `routines`）每次启动都按 Profile 重新声明，`set-agent` / Console 会拒绝修改它们（错误码 `schedule_agent_profile`），请改 routine 的 `agent` 字段。心跳任务始终由默认 Agent 执行。
+  - Profile 例程（`assistant.profile.yml` 的 `routines`）每次启动都按 Profile 重新声明，`set-agent` / Console 会拒绝修改它们（错误码 `schedule_agent_profile`），请改 routine 的 `agent` 字段。routine 写的 Agent 不在配置里（`zhin` 与 `ai.agents`）时，启动同步会记一条警告日志（`profile_routine_agent_missing`），任务照常同步，但每次运行都会失败。心跳任务始终由默认 Agent 执行。
+  - 名称不存在时，CLI / HTTP 返回 400 `schedule_agent_not_found`，Console 的 `cron:add` / `cron:set-agent` 返回同样的错误文本；两者都带 `data: { code: 'schedule_agent_not_found', agent, available }`（请求的名称与可用的 Agent 列表），前端可以据此给出选择。
   - 任务指定的 Agent 之后从 `ai.agents` 删除时，任务保留，但每次运行都会失败并记录错误；`zhin schedule list` 在该任务的 Agent 后标出「⚠ Agent 不存在」，Console 的 `schedule:list` 给它带上 `agentMissing: true`，用 `set-agent` 改成现有 Agent 或 `--clear` 即可恢复。
 
 ## 按模型调整参数

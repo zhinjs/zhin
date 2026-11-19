@@ -312,6 +312,18 @@ describe('ZhinAgent', () => {
     });
   });
 
+  describe('工具预执行已移除（#1250 第 56 批）', () => {
+    it('preExecutable 工具不在模型调用前执行，结果也不作为 Pre-fetched data 注入', async () => {
+      const lookup = makeTool('scene_lookup', '读取场景信息', { preExecutable: true, execute: vi.fn(async () => 'INJECTED-SCENE-DATA') });
+      await agent.process('群里有谁', makeCommMessage({ scope: 'group' }), [lookup]);
+      expect(llm.calls.length).toBeGreaterThan(0);
+      expect(lookup.execute).not.toHaveBeenCalled();
+      const sent = JSON.stringify(llm.calls);
+      expect(sent).not.toContain('Pre-fetched data');
+      expect(sent).not.toContain('INJECTED-SCENE-DATA');
+    });
+  });
+
   describe('getUserProfiles', () => {
     it('应返回 UserProfileStore 实例', () => {
       const profiles = agent.getUserProfiles();

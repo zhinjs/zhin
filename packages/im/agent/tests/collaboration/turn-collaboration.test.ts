@@ -5,7 +5,7 @@
  */
 import type { Mail } from '@zhin.js/harness';
 import {
-  NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, isNoReply, planSupplement, stripNoReplyMarker, stripNoReplyOutput, supplementFailureLine, supplementPreface,
+  NO_REPLY_MARKER, asSupplement, createEngagementOutcomes, isNoReply, planSupplement, stripNoReplyMarker, stripNoReplyOutput, stripNoReplySnapshot, streamTextWithoutNoReply, supplementFailureLine, supplementPreface,
 } from '../../src/collaboration/turn-collaboration.js';
 
 type Status = 'completed' | 'failed' | 'cancelled' | 'budget_exceeded' | 'denied';
@@ -168,6 +168,98 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
       .toEqual([{ type: 'text', content: '这是一只橘猫。' }]);
     expect(supplementFailureLine('zh-CN')).toBe('补充：后台任务没有完成。');
     expect(supplementFailureLine('en-US')).toBe('Update: the background task did not finish.');
+  });
+
+  it('filters the marker out of a streamed snapshot without rewriting what may already be shown (#1250 第 56 批)', () => {
+    const part = (key: string, value: Record<string, unknown>, complete = true) => ({ key, complete, value: value as never });
+    const snapshot = { revision: 3, messages: [
+      { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案 [[no_reply]]' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
+      { key: 'm1', complete: true, segments: [part('s0', { type: 'markdown', data: { content: '`[[NO_REPLY]]`' } })] },
+    ] };
+    // Never trimmed: what an update published stays a prefix of the finish.
+    expect(stripNoReplySnapshot(snapshot)).toEqual({ revision: 3, messages: [
+      { key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案 ' } }), part('s1', { type: 'image', data: { url: 'x' } })] },
+    ] });
+    const clean = { revision: 1, messages: [{ key: 'm0', complete: true, segments: [part('s0', { type: 'text', data: { text: '答案' } })] }] };
+    expect(stripNoReplySnapshot(clean)).toBe(clean);
+    // A growing part holds back a tail that may still become the marker, in any spelling.
+    for (const tail of ['`', '``[', '[', '[[', '[[ No_', '[[no_reply', '[[no_reply ]']) {
+      expect(streamTextWithoutNoReply(`答案 ${tail}`, false)).toBe('答案 ');
+      expect(streamTextWithoutNoReply(`答案 ${tail}`, true)).toBe(`答案 ${tail}`);
+    }
+    expect(streamTextWithoutNoReply('答案 [[note]]', false)).toBe('答案 [[note]]');
+    expect(streamTextWithoutNoReply('`code` 后', false)).toBe('`code` 后');
+    // Each shown text is a prefix of the next one while the reply grows.
+    const full = '这是一只橘猫。 `[[No_Reply]]` 以上';
+    let shown = '';
+    for (let end = 1; end <= full.length; end += 1) {
+      const next = streamTextWithoutNoReply(full.slice(0, end), false);
+      expect(next.startsWith(shown)).toBe(true);
+      expect(next).not.toMatch(/no_re/iu);
+      shown = next;
+    }
+    expect(streamTextWithoutNoReply(full, true)).toBe('这是一只橘猫。  以上');
+  });
+
+  it('keeps every streamed update a prefix of the next one, for any text grown a character at a time (#1250 第 56 批)', () => {
+    // What once preceded a removed marker stays shown: `x [` is not shortened to `x ` when the marker completes.
+    expect(streamTextWithoutNoReply('x [[[no_reply]', false)).toBe('x [');
+    expect(streamTextWithoutNoReply('x [[[no_reply]]', false)).toBe('x [');
+    expect(streamTextWithoutNoReply('[[[no_reply]]', false)).toBe('[');
+    expect(streamTextWithoutNoReply('[[no_reply]] [', false)).toBe(' ');
+    const reference = (value: string) => value.replace(/`*\[\[\s*no_reply\s*\]\]`*/giu, '');
+    const fragments = ['x', ' ', '[', ']', '`', 'no_reply', 'No_Reply', '[[', ']]', '[[no_reply]]', '`[[ no_reply ]]`', '\n'];
+    // mulberry32 with a fixed seed: the same texts on every run.
+    let seed = 0x1250_56;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+    };
+    const part = (value: string, complete: boolean) => ({ revision: 1, messages: [{ key: 'm0', complete,
+      segments: [{ key: 's0', complete, value: { type: 'text' as const, data: { text: value } } }] }] });
+    const shownOf = (value: string, complete: boolean) => {
+      const message = stripNoReplySnapshot(part(value, complete)).messages[0];
+      return message?.segments[0] ? String((message.segments[0].value.data as { text: string }).text) : '';
+    };
+    for (let round = 0; round < 400; round += 1) {
+      let full = '';
+      const count = 1 + Math.floor(random() * 12);
+      for (let index = 0; index < count; index += 1) full += fragments[Math.floor(random() * fragments.length)];
+      let shown = '';
+      let published = '';
+      for (let end = 1; end <= full.length; end += 1) {
+        const next = streamTextWithoutNoReply(full.slice(0, end), false);
+        expect(next.startsWith(shown), JSON.stringify({ full, end, shown, next })).toBe(true);
+        // Only a held tail is missing; a marker shows only where removing one put a new one together
+        // (`[[ `[[no_reply]]` no_reply]]`), exactly as the finish shows it.
+        expect(reference(full.slice(0, end)).startsWith(next)).toBe(true);
+        shown = next;
+        // The snapshot also holds whitespace alone, and stays monotone with that.
+        const snapshotShown = shownOf(full.slice(0, end), false);
+        expect(snapshotShown.startsWith(published), JSON.stringify({ full, end, published, snapshotShown })).toBe(true);
+        expect(snapshotShown.trim() || !snapshotShown).toBeTruthy();
+        published = snapshotShown;
+      }
+      const final = streamTextWithoutNoReply(full, true);
+      expect(final.startsWith(shown), JSON.stringify({ full, shown, final })).toBe(true);
+      expect(final).toBe(reference(full));
+      const finalShown = shownOf(full, true);
+      expect(finalShown.startsWith(published), JSON.stringify({ full, published, finalShown })).toBe(true);
+    }
+  });
+
+  it('holds whitespace alone while a part grows and drops it when only a marker followed it', () => {
+    const growing = (value: string, complete = false) => ({ revision: 1, messages: [{ key: 'm0', complete,
+      segments: [{ key: 's0', complete, value: { type: 'text' as const, data: { text: value } } }] }] });
+    expect(stripNoReplySnapshot(growing('\n[[no_')).messages).toEqual([]);
+    expect(stripNoReplySnapshot(growing('\n')).messages).toEqual([]);
+    expect(stripNoReplySnapshot(growing('\n[[no_reply]]', true)).messages).toEqual([]);
+    // A finished part of whitespace with no marker in it is still the model's own output.
+    const blank = growing('\n', true);
+    expect(stripNoReplySnapshot(blank)).toBe(blank);
+    expect(stripNoReplySnapshot(growing('\n好')).messages[0]?.segments[0]?.value).toEqual({ type: 'text', data: { text: '\n好' } });
   });
 
   it('sends nothing when the model declines or says nothing', () => {

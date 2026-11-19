@@ -608,6 +608,8 @@ zhin schedule resume <id>
 
 已有任务改用别的 Agent 用 `zhin schedule set-agent <id> <agent>`，`--clear` 恢复默认 Agent；不必停服改数据库。名称同样按 `ai.agents` 校验，心跳任务始终由默认 Agent 执行、不能修改；Profile 例程会被拒绝（每次启动按 Profile 重新声明，请改 `assistant.profile.yml` 中该 routine 的 `agent` 字段）；任务有投递目标时需要该账号上的 `endpoint.operate`，否则 403。`zhin schedule list` 对 Agent 已从 `ai.agents` 删除的任务标出「⚠ Agent 不存在」。修改在下次运行时生效。两条命令都需要 `ops.schedule.write`（经 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent`；Console 对应 `cron:add` 的 `agent` 字段与 `cron:set-agent`）。
 
+`zhin schedule resume`（`POST /api/assistant/jobs/resume`，Console 的 `cron:resume`）恢复后任务会再次向投递目标发送，因此与 `add` / `set-agent` 一样，任务有 IM 投递目标时要求该账号上的 `endpoint.operate`，否则 403 `schedule_target_forbidden`（Console RPC 在 `data.code` / `data.status` 中给出）；`pause` / `remove` 只停止投递，仍只需要 `ops.schedule.write`。被拒绝时 CLI 以非零状态退出并说明原因，例如「无法恢复任务 `<id>`：你没有权限向它的投递目标发消息（需要 `<adapter>` / `<endpoint>` 上的 endpoint.operate）」，并提示请管理员授权，或删除后以自己有权限的目标重新创建。`add` / `set-agent` 遇到 `schedule_agent_not_found` 时列出实例返回的可用 Agent（`data.available`），并提示用 `--agent` 或 `zhin schedule set-agent <id> <名称>` 改选；没有可用 Agent 时提示先在 `ai.agents` 中添加。
+
 `zhin schedule list` 显示每个任务用的 Agent（未指定时为「zhin（默认）」）、实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。多行内容逐行缩进，超过 2 行时截断；`--json` 输出完整的任务数据。
 
 ### agent：Agent 诊断
