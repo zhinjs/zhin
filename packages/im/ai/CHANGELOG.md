@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.8.1
+
+### Patch Changes
+
+- Updated dependencies [7131501]
+- Updated dependencies [1414572]
+  - @zhin.js/kernel@1.5.0
+
 ## 1.8.0
 
 ### Minor Changes
