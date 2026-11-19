@@ -485,14 +485,14 @@ export function planNativeBuildAllowance(
   }
 
   const packageList = pkg.pnpm?.onlyBuiltDependencies;
-  const nested = workspaceSkipReason?.kind === 'nested-workspace';
-  if (Array.isArray(packageList) && nested) {
+  const nestedWorkspaceFile = workspaceSkipReason?.kind === 'nested-workspace' ? workspaceSkipReason.workspaceFile : undefined;
+  if (Array.isArray(packageList) && nestedWorkspaceFile !== undefined) {
     // pnpm reads build settings from the workspace root only: adding to a member's list changes
     // nothing and suggests the package is allowed.
     const present = new Set(packageList.filter((item): item is string => typeof item === 'string').map(buildEntryPackageName));
     const missing = wanted.filter(name => !present.has(name));
     if (missing.length > 0) {
-      warnings.push(`package.json pnpm.onlyBuiltDependencies 未修改：项目是 ${workspaceSkipReason.workspaceFile} 的成员，pnpm 不读成员的这个列表；`
+      warnings.push(`package.json pnpm.onlyBuiltDependencies 未修改：项目是 ${nestedWorkspaceFile} 的成员，pnpm 不读成员的这个列表；`
         + `请在 workspace 根的配置中允许 ${missing.join(' / ')}（a member's onlyBuiltDependencies is not read by pnpm）`);
     }
   } else if (Array.isArray(packageList)) {
