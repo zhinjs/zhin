@@ -508,8 +508,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       sessionKey,
     );
     await this.turnCheckpoints.clear(sessionKey);
+    // #1250 (ADR 0067 D7): a reset session starts without the old "already told" facts and delivery
+    // record. Compaction keeps them: it rewrites the model history, not the delivered messages.
+    this.toldLedger.clear(sessionKey);
     if (active?.session_id && active.session_id !== sessionKey) {
       await this.turnCheckpoints.clear(active.session_id);
+      this.toldLedger.clear(active.session_id);
     }
     return archived;
   }

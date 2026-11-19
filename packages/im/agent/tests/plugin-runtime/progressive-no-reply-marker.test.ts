@@ -71,7 +71,7 @@ async function runRootTurn(mode: Mode, answer: Readonly<{ marked: string; partia
     rateLimiter: { check: () => ({ allowed: true }) }, usageQuota: new UsageQuota(),
     contextRepository: { getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }), setDeferredToolSnapshot: async () => undefined },
     promptController: new PromptController('one-at-a-time', 'one-at-a-time'), activeBinding: { providerAlias: 'provider', model: 'model' },
-    toldLedger: { record: vi.fn(), renderBlocks: () => [] }, finalizeActiveTurn: vi.fn() };
+    toldLedger: { record: vi.fn(), renderBlocks: () => [], recordDelivered: vi.fn(), hasDelivered: () => false }, finalizeActiveTurn: vi.fn() };
   const marked = answer.marked;
   const output = [{ type: 'message' as const, segments: [text(marked)] }];
   const engine = createFullAgentTurnEngine({ host: host as never,

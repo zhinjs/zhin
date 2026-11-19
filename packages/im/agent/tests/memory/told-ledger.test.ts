@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SessionToldLedger, TOLD_LEDGER_HEADING, extractToldEntries } from '../../src/memory/told-ledger.js';
+import { DEFAULT_TOLD_LEDGER_MAX_DELIVERED, SessionToldLedger, TOLD_LEDGER_HEADING, extractToldEntries } from '../../src/memory/told-ledger.js';
 import { createUserMessage, EMPTY_TOKEN_USAGE, projectPromptContext, type AssistantMessage } from '@zhin.js/ai';
-import { deliveredReplyContextRef } from '../../src/session/context-provenance.js';
+import { deliveredMessageContextRef, deliveredReplyContextRef, deliveredTextDigest, unrepresentedConversationBlocks } from '../../src/session/context-provenance.js';
 import { stampDeliveredMessageId } from '../../src/session/participant-header-stamp.js';
 
 describe('extractToldEntries', () => {
@@ -91,5 +91,49 @@ describe('SessionToldLedger', () => {
     expect(ledger.entries('session').map(entry => entry.turnId)).toEqual(['real-turn', 'real-turn']);
     expect(JSON.stringify(projectPromptContext([user]))).toContain('Second answer conclusion.');
     expect(firstRef).not.toBe(secondRef);
+  });
+});
+
+describe('SessionToldLedger delivered messages (#1250)', () => {
+  const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private' as const, id: 'user' };
+  const ref = (id: string, text = 'hi') => deliveredMessageContextRef({ conversation, id }, deliveredTextDigest(text));
+
+  it('remembers delivered message references per session and ignores reply-level references', () => {
+    const ledger = new SessionToldLedger();
+    ledger.recordDelivered('s1', [ref('m1'), deliveredReplyContextRef('s1', 'turn')]);
+    expect(ledger.hasDelivered('s1', ref('m1'))).toBe(true);
+    expect(ledger.hasDelivered('s1', ref('m1', 'other text'))).toBe(false);
+    expect(ledger.hasDelivered('s2', ref('m1'))).toBe(false);
+    expect(ledger.hasDelivered('s1', deliveredReplyContextRef('s1', 'turn'))).toBe(false);
+    ledger.recordDelivered('s1', undefined);
+    ledger.clear('s1');
+    expect(ledger.hasDelivered('s1', ref('m1'))).toBe(false);
+  });
+
+  it('keeps a bounded window of references and sessions', () => {
+    const ledger = new SessionToldLedger({ maxSessions: 1 });
+    for (let index = 0; index < DEFAULT_TOLD_LEDGER_MAX_DELIVERED + 1; index += 1) ledger.recordDelivered('s1', [ref(`m${index}`)]);
+    expect(ledger.hasDelivered('s1', ref('m0'))).toBe(false);
+    expect(ledger.hasDelivered('s1', ref(`m${DEFAULT_TOLD_LEDGER_MAX_DELIVERED}`))).toBe(true);
+    ledger.recordDelivered('s2', [ref('x')]);
+    expect(ledger.hasDelivered('s1', ref(`m${DEFAULT_TOLD_LEDGER_MAX_DELIVERED}`))).toBe(false);
+    expect(ledger.hasDelivered('s2', ref('x'))).toBe(true);
+  });
+});
+
+describe('unrepresentedConversationBlocks (#1250)', () => {
+  const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'group' as const, id: 'g' };
+  const own = { kind: 'conversation_event' as const, sequence: 1, eventType: 'message.created' as const,
+    text: 'You (this bot): hi', message: { conversation, id: 'm1' }, messageTextDigest: deliveredTextDigest('hi') };
+  const member = { kind: 'conversation_event' as const, sequence: 2, eventType: 'message.created' as const,
+    text: 'Bob (b): hi', message: { conversation, id: 'm2' } };
+  const joined = { kind: 'conversation_event' as const, sequence: 3, eventType: 'member.joined' as const, text: 'Bob joined.' };
+
+  it('leaves out only own messages this agent delivered with the same text', () => {
+    const delivered = new Set([deliveredMessageContextRef(own.message, own.messageTextDigest)]);
+    expect(unrepresentedConversationBlocks([own, member, joined], ref => delivered.has(ref))).toEqual([member, joined]);
+    expect(unrepresentedConversationBlocks([own], () => false)).toEqual([own]);
+    // A member's message carries no delivered text digest, whatever the predicate says.
+    expect(unrepresentedConversationBlocks([member, joined], () => true)).toEqual([member, joined]);
   });
 });
