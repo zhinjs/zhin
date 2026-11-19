@@ -83,7 +83,8 @@ describe('gateway version check (zhinjs/console#64)', () => {
     const checker = new GatewayVersionChecker({ projectRoot: '/project', inventory: async () => INVENTORY, gatewayVersion: () => '1.6.1', fetcher, now: () => now });
     const report = await checker.check();
     expect(report).toMatchObject({ gateway: '1.6.1', checkedAt: 1_000, registryReachable: true });
-    expect(report.packages.map(row => row.name)).toEqual(['zhin.js', '@zhin.js/console-ui', '@zhin.js/adapter-sandbox', '@zhin.js/gateway']);
+    expect(report.packages.map(row => row.name)).toEqual(['@zhin.js/console-ui', 'zhin.js', '@zhin.js/adapter-sandbox', '@zhin.js/gateway']);
+    expect(report.truncated).toBe(false);
     expect(report.packages.find(row => row.name === '@zhin.js/gateway')).toMatchObject({ range: null, installed: '1.6.1', latest: '1.7.0', needsMigrate: true });
     expect(report.packages.find(row => row.name === '@zhin.js/adapter-sandbox')).toMatchObject({ latestInRange: true, updateAvailable: true, needsMigrate: false });
     expect(calls.sort()).toEqual(['@zhin.js/adapter-sandbox', '@zhin.js/console-ui', '@zhin.js/gateway', 'zhin.js']);
@@ -149,6 +150,51 @@ describe('gateway version check (zhinjs/console#64)', () => {
     expect(report.registryReachable).toBe(true);
     expect(report.packages.find(row => row.name === 'zhin.js')!.latest).toBeNull();
     expect(report.packages.find(row => row.name === '@zhin.js/console-ui')!.latest).toBe('1.2.0');
+  });
+
+  it('keeps zhin.js when a name sort would drop it past the package cap', async () => {
+    const plugins = Array.from({ length: 70 }, (_, index) => installed(
+      `@zhin.js/adapter-${String(index).padStart(2, '0')}`, '^1.0.0', '1.0.0', 'plugin',
+    ));
+    const { fetcher } = fakeFetcher();
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => [...plugins, installed('zhin.js', '^1.6.0', '1.6.0'), installed('@zhin.js/console-ui', '^1.2.0', '1.2.0', 'library')],
+      fetcher,
+    });
+    const report = await checker.check();
+    expect(report.truncated).toBe(true);
+    expect(report.packages.map(row => row.name)).toContain('zhin.js');
+    expect(report.packages.map(row => row.name)).toContain('@zhin.js/console-ui');
+    expect(report.packages.some(row => row.name === '@zhin.js/adapter-69')).toBe(false);
+    expect(report.packages).toHaveLength(64);
+  });
+
+  it('returns answers already in hand when the overall deadline passes', async () => {
+    let now = 0;
+    const calls: string[] = [];
+    const checker = new GatewayVersionChecker({
+      projectRoot: '/project',
+      inventory: async () => INVENTORY,
+      gatewayVersion: () => '1.6.1',
+      timeoutMs: 5_000,
+      deadlineMs: 1_000,
+      concurrency: 1,
+      now: () => now,
+      fetcher: async name => {
+        calls.push(name);
+        now += 5_000;
+        return REGISTRY[name];
+      },
+    });
+    const started = Date.now();
+    const report = await checker.check();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(calls).toEqual(['@zhin.js/console-ui']);
+    expect(report.registryReachable).toBe(true);
+    expect(report.packages.find(row => row.name === '@zhin.js/console-ui')!.latest).toBe('1.2.0');
+    expect(report.packages.find(row => row.name === 'zhin.js')!.latest).toBeNull();
+    expect(report.truncated).toBe(false);
   });
 
   it('parses npm view output', () => {
