@@ -231,7 +231,8 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
       let readsDecided = false;
       const commitReads = (): void => {
         readsDecided = true;
-        const committed = reads.commit();
+        // The actor turn has ended: a read noted later never reached its answer (#1250 第 56 批).
+        const committed = reads.commit({ final: true });
         if (entry) noteFailuresRead(committed);
       };
       const resultsOnly = entry && batch.length > 0 && batch.every((mail) => mail.body.kind === 'result');
@@ -310,7 +311,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   // #1250: results the root turn's waiting `delegate` calls read count as answered only once its reply
   // reached the human; a failed, timed-out, superseded or stopped root turn lets them wake the entry agent.
   const rootReads = createDelegatedReads(harness);
-  const commitRootReads = (): void => { noteFailuresRead(rootReads.commit()); };
+  const commitRootReads = (final = false): void => { noteFailuresRead(rootReads.commit({ final })); };
   const tools = createCollaborationTools(
     { harness, directory, actor: entryName, mail: root },
     {
@@ -330,7 +331,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     },
     // The Mailbox settles the turn; delegated work keeps running and reports back on the lane.
     async finish(status) {
-      if (status === 'completed') commitRootReads();
+      if (status === 'completed') commitRootReads(true);
       else rootReads.revoke();
       if (rootFinished) return;
       rootFinished = true;

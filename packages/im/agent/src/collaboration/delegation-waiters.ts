@@ -101,8 +101,14 @@ export function beginDelegationSend(harness: Harness): Readonly<{ end(delegation
 export interface DelegatedReads {
   /** Records a result the turn's model received. */
   note(mail: Mail): void;
-  /** The turn succeeded: its reads are consumed. Returns the results committed now. */
-  commit(): readonly Mail[];
+  /**
+   * The turn succeeded: its reads are consumed. Returns the results committed now. `final` (the turn
+   * ended) also closes the decision: a read noted later — a tool settling after the turn — is not
+   * recorded, so its result mail runs at once instead of waiting {@link PENDING_READ_SETTLE_MS} for a
+   * decision that never comes (#1250 第 56 批). Without it (a root turn's answer phase) later reads of the
+   * same turn stay pending until its next decision.
+   */
+  commit(options?: Readonly<{ final?: boolean }>): readonly Mail[];
   /** The turn failed: its reads wake the delegator as usual. */
   revoke(): void;
 }
@@ -116,7 +122,8 @@ export function createDelegatedReads(harness: Harness): DelegatedReads {
     note(mail: Mail) {
       if (mail.body.kind !== 'result') return;
       if (decided) {
-        // A read after the turn already decided (a late tool settling) is consumed only with a new decision.
+        // The turn already ended (committed finally or revoked): the model never answered from this
+        // read, so its result mail runs as usual.
         return;
       }
       if (registry.reads.has(mail.id)) return;
@@ -131,7 +138,8 @@ export function createDelegatedReads(harness: Harness): DelegatedReads {
         registry.reads.delete(oldest);
       }
     },
-    commit() {
+    commit(options) {
+      if (options?.final) decided = true;
       const committed: Mail[] = [];
       for (const [id, mail] of mine) {
         const read = registry.reads.get(id);
