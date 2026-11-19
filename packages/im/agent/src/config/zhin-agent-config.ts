@@ -89,6 +89,7 @@ export interface ZhinAgentConfig {
   persona?: string;
   maxIterations?: number;
   timeout?: number;
+  /** @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); `zhin config check --fix` removes it. */
   preExecTimeout?: number;
   /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   maxSkills?: number;

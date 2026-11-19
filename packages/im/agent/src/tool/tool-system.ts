@@ -1,5 +1,4 @@
 import type { AgentTool } from '@zhin.js/ai';
-import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { ToolFilter, ToolSource, ToolSystemConfig } from './contracts.js';
 import {
@@ -79,29 +78,6 @@ export class ToolSystem {
   ): Promise<ResolvedToolsForTurn> {
     return resolveAgentToolsForTurn(host, allTools, sessionId, platform);
   }
-}
-
-export interface ToolRunPlan {
-  preExecTools: AgentTool[];
-  preExecution: PreExecuteResult;
-  hasNonPreExecTools: boolean;
-  mode: 'chat' | 'pre-exec-fast-path' | 'agent';
-}
-
-export async function planToolRun(
-  tools: AgentTool[],
-  timeoutMs: number,
-): Promise<ToolRunPlan> {
-  const preExecution = await runPreExecutableTools(tools, timeoutMs);
-  const hasNonPreExecTools = tools.some(tool => !tool.preExecutable);
-  return {
-    preExecTools: preExecution.tools,
-    preExecution,
-    hasNonPreExecTools,
-    mode: tools.length === 0
-      ? 'chat'
-      : (!hasNonPreExecTools && preExecution.data ? 'pre-exec-fast-path' : 'agent'),
-  };
 }
 
 /** Stamps the owning generation so ToolRuntime can reject retired-generation tools. */

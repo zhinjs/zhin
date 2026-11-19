@@ -26,7 +26,6 @@ import {
   joinSystemPrompt,
 } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
-import { planToolRun } from '../tool/runtime.js';
 import { unwrapJsonStringLayers } from './text-sanitize.js';
 import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
@@ -167,11 +166,6 @@ export async function prepareAgentLoopTurnSetup(
   const directTools = input.toolLoading === 'direct';
   const hasTools = providerModelSupports({ model: host.getTurnExecution().binding.model, requirements: { toolCalling: true } })
     && (directTools ? resolvedTools.length > 0 : allTools.length > 0);
-  const toolRun = hasTools && !directTools
-    ? await planToolRun(resolvedTools, host.config.preExecTimeout)
-    : { mode: 'agent' as const, preExecution: { tools: [], data: '' } };
-
-  const preData = toolRun.preExecution.data;
   // IM conversations get a message contract. Detached/programmatic turns keep
   // their text/custom-schema contract and never inherit the IM preset.
   // ai.agent.outputSchema: true / 'segments' → zhin message contract; an object → caller's own schema.
@@ -221,7 +215,7 @@ export async function prepareAgentLoopTurnSetup(
     : buildChatPathSystemPromptParts(host, personaEnhanced, input.promptProfile, input.promptRuntime);
   const proseSystemPrompt = joinSystemPrompt(promptParts).text;
   // ADR 0042 §1: stable = instance/model/platform text, byte-identical across sessions and scenes;
-  // the tail (scene line, per-turn notes, pre-fetched data) follows the cache breakpoint.
+  // the tail (scene line, per-turn notes) follows the cache breakpoint.
   if (imReply) promptParts = appendStable(promptParts, structuredReplyInstruction(input.replySegments));
   if (prepareReply) promptParts = appendStable(promptParts,
     'When ready to publish your final answer, call prepare_reply by itself. Then provide the final structured reply without further tools. Tool-phase text is not published.');
@@ -304,7 +298,7 @@ export async function prepareAgentLoopTurnSetup(
   const spinDetector = hasTools && harness.explorationBudget !== 0 ? new SpinDetector() : undefined;
   if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
   // Prompt-cache layout: everything that varies by turn or sender (observed scene state, capability
-  // availability, deferred tool index, pre-fetched data, network note) rides in the runtime-context
+  // availability, deferred tool index, network note) rides in the runtime-context
   // tail of the current user message, after the body. A change there no longer invalidates the
   // cached history prefix. Only the bound conversation identity belongs in the session-stable tail.
   const runtimeTail: import('@zhin.js/ai').TextContentBlock[] = [];
@@ -318,7 +312,6 @@ export async function prepareAgentLoopTurnSetup(
       .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
     if (toolIndex) runtimeTail.push(createPromptContextBlock('deferred-tools', toolIndex));
   }
-  if (preData) runtimeTail.push(createPromptContextBlock('pre-fetched-data', `Pre-fetched data:\n${preData}`));
   if (networkWithheld) runtimeTail.push({ type: 'text', text: NETWORK_DISABLED_PROMPT_NOTE });
   // #1250: denials decided under an earlier approval policy no longer speak for the current one.
   if (hasTools) {

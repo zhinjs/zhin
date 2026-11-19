@@ -13,14 +13,13 @@ export type {
 
 export type { ResolvedToolsForTurn } from './deferred-resolution.js';
 export type { CollectToolsContext, CollectToolsForTurnInput } from './tool-system.js';
-export type { CollectRuntimeToolsOptions, ToolRunPlan } from './runtime.js';
+export type { CollectRuntimeToolsOptions } from './runtime.js';
 
 export {
   ToolSystem,
   defaultToolSystem,
   createToolSystem,
   createDefaultToolSources,
-  planToolRun,
 } from './tool-system.js';
 
 export {

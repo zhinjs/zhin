@@ -15,7 +15,6 @@ export function agentToolToLlmTool(tool: AgentTool): LlmTool {
     description: tool.description,
     parameters: jsonSchemaToZod(tool.parameters),
     inputJsonSchema: toolInputJsonSchema(tool.parameters),
-    preExecutable: tool.preExecutable,
   };
 }
 

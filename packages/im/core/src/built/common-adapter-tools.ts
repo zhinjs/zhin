@@ -49,6 +49,7 @@ export interface SceneManagementMethodSpec {
   permit?: 'admin' | 'owner';
   extraParams: Record<string, { type: string; description: string; default?: any }>;
   extraRequired?: string[];
+  /** @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); tools run only when the model calls them. */
   preExecutable?: boolean;
 }
 
@@ -106,7 +107,6 @@ export const SCENE_MANAGEMENT_METHOD_SPECS: SceneManagementMethodSpec[] = [
     description: '获取群/服务器成员列表。返回所有成员的 ID、昵称、名片、角色等信息。当用户提供昵称/名片而非 ID 时，应先调用此工具查询成员列表，从中匹配到目标用户的 user_id，再执行禁言、踢人等操作',
     keywords: ['成员', '列表', 'members', 'list', '查找', '搜索用户'],
     extraParams: {},
-    preExecutable: true,
   },
   {
     method: 'banMember',
@@ -158,7 +158,6 @@ export const SCENE_MANAGEMENT_METHOD_SPECS: SceneManagementMethodSpec[] = [
     description: '获取 IM 场景基本信息，包括名称、所有者、成员数量、创建时间等。用于了解场景概况',
     keywords: ['群信息', 'group info', '群资料', '群详情'],
     extraParams: {},
-    preExecutable: true,
   },
 ];
 
@@ -243,7 +242,6 @@ export function createSceneManagementTools(
       keywords: spec.keywords,
       ...(specPermissions ? { permissions: specPermissions } : {}),
       scopes: ['group', 'channel'] as ToolScope[],
-      preExecutable: spec.preExecutable,
     };
   });
 }
