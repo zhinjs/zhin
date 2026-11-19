@@ -69,6 +69,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   keywords?: string[];
   hidden?: boolean;
   source?: string;
+  /** @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); tools run only when the model calls them. */
   preExecutable?: boolean;
   kind?: string;
   /** Per-tool approval (ADR 0039 P1); stacks with ExecPolicy. */

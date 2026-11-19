@@ -34,6 +34,13 @@ describe('dry-run and gateway agree on pnpm overrides', () => {
     expect(fromCli).toEqual(fromGateway);
     expect(fromCli.entries.map(cli.manualOverrideHint)).toEqual(fromGateway.entries.map(gateway.manualOverrideHint));
     expect(fromCli.entries.map(entry => cli.syncedOverrideValue(entry, '2.0.0'))).toEqual(fromGateway.entries.map(entry => gateway.syncedOverrideValue(entry, '2.0.0')));
+    // #1250 第 56 批: block scalars and anchors an alias uses are manual in both.
+    fs.writeFileSync(path.join(root, 'pnpm-workspace.yaml'), "overrides:\n  zhin.js: >-\n    1.6.0\n  '@zhin.js/core': &v 1.11.0\n  '@zhin.js/kernel': *v\n  '@zhin.js/agent': |\n    1.0.0\n");
+    const forms = cli.readZhinOverrides(root);
+    expect(forms).toEqual(gateway.readZhinOverrides(root));
+    expect(forms.entries.filter(entry => entry.file === 'pnpm-workspace.yaml').map(entry => [entry.key, entry.line, entry.class.kind]))
+      .toEqual([['zhin.js', 2, 'manual'], ['@zhin.js/core', 4, 'manual'], ['@zhin.js/kernel', 5, 'manual'], ['@zhin.js/agent', 6, 'manual']]);
+    expect(forms.entries.map(cli.manualOverrideHint)).toEqual(forms.entries.map(gateway.manualOverrideHint));
     const changes = [{ file: 'pnpm-workspace.yaml' as const, key: 'zhin.js', from: '1.6.0', to: '1.7.0' }];
     expect(cli.formatOverrideChanges(changes)).toEqual(gateway.formatOverrideChanges(changes));
   });

@@ -33,6 +33,5 @@ export function createSceneManagementTools(
     // (previously the bare spec word was read as a zhin role).
     ...(spec.permit ? { permissions: sceneManagementSpecPermits(spec)! } : {}),
     scopes: ['group', 'channel'] as ToolScope[],
-    preExecutable: spec.preExecutable,
   }));
 }

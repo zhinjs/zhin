@@ -120,7 +120,6 @@ export function normalizeTool(input: NormalizableTool, message?: Message): Agent
   if (tool.tags?.length) agentTool.tags = tool.tags;
   if (tool.keywords?.length) agentTool.keywords = tool.keywords;
   if (tool.permissions?.length) agentTool.permissions = [...tool.permissions];
-  if (tool.preExecutable) agentTool.preExecutable = true;
   if (tool.kind) agentTool.kind = tool.kind;
   if (tool.source) agentTool.source = tool.source;
   if (tool.requiresApproval) agentTool.requiresApproval = tool.requiresApproval;

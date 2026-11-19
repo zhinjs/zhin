@@ -120,7 +120,7 @@ export interface AgentTool {
   keywords?: string[];
   /** permit 门禁字符串（如 owner） */
   permissions?: readonly string[];
-  /** 是否允许预执行（opt-in），默认 false */
+  /** @deprecated No effect: tool pre-execution was removed (#1250 第 56 批); tools run only when the model calls them. */
   preExecutable?: boolean;
   /** 工具执行超时时间（毫秒），默认 30000 */
   timeout?: number;

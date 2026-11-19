@@ -1,3 +1,4 @@
+import { planToolRun } from '../src/tool/index.js';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@zhin.js/core', async (importOriginal) => {
@@ -15,7 +16,6 @@ import {
   canAccessTool,
   normalizeTool,
 } from '../src/resource-hub/tool-selection.js';
-import { planToolRun } from '../src/tool/runtime.js';
 import { PermissionHost } from '@zhin.js/permission';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/resource-hub/types.js';
@@ -73,7 +73,8 @@ describe('normalizeTool', () => {
     expect(agentTool.tags).toEqual(['files']);
     expect(agentTool.keywords).toEqual(['read']);
     expect(agentTool.permissions).toEqual(['role(trusted)']);
-    expect(agentTool.preExecutable).toBe(true);
+    // #1250 第 56 批: pre-execution was removed, the flag is no longer carried.
+    expect(agentTool.preExecutable).toBeUndefined();
     expect(agentTool.kind).toBe('builtin');
   });
 
@@ -120,32 +121,14 @@ describe('normalizeTool', () => {
   });
 });
 
-describe('pre-exec plans', () => {
-  it('plans pre-executable fast path in the same tool runtime seam', async () => {
-    const preTool = normalizeTool(makeTool({
-      name: 'context_fetch',
-      description: 'fetch context',
-      preExecutable: true,
-      execute: async () => 'fresh context',
-    }));
-    const plan = await planToolRun([preTool], 100);
-
-    expect(plan.mode).toBe('pre-exec-fast-path');
-    expect(plan.preExecTools.map(tool => tool.name)).toEqual(['context_fetch']);
-    expect(plan.preExecution.data).toContain('fresh context');
-  });
-
-  it('keeps mixed pre-executable and normal tools on the agent path', async () => {
-    const preTool = normalizeTool(makeTool({
-      name: 'context_fetch',
-      description: 'fetch context',
-      preExecutable: true,
-      execute: async () => 'fresh context',
-    }));
-    const normalTool = normalizeTool(makeTool({ name: 'read_file', description: 'read files' }));
-    const plan = await planToolRun([preTool, normalTool], 100);
-
-    expect(plan.mode).toBe('agent');
-    expect(plan.hasNonPreExecTools).toBe(true);
+describe('planToolRun (deprecated, #1250 第 56 批)', () => {
+  it('executes nothing, even for a tool still marked preExecutable', async () => {
+    const execute = vi.fn(async () => 'fresh context');
+    const preTool = { ...normalizeTool(makeTool({ name: 'context_fetch', description: 'fetch context' })), preExecutable: true, execute };
+    await expect(planToolRun([preTool], 100)).resolves.toEqual({
+      preExecTools: [], preExecution: { tools: [], data: '' }, hasNonPreExecTools: true, mode: 'agent',
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await expect(planToolRun([])).resolves.toMatchObject({ mode: 'chat', hasNonPreExecTools: false });
   });
 });

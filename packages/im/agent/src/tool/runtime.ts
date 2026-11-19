@@ -8,7 +8,6 @@ import {
   createDefaultToolSources,
   defaultToolSystem,
   type CollectToolsContext,
-  type ToolRunPlan,
   type ToolSystem,
 } from './tool-system.js';
 export interface CollectRuntimeToolsOptions {
@@ -42,5 +41,3 @@ export async function collectRuntimeTools(options: CollectRuntimeToolsOptions): 
   return toolSystem.collectTools(ctx, createDefaultToolSources(ctx));
 }
 
-export type { ToolRunPlan };
-export { planToolRun } from './tool-system.js';

@@ -68,6 +68,19 @@ describe('TriggerTimeoutError', () => {
     const event = turnCancelledEvent(new TriggerTimeoutError('s1', 5000));
     expect(event.code).toBe('timeout');
   });
+
+  it('is the same class the ingress deadline throws (#1250 第 56 批)', async () => {
+    const ingress = await import('../src/plugin-runtime/ingress/unified-mailbox-spine.js');
+    expect(ingress.TriggerTimeoutError).toBe(TriggerTimeoutError);
+    const err = new TriggerTimeoutError(60_000);
+    expect(err.timeoutMs).toBe(60_000);
+    expect(err.sessionKey).toBeUndefined();
+    expect(err.message).toBe('AI 处理超时（60000ms）');
+    const aborted = await ingress.withTriggerTimeout((signal) => new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason));
+    }), 5).catch((error: unknown) => error);
+    expect(aborted).toBeInstanceOf(TriggerTimeoutError);
+  });
 });
 
 describe('iteration_start event mapping', () => {

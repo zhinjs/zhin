@@ -181,7 +181,6 @@ export interface AgentPathPromptOptions {
   content: string;
   sessionId: string;
   personaEnhanced: string;
-  preData?: string;
   deferredStats?: string;
   modelSdk?: string;
   runtime?: PromptRuntimeOverrides;
@@ -191,14 +190,11 @@ export async function buildAgentPathSystemPromptParts(
   agent: ZhinAgentPrivate,
   options: AgentPathPromptOptions,
 ): Promise<SystemPromptSplit> {
-  const { preData } = options;
-
   if (options.profile.kind === 'schedule') {
     return scheduleSystemPrompt(agent, options.profile, { runtime: options.runtime, turn: options.turn });
   }
 
-  const rich = toSplit(buildRichSystemPromptParts(agentPathPromptContext(agent, options)));
-  return preData ? appendScene(rich, `Pre-fetched data:\n${preData}`) : rich;
+  return toSplit(buildRichSystemPromptParts(agentPathPromptContext(agent, options)));
 }
 
 export interface PromptRuntimeOverrides {

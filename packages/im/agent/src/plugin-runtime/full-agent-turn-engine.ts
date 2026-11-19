@@ -34,7 +34,7 @@ import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { currentMailTurn } from '../collaboration/mail-turn-context.js';
-import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput } from '../collaboration/turn-collaboration.js';
+import { startTurnCollaboration, stripNoReplyMarker, stripNoReplyOutput, withoutNoReplyStream } from '../collaboration/turn-collaboration.js';
 import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
@@ -297,7 +297,9 @@ async function* runInteractiveTurn(
   const leakInspector = new OutboundLeakInspector({
     promptTexts: [effectivePersona, options.bootstrapContext ?? ''],
   });
-  const reply = guardedReply(host, context.turn, leakInspector);
+  const guarded = guardedReply(host, context.turn, leakInspector);
+  // #1250 第 56 批: a root turn with collaboration filters `[[no_reply]]` out of its streams, updates included.
+  const reply = collaboration && guarded ? withoutNoReplyStream(guarded) : guarded;
   const messageAliases = new MessageAliasTable();
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
     messageAliases,
@@ -381,9 +383,12 @@ async function* runInteractiveTurn(
     if (stream) { replyStreams.set(id, stream); replyStream = stream; }
     return { id, ...(stream ? { stream } : {}) };
   };
-  const settlePhase: ReplyPhaseLifecycle['settle'] = async phase => {
-    const existing = phaseFacts.get(phase.id);
+  const settlePhase: ReplyPhaseLifecycle['settle'] = async settled => {
+    const existing = phaseFacts.get(settled.id);
     if (existing) return existing;
+    // #1250 第 56 批: a root turn's answer phases never show `[[no_reply]]` either (its streams filter
+    // every update and the finish, see withoutNoReplyStream).
+    const phase = collaboration ? { ...settled, output: stripNoReplyOutput(settled.output) } : settled;
     if (!reply) throw new Error('Answer phase has no reply port');
     const answer = { intent: 'answer' as const, phaseId: phase.id };
     let delivery: DeliveryOutcome, confirmedOutput: AgentOutputElement[];
@@ -421,7 +426,9 @@ async function* runInteractiveTurn(
     phaseFacts.set(phase.id, facts);
     // Recorded at projection, and only when the whole turn stayed clean (see recordOwnDeliveries).
     if (facts.contextRefs) phaseDeliveredRefs.push(...facts.contextRefs);
-    const told = renderAgentOutput(confirmedOutput);
+    // A collaborating root turn's stream keeps the space a stripped marker leaves; what it told does not.
+    const rendered = renderAgentOutput(confirmedOutput);
+    const told = collaboration ? rendered.trim() : rendered;
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
     if (told.trim()) collaboration?.replied(told);
@@ -561,8 +568,9 @@ async function* runInteractiveTurn(
               if (!progressive && !phaseFacts.size) throw error;
               projectionError = error;
             }
-            const told = confirmedOutput ? renderAgentOutput(confirmedOutput)
+            const rendered = confirmedOutput ? renderAgentOutput(confirmedOutput)
               : delivery.status === 'sent' ? (collaboration ? stripNoReplyMarker(completion.result.reply) : completion.result.reply) : '';
+            const told = collaboration ? rendered.trim() : rendered;
             if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
             // #1250 delegate-result-double-reply: later delegated results only supplement this answer.
             // A failure line (the model request failed) is no answer: delegated results read in the turn

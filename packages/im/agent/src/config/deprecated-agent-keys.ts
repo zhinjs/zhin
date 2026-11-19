@@ -1,5 +1,6 @@
 /**
- * `ai.agent.*` switches retired by the config convergence review (#735).
+ * `ai.agent.*` switches retired by the config convergence review (#735), and
+ * `preExecTimeout`, whose tool pre-execution was removed (#1250 第 56 批).
  *
  * Each one is read by nothing at runtime, so removing it changes no
  * behaviour. They stay accepted for compatibility: startup logs a warning,
@@ -11,6 +12,7 @@ export const DEPRECATED_AGENT_CONFIG_KEYS: Readonly<Record<string, string>> = Ob
   policyDenialStopAfter: '已无效果：被拒绝的调用由工具预算（toolBudget.failureStreakLimit / repeatLimit）处理。',
   deferredToolMaxResults: '已无效果：使用 deferredTools.discoverTopK。',
   taskExecApprovalMode: '已无效果：任务命令按 execApprovalMode 审批。',
+  preExecTimeout: '已无效果：工具预执行（preExecutable）已移除，工具只在模型调用时执行（#1250 第 56 批）。',
 });
 
 export interface DeprecatedAgentConfigKey {

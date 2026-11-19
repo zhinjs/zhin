@@ -276,10 +276,8 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   hidden?: boolean;
 
   /**
-   * 是否允许预执行（opt-in）
-   * 仅当设置为 true 时，Agent 才会在 LLM 调用前自动预执行此工具并将结果注入上下文。
-   * 适用于无副作用的只读工具（如获取系统状态、读取配置等）。
-   * 默认为 false，即不预执行。
+   * @deprecated 已无效果：工具预执行已移除（#1250 第 56 批）。预执行结果不经工具运行时、不记来源，
+   * 工具现在只在模型调用时执行；保留字段仅为兼容，下一个 minor 删除。
    */
   preExecutable?: boolean;
 
