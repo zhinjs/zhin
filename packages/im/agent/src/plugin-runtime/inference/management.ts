@@ -613,9 +613,14 @@ export class InferenceManagementService {
       && (service.id === reference || service.label === reference));
     if (matches.length > 1) throw new InferenceManagementError('conflict');
     const existing = matches[0];
+    // #1250 account-add-service-label-generic: a new service is named by `--label`, else by its Driver's
+    // display name ("Anthropic"), never by the plan alias `service`.
+    // Another service of the host already named so ("Anthropic"): the new one is numbered ("Anthropic 2").
+    const serviceLabel = existing ? undefined : uniqueServiceLabel(label || this.#driverLabel(reference),
+      Object.values(graph.services).filter((service) => service.ownerId === this.options.hostOwnerId).map((service) => service.label));
     const plan = {
       version: 1,
-      ...(existing ? {} : { services: { service: { driver: reference, options: {}, models: {} } } }),
+      ...(existing ? {} : { services: { service: { driver: reference, ...(serviceLabel ? { label: serviceLabel } : {}), options: {}, models: {} } } }),
       accounts: { account: { service: 'service', ...(label ? { label } : {}), auth: { method: 'api-key', source: `env://${variable}` } } },
     };
     const prepared = await this.#review(principal, { plan, ...(existing ? { bindings: { services: { service: existing.id } } } : {}) });
@@ -626,6 +631,11 @@ export class InferenceManagementService {
       createdService: !existing,
       result,
     };
+  }
+  /** Display name of a Driver by id (the first holder when several plugins declare it); the id itself otherwise. */
+  #driverLabel(id: string): string {
+    const driver = this.options.drivers().find((candidate) => candidate.id === id);
+    return driver?.label?.trim() || id;
   }
   /** `zhin ai account rename-env` (#1250 account-env-ref-immutable): same account identity, new `env://` variable. */
   async renameEnvironmentReference(
@@ -1193,4 +1203,18 @@ function mutationOwner(value: unknown): string | undefined {
     typeof value.ownerId === 'string'
     ? value.ownerId
     : undefined;
+}
+
+/**
+ * `base`, or `base 2`, `base 3` … — the first not already used as a service label (#1250
+ * account-add-service-label-generic): two services named "Anthropic" cannot be told apart, and
+ * `zhin ai account add --service <label>` would then refuse the name as ambiguous.
+ */
+function uniqueServiceLabel(base: string, taken: readonly (string | undefined)[]): string {
+  const used = new Set(taken.map((label) => label?.trim().toLowerCase()).filter((label): label is string => !!label));
+  if (!used.has(base.trim().toLowerCase())) return base;
+  for (let index = 2; ; index += 1) {
+    const candidate = `${base} ${index}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
 }

@@ -309,6 +309,7 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'schedule:pause': P.OPS_SCHEDULE_WRITE,
   'schedule:resume': P.OPS_SCHEDULE_WRITE,
   'cron:add': P.OPS_SCHEDULE_WRITE,
+  'cron:set-agent': P.OPS_SCHEDULE_WRITE,
   'cron:remove': P.OPS_SCHEDULE_WRITE,
   'cron:pause': P.OPS_SCHEDULE_WRITE,
   'cron:resume': P.OPS_SCHEDULE_WRITE,

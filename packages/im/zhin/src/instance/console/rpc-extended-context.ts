@@ -40,5 +40,7 @@ function resolveScheduleEngine(agent: AgentConsolePort | null): ConsoleScheduleE
     removeJob: id => jobs.remove(id),
     pauseJob: id => jobs.pause(id),
     resumeJob: id => jobs.resume(id),
+    ...(jobs.agents ? { listAgents: () => jobs.agents!() } : {}),
+    ...(jobs.setAgent ? { setJobAgent: (id: string, agent: string | undefined) => jobs.setAgent!(id, agent) } : {}),
   };
 }

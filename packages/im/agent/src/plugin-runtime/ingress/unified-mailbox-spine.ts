@@ -745,6 +745,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const admittedResult = await admitIngressMailTurn({
         message, matchedContent: matched.content, transcribeUrl: options.transcribeUrl,
         platformSegments: inboundVoiceSegmentsFromPlatform(snapshot, message.conversation),
+        platformOrigins: () => options.im.inboundMediaOrigins(lease, message.conversation),
         matchedVenue, venueRoute, mailbox, gate, sessionKey, turnId, senderId, entryActorName,
         senderRoles, plainText, liveRoom, mergeable, turnAccess, audit, reply,
       });

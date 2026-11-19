@@ -426,7 +426,8 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
         || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
       outcome = await runWithAgentDecisionTurn({ snapshot: lease.value, turnId: request.identity.turnId, models, disabled, inferenceSnapshot: getAgentTurnInferenceSnapshot(request.identity.turnId) }, decision => runWithAgentTurnConfiguration(
-        { activeBinding: selection.binding, models, mediaPerception },
+        { activeBinding: selection.binding, models, mediaPerception,
+          availableAgents: Object.freeze(capabilities.agents.map(agent => agent.name)) },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({
           turn,

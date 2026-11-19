@@ -660,7 +660,9 @@ describe('canonical IM interaction adapter', () => {
   it.each([
     ['UserInteractionTimeoutError', { status: 'timed_out' }],
     ['UserInteractionDeliveryError', { status: 'unavailable', reason: 'the approval prompt could not be delivered' }],
-  ])('maps an approval prompt %s to a typed outcome instead of a user denial', async (name, expected) => {
+    // #1250: the asked person replied 取消 or sent a command / media / mention meanwhile.
+    ['UserInteractionCancelledError', { status: 'denied', by: 'user' }],
+  ])('maps an approval prompt %s to a typed outcome', async (name, expected) => {
     const port = createRuntimeApprovalPort({
       isMaster: false,
       interaction: {

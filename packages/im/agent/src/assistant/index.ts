@@ -81,6 +81,7 @@ export type {
   ScheduleJobState,
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
+  ScheduleJobProvenance,
   JobAction,
   JobNotify,
   JobSchedule,
@@ -110,6 +111,10 @@ export {
   parseScheduleNotifyFromRpc,
 } from './schedule-job-service.js';
 export type { ScheduleAddInput, ScheduleInvocationContext } from './schedule-job-service.js';
+export {
+  ScheduleJobAgentError,
+  type ScheduleJobAgentErrorCode,
+} from './schedule-agent.js';
 
 export {
   ScheduleJobStore,

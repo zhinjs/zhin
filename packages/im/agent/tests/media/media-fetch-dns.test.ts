@@ -101,11 +101,15 @@ describe('fetchUrlAsBase64 — DNS-resolved private targets', () => {
         lookup,
         connect: (url, address, headers, signal, maxBytes) => {
           checked.push(address);
-          return realPinned(url, '127.0.0.1', headers, signal, maxBytes);
+          // The download only accepts port 443 (#1250 第 48 批): the checked URL has no port, and only the
+          // socket below is pointed at the local server's random port.
+          const local = new URL(url);
+          local.port = String(port);
+          return realPinned(local, '127.0.0.1', headers, signal, maxBytes);
         },
       });
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('global fetch must not be used'));
-      await expect(fetchUrlAsBase64(`https://cdn.example:${port}/a.png`, 1024 * 1024, undefined, undefined, [], transport))
+      await expect(fetchUrlAsBase64('https://cdn.example/a.png', 1024 * 1024, undefined, undefined, [], transport))
         .resolves.toMatchObject({ kind: 'image', mimeType: 'image/png' });
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(lookup).toHaveBeenCalledTimes(1);

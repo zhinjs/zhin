@@ -987,4 +987,66 @@ describe('schedule (running Host)', () => {
     await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '30m', '--prompt', 'hi', '--target', 'sandbox:sandbox-bot:private:u1']);
     expect(requests[0].body.notify).toEqual({ channel: 'im', target: 'sandbox:sandbox-bot:private:u1' });
   });
+
+  it('add 不带 --agent 时请求体没有 agent 字段（行为与以前相同）(#1250 b52)', async () => {
+    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '1h', '--prompt', '早报']);
+    expect(requests[0].body).not.toHaveProperty('agent');
+  });
+
+  it('add --agent 把 Agent 名称发给 Host；Host 拒绝不存在的 Agent 时退出码为 1 并显示可用 Agent (#1250 b52)', async () => {
+    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '1h', '--prompt', '早报', '--agent', 'news']);
+    expect(requests[0].body.agent).toBe('news');
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    stubHost(() => ({ status: 400, body: { success: false, code: 'schedule_agent_not_found', error: 'Agent 不存在：ghost。可用的 Agent：zhin、news' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '1h', '--prompt', '早报', '--agent', 'ghost']))
+      .rejects.toThrow('process.exit:1');
+    expect(error.mock.calls.map(call => String(call[0])).join('\n')).toContain('可用的 Agent：zhin、news');
+  });
+
+  it('set-agent 修改任务的 Agent，--clear 发送 null；缺少名称时不发请求 (#1250 b52)', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { job: { id: 'j1' } } } }));
+    await scheduleCommand.parseAsync(['node', 'zhin', 'set-agent', 'j1', 'news']);
+    expect(requests.map(request => [new URL(request.url).pathname, request.body])).toEqual([
+      ['/api/assistant/jobs/set-agent', { id: 'j1', agent: 'news' }],
+    ]);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'set-agent', 'j1'])).rejects.toThrow('process.exit:1');
+    expect(requests).toHaveLength(1);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'set-agent', 'j1', '--clear']);
+    expect(requests[1].body).toEqual({ id: 'j1', agent: null });
+  });
+
+  it('list 显示每个任务用的 Agent，未指定时为默认 (#1250 b52)', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { jobs: [
+      { id: 'news', enabled: false, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+        action: { kind: 'agent', prompt: '早报', agent: 'news' }, notify: { channel: 'log' }, createdAt: 1, updatedAt: 1, state: {} },
+      { id: 'plain', enabled: false, schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+        action: { kind: 'agent', prompt: '天气' }, notify: { channel: 'log' }, createdAt: 1, updatedAt: 1, state: {} },
+    ] } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    const text = lines.join('\n');
+    expect(text).toContain('    Agent:  news');
+    expect(text).toContain('    Agent:  zhin（默认）');
+    // An older instance does not send `agents`: nothing is flagged.
+    expect(text).not.toContain('Agent 不存在');
+  });
+
+  it('list 用 GET 返回的 agents 核对，标出 Agent 已删除的任务 (#1250 b52)', async () => {
+    const job = (id: string, agent?: string) => ({ id, enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+      action: { kind: 'agent', prompt: 'p', ...(agent ? { agent } : {}) }, notify: { channel: 'log' }, createdAt: 1, updatedAt: 1, state: {} });
+    stubHost(() => ({ status: 200, body: { success: true, data: { agents: ['zhin', 'news'], jobs: [job('gone', 'deleted'), job('ok', 'news'), job('plain')] } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'list']);
+    const agentLines = lines.join('\n').split('\n').filter(line => line.includes('Agent:'));
+    expect(agentLines).toEqual([
+      expect.stringMatching(/^ {4}Agent: {2}deleted {2}⚠ Agent 不存在/),
+      '    Agent:  news',
+      '    Agent:  zhin（默认）',
+    ]);
+  });
 });

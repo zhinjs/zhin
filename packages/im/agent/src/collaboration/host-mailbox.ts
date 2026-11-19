@@ -62,6 +62,7 @@ import {
   agentOf,
 } from '@zhin.js/harness';
 import type { VenueProjector } from '@zhin.js/core';
+import { noteResultAdmitted } from './delegation-waiters.js';
 import { getLogger } from '@zhin.js/logger';
 import { TriggerCancelledError } from '../turn/trigger-cancelled-error.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
@@ -255,6 +256,10 @@ export class HostMailbox {
       append: async (record) => {
         const appended = await this.#journal.append(record);
         if (record.type === 'mail_admitted') {
+          // #1250 delegate-result-double-reply: a delegating turn may be waiting for this result.
+          const admitted = record.data.kind === 'result' && typeof record.data.mailId === 'string'
+            ? this.harness.graph(record.engagementId)?.get(record.data.mailId) : undefined;
+          if (admitted) noteResultAdmitted(this.harness, admitted);
           await this.#maybeProjectAdmittedMail(record.engagementId, record.data.mailId as string | undefined);
         }
         return appended;

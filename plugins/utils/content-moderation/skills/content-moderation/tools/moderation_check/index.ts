@@ -11,6 +11,8 @@ export default defineAgentTool({
   description: 'Evaluate sample text against content moderation policies without mutating state',
   inputSchema,
   readOnly: true,
+  // ADR 0067 D1: returns text other people can write, so it is external content, not trusted output.
+  tags: ['external_content'],
   requiresApproval: 'never',
   async execute({ text }, context) {
     const engine = context.use(moderationEngineToken);

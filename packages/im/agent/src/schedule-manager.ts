@@ -14,9 +14,12 @@ import {
 } from './assistant/schedule-job-service.js';
 import { ADMIN_APPROVABLE_TOOL_TAG } from './security/admin-approvable.js';
 import type { TimerScheduler } from './assistant/timer-scheduler.js';
-import type { TaskExecutionResult } from './task-executor.js';
+import type { SchedulePreviewOptions, TaskExecutionResult } from './task-executor.js';
+import { currentTurnProvenance } from './security/provenance.js';
 import type { ScheduleAuditRecord } from './schedule-domain/audit-logger.js';
 import { isEmptyExecutionPlan } from './plugin-runtime/schedule-capability-plan.js';
+import { checkScheduleAgent, usableScheduleAgents } from './assistant/schedule-agent.js';
+import { getAgentTurnConfiguration } from './turn/agent-turn-context.js';
 
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
 
@@ -32,10 +35,15 @@ export interface ScheduleManager {
     }>;
   };
   engine: TimerScheduler | null;
+  /**
+   * Agents a job may run on (`zhin` and `ai.agents` bindings), #1250 b52. Absent: `schedule_add`
+   * accepts no `agent`.
+   */
+  agents?: () => readonly string[];
   previewTask?: (
     prompt: string,
     context: ScheduleInvocationContext,
-    options?: { activityFeedback?: boolean },
+    options?: SchedulePreviewOptions,
   ) => Promise<TaskExecutionResult>;
 }
 
@@ -79,12 +87,17 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
       schema(),
       async () => {
         const memory = manager.scheduleFeature.getStatus();
+        const agents = manager.agents?.();
         const persistent = manager.engine
           ? (await manager.engine.listJobs()).map((job) => ({
               type: 'persistent' as const,
               id: job.id,
               schedule: job.schedule,
               prompt: job.action.kind === 'agent' ? job.action.prompt : undefined,
+              ...(job.action.kind === 'agent' && job.action.agent ? { agent: job.action.agent } : {}),
+              // #1250 b52: the Agent was removed from `ai.agents`; the job's runs fail until changed.
+              ...(job.action.kind === 'agent' && job.action.agent && agents && !agents.includes(job.action.agent)
+                ? { agent_missing: true } : {}),
               label: job.label,
               enabled: job.enabled,
               notify: job.notify,
@@ -113,12 +126,21 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         refined_prompt: { type: 'string', description: '预演 refine 后的 prompt' },
         tools: { type: 'string', description: '逗号分隔的工具名' },
         skills: { type: 'string', description: '逗号分隔的技能名' },
+        agent: { type: 'string', description: '可选：到点由哪个 Agent 执行（Agent 名称）；省略时用默认 Agent。只能指定当前用户可用的 Agent' },
       }, ['prompt']),
       async (input, context) => {
         if (!manager?.engine) return { error: '持久化调度引擎不可用' };
         const parsed = parseScheduleAddFromToolArgs(input, context);
         if ('error' in parsed) return { error: parsed.error };
-        const job = await addScheduleJob(manager.engine, { ...parsed, id: generateScheduleJobId() });
+        // #1250 b52: only an Agent the caller may use in this conversation (the same set `@name`
+        // routing offers them); without a runtime turn, only the default.
+        const usable = usableScheduleAgents(manager.agents?.() ?? [], getAgentTurnConfiguration()?.availableAgents);
+        const agent = checkScheduleAgent(input.agent, usable);
+        if ('error' in agent) return { error: agent.error };
+        // ADR 0067 D2.1: a job created after the turn read anything keeps that, and every run starts tainted.
+        const provenance = currentTurnProvenance()?.snapshotForSchedule();
+        const job = await addScheduleJob(manager.engine, { ...parsed, ...agent, id: generateScheduleJobId(),
+          ...(provenance ? { provenance } : {}) });
         // #1250 b33: a plan without tools or skills is accepted (it falls back to prompt-based selection
         // when the job runs), but the caller is told, so it can preview and pass the tools explicitly.
         const warning = isEmptyExecutionPlan(job.executionPlan)
@@ -142,8 +164,11 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
       }, ['prompt']),
       async (input, context) => {
         if (!manager?.previewTask) return { error: '预演服务不可用' };
+        // ADR 0067 D2.1: the preview runs the prompt now, with the calling turn's provenance.
+        const provenance = currentTurnProvenance()?.snapshotForSchedule();
         const result = await manager.previewTask(String(input.prompt), context, {
           activityFeedback: input.activity_feedback === true,
+          ...(provenance ? { provenance } : {}),
         });
         if (!result.success) return { error: result.error || '预演失败' };
         const unattended = describeUnattendedPreview(result.audit.unattendedApproval);

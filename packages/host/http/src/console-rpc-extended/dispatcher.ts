@@ -1,5 +1,5 @@
 import type { ConsoleRpcExtendedCtx, ExtendedRpcResult } from './contracts.js';
-import { addCron, listSchedule, mutateCron, validateCron } from './schedule-rpc.js';
+import { addCron, listSchedule, mutateCron, setCronAgent, validateCron } from './schedule-rpc.js';
 import {
   actOnRequest, listInbox, listInboxMessages, listPendingRequests, listRecentInboxMessages,
   mapNoticeRow, mapRequestRow, markInboxConsumed, TABLE_NOTICE, TABLE_REQUEST,
@@ -28,6 +28,8 @@ export async function dispatchExtendedConsoleRpc(
 
     case 'cron:add':
       return addCron(d, ctx);
+    case 'cron:set-agent':
+      return setCronAgent(d, ctx);
     case 'cron:remove':
     case 'cron:pause':
     case 'cron:resume':

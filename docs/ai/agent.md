@@ -185,7 +185,7 @@ ai:
 |------|------|
 | `agents` | 列出当前可联系的 Agent 及其职责说明 |
 | `ask` | 同步提问，在本回合内等待对方答复并返回结果 |
-| `delegate` | 异步委派，立即返回 `mailId`；对方完成后结果作为 `result` 邮件投回委派方信箱并唤醒新回合 |
+| `delegate` | 委派任务。默认在本回合内最多等 20 秒：结果按时回来就直接出现在工具结果里，模型据此回答一次；`wait: false`（长任务）或超时时立即返回 `mailId`，结果之后作为 `result` 邮件投回委派方信箱并唤醒新回合，工具结果要求模型期间不要自己回答被委派的部分。同一步里的多个 `delegate` 一起发出、一起等待，每个回合的等待合计最多 20 秒且给回答留出时间，不会拖到回合超时；等待中读到的结果在回合成功回复后才算已用，回合失败或超时时仍照原路唤醒委派方 |
 | `tell` | 单向通知同伴，不等待回复 |
 | `follow_up` | 针对先前已委派或提问的 `mailId` 追问或补充上下文，复用同一 Engagement 与因果链 |
 | `board_read` | 读取当前 Engagement 共享黑板（Blackboard）上的条目（支持按 `key` 或 `kind: note \| todo \| artifact` 过滤） |
@@ -226,6 +226,7 @@ ai:
 - **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人类 Principal，不会交给另一个 Agent 批准。
 - **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后冻结 Engagement：本次请求的协作到此为止，无法恢复。拦截原因只写进 `ai.collaboration` warn 日志和协作 journal，不发到聊天。主 Agent 自己的协作调用被拒绝时，由它在回复里用一句话交代；否则（例如两个子 Agent 之间触发、主 Agent 没有察觉）在没有主 Agent 回合运行时补发一句「后台任务已停止：这次请求的协作次数到了上限。」
 - **一条请求一条结论**：子 Agent 的内部结局（失败、预算用完、取消、拒绝）回到主 Agent 时：同一委派之后的 `follow_up` 已经完成的，只留在 trace（另一项对同一 Agent 的 ask / delegate 不算）；协作已被拦截停止的，只留在 trace；本次请求的第一项失败会唤醒主 Agent 用一句话交代，之后其他委派的失败不再唤醒主 Agent，只发一句「另有 N 项后台任务没有完成。」消息确实发出后才算已告知。主 Agent 调用 `escalate` 向用户提问时，提问会记入本会话的「已告知」记录，用户下一条回复所在的回合能看到问了什么。
+- **已回答后只补充**：本次请求已经回复过用户之后，迟到的委派结果唤醒主 Agent 时，会先看到它之前回复的原文；结果没有新内容时，模型输出 `[[no_reply]]`，什么都不发（结果只留在 trace）；确有新内容才发一条，开头标「补充：」（英文会话为「Update: 」），不重复已经说过的话。
 - **身份来自传输**：消息发送方由框架填写，正文里自称"主人"或"审核员"无效。
 
 ## 会话与会话树
@@ -348,14 +349,19 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 
 ### 读取外部内容后的高危动作
 
-回合里只要有外部内容进入模型（工具结果、网页、文件、子 agent 报告、群聊背景消息），之后模型发起的高危动作就一律先审批，即使配置策略本来允许直接执行：
+回合里有外部内容进入模型（工具结果、网页、文件、子 agent 报告、群聊背景消息）之后，模型发起的高危动作要先确认，即使配置策略本来允许直接执行。高危动作分五类，每类按自己的级别判断（[ADR 0067](../adr/0067-high-risk-confirm-tiers.md)）：
 
-| 类别 | 判定 |
-|------|------|
-| 执行命令 | `bash`，或带 `shell` 标签的工具 |
-| 向其他会话发消息 | 名称含 send/forward/notify 等，或带 `outbound` 标签 |
-| 修改配置 | 名称含 config/settings、安装插件等（`get_`/`list_` 等读取类除外），或带 `config` 标签 |
-| 定时任务 | 名称含 schedule/cron/reminder/timer 等（读取类除外），或带 `schedule` 标签 |
+| 类别（配置键） | 判定 | 默认级别 |
+|------|------|------|
+| 执行命令（`shell`） | `bash`，或带 `shell` 标签的工具 | `any_content` |
+| 写文件（`fileWrite`） | `write_file`、`edit_file`、`apply_patch`、`delete_file` 等，或带 `file_write` 标签 | `any_content` |
+| 向其他会话发消息（`outbound`） | 名称含 send/forward/notify 等，或带 `outbound` 标签 | `any_content` |
+| 修改配置（`config`） | 名称含 config/settings、安装插件等（`get_`/`list_` 等读取类除外），或带 `config` 标签 | `any_content` |
+| 定时任务（`schedule`） | 名称含 schedule/cron/reminder/timer 等（读取类除外），或带 `schedule` 标签 | `untrusted_content` |
+
+级别：`off` 不因来源确认；`untrusted_content` 读过外部内容后确认，**第一方只读工具的结果不算**；`any_content` 读过任何内容后确认（含第一方只读工具的结果）；`always` 每次都确认。普通工具和只读工具不受这道闸影响。
+
+**受信输出**：第一方插件（包名是 `zhin.js` 或在 `@zhin.js/` 作用域下）里声明了 `readOnly: true` 的工具，结果算受信输出，例如天气、汇率。所以默认配置下「查一下天气，然后建个提醒」不需要确认，没有确认渠道的会话里也能完成；查完天气再执行命令、写文件、外发、改配置，仍然要确认。放宽只针对「创建」这一步：模型在读过任何内容（含受信输出）之后建的定时任务会记住这一点，每次到点运行（以及 `schedule_preview` 预演）都按读过外部内容处理，其中的执行命令、写文件、外发、改配置会被拒绝；`schedule_preview` 会当场执行提示词，不享受放宽（至少按 `any_content` 确认）。下面这些即使声明了只读也算外部内容：MCP 工具（包括上游标注 `readOnlyHint` 的）、`web_fetch` / `web_search`、文件与知识库工具（`read_file`、`grep`、`glob`、`list_dir`、`knowledge_search`、`get_local_assets`）、`memory_search`、`todo_read`、`get_self_profile`，以及带 `external_content` 标签的工具（如摸鱼日历、油价、金价、账目列表 / 汇总）。插件作者：只读工具如果会返回别人能写的文本（群成员昵称、入群申请留言等）、原样拼接上游自由文本或以前回合写入的文本，请加 `external_content` 标签。
 
 审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批每次单独确认，不会沿用会话里已记住的批准。无人值守的回合（定时任务、后台事件等）没有人能确认，会直接拒绝，策略名为 `external-content-confirmation`。
 
@@ -391,9 +397,11 @@ ai:
 
 **主人回合同样要确认（#1250）**：全局 owner（主人）的回合读过外部内容后发起高危动作，主人免审不再直接放行。`execApprovalMode: ask` 与 `bypass` 下，向主人本人发一次性确认：只认主人本人在同一会话里的回复或按钮，只有「允许一次 / 拒绝」，不记住、不沿用已记住的授权，超时按拒绝处理。主人不在场（合流、旁听、场景回合）时直接拒绝，原因写明并给出替代路径（如 Console「运维 → 定时任务」）；无人值守回合按上文规则拒绝。主人没有读过外部内容时行为不变，不会多出确认。
 
-**`auto` 模式的风险**：`execApprovalMode: auto`（默认值）下，这类确认仍由审核 Agent 决定，行为不变。审核 Agent 看到的请求里带着模型生成的参数，外部内容中的提示注入可能影响它的判断，结果可能是放行。对高价值实例（能执行命令、改配置、对外发消息、管理群成员的 Bot）建议使用 `ask`，或保持 `confirmHighRisk: external_content` 并让主人在私聊里确认；`bypass` 只适合本机开发。
+**`auto` 模式的风险**：`execApprovalMode: auto`（默认值）下，这类确认仍由审核 Agent 决定，行为不变。审核 Agent 看到的请求里带着模型生成的参数，外部内容中的提示注入可能影响它的判断，结果可能是放行。对高价值实例（能执行命令、改配置、对外发消息、管理群成员的 Bot）建议使用 `ask`，或保持 `confirmHighRisk` 的默认值（不要设为 `off`）并让主人在私聊里确认；`bypass` 只适合本机开发。
 
-`discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。第一方插件的工具如果结果可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`。
+`discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。其他工具如果结果完全可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`：这两种写法的结果对所有类别都不算来源（比受信输出更宽）。
+
+**配置**：`confirmHighRisk` 可以按类别写，没写的类别用默认级别；也可以写一个字符串作用于所有类别：`external_content`（原来的含义，等于所有类别 `any_content`，查完天气建提醒也要确认）、`always`、`off`。显式写过的字符串不会被放宽。设成 `off` 会同时失去对执行命令、写文件、外发、改配置的保护，`zhin doctor` 会提示；只想少打扰，改关单个类别，例如 `confirmHighRisk: { schedule: off }`。
 
 ### 未执行的工具如实告知（#1250）
 
@@ -443,7 +451,12 @@ ai:
 ai:
   agent:
     injectionGuard:
-      confirmHighRisk: external_content   # off 关闭
+      confirmHighRisk:                    # 不写即默认值；也可写 external_content / always / off 作用于所有类别
+        shell: any_content
+        fileWrite: any_content
+        outbound: any_content
+        config: any_content
+        schedule: untrusted_content
       outboundCheck: redact               # off 关闭
       trustedOutputTools: []
     usageQuota:
@@ -653,7 +666,7 @@ assistant:
 
 - **选工具**：任务有执行计划（`schedule_preview` 预演后保存，或 `schedule_add` 传 `tools` / `skills`）时按计划给工具；没有计划，或计划里工具和技能都为空时，按提示词自动挑选（trace 里 `capability_resolution` 的 `resolvedBy: affinity`，空计划另带 `warnings: ["empty_execution_plan"]`）。一个工具都没选到时带 `no_tools` 警告。`schedule_add` 收到空计划不会拒绝，但会在结果里提示先预演。
 - **审批**：定时任务是无人值守的回合，没有人能当场确认。`execApprovalMode: auto`（默认）时，需要审批的工具交给审核 Agent 判断：批准才执行；拒绝、要求转问人、超时或出错都按拒绝处理，不会去问任何人。判断结果写进 trace（`unattended_review`）。`ask` / `bypass` 下仍直接拒绝。必须人工确认的工具（`requiresApproval: 'human'`）、危险工具硬闸和「读取外部内容后的高危动作」确认在无人值守时一律拒绝。
-- **无人值守自动审核默认开启**：`execApprovalMode` 的默认值就是 `auto`，所以不做任何配置时，定时任务里需要审批的工具都会交给审核 Agent 判断。不想让审核 Agent 替人批准，就在 `zhin.config.yml` 里设 `ai.agent.execApprovalMode: ask`（人工审批）：无人值守回合里需要审批的工具会直接拒绝，实时回合照常问人；没有单独的开关只关掉无人值守审核。只要 `ai.agent.injectionGuard.confirmHighRisk` 保持默认的 `external_content`（不设为 `off`），无论哪种 `execApprovalMode`，本回合读取过外部内容（网页、文件、工具结果、子 Agent 报告、群聊背景等）之后，高危动作（执行命令、发往其他会话、改配置、管理定时任务）在无人值守时一律拒绝，审核 Agent 也不能放行。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
+- **无人值守自动审核默认开启**：`execApprovalMode` 的默认值就是 `auto`，所以不做任何配置时，定时任务里需要审批的工具都会交给审核 Agent 判断。不想让审核 Agent 替人批准，就在 `zhin.config.yml` 里设 `ai.agent.execApprovalMode: ask`（人工审批）：无人值守回合里需要审批的工具会直接拒绝，实时回合照常问人；没有单独的开关只关掉无人值守审核。只要 `ai.agent.injectionGuard.confirmHighRisk` 没有关闭，无论哪种 `execApprovalMode`，本回合读取过外部内容（网页、文件、工具结果、子 Agent 报告、群聊背景等）之后，高危动作（执行命令、写文件、发往其他会话、改配置、管理定时任务）在无人值守时一律拒绝，审核 Agent 也不能放行；判断时取配置级别与默认级别中较严的一个，所以单独关掉某个类别也不会让审核 Agent 放行。例外是定时任务类：只读过第一方只读工具的结果（如天气）时不算被污染（ADR 0067）。反过来，模型在读过任何内容（含天气这类受信输出）之后创建的任务，到点运行时一开始就按读过外部内容处理：上面这些高危动作一律拒绝。需要无人值守写文件或外发的任务，请在 Console 里创建，或在没读过任何工具结果的回合里创建。声明了 `readOnly: true` 的插件工具不需要审批，见[只读工具不需要审批](../authoring/agent-tools.md#只读工具不需要审批)。
 - **预演**：`schedule_preview` 的结果列出到点时会被拒的工具（`unattended_approval.denied`）和要交给审核 Agent 的工具（`unattended_approval.reviewed`）。只是提示，实际以每次调用的判断为准。
 - **任务状态**：一次运行用了兜底文案、没有任何工具结果且回复为空，或有工具被拒时，记为 `degraded`（未完成），`last_error` 写明原因和 `zhin trace <回合 id>`；`zhin watch` 显示 `last:degraded` 和原因，`zhin schedule list` 显示「上次」一行。开启 `notifyOnFailure` 时会发「[任务未完成]」提醒；如果送达的回复本身就是兜底说明，不再重复提醒。
 - **模型调用失败**（#1250 第 40 批）：回合因模型请求失败而结束（日志 `llm_error`，回复只是失败文案）时，这次运行记为失败：`last_status: error`，`last_error` 写明错误类型、原因和 `zhin trace <回合 id>`，回合 trace 的结束状态为 `failed`（`model_error:<类型>`），失败文案不会当成任务结果发出去。模型服务暂时不可用（网络错误、5xx、超时、无响应）时自动重试：约 5 分钟后第 1 次、再约 10 分钟后第 2 次，由调度器定时触发、不占执行队列；只在这次运行没有已生效或结果不明的工具操作时重试（失败的运行本来就不发回复，重试不会重复发送）；暂停、删除任务或下一次到点运行会取消待定的重试，重试状态只在内存中。`zhin schedule list` / Console 的「下次运行」显示重试时间，`retry_count` 为已安排的重试次数。全部重试失败（或这类错误不重试，如密钥被拒）后，向任务的接收人发一条说明，例如「『工作日天气早报』这次没生成：模型服务（中转站）暂时连不上，已自动重试 2 次，不再重试。排查：zhin trace <回合 id>」；开启 `notifyOnFailure` 时，每次失败都发，未重试完时写「N 分钟后会自动重试」。提醒按任务语言发中文或英文。普通聊天的失败提示不变。
@@ -721,11 +734,17 @@ routines:
     cron: "0 0 8 * * *"
     tz: Asia/Shanghai
     prompt: 生成今日早报。
+    agent: news              # 可选：由 ai.agents 中的哪个 Agent 执行，省略时为 zhin
 ```
 
 - 内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
 - 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
 - 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
+- **指定执行的 Agent**：任务默认由 `zhin` 执行。要让某个任务（如早报）走 `ai.agents` 里配置的另一个 Agent，用 `zhin schedule add --agent <名称>` 创建，或 `zhin schedule set-agent <id> <名称>` / `--clear` 修改；聊天里 `schedule_add` 也接受可选的 `agent` 参数。名称必须是已配置的 Agent，否则报错并列出可用的 Agent。聊天里只能指定**你在当前会话里能用的** Agent：与 `@名称` 点名 Agent 时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），再加上默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝，不会借此把任务交给它。只在 `ai.agents` 里配置、没有对应 Agent 包的 Agent 聊天里无法 @ 到，因此也只能用 CLI 或 Console 指定。
+  - 聊天里的可见性**只在创建任务时检查**。之后即使撤销了你对该 Agent 的权限（改了 Agent 包的 `platforms` / `scopes` / `permissions` 或你的角色），已有任务仍由原 Agent 执行；要收回，用 `zhin schedule set-agent` / Console 修改或删除该任务。
+  - `set-agent` 修改的是投递到原目标的任务，因此和创建时一样，要求对任务投递目标账号有 `endpoint.operate`，否则返回 403。
+  - Profile 例程（`assistant.profile.yml` 的 `routines`）每次启动都按 Profile 重新声明，`set-agent` / Console 会拒绝修改它们（错误码 `schedule_agent_profile`），请改 routine 的 `agent` 字段。心跳任务始终由默认 Agent 执行。
+  - 任务指定的 Agent 之后从 `ai.agents` 删除时，任务保留，但每次运行都会失败并记录错误；`zhin schedule list` 在该任务的 Agent 后标出「⚠ Agent 不存在」，Console 的 `schedule:list` 给它带上 `agentMissing: true`，用 `set-agent` 改成现有 Agent 或 `--clear` 即可恢复。
 
 ## 按模型调整参数
 

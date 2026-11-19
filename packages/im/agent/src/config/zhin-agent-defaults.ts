@@ -38,7 +38,8 @@ export const DEFAULT_CONFIG = {
   toolExecution: 'tiered',
   maxSubagentIterations: 25,
   toolBudget: { ...DEFAULT_TOOL_BUDGET },
-  injectionGuard: { ...DEFAULT_INJECTION_GUARD, trustedOutputTools: [] },
+  // ADR 0067 D3: `confirmHighRisk` stays unset so the per-category defaults apply (an explicit string keeps its meaning).
+  injectionGuard: { outboundCheck: DEFAULT_INJECTION_GUARD.outboundCheck, trustedOutputTools: [] },
   usageQuota: { ...DEFAULT_USAGE_QUOTA },
   toolHardGate: { ...DEFAULT_TOOL_HARD_GATE, dangerousTools: [] },
   modelSizeHint: '',

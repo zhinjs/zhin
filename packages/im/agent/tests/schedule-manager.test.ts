@@ -4,6 +4,7 @@ import {
   createScheduleTools,
   type ScheduleManager,
 } from '../src/schedule-manager.js';
+import { runWithAgentTurnConfiguration } from '../src/turn/agent-turn-context.js';
 
 const context = {
   signal: new AbortController().signal,
@@ -129,5 +130,65 @@ describe('schedule tools empty-plan and unattended hints (#1250 b33)', () => {
       unattendedApproval: { review: 'auto', denied: [], reviewed: [] } } }));
     const plain = await tool({ ...value, previewTask: quiet } as ScheduleManager, 'schedule_preview').execute({ prompt: '天气' }, context) as Record<string, unknown>;
     expect(plain).not.toHaveProperty('unattended_approval');
+  });
+
+  describe('agent (#1250 b52)', () => {
+    function agentManager() {
+      const addJob = vi.fn(async (input) => ({ ...input, createdAt: 1, updatedAt: 1, state: {} }));
+      const value = {
+        scheduleFeature: { getStatus: () => [] },
+        engine: { addJob },
+        agents: () => ['zhin', 'news', 'secret'],
+      } as unknown as ScheduleManager;
+      return { addJob, add: tool(value, 'schedule_add') };
+    }
+    // The Agents the caller's turn can see, as `@name` routing offers them (`capabilities.agents`).
+    const inTurn = <T>(visible: readonly string[], run: () => Promise<T>) =>
+      runWithAgentTurnConfiguration({ availableAgents: visible }, run);
+
+    it('stores an Agent visible in the caller\'s turn; without `agent` the job has none, as before', async () => {
+      const { addJob, add } = agentManager();
+      const result = await inTurn(['news'], () => add.execute({ delay_minutes: 5, prompt: '早报', notify_channel: 'silent', agent: 'news' }, context)) as Record<string, unknown>;
+      expect(result.success).toBe(true);
+      expect(addJob.mock.calls[0]![0].action).toEqual({ kind: 'agent', prompt: '早报', agent: 'news' });
+      await inTurn(['news'], () => add.execute({ delay_minutes: 5, prompt: '早报', notify_channel: 'silent' }, context));
+      expect(addJob.mock.calls[1]![0].action).toEqual({ kind: 'agent', prompt: '早报' });
+      // The default Agent needs no visibility.
+      await inTurn([], () => add.execute({ delay_minutes: 5, prompt: '早报', notify_channel: 'silent', agent: 'zhin' }, context));
+      expect(addJob.mock.calls[2]![0].action).toEqual({ kind: 'agent', prompt: '早报', agent: 'zhin' });
+    });
+
+    it('refuses an Agent the caller cannot use, without revealing it, and an unknown one', async () => {
+      const { addJob, add } = agentManager();
+      const hidden = await inTurn(['news'], () => add.execute({ delay_minutes: 5, prompt: 'x', notify_channel: 'silent', agent: 'secret' }, context)) as Record<string, unknown>;
+      expect(hidden.error).toBe('Agent 不存在或无权使用：secret。可用的 Agent：zhin、news');
+      const unknown = await inTurn(['news', 'ghost'], () => add.execute({ delay_minutes: 5, prompt: 'x', notify_channel: 'silent', agent: 'ghost' }, context)) as Record<string, unknown>;
+      expect(unknown.error).toContain('Agent 不存在或无权使用：ghost');
+      // Outside a runtime turn nothing is known about the caller's access: the default only.
+      const outside = await add.execute({ delay_minutes: 5, prompt: 'x', notify_channel: 'silent', agent: 'news' }, context) as Record<string, unknown>;
+      expect(outside.error).toBe('Agent 不存在或无权使用：news。可用的 Agent：zhin');
+      expect(addJob).not.toHaveBeenCalled();
+    });
+
+    it('schedule_list shows the Agent of each persistent job', async () => {
+      const value = manager(async () => [
+        { id: 'a', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'news' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
+        { id: 'b', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
+      ]);
+      const result = await tool(value, 'schedule_list').execute({}, context) as { persistent: Record<string, unknown>[] };
+      expect(result.persistent[0]).toMatchObject({ id: 'a', agent: 'news' });
+      expect(result.persistent[1]).not.toHaveProperty('agent');
+      expect(result.persistent[0]).not.toHaveProperty('agent_missing');
+    });
+
+    it('schedule_list flags a job whose Agent was removed from ai.agents', async () => {
+      const value = { ...manager(async () => [
+        { id: 'gone', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'deleted' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
+        { id: 'ok', enabled: true, schedule: { kind: 'at', atMs: 1 }, action: { kind: 'agent', prompt: 'p', agent: 'news' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 1, state: {} },
+      ]), agents: () => ['zhin', 'news'] };
+      const result = await tool(value, 'schedule_list').execute({}, context) as { persistent: Record<string, unknown>[] };
+      expect(result.persistent[0]).toMatchObject({ id: 'gone', agent: 'deleted', agent_missing: true });
+      expect(result.persistent[1]).not.toHaveProperty('agent_missing');
+    });
   });
 });

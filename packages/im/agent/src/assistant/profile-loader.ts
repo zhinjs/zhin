@@ -156,12 +156,14 @@ export function buildScheduleJobFromRoutine(
     throw new Error(`profile routine "${jobId}": ${built.error}`);
   }
   const now = Date.now();
+  const agent = typeof routine.agent === 'string' ? routine.agent.trim() : '';
   return {
     id: jobId,
     label: routine.label?.trim() || defaultLabel,
     enabled: routine.enabled !== false,
     schedule: built,
-    action: { kind: 'agent', prompt: routine.prompt.trim() },
+    // #1250 b52: the routine's Agent; absent = the default. An unknown name fails each run visibly.
+    action: { kind: 'agent', prompt: routine.prompt.trim(), ...(agent ? { agent } : {}) },
     notify: resolveProfileJobNotify(routine.notify, profileDefaults),
     createdAt: now,
     updatedAt: now,
@@ -291,6 +293,9 @@ export function validateAssistantProfile(profile: AssistantProfile): string[] {
     if (!routine.cron?.trim()) continue;
     if (!routine.prompt?.trim()) {
       errors.push(`routines.${key}.prompt is required when cron is set`);
+    }
+    if (routine.agent !== undefined && typeof routine.agent !== 'string') {
+      errors.push(`routines.${key}.agent must be an Agent name`);
     }
   }
   return errors;

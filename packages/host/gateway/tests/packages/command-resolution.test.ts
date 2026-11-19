@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import {
   createStreamingPackageManager,
+  packageManagerEnv,
   quoteWindowsCmdArgument,
   resolveCommand,
   translatePackageManagerArgs,
@@ -77,6 +78,41 @@ describe('package-manager command resolution', () => {
     expect(() => translatePackageManagerArgs('pnpm', ['install', '--ignore-scripts=false'])).toThrow();
     expect(() => translatePackageManagerArgs('pnpm', ['update', '--latest'])).toThrow();
     expect(() => translatePackageManagerArgs('pnpm', ['update', '-D', 'pg'])).toThrow();
+  });
+
+  it('maps an unfrozen install (lockfile meant to change) for every manager', () => {
+    expect(translatePackageManagerArgs('pnpm', ['install', '--no-frozen-lockfile'])).toEqual(['install', '--no-frozen-lockfile']);
+    expect(translatePackageManagerArgs('npm', ['install', '--no-frozen-lockfile'])).toEqual(['install']);
+    expect(translatePackageManagerArgs('yarn', ['install', '--no-frozen-lockfile'])).toEqual(['install']);
+    expect(translatePackageManagerArgs('bun', ['install', '--no-frozen-lockfile'])).toEqual(['install']);
+    expect(() => translatePackageManagerArgs('pnpm', ['install', '--frozen-lockfile', '--no-frozen-lockfile'])).toThrow();
+    expect(() => translatePackageManagerArgs('pnpm', ['add', '--no-frozen-lockfile', 'pg'])).toThrow();
+  });
+
+  it('runs an unfrozen install without CI for managers that have no such flag', () => {
+    const env = { CI: 'true', PATH: '/bin' };
+    expect(packageManagerEnv('pnpm', ['install', '--no-frozen-lockfile'], env)).toBe(env);
+    expect(packageManagerEnv('npm', ['install', '--frozen-lockfile'], env)).toBe(env);
+    expect(packageManagerEnv('npm', ['install', '--no-frozen-lockfile'], env)).toEqual({ PATH: '/bin' });
+    expect(packageManagerEnv('bun', ['install', '--no-frozen-lockfile'], { ci: '1' })).toEqual({});
+    expect(packageManagerEnv('yarn', ['install', '--no-frozen-lockfile'], env)).toEqual({ PATH: '/bin', YARN_ENABLE_IMMUTABLE_INSTALLS: 'false' });
+  });
+
+  it('passes --no-frozen-lockfile to pnpm and drops CI for npm when spawning', async () => {
+    const invocations: { command: string; args: string[]; env: Record<string, unknown> }[] = [];
+    const fakeSpawn = ((command: string, args: string[], options: { env: Record<string, unknown> }) => {
+      invocations.push({ command, args, env: options.env });
+      const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough() });
+      setImmediate(() => child.emit('close', 0, null));
+      return child;
+    }) as unknown as typeof import('node:child_process').spawn;
+    const env = { CI: 'true', PATH: '/bin' };
+    await createStreamingPackageManager(() => undefined, { manager: 'pnpm', spawn: fakeSpawn, platform: 'linux', env })(['install', '--no-frozen-lockfile'], process.cwd());
+    await createStreamingPackageManager(() => undefined, { manager: 'npm', spawn: fakeSpawn, platform: 'linux', env })(['install', '--no-frozen-lockfile'], process.cwd());
+    expect(invocations).toEqual([
+      { command: 'pnpm', args: ['install', '--no-frozen-lockfile'], env },
+      { command: 'npm', args: ['install'], env: { PATH: '/bin' } },
+    ]);
   });
 });
 

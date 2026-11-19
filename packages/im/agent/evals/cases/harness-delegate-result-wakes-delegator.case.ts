@@ -13,7 +13,7 @@ export default defineEvalCase({
   // Entry turn 1: delegate, then acknowledge. researcher runs in the background. Entry turn 2 (woken by the
   // result mail): answer with it. Entry steps are consumed in order across both turns.
   script: [
-    { toolCalls: [{ name: 'delegate', args: { agent: 'researcher', brief: 'When did Node.js 24 enter LTS?' } }] },
+    { toolCalls: [{ name: 'delegate', args: { agent: 'researcher', brief: 'When did Node.js 24 enter LTS?', wait: false } }] },
     { text: '已经交给 researcher 去查了。' },
     { actor: 'researcher', toolCalls: [{ name: 'lookup_docs', args: { query: 'Node.js 24 LTS' } }] },
     { actor: 'researcher', text: 'Node.js 24 entered Active LTS in October 2025.' },

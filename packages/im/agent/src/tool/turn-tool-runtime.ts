@@ -19,6 +19,10 @@ import { redactApprovalDisplay, redactSecretText } from '../decision-events.js';
 import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
+import { TurnCancelledError, TurnSupersededError } from '../turn/prompt-controller.js';
+import { TriggerCancelledError, TriggerTimeoutError } from '../turn/trigger-cancelled-error.js';
+import { PromptAccessDeniedError } from '../turn/prompt-access.js';
+import { ControlBlockedOutboundError } from '../plugin-runtime/host/runtime-factory.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
 import { MCP_PERMIT_POLICY, McpPermitDeniedError, formatMcpPermitDenial } from './mcp-permit-denial.js';
 import {
@@ -27,9 +31,14 @@ import {
   PROVENANCE_UNATTENDED_REASON,
   TurnProvenance,
   classifyHighRiskAction,
+  classifyToolOutput,
+  defaultHighRiskConfirmLevel,
   formatProvenanceReason,
-  isExternalContentSource,
+  highRiskConfirmLevel,
   resolveInjectionGuard,
+  runWithTurnProvenance,
+  stricterConfirmLevel,
+  type InjectionGuardConfig,
   type InjectionGuardSettings,
 } from '../security/provenance.js';
 import type { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
@@ -43,7 +52,7 @@ import {
   type ToolHardGateControlSource,
   type ToolHardGateLocation,
 } from '../security/tool-hard-gate.js';
-import type { ToolApprovalOrigin, ToolApprovalQueue } from '../security/tool-approval-queue.js';
+import { ToolApprovalQueueClosedError, type ToolApprovalOrigin, type ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import type { OpsCooldownView } from '../security/ops-cooldown.js';
 import { ON_BEHALF_OF_ARG, resolveOnBehalfOf } from '../turn/merged-principal.js';
 import { logToolErrorResult, toolErrorResultMessage } from './tool-error-result.js';
@@ -66,8 +75,8 @@ export type TurnToolOutcome =
   }>;
 
 export interface TurnToolRuntimeOptions {
-  /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
-  readonly injectionGuard?: Partial<InjectionGuardSettings>;
+  /** `ai.agent.injectionGuard`; unset keys use the ADR 0067 defaults. */
+  readonly injectionGuard?: InjectionGuardConfig;
   /** Shared with the engine so sources outside tool calls (background events) also count. */
   readonly provenance?: TurnProvenance;
   /** Masks leaks in the text arguments of outbound tools and learns other-session memory reads. */
@@ -105,6 +114,9 @@ export class TurnToolRuntime {
     this.#tools = new Map(tools.map((tool) => [tool.name, tool]));
     this.#guard = resolveInjectionGuard(options.injectionGuard);
     this.provenance = options.provenance ?? new TurnProvenance();
+    // ADR 0067 D2.1: a due run (or preview) of a task created after recorded content starts tainted.
+    const scheduled = turn.execution.kind === 'schedule' ? turn.execution.provenance : undefined;
+    if (scheduled) this.provenance.record({ kind: 'scheduled_prompt', sources: [...scheduled.sources] });
     this.#messageAliases = options.messageAliases;
     this.#decisionAudit = options.decisionAudit;
     this.#leakInspector = this.#guard.outboundCheck === 'redact' ? options.leakInspector : undefined;
@@ -209,9 +221,9 @@ export class TurnToolRuntime {
     if (hardGate.status === 'denied') {
       return this.#deny(name, toolUseId, TOOL_HARD_GATE_POLICY, hardGate.reason, causedBy);
     }
+    // ADR 0067 D2: each category asks at its own level; only `any_content` counts trusted first-party output.
     const provenanceGate = highRisk !== undefined
-      && this.#guard.confirmHighRisk === 'external_content'
-      && this.provenance.tainted;
+      && this.provenance.requiresConfirmation(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk));
     const denial: ApprovalDenialContext = { toolName: name, ...(highRisk ? { action: highRisk } : {}) };
     // A fresh human hard-gate approval, or an authority's provenance approval, covers the ordinary prompt.
     let authorizationRequired = decision.status === 'approval_required';
@@ -245,7 +257,7 @@ export class TurnToolRuntime {
         ...(!authorizationRequired || (decision.status === 'approval_required' && decision.adminMayApprove)
           ? { adminMayApprove: true }
           : { requiresOwner: true }),
-        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput,
+        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain, this.provenance.tainted), effectiveInput,
           humanOnly, tool.description),
         signal: this.turn.signal,
       });
@@ -263,7 +275,10 @@ export class TurnToolRuntime {
       // #1250 b33 review: the automatic reviewer is a model and the very target of prompt injection. In an
       // unattended turn it never approves a high-risk action after external content, even when
       // `injectionGuard.confirmHighRisk: off` skipped the intent confirmation above (fail closed, as before b33).
-      if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.tainted) {
+      // ADR 0067 D2: a category set below its default still uses the default level here.
+      if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.requiresConfirmation(
+        stricterConfirmLevel(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk),
+          defaultHighRiskConfirmLevel(name, highRisk)))) {
         this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' });
         return this.#deny(name, toolUseId, PROVENANCE_POLICY,
           `${PROVENANCE_UNATTENDED_REASON} ${formatApprovalBlocked('unattended', denial)}`, causedBy);
@@ -328,11 +343,13 @@ export class TurnToolRuntime {
       const effects = this.turn.ports.operationEvidence?.started({
         turnId: this.turn.identity.turnId, toolUseId, toolName: tool.name, readOnly: tool.readOnly === true,
       });
-      const output = await tool.execute(effectiveInput, { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) });
-      this.#observeOutput(tool, effectiveInput, output);
-      const durationMs = Date.now() - startedAt;
+      // ADR 0067 D2.1: `schedule_add` / `schedule_preview` read this turn's provenance while they run.
+      const invocation = { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) };
+      const output = await runWithTurnProvenance(this.provenance, async () => tool.execute(effectiveInput, invocation));
       // #1250: a tool that returned `{ error }` (or an MCP `isError` result) failed, even though it did not throw.
       const errorResult = toolErrorResultMessage(output);
+      this.#observeOutput(tool, effectiveInput, output, errorResult !== undefined);
+      const durationMs = Date.now() - startedAt;
       if (errorResult !== undefined) {
         const redacted = logToolErrorResult(name, errorResult);
         await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: redacted, durationMs }, causedBy);
@@ -353,7 +370,13 @@ export class TurnToolRuntime {
       if (error instanceof NetworkAccessDeniedError || error instanceof McpPermitDeniedError) {
         return this.#deny(name, toolUseId, error.policy, error.message, causedBy);
       }
-      const message = error instanceof Error ? error.message : String(error);
+      // Any code can construct a DOMException named AbortError / TimeoutError with arbitrary text, so the
+      // model sees a fixed message for those instead of a text that is exempt from provenance (#1250 F8).
+      const message = isAbortOrTimeoutDomException(error)
+        ? (error.name === 'TimeoutError' ? 'Tool call timed out.' : 'Tool call was aborted.')
+        : error instanceof Error ? error.message : String(error);
+      // #1250 F8: the error text goes to the model as this call's result, so it is a source like any output.
+      this.#observeFailure(tool, error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
       return Object.freeze({ status: 'failed', error: message, retryable: false, sideEffect: tool.readOnly !== true });
     }
@@ -420,13 +443,28 @@ export class TurnToolRuntime {
   }
 
   /** Records where the result came from, and which parts are another session's memory. */
-  #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown): void {
-    if (isExternalContentSource(tool, this.#guard)) {
-      this.provenance.record({ kind: 'tool_result', toolName: tool.name });
+  #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown, reportedError = false): void {
+    const source = classifyToolOutput(tool, this.#guard);
+    if (source !== 'none') {
+      // #1250 F8: a reported failure (`{ error }`, MCP `isError`) may quote upstream text, as a thrown error does.
+      const trusted = source === 'trusted' && !reportedError;
+      this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(trusted ? { trusted: true } : {}) });
     }
     if (this.#leakInspector && readsOtherSessionMemory(input, this.turn.session.key)) {
       this.#leakInspector.protectOtherSessionMemory(collectText(output));
     }
+  }
+
+  /**
+   * #1250 F8 (ADR 0067 D1): a thrown error's text reaches the model like a result, and often quotes the
+   * other side (an HTTP reason phrase, a JSON-RPC error message, an upstream API's text). A tool whose output
+   * counts therefore records the failure as external content, even one whose results count as trusted
+   * first-party output. Errors the harness wrote itself (cancellation, local policy refusals) are not sources.
+   */
+  #observeFailure(tool: ToolCapability, error: unknown): void {
+    if (isHarnessGeneratedError(error)) return;
+    if (classifyToolOutput(tool, this.#guard) === 'none') return;
+    this.provenance.record({ kind: 'tool_result', toolName: tool.name });
   }
 
   async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
@@ -456,6 +494,23 @@ export class TurnToolRuntime {
       throw new TurnJournalCommitError(error);
     }
   }
+}
+
+/** Errors whose text the harness wrote itself: cancellation, timeouts and local refusals (#1250 F8). */
+function isAbortOrTimeoutDomException(error: unknown): error is DOMException {
+  return error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError');
+}
+
+function isHarnessGeneratedError(error: unknown): boolean {
+  if (error instanceof DOMException) return isAbortOrTimeoutDomException(error);
+  return error instanceof TurnCancelledError
+    || error instanceof TurnSupersededError
+    || error instanceof TriggerCancelledError
+    || error instanceof TriggerTimeoutError
+    || error instanceof PromptAccessDeniedError
+    || error instanceof ToolApprovalQueueClosedError
+    || error instanceof ControlBlockedOutboundError
+    || error instanceof UnconfirmedMessageAliasError;
 }
 
 /** IM turns record where the dangerous call came from so the IM approval channel can deliver and guard it. */

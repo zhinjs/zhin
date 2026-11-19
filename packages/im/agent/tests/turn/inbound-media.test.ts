@@ -193,6 +193,27 @@ describe('resolveTurnMediaInjection', () => {
     });
   });
 
+  it('image：端点声明的协议端 origin 可用自身端口，其他非默认端口仍拒（#1250 第 48 批）', async () => {
+    const requested: string[] = [];
+    const transport: NetworkTransport = {
+      request: async () => { throw new Error('text request not expected'); },
+      requestBytes: async (url: URL) => { requested.push(url.href); return { status: 200, statusText: 'OK', headers: {}, body: bytesFor(url.href) }; },
+    };
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'url', value: 'https://satori.example:5140/v1/proxy/a.jpg' } },
+      { kind: 'image', source: { kind: 'url', value: 'https://satori.example:6379/b.jpg' } },
+      { kind: 'image', source: { kind: 'url', value: 'https://cdn.example/c.jpg' } },
+    ], { mediaTransport: transport, inboundMediaOrigins: ['https://satori.example:5140'], providerInput: ['text', 'image'] });
+    expect(requested).toEqual(['https://satori.example:5140/v1/proxy/a.jpg', 'https://cdn.example/c.jpg']);
+    expect(injection.blocks).toHaveLength(2);
+
+    requested.length = 0;
+    await resolveTurnMediaInjection([
+      { kind: 'image', source: { kind: 'url', value: 'https://satori.example:5140/v1/proxy/a.jpg' } },
+    ], { mediaTransport: transport, providerInput: ['text', 'image'] });
+    expect(requested).toEqual([]);
+  });
+
   it('audio / video / file 保留给显式支持相应输入的 provider', async () => {
     const mp3 = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00]).toString('base64');
     const injection = await resolveMedia([

@@ -125,6 +125,8 @@ export interface RuntimeTurnExecutionOptions {
    * carries a local `path` media source, or one may come back from a media reference.
    */
   readonly inboundMediaRoots?: () => readonly string[];
+  /** #1250 第 48 批: the producing Endpoint's declared protocol-server origins; read only when the message carries a media URL. */
+  readonly inboundMediaOrigins?: () => readonly string[];
   readonly resolveReference?: (
     reference: ConversationReference,
     options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
@@ -230,6 +232,9 @@ export function createRuntimeTurnRequest(
   const inboundMediaRoots = input.inboundMediaRoots && mediaEntries.some(entry => entry.source.kind === 'path' || entry.source.kind === 'platform_ref')
     ? Object.freeze([...input.inboundMediaRoots()])
     : undefined;
+  const inboundMediaOrigins = input.inboundMediaOrigins && mediaEntries.some(entry => entry.source.kind === 'url' || entry.source.kind === 'platform_ref')
+    ? Object.freeze([...input.inboundMediaOrigins()])
+    : undefined;
   if (turnReferences.length > 0 && !input.resolveReference) {
     throw new TypeError('Runtime IM references require a generation-bound resolver');
   }
@@ -283,6 +288,7 @@ export function createRuntimeTurnRequest(
       ...(message.commandMenu !== undefined ? { commandMenu: message.commandMenu } : {}),
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
       ...(inboundMediaRoots?.length ? { inboundMediaRoots } : {}),
+      ...(inboundMediaOrigins?.length ? { inboundMediaOrigins } : {}),
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
       ...(input.contextState ? { contextState: input.contextState } : {}),

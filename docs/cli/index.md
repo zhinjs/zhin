@@ -411,7 +411,25 @@ zhin update [包名 | 包名@精确版本 ...] [--dry-run]
 
 不带包名时更新全部依赖（`pnpm update`；pnpm 工作区里是 `pnpm update -r`，工作区成员一起更新）。网关在运行时经网关执行同一事务（停实例 → 更新 → 启实例，失败回滚），否则直接执行。
 
-`--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides` 里按包名写的项按 override 的版本显示；`link:` 等无法预览的 override 和带条件的 override（`a>b`、`name@<2`）在输出里单独说明。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
+`--dry-run` 只列出会升级的包：按根项目和每个工作区成员分组，每组里 Zhin 包（`zhin.js`、`@zhin.js/*`）排在最前面，`@types/node` 等放在「其他依赖」；写出「当前 → 目标」版本和 `package.json` 里的范围，最新版本超出范围时一并说明（不会升级）。目标版本按范围从 registry 查询；不写任何文件，也不停止或重启实例。pnpm 的 `minimumReleaseAge` 可能让刚发布不满一天的版本暂缓。
+
+#### 标准升级路径 {#update-path}
+
+```bash
+zhin update --dry-run   # 1. 看会升级什么、overrides 会怎么改
+zhin update             # 2. 执行（网关在运行时：停实例 → 更新 → 启实例，失败回滚）
+zhin doctor             # 3. 确认「Zhin 包单实例」等检查通过
+```
+
+**pnpm overrides 的处理**：项目常在 `package.json#pnpm.overrides`（或 `pnpm-workspace.yaml` 的 `overrides`）里锁住 Zhin 包的版本，保证每个 Zhin 包只装一份。更新涉及 Zhin 包时（不带包名，或指定了 `zhin.js` / `@zhin.js/*`），`zhin update` 会把这些锁同步到升级后的版本：
+
+- 包管理器运行前先去掉能同步的 Zhin 条目，让更新真正移动这些包；运行后按安装结果重新写回——取已安装 `zhin.js` 精确依赖的版本（同一次发布对齐的一组），没有时取项目里装着的那份；保留原来的写法（`1.2.3`、`^1.2.3`、`~1.2.3`）和条目顺序，再执行一次 `pnpm install` 让 lockfile 跟上。
+- 支持按包名写的键（`"@zhin.js/core": "1.12.0"`）和单级 `>` 选择器（`"zhin.js>@zhin.js/core": "1.12.0"`）。
+- 非 Zhin 包的条目、`link:` / `file:` / `workspace:` / `$引用` 等本地接线不动。
+- 无法自动同步的写法（键上带版本选择器如 `@zhin.js/core@<2`、父包带版本选择器、多级 `>`、复杂范围如 `>=1 <2`、嵌套对象）保持原样，并打印「请手动修改 package.json:行号 …」，指出要改的文件、行和键。
+- overrides 的改动和其他文件一样在事务快照里：任一步失败都会连同 `package.json`、lockfile 一起回滚。`--dry-run` 也会单独列出「pnpm overrides」一组，显示每条锁会从哪个版本改到哪个版本、哪些需要手改。
+
+只更新其他依赖（如 `zhin update @types/node`）时不动 Zhin 包的锁。
 
 ### search / info：发现插件
 
@@ -570,6 +588,9 @@ zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "早上好，汇报今日日程" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "检查一下 RSS"
 zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
+zhin schedule add "0 0 8 * * *" --prompt "整理今日早报" --agent news
+zhin schedule set-agent <id> <agent>     # 修改任务由哪个 Agent 执行
+zhin schedule set-agent <id> --clear     # 恢复默认 Agent（zhin）
 zhin schedule remove <id>
 zhin schedule pause <id>
 zhin schedule resume <id>
@@ -582,9 +603,12 @@ zhin schedule resume <id>
 | `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
 | `--notify-channel` | `im` / `silent`（默认；给了 `--target` 时为 `im`）/ `log` |
 | `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因。显式给出的目标还要求调用者在该账号上有 `endpoint.operate`（与 `zhin send` / `/message/send` 相同；Console 的 `cron:add` 同样），否则返回 403 `schedule_target_forbidden` |
+| `--agent` | 到点由哪个 Agent 执行，填 `ai.agents` 中的名称（如 `ai.agents.news`）；省略时用默认 Agent `zhin`，与以前相同。名称不存在时实例拒绝添加（400 `schedule_agent_not_found`），并列出可用的 Agent |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
-`zhin schedule list` 显示每个任务实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。多行内容逐行缩进，超过 2 行时截断；`--json` 输出完整的任务数据。
+已有任务改用别的 Agent 用 `zhin schedule set-agent <id> <agent>`，`--clear` 恢复默认 Agent；不必停服改数据库。名称同样按 `ai.agents` 校验，心跳任务始终由默认 Agent 执行、不能修改；Profile 例程会被拒绝（每次启动按 Profile 重新声明，请改 `assistant.profile.yml` 中该 routine 的 `agent` 字段）；任务有投递目标时需要该账号上的 `endpoint.operate`，否则 403。`zhin schedule list` 对 Agent 已从 `ai.agents` 删除的任务标出「⚠ Agent 不存在」。修改在下次运行时生效。两条命令都需要 `ops.schedule.write`（经 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent`；Console 对应 `cron:add` 的 `agent` 字段与 `cron:set-agent`）。
+
+`zhin schedule list` 显示每个任务用的 Agent（未指定时为「zhin（默认）」）、实际解析出的投递目标（账号名 + 会话）和已启用任务的下次运行时间；目标账号已不存在或缺少目标时标为「⚠ 无效」，算不出下次运行时间的已启用任务标为「⚠ 无（不会触发）」，它也会出现在 Console「需要你处理」里。多行内容逐行缩进，超过 2 行时截断；`--json` 输出完整的任务数据。
 
 ### agent：Agent 诊断
 
