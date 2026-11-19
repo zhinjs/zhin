@@ -1,3 +1,4 @@
+import { getLogger } from '@zhin.js/logger';
 import { NETWORK_DISABLED_REASON } from './network-authority.js';
 import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import {
@@ -19,6 +20,11 @@ export type {
   NodeNetworkTransportOptions,
   PinnedAddressConnect,
 } from '@zhin.js/kernel';
+
+const logger = getLogger('TurnNetworkClient');
+
+/** Fixed reason for a refused redirect hop: the target's host stays in the debug log only. */
+export const REDIRECT_DENIED_REASON = '网络请求被重定向到不允许访问的地址，已拦截';
 
 export interface NetworkRequestOptions {
   readonly headers?: Readonly<Record<string, string>>;
@@ -67,8 +73,17 @@ export class TurnNetworkClient {
 
     for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
       signal.throwIfAborted();
-      const parsed = authorizeNetworkUrl(current, this.policy);
-      const response = await request({ url: parsed, headers, signal, maxBytes });
+      // A redirect target is chosen by the remote server, and a local policy refusal is not recorded
+      // as provenance: its hostname or resolved address must not reach the model (#1250 第 56 批).
+      const hop = async () => {
+        const parsed = authorizeNetworkUrl(current, this.policy);
+        return { parsed, response: await request({ url: parsed, headers, signal, maxBytes }) };
+      };
+      const { parsed, response } = redirect === 0 ? await hop() : await hop().catch((error: unknown) => {
+        if (!(error instanceof NetworkAccessDeniedError)) throw error;
+        logger.debug(`redirect hop ${redirect} denied: ${error.message}`);
+        throw new NetworkAccessDeniedError(REDIRECT_DENIED_REASON);
+      });
       if (response.status < 300 || response.status >= 400) {
         return Object.freeze({ url: parsed.href, ...response });
       }

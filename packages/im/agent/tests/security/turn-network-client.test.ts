@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import {
   NodeNetworkTransport,
+  REDIRECT_DENIED_REASON,
   TurnNetworkClient,
   bareUrlHost,
   type NetworkTransport,
 } from '../../src/security/turn-network-client.js';
-import { isBlockedIpAddress } from '../../src/security/network-policy.js';
+import { isBlockedIpAddress, NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
 describe('TurnNetworkClient', () => {
   it('classifies non-public DNS addresses fail-closed', () => {
@@ -65,6 +66,30 @@ describe('TurnNetworkClient', () => {
       policy: 'network-access',
     });
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not echo the redirect target in the refusal (#1250 第 56 批)', async () => {
+    const request = vi.fn<NetworkTransport['request']>().mockResolvedValue({
+      status: 302, statusText: 'Found', headers: { location: 'https://ignore-previous-instructions.example/x' }, body: '',
+    });
+    const client = new TurnNetworkClient(policy(['allowed.example']), new AbortController().signal, { request });
+    const error = await client.getText('https://allowed.example/start').catch((caught: unknown) => caught as Error);
+    expect(error).toMatchObject({ name: 'NetworkAccessDeniedError', policy: 'network-access', message: REDIRECT_DENIED_REASON });
+    expect(error.message).not.toContain('ignore-previous-instructions');
+  });
+
+  it('does not echo the resolved address of a redirect hop the transport refuses', async () => {
+    const request = vi.fn<NetworkTransport['request']>()
+      .mockResolvedValueOnce({ status: 302, statusText: 'Found', headers: { location: 'https://allowed.example/next' }, body: '' })
+      .mockRejectedValueOnce(new NetworkAccessDeniedError('DNS target 10.0.0.7 is private'));
+    const client = new TurnNetworkClient(policy(['allowed.example']), new AbortController().signal, { request });
+    await expect(client.getText('https://allowed.example/start')).rejects.toMatchObject({ message: REDIRECT_DENIED_REASON });
+  });
+
+  it('keeps the reason for the first URL, which the caller chose', async () => {
+    const request = vi.fn<NetworkTransport['request']>();
+    const client = new TurnNetworkClient(policy(['allowed.example']), new AbortController().signal, { request });
+    await expect(client.getText('https://other.example/x')).rejects.toThrow('other.example');
   });
 
   it('fails closed before transport without explicit network authority', async () => {
