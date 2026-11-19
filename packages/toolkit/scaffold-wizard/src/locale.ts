@@ -1,4 +1,4 @@
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import { isLocale, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 /** Explicit language selection; never infer a location or timezone from language. */

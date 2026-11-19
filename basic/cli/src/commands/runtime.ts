@@ -13,7 +13,7 @@ import {
   parseStartOptions,
   readApplicationPluginDeclaration,
 } from '@zhin.js/runtime';
-import { importProjectInstance } from '../utils/project-instance.js';
+import { runProjectInstance } from './runtime-instance.js';
 import { output } from '../utils/output.js';
 import {
   describeBuildPlan,
@@ -95,17 +95,9 @@ runtimeCommand.command('start')
       process.exitCode = await runGateway({ root, options: parsed, args: ['runtime', 'start', ...instanceArgs] });
       return;
     }
-    // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0). Under the
-    // gateway it serves HTTP over the control channel; `--standalone` (dev / test only) runs it
-    // here with its own Node HTTP server.
-    const { runStartCommand } = await importProjectInstance(root);
-    await runStartCommand({
-      root,
-      args: command.args,
-      standaloneHttp: parsed.standalone,
-      writeOutput: (value) => process.stdout.write(value),
-      writeError: (value) => process.stderr.write(value),
-    });
+    // The supervised instance child normally takes the fast path in `cli.ts`; this covers
+    // `--standalone` and any other way of reaching the command.
+    await runProjectInstance(command.args);
   });
 
 runtimeCommand.command('migrate [phase]')
