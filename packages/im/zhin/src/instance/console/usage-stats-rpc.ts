@@ -8,8 +8,9 @@ import {
  * `plugin.root.usage-stats`（`control:read`）：只读的 token 用量统计，给 Console 图表用。
  * 数据来自 `data/agent-traces/*.jsonl`（与 `zhin usage report` 共用同一套聚合）。
  * 只返回计数、会话键与 provider / model / Profile / Agent / 账号的显示名，不返回任何消息文本。
- * `compare: 'previous'` 另算紧挨在前、等长的上一周期的 totals（`previous`）；两段合计跨度
- * 超过 31 天时上一周期从 `until - 31 天` 起截断，并标 `previous.truncated: true`。
+ * `compare: 'previous'` 另算紧挨在前、等长（按毫秒长度平移，不按日历）的上一周期的 totals（`previous`）；
+ * 当前区间与上一周期各自最多 31 天（总扫描最多 62 天），上一周期只算 totals。上一周期被截短时
+ * （每段上限或时间戳 0 处）标 `previous.truncated: true`。`session` 过滤同样作用于上一周期。
  */
 
 export const USAGE_STATS_PERMISSION = 'control:read';
@@ -22,7 +23,11 @@ const MAX_SESSION_PATTERN = 256;
 /** Trace directory of the current generation; `undefined` means no Agent is bound. */
 export type UsageTraceDirSource = () => string | undefined;
 
-/** IM accounts of the current generation (only ids, names and adapters are read); `undefined` when unavailable. */
+/**
+ * IM accounts of the current generation (only ids, names and adapters are read); `undefined` when unavailable.
+ * `adapter` must be the name traces record as `origin.platform` (the endpoint's client adapter,
+ * `EndpointRuntimeSummary.endpoint.adapter`), not the adapter package name.
+ */
 export type UsageEndpointSource = () => ReadonlyArray<Readonly<{ id: string; name: string; adapter: string }>> | undefined;
 
 function invalid(message: string): never {
@@ -47,11 +52,15 @@ export interface ResolvedUsageStatsQuery {
   readonly previous?: UsageStatsPreviousWindow;
 }
 
-/** The previous window of the same length, cut so that previous + current stay within {@link USAGE_STATS_MAX_RANGE_MS}. */
-export function previousUsageWindow(since: number, until: number, maxSpanMs = USAGE_STATS_MAX_RANGE_MS): UsageStatsPreviousWindow {
+/**
+ * The previous window of the same length (milliseconds, not calendar-aligned), right before `since`;
+ * on its own limited to `maxWindowMs` ({@link USAGE_STATS_MAX_RANGE_MS}, like the current window), so
+ * at most 2 × 31 days are scanned. `truncated` when it is shorter than the current window.
+ */
+export function previousUsageWindow(since: number, until: number, maxWindowMs = USAGE_STATS_MAX_RANGE_MS): UsageStatsPreviousWindow {
   const length = until - since;
   const wanted = since - length;
-  const earliest = until - maxSpanMs;
+  const earliest = since - maxWindowMs;
   const start = Math.max(0, wanted, earliest);
   return { since: start, until: since, truncated: start > wanted };
 }

@@ -274,9 +274,13 @@ export class AssistantStatus {
       const endpoints = this.#readUsageEndpoints();
       if (!endpoints) return undefined;
       return (platform: string, endpoint: string) => {
-        const found = endpoints.find(row => row.adapter === platform && (row.id === endpoint || row.name === endpoint))
-          ?? endpoints.find(row => row.id === endpoint || row.name === endpoint);
-        return found?.name;
+        // Same platform first (an id match beats a name match); across platforms only when the
+        // id / name is unique among all accounts, so same-named accounts on two platforms never mix.
+        const samePlatform = endpoints.filter(row => row.adapter === platform);
+        const found = samePlatform.find(row => row.id === endpoint) ?? samePlatform.find(row => row.name === endpoint);
+        if (found) return found.name;
+        const anywhere = endpoints.filter(row => row.id === endpoint || row.name === endpoint);
+        return anywhere.length === 1 ? anywhere[0]!.name : undefined;
       };
     },
   });

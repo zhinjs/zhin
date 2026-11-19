@@ -368,12 +368,12 @@ interface SkillsStatus {
 - 返回：`range`（含主机时区 `timeZone`）、`totals`、`byModel`（按输入 token 降序）、`bySession`（前 50）、`series`（范围内每个时间桶一项，缺的补 0，按时间升序）、`segments`（历史 / 固定 / 用户的上下文估算之和）、`filesRead`、`malformedLines`。`totals`、`byModel`、`bySession`、`series` 里都带 `cacheReadTokens`、`cacheWriteTokens` 和 `cacheShare`（0 到 1）；`totals.cacheShareByCall` 是单次调用缓存命中率的 p50 / p90。
 - 维度字段（`schemaVersion: 2` 起，旧数据缺字段时自动降级）：
   - `schemaVersion`：返回结构的版本号（整数，当前为 2）。没有这个字段的旧实例按 1 处理，Console 据此隐藏新页签。
-  - `byModel[]` 另带 `driverLabel`（服务所用驱动的显示名，如「OpenAI 兼容」）、`profileId` / `profileName`（这一行的调用都落在同一个模型 Profile 上时才给；`profileName` 是 Profile 的名称，没起名就不给）。两个服务同名时可以用它们区分。
-  - `byAgent[]`：按 Agent 汇总，字段 `agent`、`label`、`kind`（`main` 主助手 / `agent` 子 Agent / `unrecorded`）、`turns`、`calls`、`inputTokens`、`outputTokens`、`cacheReadTokens`、`cacheWriteTokens`、`cacheShare`。每个（子）回合的调用记在它自己的 `model_selection` 上；没有记录模型选择的旧 trace 归入 `agent: '@unrecorded'`（「未记录」），主助手是 `agent: '@main'`。
-  - `byPurpose[]`：按用途汇总，`purpose`（`chat`、`agent`、`summary`、`ambient`、`perception` 等；`agent:<名称>` 记为 `agent`）和可读的 `label`，其余字段同 `byAgent`。没有记录时是 `@unrecorded`。
+  - `byModel[]` 另带 `driverLabel`（服务所用驱动的显示名，如「OpenAI 兼容」）、`profileId` / `profileName`（这一行的每次调用都能归到同一个模型 Profile 上时才给，有一次调用归不上就不给；发生过模型切换的回合，调用优先归到切换后的 Profile；`profileName` 是 Profile 的名称，没起名就不给）。两个服务同名时可以用它们区分。
+  - `byAgent[]`：按 Agent 汇总，字段 `agent`、`label`、`kind`（`main` 主助手 / `agent` 子 Agent / `unrecorded`）、`turns`、`calls`、`inputTokens`、`outputTokens`、`cacheReadTokens`、`cacheWriteTokens`、`cacheShare`。每个（子）回合的调用记在它自己的 `model_selection` 上；没有记录模型选择的旧 trace 归入 `agent: '@unrecorded'`（「未记录」），主助手是 `agent: '@main'`。各行 token 之和等于 `totals`；`turns` 按（子）回合计——一个带子 Agent 的回合在主助手和子 Agent 各计一次，所以各行 `turns` 之和可能大于 `totals.turns`。
+  - `byPurpose[]`：按用途汇总，`purpose`（`chat`、`agent`、`summary`、`ambient`、`perception` 等；`agent:<名称>` 记为 `agent`）和可读的 `label`，其余字段同 `byAgent`。按每个（子）回合节点自己的 `model_selection.purpose` 归类（不看根回合），没有记录时是 `@unrecorded`。token 与 `turns` 的口径同 `byAgent`。
   - `bySession[]` 另带结构化的会话名字段：`scopeKind`（`group` / `private` / `channel` / `schedule` / `internal` / `http` / `a2a` / `mcp`）、`sceneLabel`（群名、用户名、定时任务 id 等，不含「群」「私聊」这类类型词）和 `shortKey`（与 `zhin usage report` 相同规则的短会话键）。`displayName` 保持原样（中文拼好的名字）；Console 应按界面语言用 `scopeKind` + `sceneLabel` 自己拼名，重名时追加 `shortKey`。
-  - `bySession[]` 另带 `endpoint`（trace 里记录的账号）和 `accountLabel`（该账号现在的名称，账号已删除时不给）；顶层 `sessionsTotal` 是范围内的会话总数，`othersTotals` 是前 50 之外的会话合计（`sessions`、`turns` 和各项 token）。
-  - 参数 `compare: 'previous'`：另算紧挨在前、等长的上一周期，返回 `previous: { since, until, truncated, totals }`（只有 `totals`，不含明细）。两段合计不超过 31 天：超过时上一周期从 `until` 往前 31 天起算，并标 `truncated: true`，Console 应注明「上一周期不完整」。`compare` 写别的值返回 `invalid_input`。
+  - `bySession[]` 另带 `endpoint`（trace 里记录的账号）和 `accountLabel`（该账号现在的名称；按 trace 记录的平台（客户端适配器名）与账号 id / 名称匹配，账号已删除、名称就是原始账号 id 时不给）；哈希会话键（`personal-session:v1:…`）解析不出平台时，`platform` 取自 trace 记录的来源；顶层 `sessionsTotal` 是范围内的会话总数，`othersTotals` 是前 50 之外的会话合计（`sessions`、`turns` 和各项 token）。
+  - 参数 `compare: 'previous'`：另算紧挨在前、等长的上一周期，返回 `previous: { since, until, truncated, totals }`（只有 `totals`，不含明细）。上一周期按毫秒长度平移（`since - (until - since)` 到 `since`），不按日历对齐；`session` 过滤同样作用于上一周期。当前区间与上一周期各自最多 31 天（一次请求最多扫描 62 天），所以「近 30 天」也能拿到完整的上一周期；只有上一周期被截短时（如碰到时间戳 0）才标 `truncated: true`，Console 应注明「上一周期不完整」。`compare` 写别的值返回 `invalid_input`。
 - 权限仍是 `control:read`，新增字段只是已有数据的显示名与分组，不含提示词或消息内容。
 - 只返回计数、会话键、provider / model / Profile / Agent / 账号的名称，不返回消息文本。结果在内存里缓存 60 秒（最多 32 条，`compare` 不同算不同的条目），换代时清空。
 

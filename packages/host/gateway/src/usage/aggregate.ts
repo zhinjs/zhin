@@ -112,7 +112,8 @@ export interface UsageStatsQuery {
   readonly timeZone?: string;
   /**
    * Also sum the totals of this earlier window (`compare: 'previous'`, #1250 第 58 批): the caller
-   * computes it (same length, right before `since`) and may cut it short to keep the total span bounded.
+   * computes it (same length in milliseconds, right before `since`; not calendar-aligned) and may cut
+   * it short (e.g. at the epoch). Only its totals are computed; the `session` filter applies to it too.
    */
   readonly previous?: UsageStatsPreviousWindow;
 }
@@ -120,7 +121,7 @@ export interface UsageStatsQuery {
 export interface UsageStatsPreviousWindow {
   readonly since: number;
   readonly until: number;
-  /** The window is shorter than the current one (the total span would exceed the limit). */
+  /** The window is shorter than the current one (cut short by the caller's per-window limit). */
   readonly truncated?: boolean;
 }
 
@@ -132,12 +133,15 @@ export interface UsageStatsPreviousWindow {
 export type UsageProviderResolver = (provider: string) => UsageResolvedService | undefined;
 
 /** What a {@link UsageProviderResolver} returns: the service's merge key and label, plus its Driver's display name when known. */
-export type UsageResolvedService = Readonly<{ key: string; label: string; driverLabel?: string }>;
+export type UsageResolvedService = Readonly<{ key: string; label?: string; driverLabel?: string }>;
 
 /** A model Profile id (`profiles:<id>`) → its readable name; `undefined` when the profile is unknown. */
 export type UsageProfileResolver = (profileId: string) => Readonly<{ label?: string }> | undefined;
 
-/** Recorded IM platform + endpoint (account) of a conversation → the account's readable name. */
+/**
+ * Recorded IM platform (`origin.platform`, the conversation's client adapter) + endpoint (account)
+ * of a conversation → the account's readable name.
+ */
 export type UsageAccountResolver = (platform: string, endpoint: string) => string | undefined;
 
 export interface UsageStatsOptions {
@@ -203,7 +207,7 @@ export interface UsageStatsTokens {
 
 export interface UsageStats {
   /** Shape version ({@link USAGE_STATS_SCHEMA_VERSION}); absent before 2. */
-  readonly schemaVersion: number;
+  readonly schemaVersion?: number;
   readonly range: { readonly since: number; readonly until: number; readonly bucket: UsageBucket; readonly timeZone: string };
   readonly totals: UsageStatsTokens & {
     readonly turns: number;
@@ -227,7 +231,7 @@ export interface UsageStats {
     readonly providerLabel?: string;
     /** Display name of the service's Driver ("Anthropic"), to tell services with the same label apart. */
     readonly driverLabel?: string;
-    /** The model Profile every attributed call of this row ran on, when there is exactly one. */
+    /** The model Profile every call of this row ran on: set only when all calls are attributed to the same one. */
     readonly profileId?: string;
     /** That Profile's readable name, when it has one. */
     readonly profileName?: string;
@@ -247,7 +251,7 @@ export interface UsageStats {
     readonly scopeKind?: string;
     readonly sceneLabel?: string;
     /** Short session key, as `zhin usage report` shows it ({@link shortSessionKey}), to tell same-named sessions apart. */
-    readonly shortKey: string;
+    readonly shortKey?: string;
     /** Recorded IM endpoint (account) of the conversation. */
     readonly endpoint?: string;
     /** The account's readable name, when the endpoint is still known. */
@@ -255,13 +259,16 @@ export interface UsageStats {
     readonly turns: number;
   }>;
   /** Sessions in range; `bySession` keeps the top {@link USAGE_STATS_SESSION_LIMIT} by input tokens. */
-  readonly sessionsTotal: number;
+  readonly sessionsTotal?: number;
   /** Sums of the sessions left out of `bySession` (all zero when none were). */
-  readonly othersTotals: UsageStatsTokens & { readonly sessions: number; readonly turns: number };
-  /** Model calls by Agent (`model_selection.agent`, from each (sub-)turn's own selection). */
-  readonly byAgent: readonly UsageAgentRow[];
-  /** Model calls by purpose (`model_selection.purpose`). */
-  readonly byPurpose: readonly UsagePurposeRow[];
+  readonly othersTotals?: UsageStatsTokens & { readonly sessions: number; readonly turns: number };
+  /**
+   * Model calls by Agent (`model_selection.agent`, from each (sub-)turn's own selection). Token columns add
+   * up to `totals`; `turns` counts (sub-)turns, so the rows' turns can add up to more than `totals.turns`.
+   */
+  readonly byAgent?: readonly UsageAgentRow[];
+  /** Model calls by the (sub-)turn's `model_selection.purpose`; same sums as `byAgent`. */
+  readonly byPurpose?: readonly UsagePurposeRow[];
   /** Totals of the previous window, with `compare: 'previous'`. */
   readonly previous?: UsageStatsPreviousWindow & { readonly truncated: boolean; readonly totals: UsageStats['totals'] };
   /** `byModel` keys use `${provider}/${model}` of the merged rows; `modelLabels` maps them to display names. */
@@ -534,22 +541,24 @@ function attributionOf(node: any): { agent: string; kind: UsageAgentRow['kind'];
   };
 }
 
-/** Profiles this (sub-)turn recorded it ran on: its selection, then fallbacks switched to or from. */
+/**
+ * Profiles this (sub-)turn recorded it ran on, in match order: the fallbacks' `to_*` (latest switch
+ * first, so calls after a switch go to the new Profile even on the same account and model), then
+ * the selection, then the fallbacks' `from_*`.
+ */
 function profileCandidatesOf(node: any): ReadonlyArray<{ profile: string; account: string; model: string }> {
   const out: { profile: string; account: string; model: string }[] = [];
   const push = (profile: unknown, account: unknown, model: unknown) => {
     const p = text(profile); const a = text(account); const m = text(model);
     if (p && a && m) out.push({ profile: p, account: a, model: m });
   };
+  const fallbacks: any[] = Array.isArray(node?.model_fallbacks)
+    ? node.model_fallbacks.filter((fallback: unknown) => fallback && typeof fallback === 'object')
+    : [];
+  for (const fallback of [...fallbacks].reverse()) push(fallback.to_profile_id, fallback.to_account_id, fallback.to_model);
   const selection = node?.model_selection;
   if (selection && typeof selection === 'object') push(selection.profile_id, selection.account_id, selection.model);
-  if (Array.isArray(node?.model_fallbacks)) {
-    for (const fallback of node.model_fallbacks) {
-      if (!fallback || typeof fallback !== 'object') continue;
-      push(fallback.to_profile_id, fallback.to_account_id, fallback.to_model);
-      push(fallback.from_profile_id, fallback.from_account_id, fallback.from_model);
-    }
-  }
+  for (const fallback of fallbacks) push(fallback.from_profile_id, fallback.from_account_id, fallback.from_model);
   return out;
 }
 
@@ -557,8 +566,9 @@ export async function buildUsageStats(dir: string, query: UsageStatsQuery, optio
   const current = await aggregateUsage(dir, query, options);
   if (!query.previous) return current;
   const window = query.previous;
+  // Only the totals of the previous window: no series buckets, rows or prompt-cache probe.
   const prior = window.since < window.until
-    ? await aggregateUsage(dir, { since: window.since, until: window.until, bucket: query.bucket, ...(query.session ? { session: query.session } : {}), ...(query.timeZone ? { timeZone: query.timeZone } : {}) }, options)
+    ? await aggregateUsage(dir, { since: window.since, until: window.until, bucket: query.bucket, ...(query.session ? { session: query.session } : {}), ...(query.timeZone ? { timeZone: query.timeZone } : {}) }, options, { totalsOnly: true })
     : undefined;
   const totals = prior?.totals ?? emptyTotals();
   return { ...current, previous: { since: window.since, until: window.until, truncated: window.truncated === true, totals } };
@@ -575,8 +585,11 @@ function emptyTotals(): UsageStats['totals'] {
   };
 }
 
-async function aggregateUsage(dir: string, query: UsageStatsQuery, options: UsageStatsOptions): Promise<UsageStats> {
+async function aggregateUsage(
+  dir: string, query: UsageStatsQuery, options: UsageStatsOptions, mode: Readonly<{ totalsOnly?: boolean }> = {},
+): Promise<UsageStats> {
   const { since, until, bucket } = query;
+  const totalsOnly = mode.totalsOnly === true;
   const timeZone = query.timeZone && isUsageTimeZone(query.timeZone) ? query.timeZone : defaultUsageTimeZone();
   const total = tally();
   let turns = 0;
@@ -585,11 +598,11 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
   const breakdown = { turns: 0, other: 0, firstRequestInputTokens: 0 };
   const models = new Map<string, Tally & { provider: string; model: string; label?: string; driverLabel?: string; providerIds: Set<string>; profiles: Set<string>; unprofiled: number }>();
   const resolved = new Map<string, UsageResolvedService | undefined>();
-  const sessions = new Map<string, Tally & { turns: number; displayName?: string; parts?: UsageSessionParts; platform?: string; endpoint?: string }>();
+  const sessions = new Map<string, Tally & { turns: number; labelled?: boolean; displayName?: string; parts?: UsageSessionParts; platform?: string; endpoint?: string }>();
   const agents = new Map<string, Tally & { turns: number; kind: UsageAgentRow['kind'] }>();
   const purposes = new Map<string, Tally & { turns: number }>();
   const buckets = new Map<number, Tally & { byModel: Record<string, number> }>();
-  for (let t = bucketStartOf(since, bucket, timeZone); t < until; t = nextBucket(t, bucket, timeZone)) {
+  for (let t = bucketStartOf(since, bucket, timeZone); !totalsOnly && t < until; t = nextBucket(t, bucket, timeZone)) {
     buckets.set(t, { ...tally(), byModel: {} });
   }
   let claimsWithoutToolCall = 0;
@@ -637,16 +650,27 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
   const cacheProbe = new PromptCacheProbe({ resolveProvider: resolve });
   const scan = await scanTraces(dir, { since, until, session: query.session }, (trace, startedAt) => {
     turns++;
-    cacheProbe.visit(trace);
+    if (!totalsOnly) cacheProbe.visit(trace);
     const session = sessions.get(trace.session_key) ?? { ...tally(), turns: 0 };
     session.turns++;
-    session.displayName ??= sessionDisplayNameOf(trace);
-    if (!session.parts?.scopeKind) session.parts = sessionPartsOf(trace);
-    if (trace.origin?.kind === 'im') {
-      session.platform ??= text(trace.origin.platform);
-      session.endpoint ??= text(trace.origin.endpoint);
+    if (!totalsOnly) {
+      // `displayName` and its parts come from the same trace: the session's first one with a recorded origin.
+      // A later trace without an origin keeps them.
+      if (!session.labelled) {
+        const displayName = sessionDisplayNameOf(trace);
+        const parts = sessionPartsOf(trace);
+        if (displayName || parts.scopeKind || parts.sceneLabel) {
+          session.labelled = true;
+          if (displayName) session.displayName = displayName;
+          session.parts = parts;
+        }
+      }
+      if (trace.origin?.kind === 'im') {
+        session.platform ??= text(trace.origin.platform);
+        session.endpoint ??= text(trace.origin.endpoint);
+      }
+      sessions.set(trace.session_key, session);
     }
-    sessions.set(trace.session_key, session);
 
     // Every model call of the turn: the root's, then each sub-agent's (nested, up to MAX_SUBAGENT_DEPTH). A
     // sub-agent trace's own `model_calls` are not repeated in its parent's, so nothing counts twice;
@@ -684,12 +708,13 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
         const at = num(call?.started_at) ?? num(call?.at) ?? startedAt;
 
         for (const t of [total, session, agentRow, purposeRow]) { t.calls++; t.input += prompt; t.output += output; t.cache += cache; t.cacheWrite += cacheWrite; }
+        if (totalsOnly) continue;
         // One row per (service, model): `services:` and `accounts:` ids of the same service merge.
         const service = resolve(recorded);
         const groupKey = service ? `${service.key}\n${model}` : isOpaqueProviderId(recorded) ? `\n${model}` : `${recorded}\n${model}`;
         const m = models.get(groupKey) ?? {
           ...tally(), provider: service?.key ?? recorded, model,
-          ...(service ? { label: service.label } : {}),
+          ...(service?.label ? { label: service.label } : {}),
           ...(service?.driverLabel ? { driverLabel: service.driverLabel } : {}),
           providerIds: new Set<string>(), profiles: new Set<string>(), unprofiled: 0,
         };
@@ -710,6 +735,7 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
 
     for (const claim of lookupClaimsOf(trace)) {
       claimsWithoutToolCall++;
+      if (totalsOnly) continue;
       const key = groupKeyOf(claim.provider ?? 'unknown', claim.model ?? 'unknown');
       claimsByGroup.set(key, (claimsByGroup.get(key) ?? 0) + 1);
     }
@@ -732,8 +758,9 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
   callShares.sort((a, b) => a - b);
   const byModel = [...models.entries()]
     .map(([group, m]) => {
-      // A row names its Profile only when every call that could be attributed ran on the same one.
-      const profileId = m.profiles.size === 1 ? [...m.profiles][0]! : undefined;
+      // A row names its Profile only when every one of its calls is attributed to the same Profile:
+      // a single call that cannot be attributed (`unprofiled`) leaves the row without one.
+      const profileId = m.profiles.size === 1 && m.unprofiled === 0 ? [...m.profiles][0]! : undefined;
       const profileName = profileId ? profileLabel(profileId) : undefined;
       return {
         provider: m.provider,
@@ -751,7 +778,10 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
     .sort((a, b) => b.inputTokens - a.inputTokens);
   const accountLabel = (platform: string | undefined, endpoint: string | undefined) => {
     if (!options.resolveAccount || !platform || !endpoint) return undefined;
-    try { return text(options.resolveAccount(platform, endpoint)); } catch { return undefined; }
+    let label: string | undefined;
+    try { label = text(options.resolveAccount(platform, endpoint)); } catch { return undefined; }
+    // An account whose name is just its raw endpoint id adds nothing next to `endpoint`.
+    return label && label !== endpoint ? label : undefined;
   };
   const rankedSessions = [...sessions.entries()].sort(([, a], [, b]) => b.input - a.input);
   const others = { ...tally(), sessions: 0, turns: 0 };
@@ -775,9 +805,12 @@ async function aggregateUsage(dir: string, query: UsageStatsQuery, options: Usag
     bySession: rankedSessions
       .slice(0, USAGE_STATS_SESSION_LIMIT)
       .map(([sessionKey, s]) => {
-        const label = accountLabel(s.platform ?? parseSessionKey(sessionKey).platform, s.endpoint);
+        const parsed = parseSessionKey(sessionKey);
+        const label = accountLabel(s.platform ?? parsed.platform, s.endpoint);
         return {
-          sessionKey, ...parseSessionKey(sessionKey),
+          sessionKey, ...parsed,
+          // Hashed keys (`personal-session:v1:…`) carry no address: take the platform from the recorded origin.
+          ...(!parsed.platform && s.platform ? { platform: s.platform } : {}),
           ...(s.displayName ? { displayName: s.displayName } : {}),
           ...(s.parts?.scopeKind ? { scopeKind: s.parts.scopeKind } : {}),
           ...(s.parts?.sceneLabel ? { sceneLabel: s.parts.sceneLabel } : {}),

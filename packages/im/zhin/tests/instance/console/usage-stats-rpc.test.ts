@@ -113,7 +113,9 @@ describe('usage model labels, input basis, time zone and session names (#1250)',
     expect(s.modelLabels).toEqual({ [`${SVC}/ag/gemini-3.8-flash`]: 'AG 中转 · ag/gemini-3.8-flash' });
     expect(s.series.find(b => b.calls)!.byModel).toEqual({ [`${SVC}/ag/gemini-3.8-flash`]: 150 });
     expect(s.bySession[0]).toMatchObject({ displayName: 'qq · 群 测试群' });
-    expect(s.bySession[0]).not.toHaveProperty('platform');
+    // The hashed key carries no address; the platform comes from the recorded IM origin (#1250 第 58 批).
+    expect(s.bySession[0]).toMatchObject({ platform: 'qq' });
+    expect(s.bySession[0]).not.toHaveProperty('scope');
     // Without a resolver opaque ids still merge by model and never show a UUID.
     const bare = await buildUsageStats(dir, range());
     expect(bare.byModel).toHaveLength(1);

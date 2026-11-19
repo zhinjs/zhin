@@ -626,8 +626,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
   const stopRuntimeFailureSync = startRuntimeFailureSync(runtimeFailureSources);
   if (agentHost) assistantStatus.bindProviderDisplay(() => agentHost.providerDisplay());
-  // `usage-stats` account labels: only each account's id, name and adapter are read (#1250 第 58 批).
-  assistantStatus.bindUsageEndpoints(() => im.endpoints.list().map(row => ({ id: row.id, name: row.name, adapter: row.adapter })));
+  // `usage-stats` account labels: only each account's id, name and client adapter are read (#1250 第 58 批).
+  // `endpoint.adapter` is what traces record as `origin.platform` (`row.adapter` is the package name).
+  assistantStatus.bindUsageEndpoints(() => im.endpoints.list().map(row => ({ id: row.id, name: row.name, adapter: row.endpoint.adapter })));
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
     // and starts a fresh instance once this one has exited.

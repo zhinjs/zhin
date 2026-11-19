@@ -67,7 +67,7 @@ function num(value: unknown): number | undefined {
  */
 export class PromptCacheProbe {
   readonly #streaks = new Map<string, Streak>();
-  readonly #resolved = new Map<string, Readonly<{ key: string; label: string }> | undefined>();
+  readonly #resolved = new Map<string, Readonly<{ key: string; label?: string }> | undefined>();
   readonly #options: PromptCacheProbeOptions;
 
   constructor(options: PromptCacheProbeOptions = {}) {
@@ -111,11 +111,11 @@ export class PromptCacheProbe {
     return out.sort((a, b) => b.zeroCacheCalls - a.zeroCacheCalls);
   }
 
-  #resolve(recorded: string): Readonly<{ key: string; label: string }> | undefined {
+  #resolve(recorded: string): Readonly<{ key: string; label?: string }> | undefined {
     const resolveProvider = this.#options.resolveProvider;
     if (!resolveProvider) return undefined;
     if (!this.#resolved.has(recorded)) {
-      let value: Readonly<{ key: string; label: string }> | undefined;
+      let value: Readonly<{ key: string; label?: string }> | undefined;
       try { value = resolveProvider(recorded); } catch { value = undefined; }
       this.#resolved.set(recorded, value);
     }

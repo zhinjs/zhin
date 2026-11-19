@@ -33,14 +33,19 @@ function traces(lines: Record<string, unknown[]>): string {
 }
 
 describe('usage-stats compare: previous (#1250 第 58 批)', () => {
-  it('resolves the previous window of the same length and caps the total span', () => {
+  it('resolves the previous window of the same length, each window limited to 31 days on its own', () => {
     expect(resolveUsageStatsQuery({ since: NOON - DAY, until: NOON, compare: 'previous' }, NOON).previous)
       .toEqual({ since: NOON - 2 * DAY, until: NOON - DAY, truncated: false });
     expect(resolveUsageStatsQuery({ since: NOON - DAY, until: NOON }, NOON)).not.toHaveProperty('previous');
-    // 20 days + 20 days > 31: the previous window starts at until - 31 days.
-    const long = resolveUsageStatsQuery({ since: NOON - 20 * DAY, until: NOON, compare: 'previous' }, NOON).previous!;
-    expect(long).toEqual({ since: NOON - USAGE_STATS_MAX_RANGE_MS, until: NOON - 20 * DAY, truncated: true });
-    expect(previousUsageWindow(NOON - 31 * DAY, NOON)).toEqual({ since: NOON - 31 * DAY, until: NOON - 31 * DAY, truncated: true });
+    // "Last 30 days": the previous 30 days come back complete (60 days scanned in all).
+    expect(resolveUsageStatsQuery({ since: NOON - 30 * DAY, until: NOON, compare: 'previous' }, NOON).previous)
+      .toEqual({ since: NOON - 60 * DAY, until: NOON - 30 * DAY, truncated: false });
+    // The maximum: 31 + 31 days.
+    expect(resolveUsageStatsQuery({ since: NOON - USAGE_STATS_MAX_RANGE_MS, until: NOON, compare: 'previous' }, NOON).previous)
+      .toEqual({ since: NOON - 2 * USAGE_STATS_MAX_RANGE_MS, until: NOON - USAGE_STATS_MAX_RANGE_MS, truncated: false });
+    // Cut short only by the per-window limit or the epoch; then `truncated`.
+    expect(previousUsageWindow(NOON - 10 * DAY, NOON, 5 * DAY)).toEqual({ since: NOON - 15 * DAY, until: NOON - 10 * DAY, truncated: true });
+    expect(previousUsageWindow(DAY, 3 * DAY)).toEqual({ since: 0, until: DAY, truncated: true });
     for (const compare of ['next', 1, true]) {
       expect(() => resolveUsageStatsQuery({ compare } as never, NOON), String(compare)).toThrow(PluginConsoleRpcError);
     }
@@ -88,6 +93,56 @@ describe('usage-stats labels through AssistantStatus (#1250 第 58 批)', () => 
     expect(out.previous).not.toHaveProperty('byModel');
     // Never message text.
     expect(JSON.stringify(out)).not.toContain('secret prompt text');
+  });
+
+  it('returns the whole previous 30 days for "last 30 days", filtered by the same session', async () => {
+    const status = new AssistantStatus({ now: () => NOON });
+    const row = (key: string, at: number, prompt: number) => ({ version: 1, session_key: key, started_at: at, model_calls: [{ provider: 'gemini', model: 'flash', prompt_tokens: prompt, completion_tokens: 1 }] });
+    const dir = traces({
+      // 59 days back: inside the previous 30 days, outside any 31-day total span.
+      '2026-08-30.jsonl': [row('qq:1:group:a', NOON - 59 * DAY, 7), row('qq:1:group:b', NOON - 59 * DAY, 500)],
+      '2026-10-27.jsonl': [row('qq:1:group:a', NOON - DAY, 3)],
+    });
+    status.bindUsageTraces(() => dir);
+    const out = (await status.consoleRpc.methods.get('usage-stats')!.handler({ since: NOON - 30 * DAY, until: NOON, compare: 'previous', session: 'group:a', timeZone: 'UTC' } as never, { signal })) as Record<string, any>;
+    expect(out.totals).toMatchObject({ calls: 1, inputTokens: 3 });
+    expect(out.previous).toMatchObject({ since: NOON - 60 * DAY, until: NOON - 30 * DAY, truncated: false, totals: { turns: 1, calls: 1, inputTokens: 7 } });
+  });
+
+  it('matches accounts by the platform traces record and never mixes same-named accounts across platforms', async () => {
+    const status = new AssistantStatus({ now: () => NOON + DAY });
+    const im = (key: string, platform: string, endpoint: string) => ({ version: 1, session_key: key, started_at: NOON, origin: { kind: 'im', platform, endpoint, scope: 'group', sceneId: '1' }, model_calls: [{ provider: 'gemini', model: 'flash', prompt_tokens: 3, completion_tokens: 1 }] });
+    const dir = traces({ '2026-10-28.jsonl': [
+      im('a', 'qq', 'ep-1'), im('b', 'discord', 'bot'), im('c', 'qq', 'x1'), im('d', 'telegram', 'ep-9'), im('e', 'qq', '10001'),
+    ] });
+    status.bindUsageTraces(() => dir);
+    status.bindUsageEndpoints(() => [
+      // `adapter` is the client adapter (what traces record), e.g. `qq` for the `icqq` package's accounts.
+      { id: 'ep-1', name: '旧号', adapter: 'icqq' },
+      { id: 'ep-1', name: '客服号', adapter: 'qq' },
+      { id: 'x1', name: 'bot', adapter: 'qq' },
+      { id: 'x2', name: 'bot', adapter: 'kook' },
+      { id: 'ep-9', name: '唯一号', adapter: 'tg' },
+      { id: '10001', name: '10001', adapter: 'qq' },
+    ]);
+    const out = (await status.consoleRpc.methods.get('usage-stats')!.handler({ since: NOON - DAY, until: NOON + DAY } as never, { signal })) as Record<string, any>;
+    const row = (key: string) => out.bySession.find((r: { sessionKey: string }) => r.sessionKey === key);
+    expect(row('a')).toMatchObject({ accountLabel: '客服号' });
+    // `bot` exists on two other platforms: ambiguous, no label.
+    expect(row('b')).not.toHaveProperty('accountLabel');
+    expect(row('c')).toMatchObject({ accountLabel: 'bot' });
+    // A different platform name, but the id is unique among all accounts.
+    expect(row('d')).toMatchObject({ accountLabel: '唯一号' });
+    // A name that is just the raw id adds nothing.
+    expect(row('e')).toMatchObject({ endpoint: '10001' });
+    expect(row('e')).not.toHaveProperty('accountLabel');
+  });
+
+  it('never shows a raw service id as the service label', () => {
+    const bare = createProviderDisplayIndex({ ...(graph as object), services: { [SVC]: { ...(graph as any).services[SVC], label: undefined, driver: undefined } } } as never);
+    expect(bare.resolveProvider(ACC)).toEqual({ key: SVC });
+    expect(bare.profile('profiles:p1')).toMatchObject({ key: SVC, model: 'flash', displayName: 'flash' });
+    expect(bare.profile('profiles:p1')).not.toHaveProperty('label');
   });
 
   it('falls back to the Driver id and drops a throwing account source', async () => {
