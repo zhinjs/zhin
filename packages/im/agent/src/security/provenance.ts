@@ -241,7 +241,12 @@ export function isExternalContentSource(tool: ToolView, settings: Pick<Injection
 export type ProvenanceSource =
   /** `trusted`: a first-party read-only lookup (ADR 0067 D1.3); absent means external content. */
   | Readonly<{ kind: 'tool_result'; toolName: string; trusted?: boolean }>
-  | Readonly<{ kind: 'conversation_context' }>
+  /**
+   * Background messages / scene events of the conversation that arrived since the last turn,
+   * excluding the agent's own replies delivered in this session (#1250). `scene` only picks the
+   * wording of the approval card; it is not part of the source key.
+   */
+  | Readonly<{ kind: 'conversation_context'; scene?: 'private' | 'group' | 'channel' }>
   /** A perception-model description of user media (`ai.multimodal.perception`). */
   | Readonly<{ kind: 'media_perception' }>
   /**
@@ -358,12 +363,22 @@ export const PROVENANCE_NO_CHANNEL_REASON =
 function describeSource(source: ProvenanceSource): string {
   switch (source.kind) {
     case 'tool_result': return `工具 ${source.toolName} 的结果${source.trusted ? '（第一方只读）' : ''}`;
-    case 'conversation_context': return '群聊背景消息';
+    case 'conversation_context': return describeConversationContext(source.scene);
     case 'media_perception': return '图片/媒体的自动描述';
     case 'scheduled_prompt': {
       const shown = (source.sources ?? []).slice(0, MAX_CHAIN_SOURCES).map(describePersistedSource);
       return `定时任务的提示词（创建时已读过${shown.length ? `：${shown.join('、')}` : '外部内容'}）`;
     }
+  }
+}
+
+/** #1250: a private chat has no group; a stored key does not keep the scene. */
+function describeConversationContext(scene: 'private' | 'group' | 'channel' | undefined): string {
+  switch (scene) {
+    case 'private': return '私聊里的背景消息';
+    case 'group':
+    case 'channel': return '群聊背景消息';
+    default: return '会话背景消息';
   }
 }
 
@@ -374,7 +389,7 @@ function describePersistedSource(key: string): string {
     const name = key.slice('tool:'.length, trusted ? -':trusted'.length : undefined);
     return `工具 ${name} 的结果${trusted ? '（第一方只读）' : ''}`;
   }
-  if (key === 'conversation_context') return '群聊背景消息';
+  if (key === 'conversation_context') return describeConversationContext(undefined);
   if (key === 'media_perception') return '图片/媒体的自动描述';
   if (key === 'scheduled_prompt') return '另一个定时任务的提示词';
   return key;

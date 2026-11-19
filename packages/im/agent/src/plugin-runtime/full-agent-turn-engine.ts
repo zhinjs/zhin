@@ -2,7 +2,7 @@ import type { CoreReplyStream } from '@zhin.js/core/runtime';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { MessageAliasTable } from '@zhin.js/ai';
-import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
+import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -281,7 +281,12 @@ async function* runInteractiveTurn(
     media,
   );
   actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
-  if (background) provenance.record({ kind: 'conversation_context' });
+  // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067).
+  if (background && unrepresentedConversationBlocks(pendingContext!.blocks,
+    ref => host.toldLedger?.hasDelivered(prep.sessionId, ref) ?? false).length) {
+    provenance.record({ kind: 'conversation_context',
+      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}) });
+  }
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
     provenance.record({ kind: 'media_perception' });
@@ -401,6 +406,7 @@ async function* runInteractiveTurn(
       ...(stopped ? { stopped: true } : {}),
     };
     phaseFacts.set(phase.id, facts);
+    host.toldLedger?.recordDelivered(prep.sessionId, facts.contextRefs);
     const told = renderAgentOutput(confirmedOutput);
     if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
       deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
@@ -529,6 +535,7 @@ async function* runInteractiveTurn(
               deliveredMessageId = delivery.messageId;
               deliveredMessageIds = delivery.messages?.map(message => message?.id ?? null);
               deliveredContextRefs = deliveredReplyContextRefs(prep.sessionId, context.turn.identity.turnId, plannedTexts, delivery);
+              host.toldLedger?.recordDelivered(prep.sessionId, deliveredContextRefs);
             }
             if (
               delivery.status === 'failed'

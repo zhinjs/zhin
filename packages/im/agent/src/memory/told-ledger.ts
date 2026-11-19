@@ -39,6 +39,9 @@ export const DEFAULT_TOLD_LEDGER_MAX_SESSIONS = 5000;
 /** Longest entry kept, in characters. */
 export const TOLD_ENTRY_MAX_CHARS = 120;
 export const TOLD_LEDGER_HEADING = '[Already told the user]';
+/** Delivered-message references kept per session (#1250 own-reply-counts-as-background). */
+export const DEFAULT_TOLD_LEDGER_MAX_DELIVERED = 64;
+const DELIVERED_MESSAGE_REF_PREFIX = 'delivered-message:';
 
 const SENTENCE_SPLIT = /(?<=[。！？!?；;])\s*|\n+|(?<=\.)\s+/u;
 const COMMITMENT = /(我会|我将|稍后|之后会|回头|明天.*(提醒|告诉|发)|会在.*(提醒|通知|告诉)|已为你设置|I'll|I will|I'm going to|will remind)/iu;
@@ -81,6 +84,8 @@ export function extractToldEntries(text: string, source: 'reply' | 'progress'): 
 /** Per-session ledger of what the user has already been told. */
 export class SessionToldLedger {
   readonly #sessions = new Map<string, ToldEntry[]>();
+  /** `delivered-message:` references of replies this agent delivered with exact text evidence. */
+  readonly #delivered = new Map<string, string[]>();
   readonly #maxEntries: number;
   readonly #maxSessions: number;
   readonly #now: () => number;
@@ -145,16 +150,45 @@ export class SessionToldLedger {
     });
   }
 
+  /**
+   * #1250: remembers the platform messages this agent delivered as its reply in `sessionId`
+   * (references from `deliveredReplyContextRefs`; only exact plain-text evidence produces one).
+   * A later background block of the same message and text is the session history's own words,
+   * not new content (ADR 0067 安全分析). Process memory only: after a restart such a block
+   * counts as background again (fail closed).
+   */
+  recordDelivered(sessionId: string, contextRefs: readonly string[] | undefined): void {
+    const refs = (contextRefs ?? []).filter(ref => ref.startsWith(DELIVERED_MESSAGE_REF_PREFIX));
+    if (!refs.length) return;
+    const current = (this.#delivered.get(sessionId) ?? []).filter(ref => !refs.includes(ref));
+    current.push(...refs);
+    this.#delivered.delete(sessionId);
+    this.#delivered.set(sessionId, current.slice(-DEFAULT_TOLD_LEDGER_MAX_DELIVERED));
+    this.#evict();
+  }
+
+  /** Whether `contextRef` names a message this agent delivered in `sessionId` (see {@link recordDelivered}). */
+  hasDelivered(sessionId: string, contextRef: string): boolean {
+    return this.#delivered.get(sessionId)?.includes(contextRef) ?? false;
+  }
+
   clear(sessionId?: string): void {
-    if (sessionId === undefined) this.#sessions.clear();
-    else this.#sessions.delete(sessionId);
+    if (sessionId === undefined) {
+      this.#sessions.clear();
+      this.#delivered.clear();
+    } else {
+      this.#sessions.delete(sessionId);
+      this.#delivered.delete(sessionId);
+    }
   }
 
   #evict(): void {
-    while (this.#sessions.size > this.#maxSessions) {
-      const oldest = this.#sessions.keys().next().value;
-      if (oldest === undefined) return;
-      this.#sessions.delete(oldest);
+    for (const map of [this.#sessions, this.#delivered] as const) {
+      while (map.size > this.#maxSessions) {
+        const oldest = map.keys().next().value;
+        if (oldest === undefined) break;
+        map.delete(oldest);
+      }
     }
   }
 }
