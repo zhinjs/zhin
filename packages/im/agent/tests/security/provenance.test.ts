@@ -53,13 +53,28 @@ describe('isExternalContentSource', () => {
 describe('TurnProvenance', () => {
   it('describes a deduplicated, bounded chain', () => {
     const provenance = new TurnProvenance();
-    provenance.record({ kind: 'conversation_context' });
+    provenance.record({ kind: 'conversation_context', scene: 'group' });
     provenance.record({ kind: 'tool_result', toolName: 'fetch_page' });
     provenance.record({ kind: 'tool_result', toolName: 'fetch_page' });
     expect(provenance.describeChain('owner', 'bash'))
       .toBe('主人的消息 → 群聊背景消息 → 工具 fetch_page 的结果 → 本次调用 bash');
     for (let index = 0; index < 6; index += 1) provenance.record({ kind: 'tool_result', toolName: `t${index}` });
     expect(provenance.describeChain('trusted_member', 'bash')).toContain('另外 3 个来源');
+  });
+
+  it('names background messages by scene: a private chat is not a group (#1250)', () => {
+    const chain = (scene?: 'private' | 'group' | 'channel') => {
+      const provenance = new TurnProvenance();
+      provenance.record({ kind: 'conversation_context', ...(scene ? { scene } : {}) });
+      return provenance.describeChain('owner', 'schedule_add');
+    };
+    expect(chain('private')).toBe('主人的消息 → 私聊里的背景消息 → 本次调用 schedule_add');
+    expect(chain('channel')).toBe('主人的消息 → 群聊背景消息 → 本次调用 schedule_add');
+    expect(chain()).toBe('主人的消息 → 会话背景消息 → 本次调用 schedule_add');
+    // The persisted key does not keep the scene.
+    const provenance = new TurnProvenance();
+    provenance.record({ kind: 'conversation_context', scene: 'private' });
+    expect(provenance.snapshotForSchedule()).toEqual({ tainted: true, sources: ['conversation_context'] });
   });
 });
 
