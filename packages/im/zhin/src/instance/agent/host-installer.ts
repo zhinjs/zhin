@@ -21,6 +21,7 @@ import { createOwnerApprovalMigrationProvider } from '@zhin.js/agent/runtime';
 import { pluginDataMigrationProviderToken, rootPluginId, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { getProcessPeerRegistry } from '@zhin.js/adapter';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
+import { createConversationPresentationResolver } from './conversation-presentation.js';
 import { installAgentPersistence } from '@zhin.js/agent/runtime';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
 import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
@@ -32,6 +33,7 @@ import {
   createVenueProjector,
   createVenueRegistry,
   venueProjectorToken,
+  untrustedContent,
   venueRegistryToken,
 } from '@zhin.js/core';
 import {
@@ -112,7 +114,10 @@ export interface InstallAgentHostOptions {
   readonly selfChangeApply?: import('../self-change-apply.js').HostSelfChangeApply;
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
-  /** Process-owned Snapshot reader; local operations hold an exact generation lease. */
+  /**
+   * Process-owned Snapshot reader; local operations hold an exact generation lease. #1250: also the
+   * source of the real command prefix and language of out-of-turn cards (IM approval, group rules).
+   */
   readonly snapshots?: SnapshotReader;
   readonly im: ImRuntime;
   readonly projectRoot: string;
@@ -160,6 +165,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
   // #1250: one board across generations — a retained generation keeps its MCP clients.
   const mcpStatus = new HostMcpStatusBoard({ onEvent: logMcpStatusEvent });
+  const conversationPresentation = createConversationPresentationResolver(() => options.snapshots);
   return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, watchProjectFiles }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
@@ -285,11 +291,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         protectedPaths: hostProtectedPaths,
         pluginRoots: selfChangePluginRoots,
         ports: selfChangeApplyHost.ports(createSelfChangeGenerationPorts({
+          // #1250: a report quotes the change's summary and paths (model text): sent literal, never
+          // template-compiled.
           send: (target, text) => options.im.endpoints.send({
             adapter: target.adapter,
             endpointKey: target.endpointKey,
             conversation: target.conversation,
-            content: text,
+            content: untrustedContent(text, { source: 'agent:self-change-report' }),
           }),
           resolveOwner: options.resolveEndpointOwner,
           control: () => zhinAgent.controlPlane,
@@ -316,12 +324,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       queue: zhinAgent.toolApprovals,
       settings: () => resolveToolHardGateImApproval(zhinAgent.config.toolHardGate?.imApproval),
       resolveOwner: options.resolveEndpointOwner,
-      send: async (target, text) => {
+      // #1250: the card spells `approve <id>` with the recipient Endpoint's real prefix, in their language.
+      resolvePresentation: target => conversationPresentation({
+        platform: target.platform,
+        endpoint: target.endpointKey,
+        conversation: target.conversation,
+        ...(target.conversation.kind === 'private' ? { recipientId: target.conversation.id } : {}),
+      }),
+      // The card keeps every user / model / plugin value as a literal piece (#1250).
+      send: async (target, content) => {
         await options.im.endpoints.send({
           adapter: target.platform,
           endpointKey: target.endpointKey,
           conversation: target.conversation,
-          content: text,
+          content,
         });
       },
       onDeliveryError: (error, target) => {
@@ -416,6 +432,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: agentFoundation,
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,
+      resolveConversationPresentation: conversationPresentation,
       withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
       withModelScope: (input, operation) => options.inference.withDeploymentModels({ ...input, service }, operation),
     });

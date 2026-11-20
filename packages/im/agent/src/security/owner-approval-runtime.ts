@@ -16,8 +16,14 @@ export type ToolRequesterRole = 'owner' | 'trusted' | 'other' | 'unknown';
 
 export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
   readonly endpoint: OwnerApprovalAddress['endpoint'];
+  /** The account's owner address: the key the stored approvals are kept under (not who may command). */
   readonly ownerId?: string;
   readonly subjectId: string;
+  /**
+   * Whether the sender is a global chat owner (ADR 0056 §2, `hostChatRole(sender) === 'owner'`). Any
+   * global owner may use the command, not only the first one the account resolves to.
+   */
+  readonly senderIsGlobalOwner: boolean;
   readonly scope: 'private' | 'group' | 'channel';
 }
 
@@ -75,7 +81,7 @@ export class OwnerApprovalRuntime {
     const locale = context.locale;
     const command = managementCommandReference('approve', context.commandPrefix)!;
     const address = ownerCommandAddress(context);
-    if (context.scope !== 'private' || !address || context.subjectId !== address.ownerId) {
+    if (context.scope !== 'private' || !address || !context.senderIsGlobalOwner) {
       return t(locale, 'denied');
     }
 

@@ -1,5 +1,5 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
-import type { SnapshotLease, SnapshotReader } from '@zhin.js/plugin-runtime';
+import type { Locale, SnapshotLease, SnapshotReader } from '@zhin.js/plugin-runtime';
 import type {
   AIService,
   AiControlPlane,
@@ -47,6 +47,13 @@ export interface ImApprovalCommandInput {
   readonly sceneId: string;
   readonly senderId: string;
   readonly commandText: string | undefined;
+  /**
+   * Whether the sender is a global chat owner (ADR 0056 §2): any global owner may settle a self-change
+   * card in a private chat, not only the owner the card was delivered to.
+   */
+  readonly senderIsGlobalOwner?: boolean;
+  /** The sender's display language for the reply (#1250); absent: the default language. */
+  readonly locale?: Locale;
 }
 
 export interface ImApprovalChannelPort {

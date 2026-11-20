@@ -396,7 +396,9 @@ export async function finalizeTurnReplyAndOutput(params: {
   const scheduleProfile = input.promptProfile.kind === 'schedule' ? input.promptProfile : undefined;
   const turnId = traceTurnId(input.turnContext);
   // A chat-path turn has no tools by design; only a scheduled job is expected to have them.
+  const replyLocale = input.turnContext.input?.locale;
   const toolSummary = describeToolCallsForUser(finalPhaseToolCalls, {
+    ...(replyLocale ? { locale: replyLocale } : {}),
     ...(scheduleProfile ? { toolsAvailable: hasTools } : {}),
     ...(scheduleProfile ? { schedule: { jobId: scheduleProfile.jobId, ...(turnId ? { turnId } : {}) } } : {}),
   });
