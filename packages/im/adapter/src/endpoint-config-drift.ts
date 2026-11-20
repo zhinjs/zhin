@@ -211,9 +211,19 @@ function looselyEqual(expanded: unknown, saved: unknown): boolean {
   return false;
 }
 
-/** A value that still carries a `${VAR}` reference somewhere. */
+/**
+ * A value written as a reference: it contains `${` somewhere. Deliberately conservative (not the
+ * parser): a malformed reference (`${QQ_SECRET`) or a literal credential that happens to contain
+ * `${` stays a reference too, so import keeps it in `secretRefs` (masked in views, redacted as a
+ * resolved secret, resolved literally at start) instead of moving it into the stored
+ * configuration, and accounts imported before references were parsed strictly compare equal.
+ */
 export function hasEnvironmentReference(value: unknown): boolean {
-  return referencedVariables(value).length > 0;
+  if (typeof value === 'string') return value.includes('${');
+  if (value && typeof value === 'object') {
+    try { return (JSON.stringify(value) ?? '').includes('${'); } catch { return false; }
+  }
+  return false;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {

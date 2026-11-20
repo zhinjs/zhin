@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId,
   type CapabilityId, type PluginId, type PluginNodeSnapshot, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
-import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, compareEndpointDirectories, configuredEndpointSeeds,
+import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, compareEndpointConfiguration, compareEndpointDirectories, configuredEndpointSeeds,
   createEndpointSpecification, defineAdapter, placeholderVariable, endpointEventGatewayToken, endpointSpec, endpointWritebackEntry,
   splitEnvironmentReferences, type Endpoint, type EndpointConfigSource, type EndpointCreationContext, type EndpointDesiredRecord,
   type EndpointDesiredRepository, type EndpointDesiredSnapshot, type EndpointSecretResolver } from '../src/index.js';
@@ -152,6 +152,16 @@ describe('configured endpoint seeds and comparison', () => {
     expect(splitEnvironmentReferences({ id: 'a', secret: '${S}', nested: { token: '${T}', plain: 1 } })).toEqual({
       config: { id: 'a', nested: { plain: 1 } }, secretRefs: { secret: '${S}', 'nested.token': '${T}' } });
     expect(() => splitEnvironmentReferences({ id: 'a', list: ['${S}'] })).toThrow(expect.objectContaining({ code: 'unsupported' }));
+  });
+
+  it('keeps a value containing ${ that is not a valid reference in secretRefs (never in the stored configuration)', () => {
+    // An unclosed reference or a literal token containing `${`: kept as a stored reference so it stays
+    // masked and is resolved literally at start, as accounts imported by earlier versions were.
+    expect(splitEnvironmentReferences({ id: 'a', secret: '${QQ_SECRET', token: 'tok${en', plain: 'x' })).toEqual({
+      config: { id: 'a', plain: 'x' }, secretRefs: { secret: '${QQ_SECRET', token: 'tok${en' } });
+    // Such an account imported before compares equal to the same file entry (no spurious drift).
+    expect(compareEndpointConfiguration({ id: 'a', secret: '${QQ_SECRET' },
+      { config: { id: 'a' }, secretRefs: { secret: '${QQ_SECRET' } })).toEqual({ fields: [], unverified: [] });
   });
 
   it('writes credentials back only as references or placeholders', () => {

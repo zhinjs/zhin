@@ -163,6 +163,7 @@ Rules (the instance, the gateway, the Console and the CLI share one parser, so r
 
 - A variable name starts with a letter or `_`, followed by letters, digits or `_`. `${1A}`, `${A-B}`, `${A:x}` and an unclosed `${A` are not references and stay as written.
 - A default runs from `:-` / `:=` to the first `}` and may be empty (`${VAR:-}`). Both forms behave the same: the default applies when the variable is unset **or empty**; `:=` does not assign the variable.
+- A default is stored in plain text in the configuration file: **never put a secret in a default**. `${VAR:-…}` counts as a reference, so the startup warning and `zhin doctor` do not report it as a literal secret, and the Console database wizard keeps `${DB_PASS:-…}` as written; keep secrets in `.env` only and write `${VAR}` in the configuration.
 - A value may hold several references and surrounding text (`http://${HOST}:${PORT:-80}`). There is no escape: `$${VAR}` expands to `$` followed by the value.
 - "Missing environment variable" reports (the startup warning, `missingEnv` in Console validation results) list only references without a default whose variable is unset; a reference with a default (even an empty one) is never missing.
 - Fields that take a whole reference only (such as `http.port`) accept `${VAR}` and both default forms; surrounding whitespace is ignored.

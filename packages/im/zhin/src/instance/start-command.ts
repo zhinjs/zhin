@@ -1,4 +1,4 @@
-import { createEnvironmentLookup, findUnsetEnvironmentReferences, parseEnvUri, resolveHostCredentialSource, type CapabilityId, type EnvironmentLookup } from '@zhin.js/plugin-runtime';
+import { createEnvironmentLookup, findUnsetEnvironmentReferences, resolveHostCredentialSource, type CapabilityId, type EnvironmentLookup } from '@zhin.js/plugin-runtime';
 import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
 import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
 import { prepareFeatureOverrideMigration } from './feature-override-migration.js';
@@ -41,6 +41,7 @@ import {
   createEnvStore,
   envStoreToken,
   type ConfigFileDocument,
+  type EnvironmentLayers,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
@@ -232,8 +233,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   await readProjectPluginLifecycleState(options.root, pluginLifecycleFile);
   const pluginLifecycleStore = createPluginLifecycleStore(options.root);
   await applyRuntimeLogLevel(hostConfig);
-  const envOverlay = environmentVariables.environments?.[parsed.environment];
-  const httpConfig = await resolveHttpConfig(hostConfig, envOverlay, options.root);
+  const httpConfig = await resolveInstanceHttpConfig(rawConfigDocument, environmentVariables, parsed.environment, options.root);
   const {listeners: additionalHttpListeners = [], ...primaryHttpListener} = httpConfig;
   // ADR 0054 §2: under the gateway, routes are served over the control channel (additional
   // listeners are opened by the gateway); standalone (dev / test) runs the Node server here.
@@ -529,12 +529,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         snapshots: host.runtime.snapshots,
         production: parsed.mode === 'production',
         projectRoot: options.root,
-        secureCredentialProvider: {
-          resolve(secretRef) {
-            const variable = parseEnvUri(secretRef);
-            return variable ? hostEnvironment.get(variable) : undefined;
-          },
-        },
       })(context);
       installConsoleRuntime(consoleHost.console)(context);
       installConsoleApiResources(consoleEventHub)(context);
@@ -1149,6 +1143,22 @@ function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): vo
   const consoleUrl = createRemoteConsoleUrl(httpOrigin);
   startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required — 见 .env 中的 HTTP_TOKEN)') : ''}`);
   startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (Console 初始化前可在页面顶部输入 HTTP_TOKEN；初始化后改填 Console API 令牌，或在 Console「会话 → 沙盒」里聊天)') : ''}`);
+}
+
+/**
+ * The instance's `http` config, resolved exactly like the gateway and the CLI do
+ * (`loadGatewayHttpConfig`): from the stored, unexpanded document with the environment overlay
+ * (`.env` / `.env.<environment>`) over the process environment, expanded once. Passing the
+ * already-expanded host config would expand a second time (`${B:-${C}}` with `B` unset would
+ * become `C`'s value; a `.env` value containing `${X}` would be expanded again).
+ */
+export function resolveInstanceHttpConfig(
+  rawDocument: unknown,
+  environmentVariables: Readonly<EnvironmentLayers>,
+  environment: string,
+  projectRoot: string,
+): ReturnType<typeof resolveHttpConfig> {
+  return resolveHttpConfig(rawDocument as RuntimeConfigDocument, environmentVariables.environments?.[environment], projectRoot);
 }
 
 /**

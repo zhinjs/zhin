@@ -1,4 +1,4 @@
-import type { Locale } from '@zhin.js/plugin-runtime';
+import { expandEnvironmentValue, type Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import type { DatabaseConfig } from './types.js';
 
@@ -169,6 +169,7 @@ export function databaseChoiceLabel(definition: DatabaseDialectDefinition, local
   return wizardText(locale, "{v0}（{v1}；当前支持/实机验证 {v2}{v3}）", [wizardText(locale, definition.name), wizardText(locale, definition.description), wizardText(locale, definition.verifiedServer), driver]);
 }
 
+/** Expands with the shared plugin-runtime parser; every unset plain reference is reported (and expands to ''). */
 function expandEnvReferences(
   input: string,
   path: string,
@@ -176,64 +177,15 @@ function expandEnvReferences(
   issues: DatabaseSchemaIssue[],
   locale: Locale = 'zh-CN'
 ): string {
-  let output = '';
-  let index = 0;
-  while (index < input.length) {
-    const start = input.indexOf('${', index);
-    if (start < 0) break;
-    let cursor = start + 2;
-    const first = input[cursor];
-    if (first === undefined || !isEnvKeyStart(first)) {
-      output += input.slice(index, start + 1);
-      index = start + 1;
-      continue;
-    }
-    cursor += 1;
-    while (cursor < input.length && isEnvKeyCharacter(input[cursor]!)) cursor += 1;
-    const key = input.slice(start + 2, cursor);
-    let fallback: string | undefined;
-    if (input[cursor] === ':' && (input[cursor + 1] === '-' || input[cursor + 1] === '=')) {
-      const close = input.indexOf('}', cursor + 2);
-      if (close < 0) {
-        output += input.slice(index, start + 1);
-        index = start + 1;
-        continue;
-      }
-      fallback = input.slice(cursor + 2, close);
-      cursor = close;
-    }
-    if (input[cursor] !== '}') {
-      output += input.slice(index, start + 1);
-      index = start + 1;
-      continue;
-    }
-    output += input.slice(index, start);
-    const resolved = env[key];
-    if ((resolved === undefined || resolved === '') && fallback !== undefined) {
-      output += fallback;
-    } else if (resolved === undefined) {
-      issues.push({
-        kind: 'env_missing',
-        path,
-        envKey: key,
-        message: wizardText(locale, "环境变量 {v0} 未设置（{v1}）", [key, path]),
-      });
-    } else {
-      output += resolved;
-    }
-    index = cursor + 1;
-  }
-  return output + input.slice(index);
-}
-
-function isEnvKeyStart(character: string): boolean {
-  return (character >= 'A' && character <= 'Z')
-    || (character >= 'a' && character <= 'z')
-    || character === '_';
-}
-
-function isEnvKeyCharacter(character: string): boolean {
-  return isEnvKeyStart(character) || (character >= '0' && character <= '9');
+  return expandEnvironmentValue(input, key => env[key], (key) => {
+    issues.push({
+      kind: 'env_missing',
+      path,
+      envKey: key,
+      message: wizardText(locale, "环境变量 {v0} 未设置（{v1}）", [key, path]),
+    });
+    return '';
+  });
 }
 
 function validateValue(

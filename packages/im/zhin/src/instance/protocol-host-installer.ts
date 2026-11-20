@@ -62,9 +62,6 @@ export interface InstallProtocolHostsOptions {
   readonly snapshots: SnapshotReader;
   readonly production: boolean;
   readonly projectRoot: string;
-  readonly secureCredentialProvider?: Readonly<{
-    resolve(secretRef: string): string | undefined;
-  }>;
 }
 
 /**
@@ -202,7 +199,8 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
   };
 }
 
-async function resolveProtocolConfig(
+/** @internal Exported for tests: the protocol Hosts' view of the (already expanded) host config. */
+export async function resolveProtocolConfig(
   config: RuntimeConfigDocument | ConfigDocumentPort,
   http: HttpHostOptions,
 ): Promise<ProtocolConfig> {

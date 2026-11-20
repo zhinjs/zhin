@@ -38,3 +38,12 @@ it('a candidate without an Adapter projection cannot authorize config-only or pr
  const candidate = createSnapshotView(3, { root, tree: new Map(), config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map() });
  expect(await readConfiguredEndpointKeys({ plugins: { sandbox: {} } } as never, candidate)).toEqual(new Set());
 });
+
+it('expands the raw config with the given environment (the instance EnvStore: .env variables count)', async () => {
+  const config = { configVersion: 2, plugins: { icqq: '@zhin.js/adapter-icqq' }, icqq: { endpoints: [{ id: '${ZHIN_TEST_DOTENV_ONLY_ID}' }] } };
+  delete process.env.ZHIN_TEST_DOTENV_ONLY_ID;
+  const dotenv: Record<string, string> = { ZHIN_TEST_DOTENV_ONLY_ID: '10001' };
+  expect(await readConfiguredEndpointKeys(config as never, undefined, name => dotenv[name])).toEqual(new Set(['icqq:10001']));
+  // Default: the process environment only — a `.env`-only variable expands to empty and yields no key.
+  expect(await readConfiguredEndpointKeys(config as never)).toEqual(new Set());
+});

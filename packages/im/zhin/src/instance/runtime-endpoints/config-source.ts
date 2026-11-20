@@ -5,6 +5,7 @@ import {
 } from '@zhin.js/adapter';
 import type { ConsoleConfigProjectPatchResult } from '@zhin.js/console-protocol';
 import { environmentReferencesIn, readPluginConfigurationMap, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { getLogger } from '@zhin.js/logger';
 import { isSecretConfigKey, parsePluginConfigSchema, type JsonSchema } from '@zhin.js/runtime';
 
 /** Configuration file reads/writes the instance already owns (RuntimeConfigDocument + ConsoleConfigurationStore). */
@@ -79,13 +80,26 @@ export function createEndpointConfigSource(options: EndpointConfigSourceOptions)
  * Resolves imported `${VAR}` account references at start (never stored resolved). A reference
  * that resolves to nothing is a configuration error, so the account waits for the operator
  * instead of retrying with an empty credential.
+ *
+ * Accounts imported by earlier versions stored every value containing `${` as a reference, also
+ * a malformed one (`${QQ_SECRET`) or a literal credential that contains `${`. Such a stored
+ * reference holds no reference the parser recognizes; it keeps working as before — the text is
+ * the value, unexpanded — and `warn` reports it once per resolution (never the value itself).
  */
-export function createEndpointSecretResolver(expand: (value: string) => string): EndpointSecretResolver {
+export function createEndpointSecretResolver(
+  expand: (value: string) => string,
+  warn: (message: string) => void = message => getLogger('endpoints').warn(message),
+): EndpointSecretResolver {
   return Object.freeze({
-    async resolve(reference: string, context: Readonly<{ signal: AbortSignal }>) {
+    async resolve(reference: string, context: Readonly<{ instanceId: string; signal: AbortSignal }>) {
       context.signal.throwIfAborted();
-      if (typeof reference !== 'string' || environmentReferencesIn(reference).length === 0) {
+      if (typeof reference !== 'string' || !reference.includes('${')) {
         throw new AdapterManagementError('invalid_configuration', 'Endpoint credential reference is invalid');
+      }
+      if (environmentReferencesIn(reference).length === 0) {
+        warn(`账号 ${context.instanceId} 保存的凭据引用不是合法的 \${VAR}，按原文作为字面值使用；`
+          + '请在 zhin.config.yml 改正引用（或改为 .env 中的变量）后重新导入该账号');
+        return reference;
       }
       const value = expand(reference);
       if (!value) throw new AdapterManagementError('invalid_configuration', 'Endpoint credential reference resolves to an empty value');

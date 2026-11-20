@@ -5,7 +5,7 @@
       "package": "zhin.js",
       "type": "minor",
       "version": "1.10.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——`zhin.js/i18n` 新增导出 `formatList()` 与类型 `FormatListOptions`（主入口经 `@zhin.js/plugin-runtime` 同时得到 `formatList`、`queryLocale`、`projectLocale`）。同属 1.10.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——`zhin.js/i18n` 新增导出 `formatList()` 与类型 `FormatListOptions`（主入口经 `@zhin.js/plugin-runtime` 同时得到 `formatList`、`queryLocale`、`projectLocale`）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——主入口经 `@zhin.js/plugin-runtime`（`export *`）同时得到 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与相关类型，插件（如 code-runner、calendar）据此判断未展开的 `${VAR}`。同属 1.10.0。"
     },
     {
       "package": "@zhin.js/gateway",
