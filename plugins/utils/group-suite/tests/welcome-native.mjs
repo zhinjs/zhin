@@ -30,7 +30,9 @@ try {
   kit = await PluginTestKit.create({ projectRoot: temporary, endpoints: ['first', 'second'],
     config: { configVersion: 2, plugins: { alpha: './plugins/group-suite', beta: './plugins/group-suite' },
       alpha: { commandNamespace: 'alpha', welcomeMessage: 'alpha ${sender.name} (${sender.id})' },
-      beta: { commandNamespace: 'beta', welcomeMessage: 'beta ${sender.name}' } },
+      // #1250: the config goes through the real environment expansion; dotted placeholders survive it,
+      // a single name such as ${menu} is an (unset) environment reference.
+      beta: { commandNamespace: 'beta', welcomeMessage: 'beta ${sender.name} [${bot.menu}] [${command.checkin}] [${conversation.kind}] [${menu}${prefix}]' } },
     installResources: ({ resources }) => {
       resources.provide(scheduleRootHostToken, schedules);
       resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), schedules));
@@ -43,7 +45,7 @@ try {
   const emit = async (payload = notice, endpoint = 'first') => { kit.clearDeliveries(); await kit.emit('notice.receive', payload, endpoint); return kit.deliveries; };
   assert.equal((await emit()).length, 2); // Both omitted scopes preserve the existing behavior.
   await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeConversations'], value: [] }]);
-  assert.equal((await emit()).length, 1); assert.equal(kit.deliveries[0].payload[0].data.text, 'beta Bob');
+  assert.equal((await emit()).length, 1); assert.equal(kit.deliveries[0].payload[0].data.text, 'beta Bob [菜单] [beta checkin] [group] []');
   await kit.patchConfig([{ op: 'set', path: ['beta', 'welcomeConversations'], value: [] },
     { op: 'set', path: ['alpha', 'welcomeConversations'], value: [conversation, conversation] }]);
   assert.equal((await emit()).length, 1); assert.deepEqual(kit.deliveries[0].conversation, conversation);

@@ -13,7 +13,7 @@ description: 为群欢迎选择精确账号与会话，区分全部、空范围�
 
 流程从 Host 用途目录读取[群运营套件](https://github.com/zhinjs/zhin/tree/main/plugins/utils/group-suite)的包身份，列出该包的可管理实例。相同包可以有多个实例，必须明确选择，不默认选第一个。尚未安装时进入市场查看该用途的包，审阅具体版本和原有安装计划；打开市场本身不会安装。结果不确定时先核对安装状态，不重复提交；成功后继续选择 Host 实际返回的实例名。
 
-1. 填写 `welcomeMessage`，例如 `欢迎 ${sender.name} (${sender.id})`；可用的占位符（含按账号前缀渲染的 `${menu}`、`${command.*}`）见[消息模板占位符](../reference/message-templates.md)。空文案仍表示关闭欢迎。
+1. 填写 `welcomeMessage`，例如 `欢迎 ${sender.name} (${sender.id})`；可用的占位符（含按账号前缀渲染的 `${bot.menu}`、`${command.*}`）见[消息模板占位符](../reference/message-templates.md)。空文案仍表示关闭欢迎。
 2. 在 `welcomeConversations` 点击“限定到所选会话”。此时先设为空范围，不会立即扩大生效范围。
 3. 添加精确会话，读取当前 Host 账号并选择实际 Bot，再填写群 ID；平台有父容器或话题时，保留对应 ID。
 4. 核对摘要，通过原表单的 Host 校验并保存，再按引导到插件详情申请应用。编辑草稿不等于已经生效。

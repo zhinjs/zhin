@@ -20,7 +20,7 @@ export default defineHandler({
       if (owner.ownsWelcome(notice.conversation)) return;
     }
     // #1250: the text is an outbound template; the new member is this send's `sender` (the subject
-    // of the event), passed as data, so the renderer fills `${sender.name}` / `${menu}` /
+    // of the event), passed as data, so the renderer fills `${sender.name}` / `${bot.menu}` /
     // `${command.*}` for the sending account and never expands placeholders inside the nickname.
     const member = notice.target;
     const result = await this.use(outboundMessageToken).send({

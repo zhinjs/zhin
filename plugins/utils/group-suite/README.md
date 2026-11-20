@@ -28,7 +28,7 @@ plugins:
 group-suite:
   keywordReply: true
   ephemeralKeywords: false
-  welcomeMessage: "" # 默认关闭；可设为 "欢迎 ${sender.name}！发送 ${menu:-${menu}} 查看功能"（见下方占位符）
+  welcomeMessage: "" # 默认关闭；可设为 "欢迎 ${sender.name}！发送 ${bot.menu} 查看功能"
   basePointsMin: 10
   basePointsMax: 30
   streakBonus: 5
@@ -101,26 +101,24 @@ group-suite:
 | 写法 | 含义 |
 |---|---|
 | `${sender.name}` / `${sender.id}` | 欢迎语里是新成员；问答里是提问的人 |
-| `${menu}` | 发送账号的菜单入口（带该账号的命令前缀与菜单关键词，例如 `#菜单`）；菜单关闭时原样保留 |
-| `${prefix}` | 发送账号的命令前缀，没有前缀时为空 |
+| `${bot.menu}` | 发送账号的菜单入口（带该账号的命令前缀与菜单关键词，例如 `#菜单`）；菜单关闭时原样保留 |
+| `${bot.prefix}` | 发送账号的命令前缀，没有前缀时为空 |
 | `${command.checkin}`、`${command.stats_rank}` | 本插件命令在该账号下的写法（带前缀与命名空间）；命令名里的 `-` 写成 `_` |
-| `${time}` / `${date}` | 仅问答回答：当前时间 / 日期，按提问者的语言格式化（由本插件填写） |
+| `${now.time}` / `${now.date}` | 仅问答回答：当前时间 / 日期，按提问者的语言格式化（由本插件填写） |
 | `$1`–`$9` | 仅 `teach-regex` 回答：正则捕获组 |
 
 同一个实例的不同账号可以有不同前缀，同一句模板会按发出消息的账号分别渲染。例：
 
 ```yaml
 group-suite:
-  welcomeMessage: "欢迎 ${sender.name}！发送 ${menu:-${menu}} 查看功能，${command.checkin} 每日签到"
+  welcomeMessage: "欢迎 ${sender.name}！发送 ${bot.menu} 查看功能，${command.checkin} 每日签到"
 ```
 
-配置文件里单个名字的 `${menu}`、`${prefix}` 会先被当成环境变量引用展开（变量不存在时变成空），所以在配置文件里写成
-`${menu:-${menu}}` / `${prefix:-${prefix}}`；带点号的 `${sender.name}`、`${command.checkin}` 不受影响。
-问答回答存在数据库里，不经过环境变量展开，直接写 `${menu}`。详见[消息模板占位符](../../../docs/reference/message-templates.md#配置文件里的环境变量引用)。
+所有占位符都至少两段（带点号），不会和配置文件加载时的环境变量引用（`${NAME}`）冲突，配置文件、群内 `功能 设置` 与问答回答里写法相同。
 
-模板只做一次扫描：新成员昵称、提问内容、正则捕获组都只当数据，里面写的 `${menu}` 不会再被展开。
+模板只做一次扫描：新成员昵称、提问内容、正则捕获组都只当数据，里面写的 `${bot.menu}` 不会再被展开。
 
-账号配置了命令前缀、欢迎语里却直接写了「帮助」「菜单」「help」「menu」而没有用 `${menu}` / `${prefix}` 时，
+账号配置了命令前缀、欢迎语里却直接写了「帮助」「菜单」「help」「menu」而没有用 `${bot.menu}` / `${bot.prefix}` 时，
 插件在该账号收到第一条群消息时打一条 warn（每个账号与文本一次）；`zhin doctor` 看不到插件按账号的配置。
 
 ### 两套自动回复：teach 问答 与 keyword 关键词回复

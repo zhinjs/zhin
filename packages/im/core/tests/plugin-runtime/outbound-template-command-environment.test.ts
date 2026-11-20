@@ -1,10 +1,10 @@
-// zhinjs/zhin#1250: `${prefix}` / `${menu}` / `${command.*}` in outbound templates are rendered for the
+// zhinjs/zhin#1250: `${bot.prefix}` / `${bot.menu}` / `${command.*}` in outbound templates are rendered for the
 // account that sends the message, with the same prefix resolver as inbound command dispatch.
 import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, createEndpointSpecification, endpointSpec,
   endpointEventGatewayToken, type EndpointDesiredSnapshot, type EndpointDesiredRepository, type EndpointSendRequest,
   type Endpoint as EndpointContract } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
-import { SnapshotStore, createSnapshotView, createCapabilitySlot, rootPluginId, childPluginId,
+import { SnapshotStore, createSnapshotView, createCapabilitySlot, rootPluginId, childPluginId, expandEnvironmentValue,
   type SnapshotState, type PluginId } from '@zhin.js/plugin-runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { ImRuntime, installComponentHost } from '../../src/plugin-runtime/im/index.js';
@@ -93,7 +93,7 @@ describe('outbound templates · command environment of the sending account (#125
   it('renders the same template differently for two accounts with different prefixes', async () => {
     const f = await fixture();
     try {
-      const template = '发送 ${menu} 查看，${command.checkin} 签到；前缀=[${prefix}]';
+      const template = '发送 ${bot.menu} 查看，${command.checkin} 签到；前缀=[${bot.prefix}]';
       expect(await f.send(0, template)).toBe('发送 #菜单 查看，#checkin 签到；前缀=[#]');
       expect(await f.send(1, template)).toBe('发送 /菜单 查看，/checkin 签到；前缀=[/]');
     } finally { await f.close(); }
@@ -102,26 +102,26 @@ describe('outbound templates · command environment of the sending account (#125
   it('an account without a prefix renders bare commands and an empty prefix', async () => {
     const f = await fixture({ prefixes: [undefined] });
     try {
-      expect(await f.send(0, '[${prefix}] ${menu} ${command.checkin}')).toBe('[] 菜单 checkin');
+      expect(await f.send(0, '[${bot.prefix}] ${bot.menu} ${command.checkin}')).toBe('[] 菜单 checkin');
     } finally { await f.close(); }
   });
 
   it('follows the ImRuntime prefix resolver, not the adapter configuration', async () => {
     const f = await fixture({ imCommandPrefix: '!' });
     try {
-      expect(await f.send(0, '${menu} ${command.checkin}')).toBe('!菜单 !checkin');
-      expect(await f.send(1, '${menu} ${command.checkin}')).toBe('!菜单 !checkin');
+      expect(await f.send(0, '${bot.menu} ${command.checkin}')).toBe('!菜单 !checkin');
+      expect(await f.send(1, '${bot.menu} ${command.checkin}')).toBe('!菜单 !checkin');
     } finally { await f.close(); }
   });
 
-  it('uses a custom menu keyword and leaves ${menu} as written when the menu is off', async () => {
+  it('uses a custom menu keyword and leaves ${bot.menu} as written when the menu is off', async () => {
     const custom = await fixture({ rootConfig: { menuKeyword: '功能表' } });
     try {
-      expect(await custom.send(0, '${menu}')).toBe('#功能表');
+      expect(await custom.send(0, '${bot.menu}')).toBe('#功能表');
     } finally { await custom.close(); }
     const off = await fixture({ rootConfig: { menuKeyword: false } });
     try {
-      expect(await off.send(0, '${menu} ${prefix}')).toBe('${menu} #');
+      expect(await off.send(0, '${bot.menu} ${bot.prefix}')).toBe('${bot.menu} #');
     } finally { await off.close(); }
   });
 
@@ -158,9 +158,32 @@ describe('outbound templates · command environment of the sending account (#125
   it('a subject passed as incoming.sender is data: its nickname is never expanded', async () => {
     const f = await fixture();
     try {
-      const incoming = { sender: { id: 'u-1', name: '${menu}{name}' }, content: '', timestamp: 1 };
-      expect(await f.send(0, '欢迎 ${sender.name}（${sender.id}），发送 ${menu}', { incoming }))
-        .toBe('欢迎 ${menu}{name}（u-1），发送 #菜单');
+      const incoming = { sender: { id: 'u-1', name: '${bot.menu}{name}' }, content: '', timestamp: 1 };
+      expect(await f.send(0, '欢迎 ${sender.name}（${sender.id}），发送 ${bot.menu}', { incoming }))
+        .toBe('欢迎 ${bot.menu}{name}（u-1），发送 #菜单');
+    } finally { await f.close(); }
+  });
+
+  it('survives configuration environment expansion and reaches the outbound template', async () => {
+    const f = await fixture();
+    try {
+      // What a plugin config string goes through at load time (EnvStore.expandMissingAsEmpty).
+      const config = expandEnvironmentValue({
+        welcome: '欢迎 ${sender.name}，发送 ${bot.menu}，${command.checkin} 签到 [${bot.prefix}] ${conversation.kind}',
+        legacy: '${menu}|${prefix}',
+      }, () => undefined, () => '');
+      expect(config.legacy).toBe('|'); // A single name is an environment reference; dotted paths pass through.
+      const incoming = { sender: { id: 'u-1', name: 'Bob' }, content: '', timestamp: 1 };
+      expect(await f.send(0, config.welcome, { incoming })).toBe('欢迎 Bob，发送 #菜单，#checkin 签到 [#] group');
+      expect(await f.send(1, config.welcome, { incoming })).toBe('欢迎 Bob，发送 /菜单，/checkin 签到 [/] group');
+    } finally { await f.close(); }
+  });
+
+  it('leaves the removed top-level placeholders as written', async () => {
+    const f = await fixture();
+    try {
+      const text = '${prefix} ${menu} ${adapter} ${endpoint} ${kind} ${conversationId} ${content} ${timestamp}';
+      expect(await f.send(0, text, { incoming: { sender: { id: 'u' }, content: 'hi', timestamp: 1 } })).toBe(text);
     } finally { await f.close(); }
   });
 
@@ -171,7 +194,7 @@ describe('outbound templates · command environment of the sending account (#125
       expect(await f.send(0, '纯文本，没有占位符')).toBe('纯文本，没有占位符');
       expect(await f.send(0, { type: 'text', data: { text: 'segment text' } } as never)).toBe('segment text');
       expect(resolve).not.toHaveBeenCalled();
-      expect(await f.send(0, '${menu}')).toBe('#菜单');
+      expect(await f.send(0, '${bot.menu}')).toBe('#菜单');
       expect(resolve).toHaveBeenCalledTimes(1);
       // Several texts of one send share one computation.
       expect(await f.send(0, ['${command.checkin}', ' ', '${command.group.kick}'] as never)).toBe('#checkin #group kick');

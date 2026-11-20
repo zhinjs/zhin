@@ -109,12 +109,12 @@ export function parseTeachPair(raw: string): { question: string; answer: string 
 
 /**
  * zhinjs/zhin#1250: a taught answer is an outbound template — `${sender.name}`, `${sender.id}`,
- * `${menu}`, `${command.checkin}`, … are filled by the outbound renderer from the incoming message,
- * as data. Only `${time}` / `${date}` are filled here (formatted with the message's locale), in the
+ * `${bot.menu}`, `${command.checkin}`, … are filled by the outbound renderer from the incoming message,
+ * as data. Only `${now.time}` / `${now.date}` are filled here (formatted with the message's locale), in the
  * same single pass as the regex captures `$1`–`$9`. Captures are the asker's own text: they are sent
  * as untrusted content, so a capture (or a nickname) is never expanded as a placeholder.
  */
-const ANSWER_LOCAL_PLACEHOLDER = /\$\{\s*(time|date)\s*\}|\$([1-9])/gu;
+const ANSWER_LOCAL_PLACEHOLDER = /\$\{\s*now\.(time|date)\s*\}|\$([1-9])/gu;
 const TEACH_TRUST = Object.freeze({ source: 'group-suite.teach' });
 
 function processAnswer(

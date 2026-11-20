@@ -343,7 +343,7 @@ function lazyTemplateContext(
   let withCommands: TemplateContext | undefined;
   return (text) => {
     base ??= buildTemplateContext(conversation, incoming, snapshot);
-    if (!COMMAND_PLACEHOLDER.test(text) || base.prefix === undefined) return base;
+    if (!COMMAND_PLACEHOLDER.test(text) || base.bot.prefix === undefined) return base;
     withCommands ??= withCommandPaths(base, conversation, incoming, requester, snapshot);
     return withCommands;
   };
@@ -367,7 +367,7 @@ function withCommandPaths(
   snapshot: RuntimeSnapshot,
 ): TemplateContext {
   try {
-    const command = templateCommandPaths(snapshot, commandEnvironmentInput(conversation, incoming, snapshot), requester, base.prefix ?? '');
+    const command = templateCommandPaths(snapshot, commandEnvironmentInput(conversation, incoming, snapshot), requester, base.bot.prefix ?? '');
     return command ? { ...base, command } : base;
   } catch {
     // Placeholders stay as written; the send itself never fails over a template lookup.
@@ -391,18 +391,21 @@ function buildTemplateContext(
     }
   }
   return {
-    ...(environment ? { prefix: environment.prefix, ...(environment.menu !== undefined ? { menu: environment.menu } : {}) } : {}),
-    adapter: conversation.endpoint.adapter,
-    endpoint: conversation.endpoint.id,
-    kind: conversation.kind,
-    conversationId: conversation.id,
-    sender: incoming?.sender,
-    content: incoming?.content,
-    segments: incoming?.segments,
-    messageId: incoming?.messageId,
-    timestamp: incoming?.timestamp,
-    endpointId: incoming?.endpointId,
-    mentioned: incoming?.mentioned,
+    bot: {
+      adapter: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      ...(incoming?.endpointId !== undefined ? { endpointId: incoming.endpointId } : {}),
+      ...(environment ? { prefix: environment.prefix, ...(environment.menu !== undefined ? { menu: environment.menu } : {}) } : {}),
+    },
+    conversation: { kind: conversation.kind, id: conversation.id },
+    ...(incoming?.sender ? { sender: incoming.sender } : {}),
+    ...(incoming ? { message: {
+      content: incoming.content,
+      ...(incoming.segments !== undefined ? { segments: incoming.segments } : {}),
+      ...(incoming.messageId !== undefined ? { id: incoming.messageId } : {}),
+      timestamp: incoming.timestamp,
+      ...(incoming.mentioned !== undefined ? { mentioned: incoming.mentioned } : {}),
+    } } : {}),
   };
 }
 

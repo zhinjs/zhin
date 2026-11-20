@@ -1,5 +1,5 @@
 /**
- * @internal zhinjs/zhin#1250: the command environment (`${prefix}`, `${menu}`, `${command.*}`) of
+ * @internal zhinjs/zhin#1250: the command environment (`${bot.prefix}`, `${bot.menu}`, `${command.*}`) of
  * outbound templates. The IM runtime provides it from the same MessageDispatcher (and so the same
  * prefix resolver) the inbound command dispatch uses; nothing here reads adapter configuration
  * itself. Not exported from the package. The renderer reads it from the Root scope only, so a

@@ -29,7 +29,7 @@
     {
       "package": "@zhin.js/plugin-runtime",
       "type": "minor",
-      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `formatDateTime()` 与 `FormatDateTimeOptions`（CLI 与日志共用的 `YYYY-MM-DD HH:mm:ss` 日期时间格式）。npm 上 1.4.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——出站模板 TemplateContext 新增 `prefix`、`menu`、`command` 与新增导出类型 `TemplateCommandPaths`（主体沿用已有的 `sender`：由事件触发、没有入站消息的发送，由发送方插件经 `incoming.sender` 传入事件主体，如入群的新成员），按发出消息的账号渲染带前缀的命令写法，所有插件可用。1.4.1 已发布，本次为 1.5.0，npm 上 1.5.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250）：第 22 批——新增公开导出 `formatDateTime()` 与 `FormatDateTimeOptions`（CLI 与日志共用的 `YYYY-MM-DD HH:mm:ss` 日期时间格式）。npm 上 1.4.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——出站模板 TemplateContext 重组为分组字段（不兼容：旧顶层占位符不再展开）：`bot`（`adapter`、`endpoint`、`endpointId` 与新增的 `prefix`、`menu`，新增导出类型 `TemplateBot`）、`conversation`（`kind`、`id`）、`sender`（`id`、`name`、`roles`；也承载事件触发发送的主体，如入群的新成员，经 `incoming.sender` 传入）、`message`（`content`、`segments`、`id`、`timestamp`、`mentioned`）与新增的 `command`（新增导出类型 `TemplateCommandPaths`），按发出消息的账号渲染带前缀的命令写法，所有插件可用；所有占位符至少两段，不与配置加载时的环境变量展开冲突。1.4.1 已发布，本次为 1.5.0，npm 上 1.5.0 未被占用。"
     },
     {
       "package": "@zhin.js/harness",

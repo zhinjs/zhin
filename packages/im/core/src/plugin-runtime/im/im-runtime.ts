@@ -368,7 +368,7 @@ export class ImRuntime implements OutboundMessageService {
     resources.provide(permissionHostToken, this.permissionHost);
     resources.provide(commandExecutionAdmissionToken, this.#commandExecution.admission);
     resources.provide(messageBusToken, this.messageBus);
-    // #1250: outbound templates resolve `${prefix}` / `${menu}` with this runtime's own dispatcher.
+    // #1250: outbound templates resolve `${bot.prefix}` / `${bot.menu}` with this runtime's own dispatcher.
     resources.provide(outboundCommandEnvironmentToken, (input, snapshot) => this.#inbound.outboundCommandEnvironment(input, snapshot));
   }
 

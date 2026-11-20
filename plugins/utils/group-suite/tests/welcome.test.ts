@@ -230,8 +230,8 @@ describe('group-suite welcome · delivery', () => {
 describe('group-suite welcome · outbound template (#1250)', () => {
   const payloadText = (request: EndpointSendRequest) => (request.payload as { data: { text: string } }[]).map(item => item.data.text).join('');
 
-  it('renders ${menu} / ${prefix} / ${command.*} for the account that sends the welcome', async () => {
-    const f = await fixture(undefined, '欢迎 ${sender.name}！发送 ${menu} 查看，${command.checkin} 签到 [${prefix}]');
+  it('renders ${bot.menu} / ${bot.prefix} / ${command.*} for the account that sends the welcome', async () => {
+    const f = await fixture(undefined, '欢迎 ${sender.name}！发送 ${bot.menu} 查看，${command.checkin} 签到 [${bot.prefix}]');
     try {
       f.allowEverywhere();
       await f.receive();
@@ -243,11 +243,11 @@ describe('group-suite welcome · outbound template (#1250)', () => {
     } finally { await f.close(); }
   });
 
-  it('treats the nickname as data and leaves the old {name} / {id} unexpanded', async () => {
-    const f = await fixture(undefined, '{name} {id} 欢迎 ${sender.name}');
+  it('treats the nickname as data and leaves {name} / {id} and the removed top-level placeholders unexpanded', async () => {
+    const f = await fixture(undefined, '{name} {id} ${menu} ${prefix} ${adapter} 欢迎 ${sender.name}');
     try {
-      await f.receive({ ...f.notice, target: { id: 'new', name: '${menu}{name}${sender.id}' } });
-      expect(f.sent.map(payloadText)).toEqual(['{name} {id} 欢迎 ${menu}{name}${sender.id}']);
+      await f.receive({ ...f.notice, target: { id: 'new', name: '${bot.menu}{name}${sender.id}' } });
+      expect(f.sent.map(payloadText)).toEqual(['{name} {id} ${menu} ${prefix} ${adapter} 欢迎 ${bot.menu}{name}${sender.id}']);
     } finally { await f.close(); }
   });
 

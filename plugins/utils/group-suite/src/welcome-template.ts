@@ -1,15 +1,15 @@
 import { getLogger } from 'zhin.js';
 
 /**
- * zhinjs/zhin#1250: welcome text is an outbound template (`${sender.name}`, `${menu}`,
+ * zhinjs/zhin#1250: welcome text is an outbound template (`${sender.name}`, `${bot.menu}`,
  * `${command.checkin}`, …) filled by the outbound renderer; the new member is passed as data in
- * `sender`, so a nickname containing `${menu}` is sent literally. This module only warns about
+ * `sender`, so a nickname containing `${bot.menu}` is sent literally. This module only warns about
  * menu words written without the account's command prefix.
  */
 
 /** Words that read as the command menu; written bare they miss an account that needs a prefix. */
 const BARE_MENU_WORD = /帮助|菜单|(?<![\p{L}\p{N}_])(?:help|menu)(?![\p{L}\p{N}_])/giu;
-const ENVIRONMENT_PLACEHOLDER = /\$\{\s*(menu|prefix|command)\b/u;
+const ENVIRONMENT_PLACEHOLDER = /\$\{\s*(bot\.menu|bot\.prefix|command\.)/u;
 const MAX_HINTED = 512;
 const hinted = new Set<string>();
 const logger = getLogger('group-suite');
@@ -35,7 +35,7 @@ export function hintWelcomePrefix(endpoint: string, text: string, prefix: string
   if (hinted.size >= MAX_HINTED) hinted.clear();
   hinted.add(key);
   logger.warn(`group-suite welcomeMessage for account ${endpoint} names the menu without its command prefix `
-    + `"${prefix}"; write \${menu} (or \${prefix}) instead. zhin doctor does not check per-account plugin config.`);
+    + `"${prefix}"; write \${bot.menu} (or \${bot.prefix}) instead. zhin doctor does not check per-account plugin config.`);
 }
 
 /** @internal Tests only. */
