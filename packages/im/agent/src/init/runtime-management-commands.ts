@@ -9,11 +9,11 @@
  * `reset` 对所有人开放：受信任用户直接归档会话；其他人发 `reset` 等同聊天清空命令 `/clear`（同一条
  * 清空路径、触发条件、@ 要求、确认冷却与群规则，见 `RuntimeManagementCommandHost.clear`）。
  *
- * 只接受人类来源：消息 `origin`（或 `metadata.origin`）不是 `human` 时静默不回复，记 `filtered_by_policy`
- * / `non_human_origin`，与改前 Agent 入站对非人类来源的处理一致。
+ * 只接受人类来源：由命令分发统一过滤（第 84 批，`@zhin.js/core` 的 `isNonHumanOrigin`）——消息 `origin`
+ * （或无可信来源时的 `metadata.origin`）不是 `human` 时不进任何命令，结局 `ignored_bot` / `non_human_origin`。
  */
 import { defineCommand, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
-import { reportInboundOutcome, type Message } from '@zhin.js/core/runtime';
+import type { Message } from '@zhin.js/core/runtime';
 import type { InferenceClient } from '@zhin.js/ai/provider';
 import type { SnapshotLease } from '@zhin.js/plugin-runtime';
 import { managementMessages as t } from './management-messages.js';
@@ -21,7 +21,7 @@ import { asPrivate } from '../internal/as-private.js';
 import { jumpSessionTree, listSessionTree } from '../session/session-tree-commands.js';
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
-import { isNonHumanOrigin, resolveRuntimeSenderRoles } from '../plugin-runtime/ingress/request-capabilities.js';
+import { resolveRuntimeSenderRoles } from '../plugin-runtime/ingress/request-capabilities.js';
 import { dispatchLeaseToken } from '../plugin-runtime/inference/dispatch-lease.js';
 
 /** Management commands need any zhin chat role (`trusted` or higher) on the conversation's chain. */
@@ -51,6 +51,11 @@ export interface RuntimeManagementDispatch {
    * for the message, retained); absent when the operation has no Host resources.
    */
   readonly retainLease?: () => SnapshotLease;
+  /**
+   * #1250 第 84 批: the message's conversation sequence, as the IM runtime recorded it (absent without
+   * Host resources or when none was recorded): the clear path folds scene events up to it.
+   */
+  readonly conversationSequence?: number;
 }
 
 export interface RuntimeManagementCommandHost {
@@ -118,20 +123,8 @@ function inputOf(command: CommandInput): Message {
 function dispatchOf(command: CommandRun): RuntimeManagementDispatch {
   if (!command.has(dispatchLeaseToken)) return { signal: command.signal };
   const port = command.use(dispatchLeaseToken);
-  return { signal: command.signal, retainLease: () => port.retain() };
-}
-
-/**
- * Management commands answer people only: `true` (and the outcome recorded) for a message from
- * another bot (origin other than `human`), which then gets no reply and runs nothing, like the Agent
- * ingress before these became Root commands. `filtered_by_policy` / `non_human_origin` outranks the
- * dispatch's own `command_replied`.
- */
-function fromBot(name: string, command: CommandInput): boolean {
-  const message = inputOf(command);
-  if (!isNonHumanOrigin(message)) return false;
-  reportInboundOutcome(message, { outcome: 'filtered_by_policy', reason: 'non_human_origin', stage: 'command', command: name });
-  return true;
+  return { signal: command.signal, retainLease: () => port.retain(),
+    ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}) };
 }
 
 async function listLanguageProfiles(operation: RuntimeManagementOperation) {
@@ -160,7 +153,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       name: 'models',
       definition: define({
         ...described('models'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
-        execute: command => fromBot('models', command) ? undefined : open(command, async operation => {
+        execute: command => open(command, async operation => {
           const profiles = await listLanguageProfiles(operation);
           return [t(command.locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
         }),
@@ -170,7 +163,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       name: 'health',
       definition: define({
         ...described('health'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
-        execute: command => fromBot('health', command) ? undefined : open(command, async operation => {
+        execute: command => open(command, async operation => {
           const profiles = await listLanguageProfiles(operation);
           return `${t(command.locale, 'health')}\n${profiles.length} configured language profiles`;
         }),
@@ -181,7 +174,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       definition: define({
         ...described('tree'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         params: { index: { type: 'integer', optional: true, min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
-        execute: command => fromBot('tree', command) ? undefined : open(command, async operation => {
+        execute: command => open(command, async operation => {
           const index = command.params.index;
           if (typeof index === 'number') {
             return withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, index, command.locale));
@@ -198,7 +191,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       definition: define({
         ...described('fork'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         params: { index: { type: 'integer', min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
-        execute: command => fromBot('fork', command) ? undefined : open(command, operation =>
+        execute: command => open(command, operation =>
           // `index` is a required `integer` param: the command module parses it before `execute` runs.
           withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, command.params.index as number, command.locale))),
       }),
@@ -207,7 +200,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       name: 'compact',
       definition: define({
         ...described('compact'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
-        execute: command => fromBot('compact', command) ? undefined : open(command, async operation => {
+        execute: command => open(command, async operation => {
           const result = await withModelScope(operation, () => host.zhinAgent.compactSession(operation.sessionKey, command.locale));
           return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
         }),
@@ -222,7 +215,6 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
         // which only acts where the AI answers them and only clears their own session.
         ...described('reset'), options: {},
         execute: async command => {
-          if (fromBot('reset', command)) return undefined;
           const message = inputOf(command);
           if (resolveRuntimeSenderRoles(message).hostRole === undefined) {
             await host.clear(message, dispatchOf(command));
@@ -261,7 +253,6 @@ function memoryCommands(runtime: SemanticMemoryRuntime): RuntimeManagementComman
       definition: define({
         ...described('memory'), options: {},
         execute: async command => {
-          if (fromBot('memory', command)) return undefined;
           const scope = scopeOf(command);
           if (typeof scope === 'string') return scope;
           if (inputOf(command).conversation.kind !== 'private') {
@@ -281,7 +272,6 @@ function memoryCommands(runtime: SemanticMemoryRuntime): RuntimeManagementComman
       definition: define({
         ...described('forget'), options: {},
         execute: async command => {
-          if (fromBot('memory forget', command)) return undefined;
           const scope = scopeOf(command);
           if (typeof scope === 'string') return scope;
           const target = command.args.join(' ').trim();

@@ -34,8 +34,14 @@ interface OpenOperationInput {
   readonly subject?: UsageSubject;
   readonly alreadyAdmitted: boolean;
   readonly inferenceSnapshot?: InferenceGraphSnapshot;
-  /** IM commands only: also expose the dispatching generation ({@link dispatchLeaseToken}). */
+  /**
+   * Root IM commands only: also expose the dispatching generation ({@link dispatchLeaseToken}).
+   * Never offered to a plugin-owned command / handler (#1250 第 84 批): a retained lease that is
+   * never released would pin a retired generation and keep hot reload from draining.
+   */
   readonly dispatchLease?: boolean;
+  /** The dispatched message's conversation sequence, offered with the dispatch lease. */
+  readonly conversationSequence?: number;
 }
 
 /** Each authorized Command/Tool owns a lazy client and an independent borrowed generation lease. */
@@ -98,7 +104,10 @@ export function createHostOperationResources(options: OperationResourcesOptions)
     });
     // #1250 第 83 批: the exact generation this operation was dispatched in, retained on demand.
     const dispatchLease: DispatchLeasePort | undefined = input.dispatchLease
-      ? Object.freeze({ retain: () => input.snapshots.retain(input.lease) })
+      ? Object.freeze({
+        retain: () => input.snapshots.retain(input.lease),
+        ...(input.conversationSequence !== undefined ? { conversationSequence: input.conversationSequence } : {}),
+      })
       : undefined;
     return Object.freeze({
       has: (token: Token<unknown>) => token === aiInferenceClientToken || (dispatchLease !== undefined && token === dispatchLeaseToken),
@@ -120,7 +129,9 @@ export function createHostOperationResources(options: OperationResourcesOptions)
         open({
           ...input,
           alreadyAdmitted: false,
-          dispatchLease: true,
+          // #1250 第 84 批: only an operation owned by the Root (the Agent management commands the
+          // zhin instance registers) sees the dispatch lease; token secrecy alone is not the guard.
+          dispatchLease: input.owner === input.lease.value.root,
           subject: usageSubjectFromMessage(input.message),
           context: () =>
             resolveInferenceMessageContext(contextOptions, input.message, randomUUID()),

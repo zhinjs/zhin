@@ -102,7 +102,7 @@ sidebar: false
 | outcome | reason | 可见 | 发起人人话（zh / en） | 管理员补充（zh / en） |
 | --- | --- | --- | --- | --- |
 | `replied` | `agent` / `agent_merged`（合流后回复） | 发起人 | 已回复。 / Replied. | 由 Agent 回复，回合 `{turnId}`。 / Replied by the agent, turn `{turnId}`. |
-| `command_replied` | `executed` / `menu` / `help` | 发起人 | 已执行指令 `{command}`。 / Ran command `{command}`. | 指令 `{command}`（插件 `{owner}`）。 / Command `{command}` (plugin `{owner}`). |
+| `command_replied` | `executed` / `menu` / `help` | 发起人 | 已执行指令 `{command}`。 / Ran command `{command}`. | 指令 `{command}`（插件 `{owner}`）。 / Command `{command}` (plugin `{owner}`).（#1250 第 84 批：指令什么都没返回、什么都没发，且执行期间自己记了结局——如没有清空的 `reset`——时保留指令自己的结局，分发层不再追加 `command_replied`。） |
 | `handler_replied` | `middleware` / `handler` / `middleware_replied`（中间件自己回复后停止分发，#1250） | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 `{stage}` 回复。 / Replied by `{owner}` (`{stage}`). |
 | `interaction_answered` | `prompt` / `button` | 发起人 | 已作为对等待中提问的回答。 / Taken as your answer to a pending question. | 提问方 `{owner}`。 / Prompt by `{owner}`. |
 | `suggested` | `near_miss` | 发起人 | 没有这条指令，已提示相近的指令。 / No such command; suggested a close one. | 近似匹配提示，来自 `{owner}`。 / Near-match suggestion from `{owner}`. |
@@ -135,6 +135,8 @@ sidebar: false
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
 | `not_addressed` | `no_command_not_ambient`（群消息、未匹配命令、本群不在 `ai.trigger.ambient.conversations`）、`prefix_mismatch`、`empty_input`、`ignored_trigger_prefix`、`trigger_disabled` | 发起人 | 这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。 / You did not mention me and it is not a command; here I only answer when mentioned. | 未点名、未匹配指令，本群不插话（`{reason}`）。 / Not addressed, no command, no interjection here (`{reason}`). |
+| `not_addressed` | `clear_command`（没有聊天角色的人发 `reset`，即清空指令，但此处 AI 不回复他：群里未 @、AI 触发关闭等；#1250 第 84 批） | 发起人 | 清空指令只在我会回复你的地方生效（群里要 @ 我），这次没有清空。 / The clear command only works where I answer you (mention me in a group); nothing was cleared. | 清空指令未生效：此处 AI 不回复该发送者或未点名（`{reason}`）。 / Clear command not applied: not addressed or the AI does not answer the sender here (`{reason}`). |
+| `not_addressed` | `live_room_clear`（直播间里没有聊天角色的人发 `reset`：直播间的会话是共享场景任务，不清空，也不进 AI 回合；#1250 第 84 批） | 发起人 | 直播间里清空指令不清空上下文，也不进 AI 回合。 / In a live room the clear command clears nothing and starts no AI turn. | 直播间里清空指令不生效（`{reason}`）。 / Clear command not applied in a live room (`{reason}`). |
 | `feature_disabled` | `commands_unavailable` / `plugin_disabled:<plugin>` | 管理员 | 这里没有开启相关功能。 / That feature is not enabled here. | 功能在此处关闭（`{reason}`）。 / Feature disabled here (`{reason}`). |
 | `ambient_silent` | `ambient_not_engaged` / `cooldown` / `hourly_cap` / `no_context` / `judge_failed` / `superseded` | 发起人 | 我判断这句不需要我插话。 / I decided not to chime in. | 旁听判定不插话（`{reason}`）。 / Ambient judge declined (`{reason}`). |
 | `model_silent` | `empty_output` | 发起人 | 我看了，但这次决定不回复。 / I read it but chose not to reply. | 回合 `{turnId}` 完成但没有输出。 / Turn `{turnId}` completed with no output. |
@@ -153,6 +155,7 @@ sidebar: false
 | `filtered_by_policy` | `cannot_speak_muted` / `cannot_speak_muted_all` / `cannot_speak_restricted` | 发起人 | 同上 | 同上 |
 | `filtered_by_policy` | `middleware_stopped` | 管理员 | 同上 | 同上 |
 | `filtered_by_policy` | `control_gate_failed` | 管理员 | 同上 | 同上 |
+| `filtered_by_policy` | `outbound_stopped`（控制面停止了本会话的出站消息，没有聊天角色的人发的 `reset` 不清空、不回复；#1250 第 84 批） | 发起人 | 同上 | 同上 |
 | `media_rejected` | `too_large` / `mime_mismatch` / `scheme_unsupported` / `host_not_allowed` / `path_not_allowed` / `fetch_failed` / `unmaterialized_platform_reference` | 发起人 | 你发的媒体我读不了，只看了文字部分。 / I could not read your media; only the text was used. | 媒体被拒（`{reason}`）。 / Media rejected (`{reason}`). |
 
 `middleware_stopped` 只记中间件停止分发且**该中间件所属插件没有为本条消息送达任何回复**的情况；别的插件先送达的回复不算。中间件先自己回复（`$reply` 回执 `sent`）再停止分发的（游戏会话输入、菜单），记 `handler_replied` / `middleware_replied`，不算被策略拦下（#1250 `inbound-outcome-middleware-reply-mislabeled`）。消费者按 `outcome` 归类即可：`reason` 只新增取值，旧取值含义不变。
@@ -164,7 +167,7 @@ sidebar: false
 | outcome | reason | 管理员人话（zh / en） |
 | --- | --- | --- |
 | `ignored_self` | `self_echo` | 机器人自己发出的消息回显。 / Echo of the bot's own message. |
-| `ignored_bot` | `member` / `peer_bot` / `non_human_origin` | 来自其他机器人（`{reason}`），只记录。 / From another bot (`{reason}`); recorded only. |
+| `ignored_bot` | `member` / `peer_bot` / `non_human_origin`（消息的可信来源，或无可信来源时适配器自报的 `metadata.origin`，不是 `human`：Agent 入站不回复；#1250 第 84 批起命令分发也不进任何指令——不执行、不回复无权限、不给近似指令提示，阶段 `command`） | 来自其他机器人（`{reason}`），只记录。 / From another bot (`{reason}`); recorded only. |
 | `dropped_duplicate` | `duplicate` | 同一条消息已由另一个端点处理。 / Already handled by another endpoint. |
 | `dropped_unready` | `venue_unready` | 场地成员尚未上报自身 ID，消息未处理：`{detail}`。 / Venue members not ready: `{detail}`. |
 | `dropped_dedup_error` | `dedup_error` | 去重存储出错，按失败关闭丢弃：{detail}。 / Dedup store failed closed: {detail}. |

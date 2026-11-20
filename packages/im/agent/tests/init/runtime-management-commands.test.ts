@@ -197,15 +197,19 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
     expect(h.dispatches[1]!.retainLease).toBeUndefined();
   });
 
-  it('answers people only: another bot gets no reply and nothing runs (#1250 第 83 批)', async () => {
+  it('answers people only: the command dispatch keeps another bot away from every command (#1250 第 83 / 84 批)', async () => {
     const h = harness({ host: { semanticMemory: { active: true, list: vi.fn(async () => []), delete: vi.fn() } as never } });
     for (const origin of ['peer_bot', 'member', 'self']) {
       for (const content of ['/models', '/health', '/tree', '/fork 1', '/compact', '/reset', '/memory', '/memory forget all']) {
         for (const kind of ['private', 'group'] as const) {
-          const sent = await h.send(content, { kind, role: 'owner', metadata: { origin } });
-          expect(sent.reply).toBeUndefined();
-          expect(sent.route).not.toHaveBeenCalled();
-          expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'filtered_by_policy', reason: 'non_human_origin', stage: 'command' }));
+          for (const role of ['owner', undefined] as const) {
+            const sent = await h.send(content, { kind, ...(role ? { role } : {}), metadata: { origin } });
+            expect(sent.reply).toBeUndefined();
+            expect(sent.message.$reply).not.toHaveBeenCalled();
+            expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'command' }));
+            // No permit refusal, no command outcome at all.
+            expect(sent.outcomes.filter(candidate => candidate.stage === 'command')).toHaveLength(1);
+          }
         }
       }
     }
@@ -214,6 +218,19 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
     expect(h.archiveSession).not.toHaveBeenCalled();
     // `human` (or no origin) is a person.
     expect((await h.send('/models', { role: 'owner', metadata: { origin: 'human' } })).reply).toContain('openai/gpt-4o');
+  });
+
+  it('sends no permission refusal to a self-reported bot without a role in a private chat (#1250 第 84 批)', async () => {
+    const h = harness();
+    const bot = await h.send('/models', { kind: 'private', metadata: { origin: 'peer_bot' } });
+    expect(bot.reply).toBeUndefined();
+    expect(bot.message.$reply).not.toHaveBeenCalled();
+    expect(bot.outcomes).not.toContainEqual(expect.objectContaining({ outcome: 'permission_denied' }));
+    expect(bot.outcomes).toContainEqual(expect.objectContaining({ outcome: 'ignored_bot', reason: 'non_human_origin' }));
+    expect(h.list).not.toHaveBeenCalled();
+    // The same message from a person is refused with the reason, as before.
+    const person = await h.send('/models', { kind: 'private' });
+    expect(person.reply).toBe(denial());
   });
 
   it('fails a model-using command when the Host model operation is unavailable', async () => {

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SnapshotStore, rootPluginId, createCapabilitySlot, createRootPrivateToken, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, rootPluginId, childPluginId, createCapabilitySlot, createRootPrivateToken, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { RuntimeMessage } from '@zhin.js/core/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import {
@@ -98,6 +98,20 @@ it('exposes the dispatching generation to an IM command operation only, by token
     retained.release();
     expect(lease.active).toBe(true);
     await im.close(); await tool.close();
+  } finally { lease.release(); await f.close(); }
+});
+
+it('offers the dispatch lease only to a Root-owned IM operation, never a plugin command (#1250 第 84 批)', async () => {
+  const f = await fixture(), lease = f.snapshots.acquire();
+  try {
+    const plugin = childPluginId(f.root, 'some-plugin');
+    const view = f.ports.im.open({ lease, snapshots: f.snapshots, message: f.message, owner: plugin, signal: f.signal })!;
+    expect(view.has(dispatchLeaseToken)).toBe(false);
+    expect(() => view.use(dispatchLeaseToken)).toThrow('Resource is not available in this operation');
+    // The plugin still gets its inference client.
+    expect(view.has(aiInferenceClientToken)).toBe(true);
+    await view.close();
+    expect(lease.active).toBe(true);
   } finally { lease.release(); await f.close(); }
 });
 

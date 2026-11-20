@@ -80,6 +80,8 @@ export interface ImOperationResourcesInput {
   readonly message: RuntimeMessage;
   readonly owner: PluginId;
   readonly signal: AbortSignal;
+  /** #1250 第 84 批: the message's conversation sequence, when it was recorded (not for a secret). */
+  readonly conversationSequence?: number;
 }
 export interface ImOperationResourcesPort {
   open(input: ImOperationResourcesInput): OperationResourceView | undefined;
