@@ -9,11 +9,13 @@ export async function runManagementCommand(name: string, input: Readonly<{
   args?: readonly string[];
   senderId?: string;
   locale?: Locale;
+  kind?: 'private' | 'group' | 'channel';
   host?: Partial<RuntimeManagementCommandHost>;
 }>): Promise<unknown> {
   const commands = createRuntimeManagementCommands({
     zhinAgent: {} as never,
-    open: async (_message, _signal, run) => run({ sessionKey: 'session' }),
+    open: async (_message, _dispatch, run) => run({ sessionKey: 'session' }),
+    clear: async () => undefined,
     ...input.host,
   });
   const command = commands.find(entry => entry.name === name);
@@ -25,9 +27,10 @@ export async function runManagementCommand(name: string, input: Readonly<{
     options: {},
     segments: [],
     signal: new AbortController().signal,
+    has: () => false,
     formatCommand: (path: string) => `/${path}`,
     input: {
-      conversation: { endpoint: { id: 'ep', adapter: 'qq' }, kind: 'private', id: input.senderId ?? 'u' },
+      conversation: { endpoint: { id: 'ep', adapter: 'qq' }, kind: input.kind ?? 'private', id: input.senderId ?? 'u' },
       content: '',
       ...(input.senderId ? { sender: { id: input.senderId } } : {}),
     },

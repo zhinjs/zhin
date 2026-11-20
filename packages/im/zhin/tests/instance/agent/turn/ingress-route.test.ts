@@ -14,14 +14,25 @@ import { InboundOutcomeLedger, inboundOutcomeSink } from '@zhin.js/core/runtime'
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../core/src/plugin-runtime/im/conversation-runtime.js';
 import { executeInboundTurnSpine } from '../../../../../core/src/plugin-runtime/im/inbound-spine.js';
-import { rootPluginId, SnapshotStore, userLocalePreferencesToken, type Locale, type RuntimeSnapshot,
-  type UserLocalePreferences } from '@zhin.js/plugin-runtime';
+import { createCapabilitySlot, rootPluginId, SnapshotStore, userLocalePreferencesToken, type Locale, type PluginId, type RuntimeSnapshot,
+  type SnapshotLease, type SnapshotReader, type UserLocalePreferences } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
-import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '@zhin.js/agent/runtime';
+import { AgentTurnIngressRoute, auditStaleReply, createHostOperationResources, mergedMemberAccess, mergedTurnSenders,
+  selectDecisionAgentRoute } from '@zhin.js/agent/runtime';
 import { createRuntimeManagementCommands } from '@zhin.js/agent';
 import { CommandIndex, commandFeatureId } from '@zhin.js/command';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { createCapabilitySlot } from '@zhin.js/plugin-runtime';
+
+/**
+ * #1250 第 83 批: the Host's IM operation resources for one message, as Core opens them with the lease
+ * it holds for the message (`imOperationResourcesToken`): a management command retains that generation.
+ */
+function hostOperationResources(lease: SnapshotLease, snapshots: Pick<SnapshotReader, 'retain'>) {
+  const port = createHostOperationResources({ host: {} as never, quota: {} as never }).im;
+  return (input: Readonly<{ message: unknown; owner: PluginId; signal: AbortSignal }>) =>
+    port.open({ lease, snapshots: snapshots as SnapshotReader, message: input.message as never, owner: input.owner, signal: input.signal });
+}
+const operationInputResources = Symbol.for('zhin.operation-input-resources/1');
 
 /**
  * #1250 第 83 批: makes `snapshot` a generation whose Root holds the Agent management commands, wired
@@ -38,7 +49,8 @@ function installManagementCommands(snapshot: RuntimeSnapshot, route: () => Agent
   mutable.resources.get(root)!.set(permissionHostToken.id, new PermissionHost());
   const slots = createRuntimeManagementCommands({
     zhinAgent: zhinAgent as never,
-    open: (message, signal, run) => route().runManagementOperation(message, signal, run),
+    open: (message, dispatch, run) => route().runManagementOperation(message, dispatch, run),
+    clear: async (message, dispatch) => { await route().clearAsCommand(message, dispatch); },
   }).map(command => createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: command.name,
     source: `/agent/${command.name}`, definition: command.definition }));
   for (const slot of slots) mutable.capabilities.set(slot.id, slot);
@@ -455,6 +467,10 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
   const snapshot = { root: rootPluginId(), resources, tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
   const dispatcher = new MessageDispatcher(() => options.prefix!);
   const coordinator = new RuntimeInteractionCoordinator();
+  const release = vi.fn();
+  // The IM runtime's lease for the message; a command retains it through the Host operation resources.
+  const held = { value: snapshot, active: true, release: vi.fn() } as unknown as SnapshotLease;
+  const openResources = hostOperationResources(held, { retain: () => ({ value: snapshot, active: true, release }) as never });
   const reply = vi.fn(async (content: unknown) => {
     if (JSON.stringify(content).includes('Confirm operation')) {
       expect(coordinator.resolveClaim({ ...message, content: 'yes', segments: [] } as never)).toBe(true);
@@ -475,7 +491,7 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     },
     {
       generation: 1,
-      ...(options.commands ? { snapshot } : {}),
+      ...(options.commands ? { snapshot, createOperationResources: openResources } : {}),
       reply: reply,
       clientAdapter: 'fixture',
       presentation: {
@@ -489,10 +505,8 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
   const inference = ingressInferenceFixture();
   const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) =>
     options.execute ? options.execute(request) : { status: 'completed', output: [] });
-  const release = vi.fn();
   const route = new AgentTurnIngressRoute({
     withInferenceScope: inference.withInferenceScope,
-    ...(options.commands ? { acquireLease: () => ({ value: snapshot, active: true, release }) as never } : {}),
     projectRoot: process.cwd(), runtime: { executeLeased } as never, resolveEndpointOwner: () => 'user',
     im: { createInteraction: (source: Message) => coordinator.create(source) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
@@ -1095,7 +1109,6 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
     const snapshots = new SnapshotStore(snapshot);
     const route: AgentTurnIngressRoute = new AgentTurnIngressRoute({
       withInferenceScope: ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":false,"confidence":0.1,"reason":"no"}') }).withInferenceScope,
-      acquireLease: () => snapshots.acquire(),
       projectRoot: '/host-a', runtime: { executeLeased } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext: async () => ({ blocks: [], cursor: 5 }),
         commitConversationContext: async () => undefined, inboundMediaOrigins: () => [] } as never,
@@ -1133,17 +1146,23 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
     // #1250 第 83 批: the same message through the command dispatch first (the management Root
     // commands of this generation), then — when no command claimed it — the Agent ingress.
     const dispatcher = new MessageDispatcher(() => '/');
-    const spine = async (text: string, extra: { conversation?: ConversationRef; owner?: boolean } = {}) => {
+    const spine = async (text: string, extra: { conversation?: ConversationRef; owner?: boolean; mentioned?: boolean } = {}) => {
       const conversation = extra.conversation ?? privateChat;
       const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
       const $reply = vi.fn(async (_content: unknown) => ({ status: 'sent' }));
       const message = {
         conversation, content: text, endpointId: 'account-a', commandPrefix: '/', locale: 'zh-CN',
         sender: { id: 'alice', ...(extra.owner ? { chatRole: 'owner' as const, chatRoleLevels: { owner: 'global' as const } } : {}) },
+        ...(extra.mentioned !== undefined ? { mentioned: extra.mentioned } : {}),
         message: { conversation, id: `message-${text}` }, $reply,
         [inboundOutcomeSink]: () => ledger,
       } as unknown as Message;
       const lease = snapshots.acquire();
+      Object.assign(message, { [operationInputResources]: () => {
+        const open = hostOperationResources(lease, snapshots);
+        const signal = new AbortController().signal;
+        return { signal, create: (input: { owner: PluginId; signal: AbortSignal }) => ({ signal: input.signal, resources: open({ message, ...input }) }) };
+      } });
       try {
         const outcome = await executeInboundTurnSpine({
           message, lease, requester: rootPluginId(), conversationSequence: 5, ingressRoute: route,
@@ -1293,19 +1312,53 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
       await f.run('/clear', { owner: true });
       expect(f.archiveSession).toHaveBeenCalledTimes(2);
       expect(f.archiveSession.mock.calls[1]![0]).toBe(f.archiveSession.mock.calls[0]![0]);
-      // Member: the management command's permission answer stands; nothing is cleared. #1250: the refusal is
-      // the message's `permission_denied` outcome, replied in this private chat (silent in a group).
-      const member = await f.spine('/reset');
-      expect(member.record).toMatchObject({ outcome: 'permission_denied', reason: 'not_operator', reply: 'yes' });
-      expect(f.archiveSession).toHaveBeenCalledTimes(2);
-      // ...and points the member at /clear, which clears their own session.
-      expect(String(member.outcome.reply?.content)).toContain('/clear');
-      const group = await f.spine('/reset', { conversation: { endpoint, kind: 'group', id: 'g1' } });
-      expect(group.record).toMatchObject({ outcome: 'permission_denied', reason: 'not_operator', reply: 'no' });
-      expect(group.outcome.reply).toBeUndefined();
-      expect(group.$reply).not.toHaveBeenCalled();
-      expect(f.archiveSession).toHaveBeenCalledTimes(2);
     } finally { await f.close(); }
+  });
+
+  it('runs /reset from a member as the chat clear command: same session, confirmation, mention rule and gates (#1250 第 83 批)', async () => {
+    const f = clearFixture();
+    try {
+      // Private chat: exactly what `/clear` does — the sender's own session, the fixed clear confirmation, no model turn.
+      const member = await f.spine('/reset');
+      expect(member.outcome.stage).toBe('command');
+      expect(member.record).toMatchObject({ outcome: 'command_replied', command: 'reset' });
+      expect(member.record.facets).toContain('cleared:clear_command');
+      expect(member.record).not.toMatchObject({ outcome: 'permission_denied' });
+      expect(member.$reply).toHaveBeenCalledExactlyOnceWith('已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。');
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+      expect(f.executeLeased).not.toHaveBeenCalled();
+      await f.run('/clear');
+      expect(f.archiveSession.mock.calls[1]![0]).toBe(f.archiveSession.mock.calls[0]![0]);
+      // Group without a mention: like `/clear`, nothing is cleared and nothing is said.
+      const unaddressed = await f.spine('/reset', { conversation: groupChat });
+      expect(unaddressed.$reply).not.toHaveBeenCalled();
+      expect(unaddressed.outcome.reply).toBeUndefined();
+      expect(f.archiveSession).toHaveBeenCalledTimes(2);
+      expect(f.executeLeased).not.toHaveBeenCalled();
+      // Group with a mention: the sender's own group session is cleared.
+      const addressed = await f.spine('/reset', { conversation: groupChat, mentioned: true });
+      expect(addressed.$reply).toHaveBeenCalledExactlyOnceWith('已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。');
+      expect(f.archiveSession).toHaveBeenCalledTimes(3);
+      expect(f.archiveSession.mock.calls[2]![0]).not.toBe(f.archiveSession.mock.calls[0]![0]);
+      expect(f.executeLeased).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+    // The clear's own gates hold: a control-plane stop or a muted sender clears nothing.
+    for (const options of [{ control: { gate: () => stopped, outboundGate: () => stopped } }, { control: { gate: () => ({ blocked: false }), outboundGate: () => stopped } }, { cannotSpeak: true }]) {
+      const g = clearFixture(options);
+      try {
+        const stoppedReset = await g.spine('/reset');
+        expect(g.archiveSession).not.toHaveBeenCalled();
+        expect(stoppedReset.$reply).not.toHaveBeenCalled();
+        expect(stoppedReset.outcome.reply).toBeUndefined();
+      } finally { await g.close(); }
+    }
+    // The AI trigger is off for private chats: no clear, like `/clear`.
+    const off = clearFixture({ trigger: { respondToPrivate: false } });
+    try {
+      const silent = await off.spine('/reset');
+      expect(off.archiveSession).not.toHaveBeenCalled();
+      expect(silent.$reply).not.toHaveBeenCalled();
+    } finally { await off.close(); }
   });
 
   it('is never reached when a plugin command already handled /clear (command first)', async () => {

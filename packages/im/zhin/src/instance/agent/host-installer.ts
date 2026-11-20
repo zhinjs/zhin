@@ -437,7 +437,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveConversationPresentation: conversationPresentation,
       withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
       withModelScope: (input, operation) => options.inference.withDeploymentModels({ ...input, service }, operation),
-      ...(options.snapshots ? { acquireLease: () => options.snapshots!.acquire() } : {}),
     });
     resources.provide(ingressRouteToken, ingressRoute);
     // #1250 第 83 批: the Agent management commands (`models`, `health`, `tree`, `fork`, `compact`,
@@ -447,7 +446,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       for (const command of createRuntimeManagementCommands({
         zhinAgent,
         semanticMemory: semanticMemory ?? null,
-        open: (message, operationSignal, run) => ingressRoute.runManagementOperation(message, operationSignal, run),
+        // Each command retains the generation that dispatched it (an operation resource bound to the
+        // IM runtime's own lease for the message), never whichever generation is current by then.
+        open: (message, dispatch, run) => ingressRoute.runManagementOperation(message, dispatch, run),
+        clear: async (message, dispatch) => { await ingressRoute.clearAsCommand(message, dispatch); },
       })) addFeature(commandFeatureId, command.name, command.definition);
     }
     // #1012 A9 方案②：插件旧欢迎（group-suite）发送前询问；会话开启 welcome.enabled 时让给 MemberLifecycle。

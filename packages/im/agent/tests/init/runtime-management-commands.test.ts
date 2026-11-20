@@ -6,8 +6,13 @@ import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot, type Snapshot
 import {
   createRuntimeManagementCommands,
   type RuntimeManagementCommandHost,
+  type RuntimeManagementDispatch,
   type RuntimeManagementOperation,
 } from '../../src/init/runtime-management-commands.js';
+import { dispatchLeaseToken } from '../../src/plugin-runtime/inference/dispatch-lease.js';
+
+/** `@zhin.js/feature-kit`'s operation hook: the IM runtime's per-message operation resources. */
+const operationInputResources = Symbol.for('zhin.operation-input-resources/1');
 
 /**
  * zhinjs/zhin#1250 第 83 批: the Agent management commands are Root commands. These tests run them
@@ -28,12 +33,15 @@ function harness(options: {
   const replyFixed = vi.fn(async () => undefined);
   const withModelScope = vi.fn(<T>(run: () => Promise<T>) => run());
   const opened: Message[] = [];
+  const dispatches: RuntimeManagementDispatch[] = [];
+  const clear = vi.fn(async (_message: Message, _dispatch: RuntimeManagementDispatch) => undefined);
   const operation: RuntimeManagementOperation = {
     sessionKey: 'session-1', inference: { list } as never, withModelScope, replyFixed, ...options.operation,
   };
   const commands = createRuntimeManagementCommands({
     zhinAgent: { archiveSession, compactSession } as never,
-    open: async (message, _signal, run) => { opened.push(message); return run(operation); },
+    open: async (message, dispatch, run) => { opened.push(message); dispatches.push(dispatch); return run(operation); },
+    clear,
     ...options.host,
   });
   const slots = commands.map(command => createCapabilitySlot({
@@ -49,7 +57,8 @@ function harness(options: {
   const prefix = options.prefix ?? '/';
   const dispatcher = new MessageDispatcher(() => prefix);
 
-  async function send(content: string, at: { kind?: 'private' | 'group' | 'channel'; role?: Role; locale?: 'zh-CN' | 'en' } = {}) {
+  async function send(content: string, at: { kind?: 'private' | 'group' | 'channel'; role?: Role; locale?: 'zh-CN' | 'en';
+    metadata?: Record<string, unknown>; resources?: { has(token: unknown): boolean; use(token: unknown): unknown } } = {}) {
     const kind = at.kind ?? 'group';
     const outcomes: Record<string, unknown>[] = [];
     const sink = { report: (candidate: Record<string, unknown>) => { outcomes.push(candidate); return true; }, enter() {} };
@@ -58,8 +67,12 @@ function harness(options: {
       conversation: { endpoint: { id: 'ep-1', adapter: 'qq' }, kind, id: kind === 'private' ? 'u1' : 'g1' },
       content, locale: at.locale ?? 'zh-CN', endpointId: 'bot', commandPrefix: prefix,
       sender: { id: 'u1', ...(at.role ? { chatRole: at.role } : {}) },
+      ...(at.metadata ? { metadata: at.metadata } : {}),
       $reply: vi.fn(async () => ({ status: 'sent' })),
       [inboundOutcomeSink]: () => sink,
+      // The IM runtime's operation resources for this message (Host-provided in production).
+      ...(at.resources ? { [operationInputResources]: () => ({ signal: new AbortController().signal,
+        create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources: at.resources }) }) } : {}),
     } as unknown as Message;
     const route = vi.fn(async () => true);
     const outcome = await executeInboundTurnSpine({
@@ -76,7 +89,7 @@ function harness(options: {
     return { outcome, outcomes, route, reply: outcome.reply?.content, message };
   }
 
-  return { send, commands, archiveSession, compactSession, list, replyFixed, withModelScope, opened, snapshot };
+  return { send, commands, archiveSession, compactSession, list, replyFixed, withModelScope, opened, dispatches, clear, snapshot };
 }
 
 const denial = (locale: 'zh-CN' | 'en' = 'zh-CN') => describeCommandDenial('trusted', locale);
@@ -121,7 +134,7 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
 
   it('is silent to a sender without a chat role in a group or channel and runs nothing', async () => {
     for (const kind of ['group', 'channel'] as const) {
-      for (const content of ['/models', '/health', '/tree', '/tree 1', '/fork 1', '/compact', '/reset']) {
+      for (const content of ['/models', '/health', '/tree', '/tree 1', '/fork 1', '/compact']) {
         const h = harness();
         const sent = await h.send(content, { kind });
         expect(sent.reply).toBeUndefined();
@@ -134,19 +147,80 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
     }
   });
 
-  it('tells a sender without a chat role why in a private chat; reset points at the clear command', async () => {
+  it('tells a sender without a chat role why in a private chat, with the one permit refusal', async () => {
     const h = harness();
     const models = await h.send('/models', { kind: 'private' });
     expect(models.reply).toBe(denial());
     expect(models.outcomes).toContainEqual(expect.objectContaining({ outcome: 'permission_denied', reason: 'denied:trusted' }));
     expect((await h.send('/fork 1', { kind: 'private', locale: 'en' })).reply).toBe(denial('en'));
-    const reset = await h.send('/reset', { kind: 'private' });
-    expect(reset.reply).toBe(`${denial()}要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。`);
-    expect(reset.outcomes).toContainEqual({ outcome: 'permission_denied', reason: 'not_operator', stage: 'command', command: 'reset', reply: 'yes' });
-    expect((await h.send('/reset', { kind: 'private', locale: 'en' })).reply)
-      .toBe(`${denial('en')} To clear your own AI conversation context, send /clear or 清空 (mention the bot first in a group).`);
     expect(h.archiveSession).not.toHaveBeenCalled();
-    expect(reset.route).not.toHaveBeenCalled();
+    expect(models.route).not.toHaveBeenCalled();
+  });
+
+  it('runs reset from a sender without a chat role as the clear command, everywhere, with no refusal', async () => {
+    for (const kind of ['private', 'group', 'channel'] as const) {
+      const h = harness();
+      const sent = await h.send('/reset', { kind });
+      // The clear path answers (or stays silent) itself; the command adds no reply and no refusal.
+      expect(h.clear).toHaveBeenCalledOnce();
+      expect(h.clear.mock.calls[0]![0]).toBe(sent.message);
+      expect(sent.reply).toBeUndefined();
+      expect(h.opened).toEqual([]);
+      expect(h.archiveSession).not.toHaveBeenCalled();
+      expect(h.replyFixed).not.toHaveBeenCalled();
+      expect(sent.route).not.toHaveBeenCalled();
+      expect(sent.outcomes).not.toContainEqual(expect.objectContaining({ outcome: 'permission_denied' }));
+      expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'command_replied', command: 'reset' }));
+    }
+    // A trusted sender's reset never takes the clear path.
+    const trusted = harness();
+    await trusted.send('/reset', { role: 'trusted' });
+    expect(trusted.clear).not.toHaveBeenCalled();
+    expect(trusted.archiveSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it('hands every command the generation that dispatched it, from the message\'s operation resources', async () => {
+    const lease = { release: vi.fn() } as unknown as SnapshotLease;
+    const retain = vi.fn(() => lease);
+    const resources = { has: (token: unknown) => token === dispatchLeaseToken, use: (token: unknown) => {
+      if (token !== dispatchLeaseToken) throw new Error('unexpected token');
+      return { retain };
+    } };
+    const h = harness();
+    await h.send('/models', { role: 'trusted', resources });
+    expect(h.dispatches[0]!.retainLease?.()).toBe(lease);
+    expect(retain).toHaveBeenCalledOnce();
+    await h.send('/reset', { resources });
+    expect(h.clear.mock.calls[0]![1].retainLease?.()).toBe(lease);
+    // Without Host operation resources there is no generation to retain.
+    await h.send('/health', { role: 'trusted' });
+    expect(h.dispatches[1]!.retainLease).toBeUndefined();
+  });
+
+  it('answers people only: another bot gets no reply and nothing runs (#1250 第 83 批)', async () => {
+    const h = harness({ host: { semanticMemory: { active: true, list: vi.fn(async () => []), delete: vi.fn() } as never } });
+    for (const origin of ['peer_bot', 'member', 'self']) {
+      for (const content of ['/models', '/health', '/tree', '/fork 1', '/compact', '/reset', '/memory', '/memory forget all']) {
+        for (const kind of ['private', 'group'] as const) {
+          const sent = await h.send(content, { kind, role: 'owner', metadata: { origin } });
+          expect(sent.reply).toBeUndefined();
+          expect(sent.route).not.toHaveBeenCalled();
+          expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'filtered_by_policy', reason: 'non_human_origin', stage: 'command' }));
+        }
+      }
+    }
+    expect(h.opened).toEqual([]);
+    expect(h.clear).not.toHaveBeenCalled();
+    expect(h.archiveSession).not.toHaveBeenCalled();
+    // `human` (or no origin) is a person.
+    expect((await h.send('/models', { role: 'owner', metadata: { origin: 'human' } })).reply).toContain('openai/gpt-4o');
+  });
+
+  it('fails a model-using command when the Host model operation is unavailable', async () => {
+    const h = harness({ operation: { withModelScope: undefined } });
+    await expect(h.send('/compact', { role: 'trusted' })).rejects.toThrow('The Host model operation is unavailable');
+    await expect(h.send('/fork 1', { role: 'trusted' })).rejects.toThrow('The Host model operation is unavailable');
+    expect(h.compactSession).not.toHaveBeenCalled();
   });
 
   it('parses tree / fork arguments and answers mistakes of a permitted sender with the usage', async () => {
@@ -194,6 +268,8 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
     for (const name of ['models', 'health', 'tree', 'fork', 'compact', 'reset', 'memory']) expect(operator).toContain(name);
     const member = await menu();
     for (const name of ['models', 'health', 'tree', 'fork', 'compact']) expect(member).not.toContain(`/${name}`);
+    // Open to everyone (a member's reset is the clear command), so listed for everyone.
+    expect(member).toContain('reset');
     expect(member).toContain('memory');
   });
 });
@@ -211,7 +287,7 @@ describe('memory / memory forget', () => {
   it('lists and forgets only the sender\'s own memory, for everyone', async () => {
     const runtime = memory([{ id: 'a1', key: 'pet', content: '橘猫团子' }, { id: 'a2', key: 'tea', content: '乌龙' }]);
     const h = harness({ host: { semanticMemory: runtime as never } });
-    const listed = await h.send('/memory');
+    const listed = await h.send('/memory', { kind: 'private' });
     expect(listed.reply).toContain('关于你的记忆（2 条）');
     expect(listed.reply).toContain('橘猫团子');
     expect(listed.reply).toContain('发送 /memory forget <key 或 id> 遗忘一条');
@@ -223,6 +299,22 @@ describe('memory / memory forget', () => {
     expect((await h.send('/memory forget nothing')).reply).toContain('没有找到');
     expect((await h.send('/memory forget all')).reply).toContain('已遗忘 1 条');
     expect((await h.send('/memory', { kind: 'private', locale: 'en' })).reply).toBe('ℹ️ There are no memories about you.');
+  });
+
+  it('never shows memory content in a group or channel: memory points at the private chat, forget answers a count', async () => {
+    for (const kind of ['group', 'channel'] as const) {
+      const runtime = memory([{ id: 'a1', key: 'pet', content: '橘猫团子' }, { id: 'a2', key: 'tea', content: '乌龙' }]);
+      const h = harness({ host: { semanticMemory: runtime as never } });
+      const listed = await h.send('/memory', { kind });
+      expect(listed.reply).toBe('🔒 记忆只在私聊里列出，请私聊机器人发送 /memory 查看你的记忆。');
+      expect(runtime.list).not.toHaveBeenCalled();
+      expect((await h.send('/memory', { kind, locale: 'en' })).reply)
+        .toBe('🔒 Memories are listed in private chats only. Send /memory to the bot in a private chat to see yours.');
+      const forgot = await h.send('/memory forget all', { kind });
+      expect(forgot.reply).toBe('✅ 已遗忘 2 条关于你的记忆。');
+      for (const text of ['橘猫团子', '乌龙', 'pet', 'tea', 'a1', 'a2']) expect(String(forgot.reply)).not.toContain(text);
+      expect(runtime.delete).toHaveBeenCalledTimes(2);
+    }
   });
 
   it('says long-term memory is off instead of handing the command to the AI', async () => {

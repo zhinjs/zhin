@@ -324,8 +324,10 @@ ai:
 | `/models` · `/health` | `trusted` | 列出语言模型 / AI 服务健康状态 |
 | `/tree` · `/tree N` · `/fork N` | `trusted` | 查看 / 跳转会话分支点 |
 | `/compact` | `trusted` | 压缩当前会话上下文 |
-| `/reset` | 聊天角色（自行判定） | 归档当前会话；无角色者私聊收到改发 `/clear` 的引导 |
-| `/memory` · `/memory forget <key\|id\|all>` | 所有人 | 查看 / 遗忘关于自己的记忆（仅启用语义记忆时注册） |
+| `/reset` | 所有人 | 有聊天角色：归档当前会话；其他人：等同 `/clear`（同一条清空路径、触发与 @ 要求、冷却与闸门） |
+| `/memory` · `/memory forget <key\|id\|all>` | 所有人 | 查看 / 遗忘关于自己的记忆（仅启用语义记忆时注册；群里 `/memory` 只提示私聊查看，`forget` 只回复条数） |
+
+这些命令只回应人：来源不是 `human` 的消息（其他机器人）不回复、不执行，结局 `filtered_by_policy` / `non_human_origin`。命令在分发它的那一代上运行（Host 操作资源里的分发租约），不取最新一代。
 
 带短码的 `rule …`、`approve …` / `deny …` 仍在 ingress 管理阶段（`ingress-management-stage.ts`）处理。
 

@@ -127,6 +127,7 @@ export {
 export type {
   RuntimeManagementCommand,
   RuntimeManagementCommandHost,
+  RuntimeManagementDispatch,
   RuntimeManagementOperation,
 } from './init/runtime-management-commands.js';
 export {

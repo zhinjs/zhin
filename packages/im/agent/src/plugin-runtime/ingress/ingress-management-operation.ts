@@ -1,7 +1,8 @@
 /**
  * zhinjs/zhin#1250 第 83 批: the operation an Agent management Root command (`models`, `tree`,
  * `reset` …, see `createRuntimeManagementCommands`) runs in. It resolves the same session an AI turn
- * of the message would use and holds a generation lease for inference until the command settles.
+ * of the message would use and holds a lease on the dispatching generation for inference until the
+ * command settles.
  *
  * Internal module: deliberately not re-exported from the ingress index.
  */
@@ -22,8 +23,11 @@ export interface ManagementOperationInput {
   readonly message: Message;
   readonly signal: AbortSignal;
   readonly projectRoot: string;
-  /** A lease on the current generation; absent: no inference (`models`, `health` fail). */
-  readonly acquireLease?: () => SnapshotLease;
+  /**
+   * Retains the generation that dispatched the command (the IM runtime's lease for the message);
+   * absent: no inference (`models`, `health` fail) and no model operation (`tree N`, `fork`, `compact` fail).
+   */
+  readonly retainLease?: () => SnapshotLease;
   readonly withInferenceScope?: <T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; signal: AbortSignal }>,
     operation: (scope: InferenceOperationScope) => Promise<T>) => Promise<T>;
   readonly withModelScope?: <T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; signal: AbortSignal }>,
@@ -44,7 +48,7 @@ export async function runManagementOperation<T>(
   run: (operation: RuntimeManagementOperation) => Promise<T>,
 ): Promise<T> {
   const { message, signal } = input;
-  const lease = input.acquireLease?.();
+  const lease = input.retainLease?.();
   try {
     const sessionKey = managementSessionKey(message, lease?.value, input.projectRoot);
     const withInferenceScope = input.withInferenceScope;

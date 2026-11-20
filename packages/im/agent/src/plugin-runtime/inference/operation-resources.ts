@@ -19,6 +19,7 @@ import {
 import { getLogger } from '@zhin.js/logger';
 import type { HostInference } from './host.js';
 import { resolveInferenceMessageContext, resolveInferenceTurnContext } from './turn-context.js';
+import { dispatchLeaseToken, type DispatchLeasePort } from './dispatch-lease.js';
 
 interface OperationResourcesOptions {
   readonly host: HostInference;
@@ -33,6 +34,8 @@ interface OpenOperationInput {
   readonly subject?: UsageSubject;
   readonly alreadyAdmitted: boolean;
   readonly inferenceSnapshot?: InferenceGraphSnapshot;
+  /** IM commands only: also expose the dispatching generation ({@link dispatchLeaseToken}). */
+  readonly dispatchLease?: boolean;
 }
 
 /** Each authorized Command/Tool owns a lazy client and an independent borrowed generation lease. */
@@ -93,9 +96,14 @@ export function createHostOperationResources(options: OperationResourcesOptions)
         }
       },
     });
+    // #1250 第 83 批: the exact generation this operation was dispatched in, retained on demand.
+    const dispatchLease: DispatchLeasePort | undefined = input.dispatchLease
+      ? Object.freeze({ retain: () => input.snapshots.retain(input.lease) })
+      : undefined;
     return Object.freeze({
-      has: (token: Token<unknown>) => token === aiInferenceClientToken,
+      has: (token: Token<unknown>) => token === aiInferenceClientToken || (dispatchLease !== undefined && token === dispatchLeaseToken),
       use<T>(token: Token<T>): T {
+        if (dispatchLease && token === dispatchLeaseToken) return dispatchLease as T;
         if (token !== aiInferenceClientToken)
           throw new Error('Resource is not available in this operation');
         return client as T;
@@ -112,6 +120,7 @@ export function createHostOperationResources(options: OperationResourcesOptions)
         open({
           ...input,
           alreadyAdmitted: false,
+          dispatchLease: true,
           subject: usageSubjectFromMessage(input.message),
           context: () =>
             resolveInferenceMessageContext(contextOptions, input.message, randomUUID()),

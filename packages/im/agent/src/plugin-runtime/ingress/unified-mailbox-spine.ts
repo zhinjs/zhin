@@ -31,7 +31,7 @@ import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
 import { answerClearCommand, ClearConfirmCooldown, clearSessionContext, matchClearCommand, sendFixedReply } from './clear-command.js';
-import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
+import { inboundVoiceSegmentsFromPlatform, isNonHumanOrigin } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
@@ -40,7 +40,7 @@ import { auditAmbientDecision } from './ingress-ambient-stage.js';
 import { auditStaleReply, reactionOf } from './ingress-delivery-helpers.js';
 import { tryHandleIngressCommands } from './ingress-management-stage.js';
 import { runManagementOperation } from './ingress-management-operation.js';
-import type { RuntimeManagementOperation } from '../../init/runtime-management-commands.js';
+import type { RuntimeManagementDispatch, RuntimeManagementOperation } from '../../init/runtime-management-commands.js';
 import { turnFailureOutcome, turnSuccessOutcome } from './ingress-outcomes.js';
 import {
   createAnnouncementDispatcher,
@@ -384,11 +384,6 @@ export interface AgentTurnIngressRouteOptions {
     operation: (scope: InferenceOperationScope) => Promise<T>) => Promise<T>;
   readonly withModelScope?: <T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; signal: AbortSignal }>,
     operation: () => Promise<T>) => Promise<T>;
-  /**
-   * #1250 第 83 批: a lease on the current generation for an Agent management Root command's
-   * inference (`models`, `health`); absent, those commands fail like an unconfigured inference.
-   */
-  readonly acquireLease?: () => SnapshotLease;
   readonly runtime: AgentRuntime;
   readonly im: ImRuntime;
   readonly transcribeUrl?: InboundAudioUrlTranscriber;
@@ -586,16 +581,37 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   /**
    * #1250 第 83 批: runs an Agent management Root command (`createRuntimeManagementCommands`) for
-   * `message` against the session its AI turn would use, holding a generation lease meanwhile.
+   * `message` against the session its AI turn would use, holding a lease on the generation that
+   * dispatched the command (`dispatch.retainLease`) meanwhile.
    */
-  runManagementOperation<T>(message: Message, signal: AbortSignal, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
+  runManagementOperation<T>(message: Message, dispatch: RuntimeManagementDispatch, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
     const options = this.options;
     return runManagementOperation({
-      message, signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
-      ...(options.acquireLease ? { acquireLease: options.acquireLease } : {}),
+      message, signal: dispatch.signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
+      ...(dispatch.retainLease ? { retainLease: dispatch.retainLease } : {}),
       ...(options.withInferenceScope ? { withInferenceScope: options.withInferenceScope } : {}),
       ...(options.withModelScope ? { withModelScope: options.withModelScope } : {}),
     }, run);
+  }
+
+  /**
+   * #1250 第 83 批: the Root `reset` command from a sender without a zhin chat role. The command
+   * dispatch claimed the message, so this runs the same ingress path a `/clear` takes — flood
+   * observation, control-plane and speaking gates, the AI trigger and mention requirements, the clear
+   * of the sender's own session and its confirmation cooldown — on the dispatching generation, and
+   * nothing else: no AI turn, no ambient judgement, never a clear in a live room. `true` when it
+   * cleared.
+   */
+  async clearAsCommand(message: Message, dispatch: RuntimeManagementDispatch): Promise<boolean> {
+    if (!dispatch.retainLease) throw new Error('The dispatching generation is unavailable');
+    const lease = dispatch.retainLease();
+    try {
+      let cleared = false;
+      await this.#route(message, lease, lease.value.root, undefined, () => { cleared = true; });
+      return cleared;
+    } finally {
+      lease.release();
+    }
   }
 
   #noteSpoke(key: string): void {
@@ -670,14 +686,29 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return false;
   }
 
-  async route(
+  route(
     message: Message,
     lease: SnapshotLease,
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
-    const messageOrigin = (message as { readonly origin?: unknown }).origin ?? message.metadata?.origin;
-    if (typeof messageOrigin === 'string' && messageOrigin !== 'human') {
+    return this.#route(message, lease, requester, conversationSequence);
+  }
+
+  /**
+   * `clearCommand` (see {@link clearAsCommand}): the message is the Root `reset` command of a sender
+   * without a chat role, already recognized as a clear; called when it cleared. The route then
+   * handles only the clear: it stops at the point a `/clear` would be answered or fall through.
+   */
+  async #route(
+    message: Message,
+    lease: SnapshotLease,
+    requester: PluginId,
+    conversationSequence: number | undefined,
+    clearCommand?: () => void,
+  ): Promise<boolean> {
+    const asClear = clearCommand !== undefined;
+    if (isNonHumanOrigin(message)) {
       reportInboundOutcome(message, { outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'agent_gate' });
       return false;
     }
@@ -726,7 +757,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       });
     }
 
-    if (await tryHandleIngressCommands({
+    if (!asClear && await tryHandleIngressCommands({
       message, turnAccess, ownerId, effectiveEndpoint, agent: options.agent, groupRules: this.#groupRules,
       toolApprovalIm: options.toolApprovalIm, reply,
     })) {
@@ -753,17 +784,25 @@ export class AgentTurnIngressRoute implements IngressRoute {
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
       // #1250: `/clear`, `/reset`, `/new` that no command handled clear the sender's own session
       // context like a triggered `清空` — only after every ingress gate passed, never when outbound is
-      // stopped, and not in a live room (its session is the shared scene task).
-      ...(liveRoom ? {} : {
-        onUnmatched: (outboundBlocked: (stage: string) => boolean) => answerClearCommand({
-          message,
-          policy: { trigger },
-          outboundBlocked: () => outboundBlocked('clear_command'),
-          archive: () => zhinAgent.archiveSession(initialSessionKey),
-          cooldown: this.#clearConfirmCooldown,
-          cooldownKey: clearCooldownKey,
-          send: text => replyFixed(initialSessionKey, text),
-        }),
+      // stopped, and not in a live room (its session is the shared scene task). The `reset` command of
+      // a sender without a chat role (`asClear`) stops here either way: no ambient judgement.
+      ...(liveRoom && !asClear ? {} : {
+        onUnmatched: async (outboundBlocked: (stage: string) => boolean) => {
+          if (liveRoom) return true;
+          const cleared = await answerClearCommand({
+            message,
+            policy: { trigger },
+            recognized: asClear,
+            outboundBlocked: () => outboundBlocked('clear_command'),
+            archive: () => zhinAgent.archiveSession(initialSessionKey),
+            cooldown: this.#clearConfirmCooldown,
+            cooldownKey: clearCooldownKey,
+            send: text => replyFixed(initialSessionKey, text),
+          });
+          if (cleared) clearCommand?.();
+          else if (asClear) reportInboundOutcome(message, { outcome: 'not_addressed', reason: 'clear_command', stage: 'agent_gate' });
+          return cleared || asClear;
+        },
       }),
     });
     if (gateEvaluation.kind === 'halt') {
@@ -786,8 +825,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
     // is the shared scene task — and not while the control plane stops outbound messages (no clear, no
     // reply, like the untriggered spelling): the message then goes on like any other.
     const clearRequested = !liveRoom && !ambient
-      && (isClearCommand(matched.content) || matchClearCommand(message))
+      && (asClear || isClearCommand(matched.content) || matchClearCommand(message))
       && !outboundBlocked('clear_command');
+    // The `reset` command of a sender without a chat role is a clear or nothing (live room, outbound stopped).
+    if (asClear && !clearRequested) return true;
     const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !clearRequested;
     if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
     audit({
@@ -807,6 +848,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         archive: () => zhinAgent.archiveSession(sessionKey),
         send: text => replyFixed(sessionKey, text),
       });
+      clearCommand?.();
       return true;
     }
 

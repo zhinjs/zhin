@@ -10,8 +10,13 @@ type ReplyReceipt = Awaited<ReturnType<Message['$reply']>>;
 /**
  * #1250: the chat clear command. `clear` / 清空 / 重置 (as triggered AI input) and the slash spellings
  * `/clear`, `/reset`, `/new` (any letter case, ASCII or full-width slash; see {@link isClearCommand})
- * archive the sender's session context through `ZhinAgent.archiveSession` — the one reset path, also
- * used by the operator `<prefix>reset` management command — and answer with a short fixed confirmation.
+ * archive the sender's session context through `ZhinAgent.archiveSession` and answer with a short
+ * fixed confirmation. Everyone can use it.
+ *
+ * With the command prefix `/`, `/reset` is the Agent's Root `reset` command (#1250 第 83 批), which the
+ * command dispatch claims before this ingress sees the message: for a sender without a zhin chat role
+ * that command runs exactly this clear (`AgentTurnIngressRoute.clearAsCommand`, the same triggers,
+ * mention requirement, cooldown and gates); a trusted sender's `reset` archives the session directly.
  */
 export const CLEARED_MESSAGE = Object.freeze({
   'zh-CN': '已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。',
@@ -65,10 +70,15 @@ function withoutOwnCommandSuffix(text: string, botUsername: string | undefined):
     : undefined;
 }
 
-/** The clear command a message carries: `addressed` when it was sent to the bot (private, mention, `/clear@<bot>`). */
-function clearCommandOf(message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>): CommandText | undefined {
+/**
+ * The clear command a message carries: `addressed` when it was sent to the bot (private, mention,
+ * `/clear@<bot>`). `recognized`: the command dispatch already recognized the message as a clear (the
+ * Root `reset` command, see {@link CLEARED_MESSAGE}), so only where it was sent is checked.
+ */
+function clearCommandOf(message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>, recognized = false): CommandText | undefined {
   const isPrivate = message.conversation.kind === 'private';
   const mentioned = !isPrivate && mentionedBot(message);
+  if (recognized) return { text: message.content.trim(), addressed: isPrivate || mentioned };
   const command = withoutOwnCommandSuffix(mentioned ? withoutLeadingMentions(message.content) : message.content, botUsernameOf(message));
   if (!command || !isClearCommand(command.text)) return undefined;
   return { text: command.text, addressed: isPrivate || mentioned || command.addressed };
@@ -81,8 +91,8 @@ function clearCommandOf(message: Pick<Message, 'content' | 'conversation' | 'men
  * no AI trigger matched (a leading `/` is an ignored trigger prefix), so `/clear` reaches the same
  * clear as a triggered `清空`.
  */
-export function matchClearCommand(message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>): boolean {
-  return clearCommandOf(message)?.addressed === true;
+export function matchClearCommand(message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>, recognized = false): boolean {
+  return clearCommandOf(message, recognized)?.addressed === true;
 }
 
 /**
@@ -154,11 +164,12 @@ export interface ClearCommandPolicy {
 export function clearCommandAllowed(
   message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>,
   policy: ClearCommandPolicy,
+  recognized = false,
 ): boolean {
   const { trigger } = policy;
   if (trigger?.enabled === false) return false;
   if (message.conversation.kind === 'private') return trigger?.respondToPrivate !== false;
-  return trigger?.respondToAt !== false && clearCommandOf(message)?.addressed === true;
+  return trigger?.respondToAt !== false && clearCommandOf(message, recognized)?.addressed === true;
 }
 
 /**
@@ -195,6 +206,8 @@ export async function clearSessionContext(input: Readonly<{
 export async function answerClearCommand(input: Readonly<{
   message: Message;
   policy: ClearCommandPolicy;
+  /** The command dispatch already recognized `message` as a clear (the Root `reset` command). */
+  recognized?: boolean;
   /** The control plane stopped outbound messages here: no clear, no reply (the message falls through). */
   outboundBlocked?: () => boolean;
   archive: () => Promise<boolean>;
@@ -202,7 +215,8 @@ export async function answerClearCommand(input: Readonly<{
   cooldownKey: string;
   send: (text: string) => Promise<unknown>;
 }>): Promise<boolean> {
-  if (!matchClearCommand(input.message) || !clearCommandAllowed(input.message, input.policy)) return false;
+  const recognized = input.recognized === true;
+  if (!matchClearCommand(input.message, recognized) || !clearCommandAllowed(input.message, input.policy, recognized)) return false;
   if (input.outboundBlocked?.()) return false;
   await clearSessionContext(input);
   return true;

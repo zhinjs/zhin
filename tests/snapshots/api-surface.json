@@ -53,7 +53,7 @@
     "export type{PromptSegment,SegmentKind,TextSegmentKind,MessageSegmentKind,SegmentInput,SegmentOutput,SegmentRuntimeView,SegmentSessionView,PromptSegmentDebugInfo,SystemPromptParts,MessageSegmentOutput,MergeMessageSegmentsOptions,}from './prompt/segments/index.js';",
     "export type{PromptSegmentSource}from './prompt/tokens.js';",
     "export type{RichSystemPromptContext,PromptSectionDebugInfo}from './prompt/system-prompt.js';",
-    "export type{RuntimeManagementCommand,RuntimeManagementCommandHost,RuntimeManagementOperation,}from './init/runtime-management-commands.js';",
+    "export type{RuntimeManagementCommand,RuntimeManagementCommandHost,RuntimeManagementDispatch,RuntimeManagementOperation,}from './init/runtime-management-commands.js';",
     "export type{ScheduleJobAgentErrorCode}from './assistant/index.js';",
     "export type{ScheduleManager,ScheduleToolRegistration}from './schedule-manager.js';",
     "export type{ScheduleTurnExecutionRequest,ScheduleTurnPort,}from './schedule-domain/execution-domain.js';",
