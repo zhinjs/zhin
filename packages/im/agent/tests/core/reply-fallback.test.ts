@@ -54,7 +54,7 @@ describe('reply fallback (#1250 b33)', () => {
     expect(empty).toBe('The model returned no visible content (a reasoning model may have replied empty, or the context is too long). '
       + 'Send /clear to clear this conversation\'s context and try again, or switch to a non-reasoning model.');
     const denied = describeToolCallsForUser([{ tool: WEATHER, result: 'x', status: 'denied' }], { locale: 'en' }).text;
-    expect(denied).toBe(`The required tools \`${WEATHER}\` were denied and did not run, so the request could not be completed. `
+    expect(denied).toBe(`The required tool \`${WEATHER}\` was denied and did not run, so the request could not be completed. `
       + 'Try again after someone with permission approves it.');
     expect(formatReplyFallback({ cause: 'no_tools' }, { locale: 'en' })).toContain('No tools were available');
     const scheduled = formatReplyFallback({ cause: 'no_tools' },
@@ -69,6 +69,17 @@ describe('reply fallback (#1250 b33)', () => {
     for (const text of [empty, denied, scheduled]) expect(text).not.toMatch(cjk);
     // The default language is unchanged.
     expect(formatToolCallsForUser([], { locale: 'zh-CN' })).toBe(formatToolCallsForUser([]));
+  });
+
+  it('agrees in number with the denied tools in English, and keeps the Chinese wording (#1250 第 81 批)', () => {
+    const two = [{ tool: 'a', result: 'x', status: 'denied' as const }, { tool: 'b', result: 'x', status: 'denied' as const }];
+    expect(describeToolCallsForUser(two, { locale: 'en' }).text)
+      .toMatch(/^The required tools `a`, `b` were denied and did not run, so the request could not be completed\./u);
+    expect(describeToolCallsForUser(two).text).toMatch(/^需要的工具 `a`、`b` 被拒绝，没有运行，所以没能完成这个请求。/u);
+    expect(describeToolCallsForUser([two[0]!]).text).toMatch(/^需要的工具 `a` 被拒绝，没有运行/u);
+    // `/clear` is the prefix-independent clear word: literal in both languages, never a command prefix.
+    expect(formatReplyFallback({ cause: 'empty_reply' })).toContain('可发送 /clear 清空');
+    expect(formatReplyFallback({ cause: 'empty_reply' }, { locale: 'en' })).toContain('Send /clear to clear');
   });
 
   it('tells model text from the summary fallback', () => {

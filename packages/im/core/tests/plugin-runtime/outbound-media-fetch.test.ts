@@ -160,6 +160,8 @@ describe('fetchOutboundMedia (#1250 第 46 批 outbound-media-ssrf)', () => {
     expect(outboundMediaNotice('image')).toBe('[图片未发送：媒体地址不被允许]');
     expect(outboundMediaNotice('file', 'en')).toBe('[file not sent: media address not allowed]');
     expect(outboundMediaNotice('sticker')).toBe('[附件未发送：媒体地址不被允许]');
+    expect(outboundMediaNotice('record', 'en')).toBe('[audio not sent: media address not allowed]');
+    expect(outboundMediaNotice('constructor', 'en')).toBe('[attachment not sent: media address not allowed]');
   });
 });
 
