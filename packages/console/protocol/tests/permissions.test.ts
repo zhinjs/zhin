@@ -16,6 +16,8 @@ import {
   bindingScopeCovers,
   consoleRpcPermission,
   grantsAllow,
+  hasGlobalOwnerGrant,
+  isGlobalOwnerGrant,
   grantsAllowAlsoRequired,
   isConsolePermission,
   isPluginConsoleRpcType,
@@ -283,5 +285,17 @@ describe('conversation level and chat roles (ADR 0055 / 0056)', () => {
     expect(parseFeatureConversationKey(key)).toEqual({ adapter: 'qq', endpointId: 'bot', kind: 'channel', id: 'a/b%:c' });
     expect(parseFeatureConversationKey('qq/bot/channel:a%2fb')).toBeUndefined();
     expect(() => formatFeatureConversationKey({ adapter: 'qq', endpointId: 'b/c', kind: 'group', id: '1' })).toThrow(TypeError);
+  });
+});
+
+describe('isGlobalOwnerGrant / hasGlobalOwnerGrant (#1250 第 78 批)', () => {
+  it('is the built-in owner role at the global scope only', () => {
+    expect(isGlobalOwnerGrant({ role: 'owner', scope: { kind: 'global' } })).toBe(true);
+    expect(isGlobalOwnerGrant({ role: 'owner', scope: { kind: 'adapter', key: 'qq' } })).toBe(false);
+    expect(isGlobalOwnerGrant({ role: 'admin', scope: { kind: 'global' } })).toBe(false);
+    expect(isGlobalOwnerGrant({ scope: { kind: 'global' } })).toBe(false);
+    expect(hasGlobalOwnerGrant([{ role: 'admin', scope: { kind: 'global' } }, { role: 'owner', scope: { kind: 'global' } }])).toBe(true);
+    expect(hasGlobalOwnerGrant([{ role: 'owner', scope: { kind: 'endpoint', key: 'qq/1' } }])).toBe(false);
+    expect(hasGlobalOwnerGrant([])).toBe(false);
   });
 });

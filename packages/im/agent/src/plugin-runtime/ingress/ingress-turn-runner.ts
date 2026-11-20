@@ -334,7 +334,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             : undefined;
           const turnPolicy = resolveSandboxTurnPolicy({
             runtimeSandbox: turnAccess.origin.kind === 'im' && platformCapabilities?.has('runtime.sandbox') === true,
-            isMaster: senderRoles.isMaster,
+            isMaster: senderRoles.hostRole === 'owner',
             scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined,
             masterShell: service.getAgentConfig()?.masterShell,
             masterShellApprovalMode: service.getAgentConfig()?.masterShellApprovalMode,
@@ -347,7 +347,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           const initiatorPresent = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge;
           const approver = resolveImApprover({
             senderId: message.sender?.id,
-            isMaster: senderRoles.isMaster,
+            isMaster: senderRoles.hostRole === 'owner',
             // #1250 review: admin held at endpoint level or above; a conversation-level admin or demoted owner is not.
             isAdmin: message.sender?.id ? holdsEndpointAdmin(message.sender) : false,
             ownerId,
@@ -372,7 +372,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           };
           const askApprovalPort = createRuntimeApprovalPort({
             ...imApprovalOptions,
-            isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
+            isMaster: senderRoles.hostRole === 'owner' && turnPolicy.shell?.approvalMode !== 'ask',
             masterPresent: initiatorPresent,
           });
           const escalatedApprovalPort = createRuntimeApprovalPort({ ...imApprovalOptions, isMaster: false });
@@ -459,12 +459,12 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mode: turnPolicy.shell?.approvalMode
                   ?? service.getAgentConfig()?.execApprovalMode
                   ?? 'auto',
-                masterInitiator: senderRoles.isMaster,
+                masterInitiator: senderRoles.hostRole === 'owner',
                 auto: createAutoApprovalPort(
                   agent.approvalReviewer,
                   escalatedApprovalPort,
                   approvalJudgment,
-                  { escalateRejections: senderRoles.isMaster && turnAccess.origin.kind === 'im' && turnAccess.origin.scope === 'private' },
+                  { escalateRejections: senderRoles.hostRole === 'owner' && turnAccess.origin.kind === 'im' && turnAccess.origin.scope === 'private' },
                 ),
                 ask: askApprovalPort,
               }),

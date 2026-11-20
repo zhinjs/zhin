@@ -12,6 +12,7 @@ export { UserFacingError, isUserFacingError, userFacingErrorText, userFacingRefu
 export {
   CONVERSATION_MANAGER_PERMIT,
   canManageConversation,
+  describeConversationManagerDenial,
   assertBuiltinPermits,
   checkBuiltinPermit,
   checkBuiltinPermitList,

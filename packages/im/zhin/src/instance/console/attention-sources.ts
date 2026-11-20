@@ -18,7 +18,7 @@ import type {
   AttentionChatRoles,
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
-import { hasGlobalOwner } from '../chat-owner-claim.js';
+import { hasGlobalOwner } from '../chat-roles.js';
 import { personalPrincipalEndpointOf, personalPrincipalPending } from '../chat-personal-principals.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';

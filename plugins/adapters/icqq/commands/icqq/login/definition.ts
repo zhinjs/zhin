@@ -6,7 +6,7 @@
  * owner can fetch the QR image and confirm/send verification codes without the
  * Console or terminal.
  */
-import { LoginSubmissionError, type LoginChallenge, type LoginChallengeBlock } from '@zhin.js/core';
+import { isOwner, LoginSubmissionError, type LoginChallenge, type LoginChallengeBlock } from '@zhin.js/core';
 import { icqqLoginControls, type IcqqLoginControl } from '../../../src/icqq-login-control.js';
 
 export { icqqLoginControls };
@@ -49,10 +49,10 @@ export function isIcqqLoginOperator(config: unknown, input: unknown): boolean {
     notify?: { id?: unknown };
     endpoints?: readonly { notify?: { id?: unknown } }[];
   };
-  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown; chatRoleLevels?: { owner?: unknown } } } | null | undefined)?.sender;
+  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown; chatRoleLevels?: unknown } } | null | undefined)?.sender;
   const senderId = (typeof sender === 'object' && sender?.id) ? String(sender.id).trim() : '';
   if (!senderId) return false;
-  if (sender?.chatRole === 'owner' && sender.chatRoleLevels?.owner === 'global') return true;
+  if (isOwner(sender)) return true;
   const targets = new Set<string>();
   const collect = (value: unknown) => {
     if (value === undefined || value === null) return;

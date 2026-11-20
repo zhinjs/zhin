@@ -29,8 +29,7 @@ import {
 } from '@zhin.js/core';
 import { ChatPeopleError, type ChatPeople, type ChatPrincipalRef } from '../chat-people.js';
 import { CHAT_IDENTITY_RETENTION_MS, isChatPrincipalId, type StoredChatIdentity } from '../chat-principals.js';
-import { ChatRoleStorageUnavailableError } from '../chat-roles.js';
-import { hasGlobalOwner } from '../chat-owner-claim.js';
+import { ChatRoleStorageUnavailableError, hasGlobalOwner } from '../chat-roles.js';
 import type { ChatIdentityBindCodes } from '../chat-identity-bind.js';
 import { chatRoleView } from './chat-roles-rpc.js';
 import { FeatureRpcError, readScope, type FeatureRpcReply } from './console-feature-rpc.js';

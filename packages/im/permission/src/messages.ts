@@ -16,7 +16,35 @@ export const permissionMessages = createMessages({
   'bot-permission': { 'zh-CN': '要求机器人账号自身拥有该平台权限', en: 'Requires the Bot account itself to hold this platform permission' },
   missingBot: { 'zh-CN': '未提供假设的机器人平台身份，无法判断机器人条件', en: 'No hypothetical Bot standing was provided, so the Bot condition cannot be evaluated' },
   deniedGeneric: { 'zh-CN': '不满足使用条件。', en: 'The conditions for this are not met.' },
-  deniedRole: { 'zh-CN': '需要你在本会话拥有 zhin 角色 {value}。', en: 'You need the zhin role {value} in this conversation.' },
+  // ADR 0060 §5.3 / zhinjs/zhin#1250 第 78 批: the one source of role refusals (commands, buttons,
+  // management commands). They say where roles come from, never which role or who holds it.
+  deniedRole: {
+    'zh-CN': '此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
+    en: 'This needs a zhin role. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',
+  },
+  deniedRoleStanding: {
+    'zh-CN': '此功能需要 zhin 角色，群主 / 群管理员的平台身份不等于 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
+    en: 'This needs a zhin role, and being a group owner / admin on the platform is not one. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',
+  },
+  // Host-wide abilities (restart, configuration, owner approvals, `owner@global` permits): ADR 0056 §2.
+  globalOwnerOnly: { 'zh-CN': '仅全局聊天主人（global owner）可使用此指令。', en: 'Only a global chat owner can use this command.' },
+  globalOwnerPrivateOnly: { 'zh-CN': '仅全局聊天主人（global owner）可在私聊中使用此指令。', en: 'Only a global chat owner can use this command, in a private chat.' },
+  deniedGlobalOwner: { 'zh-CN': '此功能需要全局聊天主人（global owner）。', en: 'This needs a global chat owner.' },
+  // `{bind}`: the chat invocation of the `bind` command (with the endpoint's command prefix) when the
+  // caller knows it, else `绑定` / `bind` and `{prefixHint}` says to add a configured prefix.
+  globalOwnerGrant: {
+    'zh-CN': '全局 owner 在 Console「聊天角色」页授予，授予前先私聊机器人发送「{bind} <码>」{prefixHint}把聊天身份绑定到 Console 账号；还没有全局 owner 时，部署者也可私聊机器人发送「认领 <码>」（不需要命令前缀，码见 zhin status）。',
+    en: 'Global owners are granted on the Console "Chat roles" page; first bind your chat identity to a Console account: send 「{bind} <code>」{prefixHint} to the bot in a private chat. While there is no global owner, the deployer can also send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code).',
+  },
+  bindWord: { 'zh-CN': '绑定', en: 'bind' },
+  bindPrefixHint: { 'zh-CN': '（配置了命令前缀时带上前缀）', en: ' (with the command prefix, if one is configured)' },
+  deniedConversationManager: {
+    'zh-CN': '群聊和频道里需要本会话的 zhin 聊天角色 admin（或 owner）；私聊中可以直接管理本会话。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
+    en: 'In a group or channel this needs the zhin chat role admin (or owner) of this conversation; in a private chat you manage your own conversation. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',
+  },
+  deniedCommand: { 'zh-CN': '没有权限执行此指令。', en: 'You do not have permission to run this command.' },
+  deniedCommandHere: { 'zh-CN': '无法执行此指令。', en: 'This command cannot run here.' },
+  deniedPrivate: { 'zh-CN': '此指令只能在私聊中使用，请私聊机器人发送。', en: 'This command works in a private chat only; send it to the bot privately.' },
   deniedPlatformOwner: { 'zh-CN': '需要你是本群群主。', en: 'You need to be the owner of this group.' },
   deniedPlatformAdmin: { 'zh-CN': '需要你是本群群主或管理员。', en: 'You need to be an owner or admin of this group.' },
   deniedPlatformRole: { 'zh-CN': '需要你拥有平台角色 {value}。', en: 'You need the platform role {value}.' },

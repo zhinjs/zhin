@@ -1,11 +1,11 @@
 import { createMessages } from '@zhin.js/plugin-runtime';
 
 export const managementMessages = createMessages({
-  denied: { 'zh-CN': '⚠️ 仅聊天角色 owner / admin / trusted 可使用此管理指令。', en: '⚠️ Only chat roles owner / admin / trusted can use this management command.' },
   models: { 'zh-CN': '🤖 可用模型:', en: '🤖 Available models:' },
   more: { 'zh-CN': '  ... 还有 {count} 个', en: '  ... {count} more' },
   usage: { 'zh-CN': 'ℹ️ 用法：{command}', en: 'ℹ️ Usage: {command}' },
-  resetDenied: { 'zh-CN': '⚠️ {command} 是管理指令，仅聊天角色 owner / admin / trusted 可用。要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。', en: '⚠️ {command} is a management command for chat roles owner / admin / trusted only. To clear your own AI conversation context, send /clear or 清空 (mention the bot first in a group).' },
+  // `{denial}`: the shared management-command refusal (`describeCommandDenial('trusted', …)`, `@zhin.js/permission`).
+  resetDenied: { 'zh-CN': '{denial}要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。', en: '{denial} To clear your own AI conversation context, send /clear or 清空 (mention the bot first in a group).' },
   archived: { 'zh-CN': '✅ 已归档当前会话，下次 @ 将使用新上下文', en: '✅ The current session was archived. The next mention will start a new context.' },
   noSession: { 'zh-CN': 'ℹ️ 无活跃会话可归档', en: 'ℹ️ No active session to archive.' },
   health: { 'zh-CN': '🏥 AI 服务健康状态:', en: '🏥 AI service health:' },

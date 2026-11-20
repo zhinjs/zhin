@@ -141,7 +141,7 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
     filesystem: turnPolicy.filesystem,
     imageAssets: service.imageAssets,
     ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
-    fileRole: toolRequesterRoleToFileRole(senderRoles.isMaster ? 'owner' : senderRoles.isTrusted ? 'trusted' : 'other'),
+    fileRole: toolRequesterRoleToFileRole(senderRoles.hostRole === 'owner' ? 'owner' : senderRoles.hostRole ? 'trusted' : 'other'),
   });
   const mediaTrust = modelMediaTrust('agent:reply', mediaAuthority, {
     locale: message.locale,
@@ -403,11 +403,11 @@ export async function admitIngressMailTurn(input: {
     sessionKey: gate ? sessionKey : `turn:${turnId}`,
     senderId,
     entry: entryActorName,
-    isMaster: senderRoles.isMaster,
+    isMaster: senderRoles.hostRole === 'owner',
     text: preprocessed.text,
     plainText,
     ...(venueDescriptor ? { venue: venueDescriptor } : {}),
-    live: gate !== undefined && liveRoom && !senderRoles.isMaster,
+    live: gate !== undefined && liveRoom && senderRoles.hostRole !== 'owner',
     mergeable,
     ...(message.sender?.name ? { senderName: message.sender.name } : {}),
     ...(message.message?.id ? { messageId: message.message.id } : {}),

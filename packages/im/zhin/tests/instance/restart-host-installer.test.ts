@@ -26,6 +26,7 @@ import {
   deliverPendingRestartReceipt,
   installRestartHost,
 } from '../../src/instance/restart-host-installer.js';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 
 class Client extends EventEmitter {
   readonly sendNative = vi.fn(async (_request: EndpointSendRequest) => 'sent');
@@ -211,17 +212,17 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
     const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
     try {
       await f.receive('!!重启', { sender: 'stranger', kind: 'private', conversationId: 'stranger' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(lastReplyText(f.client)).toBe(describeGlobalOwnerRequired('zh-CN'));
       await f.receive('!!restart confirm', { sender: 'stranger', kind: 'private', conversationId: 'stranger' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(lastReplyText(f.client)).toBe(describeGlobalOwnerRequired('zh-CN'));
       // The account owner (migrated from the adapter master) is not the host owner.
       await f.receive('!!重启', { sender: 'carol', kind: 'private', conversationId: 'carol' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(lastReplyText(f.client)).toBe(describeGlobalOwnerRequired('zh-CN'));
       // A globally trusted user is not an owner either.
       await f.receive('!!restart', { sender: 'dave', kind: 'private', conversationId: 'dave' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(lastReplyText(f.client)).toBe(describeGlobalOwnerRequired('zh-CN'));
       await f.receive('!!restart confirm', { sender: 'dave', kind: 'private', conversationId: 'dave' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(lastReplyText(f.client)).toBe(describeGlobalOwnerRequired('zh-CN'));
       await waitForRestartTimer();
       expect(f.requestRestart).not.toHaveBeenCalled();
       expect(await consumePendingRestartReceipt(f.project)).toBeNull();
