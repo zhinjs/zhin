@@ -133,7 +133,8 @@ export function resolveTriggerTimeoutMs(trigger?: AITriggerConfig): number {
 export function renderChatTurnError(trigger: AITriggerConfig | undefined, error: unknown, master: boolean, locale?: Locale): string {
   const detail = error instanceof Error ? error.message : String(error);
   const template = trigger?.errorTemplate;
-  if (template?.trim()) return template.replace('{error}', detail);
+  // A callback, so `$&` / `$'` in the error message stay literal text.
+  if (template?.trim()) return template.replace('{error}', () => detail);
   return chatFailureLine(error instanceof TriggerTimeoutError ? 'turn_timeout' : 'turn_error', { master, detail, locale });
 }
 

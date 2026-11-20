@@ -127,6 +127,30 @@ describe('message outcome codes (ADR 0061 §1)', () => {
     expect(formatMessageOutcome({ outcome: 'interaction_cancelled', reason: 'other' }, { audience: 'sender' })).toBe('你退出了这次提问，没有继续。');
     expect(formatMessageOutcome({ outcome: 'not_a_code' as MessageOutcome }, { audience: 'sender', locale: 'en' })).toBe('No outcome was recorded.');
   });
+
+  it('renders every code and reason template in both audiences and languages without leftover placeholders (#1250 第 81 批)', () => {
+    // An unknown placeholder fails at import (load-time check); here every catalog entry renders.
+    const records = [...MESSAGE_OUTCOMES.map((outcome) => ({ outcome })), { outcome: 'interaction_cancelled' as const, reason: 'superseded' }];
+    for (const record of records) {
+      for (const audience of ['sender', 'admin'] as const) {
+        for (const locale of ['zh-CN', 'en'] as const) {
+          const text = formatMessageOutcome(record, { audience, locale, includeDetail: true });
+          expect([record, audience, locale, text]).toEqual([record, audience, locale, expect.not.stringMatching(/\{\w+\}/u)]);
+        }
+      }
+    }
+    expect(formatMessageOutcome({ outcome: 'interaction_cancelled', reason: 'superseded' }, { audience: 'admin', locale: 'en' }))
+      .toBe('Prompt replaced by a newer prompt in the conversation, asked by — (—).');
+  });
+
+  it('looks reason templates up by own keys only: prototype keys fall back to the code template (#1250 第 81 批)', () => {
+    for (const reason of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(formatMessageOutcome({ outcome: 'interaction_cancelled', reason }, { audience: 'sender' })).toBe('你退出了这次提问，没有继续。');
+      expect(formatMessageOutcome({ outcome: 'model_error', reason }, { audience: 'admin', locale: 'en' })).toBe(`Model failed (${reason}).`);
+    }
+    expect(formatMessageOutcome({ outcome: 'constructor' as MessageOutcome, reason: 'superseded' }, { audience: 'sender', locale: 'en' }))
+      .toBe('No outcome was recorded.');
+  });
 });
 
 describe('InboundOutcomeLedger (ADR 0061 §4.1)', () => {

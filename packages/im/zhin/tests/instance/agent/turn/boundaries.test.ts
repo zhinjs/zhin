@@ -22,6 +22,7 @@ import {
   runtimeApprovalPolicy,
   runtimeImSessionKey,
 } from '@zhin.js/agent/runtime';
+import { chatFailureLine } from '@zhin.js/agent';
 import {
   renderChatTurnError,
   resolveTriggerTimeoutMs,
@@ -850,12 +851,29 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
   });
 
   it('errorTemplate 未配置或为空白时用聊天失败口吻，没有内置的 ❌ 模板（#1250 第 81 批）', () => {
-    expect(renderChatTurnError(undefined, new Error('boom'), false)).not.toMatch(/❌|AI 处理失败|boom/u);
-    expect(renderChatTurnError({ errorTemplate: '  ' }, new Error('boom'), false)).not.toMatch(/❌|AI 处理失败|boom/u);
+    // Pin the line choice: renderChatTurnError picks a line with Math.random.
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      for (const trigger of [undefined, { errorTemplate: '  ' }]) {
+        expect(renderChatTurnError(trigger, new Error('boom'), false)).toBe(chatFailureLine('turn_error', { random: 0 }));
+        expect(renderChatTurnError(trigger, new Error('boom'), false)).toBe('刚卡了一下，你再说一遍？');
+        // The owner also gets the cause in brackets.
+        expect(renderChatTurnError(trigger, new Error('boom'), true)).toBe(chatFailureLine('turn_error', { random: 0, master: true, detail: 'boom' }));
+        expect(renderChatTurnError(trigger, new Error('boom'), true)).toBe('刚卡了一下，你再说一遍？（boom）');
+        expect(renderChatTurnError(trigger, new Error('boom'), true, 'en')).toBe('I got stuck for a moment. Could you try again? (boom)');
+      }
+    } finally {
+      random.mockRestore();
+    }
   });
 
   it('errorTemplate 自定义模板插值 {error}', () => {
     expect(renderChatTurnError({ errorTemplate: 'ERR {error}' }, new Error('boom'), false)).toBe('ERR boom');
+  });
+
+  it('errorTemplate 插值时错误信息里的 $& / $\' / $` / $$ 原样保留（#1250 第 81 批）', () => {
+    expect(renderChatTurnError({ errorTemplate: 'ERR {error} end' }, new Error("a $& b $' c $` d $$ e $1"), false))
+      .toBe("ERR a $& b $' c $` d $$ e $1 end");
   });
 
   it('withTriggerTimeout：限时内完成则正常返回', async () => {

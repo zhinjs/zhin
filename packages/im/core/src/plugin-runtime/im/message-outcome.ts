@@ -220,11 +220,30 @@ const REASON_TEMPLATES: Readonly<Partial<Record<MessageOutcome, Readonly<Record<
  * (`createMessages`), which checks at load that both languages use the same placeholders. Keys are
  * `<outcome>.<audience>` and `<outcome>:<reason>.<audience>`.
  */
-const outcomeMessages = createMessages(Object.fromEntries([
+const outcomeMessages = createMessages(Object.fromEntries(checkOutcomePlaceholders([
   ...Object.entries(MESSAGE_OUTCOME_TEMPLATES).map(([code, template]) => [code, template] as const),
   ...Object.entries(REASON_TEMPLATES).flatMap(([code, reasons]) =>
     Object.entries(reasons ?? {}).map(([reason, template]) => [`${code}:${reason}`, template] as const)),
-].flatMap(([key, template]) => [[`${key}.sender`, template.sender], [`${key}.admin`, template.admin]])));
+]).flatMap(([key, template]) => [[`${key}.sender`, template.sender], [`${key}.admin`, template.admin]])));
+
+/**
+ * Load-time guard (#1250 第 81 批): a placeholder outside {@link MESSAGE_OUTCOME_PLACEHOLDERS} gets no
+ * value from {@link outcomeValues}, so rendering it would throw (`GET /conversations/outcomes` 500).
+ * Fail at import instead, which every test importing this module catches.
+ */
+function checkOutcomePlaceholders<T extends readonly (readonly [string, MessageOutcomeTemplate])[]>(entries: T): T {
+  const known: ReadonlySet<string> = new Set(MESSAGE_OUTCOME_PLACEHOLDERS);
+  for (const [key, template] of entries) {
+    for (const [audience, texts] of Object.entries(template)) {
+      for (const [locale, text] of Object.entries(texts as Bilingual)) {
+        for (const [, name] of text.matchAll(/\{(\w+)\}/gu)) {
+          if (!known.has(name!)) throw new Error(`Message outcome template ${key}.${audience} (${locale}) uses unknown placeholder {${name}}`);
+        }
+      }
+    }
+  }
+  return entries;
+}
 
 /**
  * Renders the human-readable reason of a record for one audience. Missing placeholders read as
@@ -235,7 +254,9 @@ export function formatMessageOutcome(
   record: Pick<MessageOutcomeRecord, 'outcome'> & Partial<MessageOutcomeRecord>,
   options: Readonly<{ audience: 'sender' | 'admin'; locale?: Locale; includeDetail?: boolean }>,
 ): string {
-  const key = record.reason && REASON_TEMPLATES[record.outcome]?.[record.reason] ? `${record.outcome}:${record.reason}`
+  const reasons = Object.hasOwn(REASON_TEMPLATES, record.outcome) ? REASON_TEMPLATES[record.outcome] : undefined;
+  // Own keys only: a reason such as `constructor` must not reach `Object.prototype`.
+  const key = record.reason && reasons && Object.hasOwn(reasons, record.reason) ? `${record.outcome}:${record.reason}`
     : Object.hasOwn(MESSAGE_OUTCOME_TEMPLATES, record.outcome) ? record.outcome : 'unrecorded';
   return outcomeMessages(options.locale, `${key}.${options.audience}`, outcomeValues(record, options));
 }
