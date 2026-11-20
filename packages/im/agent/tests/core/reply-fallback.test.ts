@@ -23,6 +23,7 @@ describe('reply fallback (#1250 b33)', () => {
     expect(text).toContain('没有可用的工具');
     expect(text).toContain('zhin trace turn-9');
     expect(text).not.toContain('/reset');
+    expect(text).not.toContain('/clear');
     expect(text).not.toContain('推理型模型');
   });
 
@@ -40,6 +41,7 @@ describe('reply fallback (#1250 b33)', () => {
     expect(described.fallback).toEqual({ cause: 'empty_reply' });
     expect(described.text).toContain('模型未返回可见内容');
     expect(described.text).not.toContain('/reset');
+    expect(described.text).not.toContain('/clear');
   });
 
   it('does not call real tool output a fallback', () => {

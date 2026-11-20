@@ -8,7 +8,7 @@ import { sanitizeAssistantReply } from '../../src/core/text-sanitize.js';
 describe('formatToolCallsForUser', () => {
   it('empty toolCalls returns actionable hint', () => {
     const out = formatToolCallsForUser([]);
-    expect(out).toContain('/reset');
+    expect(out).toContain('/clear');
     expect(out).not.toContain('任务已结束，但没有可展示的结果');
   });
 
