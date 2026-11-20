@@ -199,7 +199,7 @@ export class ImRuntime implements OutboundMessageService {
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),
       deliver: (request, snapshot) => this.#deliver(request, snapshot),
-      recordIncoming: (input, sender) => this.#conversations.recordIncoming(input, sender),
+      recordIncoming: (input, sender, options) => this.#conversations.recordIncoming(input, sender, options),
       recordNotice: async (notice) => this.#publishSceneEvent(notice, await this.#conversations.recordNotice(notice)),
       recordRequest: async (request) => this.#publishSceneEvent(request, await this.#conversations.recordRequest(request)),
       markInteractionAnswer: (message) => this.#conversations.markInteractionAnswer(message),

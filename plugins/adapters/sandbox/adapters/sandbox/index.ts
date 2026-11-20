@@ -29,6 +29,8 @@ export default defineAdapter<SandboxEndpointConfig>({
         streaming: { mode: 'native', formats: ['text', 'markdown'] },
         mention: { user: true, all: true },
         quote: true,
+        // ADR 0067 D8：模拟器入站文本就是 Console 输入框里打的字；@、表情、媒体、按钮都是非文本段。
+        inboundTextAuthoredBySender: true,
         // ADR 0064 P1b（D9）：端点 control 端口以 recall / edit / reaction 帧实现，页面就地应用。
         recall: { others: true },
         edit: true,

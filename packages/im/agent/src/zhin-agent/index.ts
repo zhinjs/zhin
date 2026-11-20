@@ -29,7 +29,7 @@ import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { ContextSystem } from '../context/context-system.js';
 import { type MemorySystem, createMemorySystemForHost } from '../memory/memory-system.js';
 import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
-import { SessionToldLedger } from '../memory/told-ledger.js';
+import { SessionToldLedger, sessionKeyLedgerId } from '../memory/told-ledger.js';
 import { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
@@ -511,6 +511,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     // #1250 (ADR 0067 D7): a reset session starts without the old "already told" facts and delivery
     // record. Compaction keeps them: it rewrites the model history, not the delivered messages.
     this.toldLedger.clear(sessionKey);
+    this.toldLedger.clear(sessionKeyLedgerId(sessionKey));
     if (active?.session_id && active.session_id !== sessionKey) {
       await this.turnCheckpoints.clear(active.session_id);
       this.toldLedger.clear(active.session_id);

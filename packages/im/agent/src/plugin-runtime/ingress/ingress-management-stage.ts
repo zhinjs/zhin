@@ -37,6 +37,12 @@ export interface IngressCommandsContext {
     operation: () => Promise<T>,
   ) => Promise<T>;
   readonly reply: (content: SendContent) => Promise<Awaited<ReturnType<Message['$reply']>>>;
+  /**
+   * #1250 (ADR 0067 D8): sends a fixed-template reply and records it as this session's own delivery.
+   * Used only for `reset`, whose answers are fixed strings; other management replies may carry stored
+   * content (memory, session tree) and keep counting as background.
+   */
+  readonly replyFixed?: (text: string) => Promise<Awaited<ReturnType<Message['$reply']>>>;
 }
 
 export async function tryHandleIngressCommands(input: IngressCommandsContext): Promise<boolean> {
@@ -82,7 +88,8 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
     senderId: turnAccess.principal.subjectId,
   });
   if (managementReply != null) {
-    await reply(managementReply);
+    const fixed = input.replyFixed && /^reset\s*$/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '');
+    await (fixed ? input.replyFixed! : reply)(managementReply);
     logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
     return true;
   }

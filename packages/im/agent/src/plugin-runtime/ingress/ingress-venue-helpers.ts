@@ -200,6 +200,12 @@ export async function evaluateIngressGatesAndTrigger(input: {
     inferInput: Readonly<{ lease: SnapshotLease; sessionKey: string; operationId?: string; signal: AbortSignal }>,
     run: (scope: InferenceOperationScope) => Promise<T>,
   ) => Promise<T>;
+  /**
+   * #1250 (ADR 0067 D8): runs only when the control-plane and speaking gates passed and no trigger
+   * matched the message; `true` means it answered (e.g. the reset hint) and the ingress stops there.
+   * `outboundBlocked` reports the control plane's outbound stop for this conversation.
+   */
+  readonly onUnmatched?: (outboundBlocked: (stage: string) => boolean) => Promise<boolean>;
 }): Promise<IngressGateEvaluation> {
   const {
     message,
@@ -278,6 +284,9 @@ export async function evaluateIngressGatesAndTrigger(input: {
   if (!matched && liveRoom) {
     const text = message.content.trim();
     if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
+  }
+  if (!matched && input.onUnmatched && await input.onUnmatched(outboundBlocked)) {
+    return { kind: 'halt', handled: true };
   }
   if (!matched) {
     matched = await considerAmbientEngagement({

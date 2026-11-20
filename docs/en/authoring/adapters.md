@@ -167,13 +167,23 @@ A profile has sections per conversation kind: `default`, `private`, `group`, `ch
 
 | Group | Content |
 |---|---|
-| `messaging` | `segments` (the former `AdapterDefinition.segments`; both name the same declaration, write it once), `maxLength`, `mention`, `quote`, `reaction`, `recall`, `edit`, `forward`, `maxMessagesPerTurn` |
+| `messaging` | `segments` (the former `AdapterDefinition.segments`; both name the same declaration, write it once), `maxLength`, `mention`, `quote`, `reaction`, `recall`, `edit`, `forward`, `maxMessagesPerTurn`, `inboundTextAuthoredBySender` (below) |
 | `scene` | `groupInfo`, `memberProfile`, `roles` (platform role words to `owner / admin / member`), `platformStanding` (which of `standing` / `roles` / `permissions` the inbound `sender.platform` reports, ADR 0056 §1), `selfStanding` (the bot's own standing in the conversation, looked up through `management.inspectSelfStanding` and cached per conversation by the framework for `bot:*` permits; declaring it requires the method), `mute`, `maxMembers`, `card`, `title` |
 | `actions` | What the Bot can do: `reaction`, `poke`, `mute`, `unmute`, `muteAll`, `kick`, `setCard`, `setTitle`, `recall`, `essence`, `announce`, `invite`, `quoteReply`, `forward`; each `{ scopes, requiresRole?, params? }`, absent means unsupported |
 | `events` | `emit` (standard event names), `liveDanmaku` (the former `capabilities: ['liveDanmaku']`) |
 | `feedback` | How "typing" is shown: `typing` / `reaction` / `status-message` / `none` |
 | `delivery` | `send`, `proactive`, `passiveWindow`, `rateLimitPerMinute`, `mediaMaxBytes`, `spool`, `requiresMessageSeq` |
 | `prompt` | `auto` (generate the platform description), `text` (adapter-authored text) |
+
+**`messaging.inboundTextAuthoredBySender` (ADR 0067 D8)** declares that every inbound `text` segment of this adapter is text the sender wrote: forwards, quotes, cards, merged forwards and inline-bot results arrive as non-text segments (`forward`, `json`, media, …), as `replyTo`, or with the `forwarded: true` marker on the inbound message, and the plain-text view `content` equals the text segments (no embed titles, sticker names or file names appended). Only for an adapter that declares it does the core keep "original text" evidence for a private-chat inbound message, so that the initiator's own earlier original message does not count as an external-content source in the next turn; without it every such message counts (fail closed). Declare it only after checking the adapter's inbound conversion; an adapter whose platform gives no forward marker, or that turns cards or file names into text, must not declare it. Declared today: sandbox, telegram (forwards, `via_bot`, automatic forwards and cross-chat quotes carry `forwarded`), onebot11, napcat, discord.
+
+Check every item before declaring it (if one cannot be met, do not declare it):
+
+1. **Text segments come only from what the sender typed**: a `text` segment holds only what the person typed in the input box (Telegram `text` / `caption`, Discord `content`); card titles, embeds, sticker names, file names, button labels, voice transcripts and system notices never become text segments and are not appended to the plain-text view `content` (`content` must equal the joined text segments).
+2. **Forwards, quotes, cards, embeds and messages sent on someone's behalf are explicit**: every forward the platform can mark (merged forwards, automatic forwards, inline-bot results, cross-chat quotes) carries `forwarded: true`; a quote / reply carries `replyTo`; cards (`json` / `xml` / `markdown`), merged forwards and media stay non-text segments and are never expanded into `text`; messages a bot or webhook sends on someone's behalf are either not admitted or carry `forwarded`.
+3. **String protocol formats fail closed**: when the platform can also report messages as a string protocol (the OneBot / NapCat CQ string format), never wrap the raw string into one `text` segment; strip the control codes from the plain-text view, parse quotes into `replyTo`, and set `forwarded: true` as soon as any code other than a quote appears (at / face included), the string is malformed, or two text fields of the event disagree; the plain-text view and the provenance check must read the same field.
+4. **Adapter-level tests**: feed the payload `receive` gets through the real `ConversationRuntime` with `recordsInboundTextEvidence` from `plugins/adapters/test-utils/inbound-evidence.ts`, and assert that cards, forwards and quotes get no evidence while a plain private-chat text does.
+5. **Re-check after platform changes**: when the platform adds a forward that arrives as text, or a new message type, check again before keeping the declaration.
 
 An icqq-like example:
 

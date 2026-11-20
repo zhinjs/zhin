@@ -185,9 +185,9 @@ export function formatInboundContent(ev: OneBot11Event): string {
       .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))
       .join('');
   }
-  return typeof ev.raw_message === 'string'
-    ? stripCqCodes(ev.raw_message).trim()
-    : '';
+  // 与 isCqStringRelayed 读同一个来源（字符串 message 优先），文本视图与来源判定不会分家。
+  const source = cqStringSource(ev);
+  return source === undefined ? '' : stripCqCodes(source).trim();
 }
 
 function stripCqCodes(input: string): string {
@@ -202,6 +202,70 @@ function stripCqCodes(input: string): string {
     cursor = end + 1;
   }
   return result;
+}
+
+/**
+ * #1250（ADR 0067 D8）：CQ 字符串上报格式下，只有带合规 id 的 reply 码会被解析（成为 replyTo，
+ * 本身就不写证据）；其余任何 CQ 码（含 at / face，与数组格式里非文本段一律计来源保持一致）
+ * 都使这条消息失败关闭。参数值按 CQ 规范转义，不含 `,` `[` `]`。
+ */
+const CQ_REPLY_CODE_RE = /\[CQ:reply((?:,[A-Za-z_][\w.-]*=[^,[\]]*)*)\]/y;
+
+/** CQ 字符串的入站来源判定结果。 */
+export interface CqStringProvenance {
+  /** 形如 `[CQ:reply,id=…]` 的引用 id。 */
+  readonly replyToId?: string;
+  /**
+   * 含 reply 以外的任何 CQ 码（at / face / json / xml / forward / markdown / image …），或出现
+   * 不属于任何合规 CQ 码的方括号（不合规实现把卡片 JSON 原样塞进串里时就是这样）：
+   * 文本视图无法证明只是发送者亲手输入，失败关闭。
+   */
+  readonly foreign: boolean;
+}
+
+/** 扫描 CQ 字符串：取 reply 引用 id，并判定是否含纯文本与 reply 以外的内容。 */
+export function inspectCqString(input: string): CqStringProvenance {
+  let replyToId: string | undefined;
+  let foreign = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === ']') {
+      foreign = true;
+      continue;
+    }
+    if (ch !== '[') continue;
+    CQ_REPLY_CODE_RE.lastIndex = i;
+    const reply = CQ_REPLY_CODE_RE.exec(input);
+    const id = reply ? /,id=([^,]+)/.exec(reply[1] ?? '')?.[1] : undefined;
+    if (!reply || !id) {
+      foreign = true;
+      continue;
+    }
+    replyToId ??= id;
+    i += reply[0].length - 1;
+  }
+  return { ...(replyToId ? { replyToId } : {}), foreign };
+}
+
+/** 字符串上报格式下的原始 CQ 串；数组格式返回 undefined。 */
+function cqStringSource(ev: OneBot11Event): string | undefined {
+  if (Array.isArray(ev.message)) return undefined;
+  // 字符串上报格式（post_message_format: "string"）下 message 实为 CQ 串，类型仍按数组声明。
+  const message: unknown = ev.message;
+  if (typeof message === 'string') return message;
+  return typeof ev.raw_message === 'string' ? ev.raw_message : undefined;
+}
+
+/**
+ * #1250（ADR 0067 D8）：字符串上报格式且串里有 reply 以外的 CQ 码时为 true；`message` 与
+ * `raw_message` 同为字符串却不一致时也为 true（无法确定文本视图读的是哪一个，失败关闭）。
+ * 入站按 `forwarded` 投递，IM 运行时不为它保留"本人原文"证据（失败关闭）。
+ */
+export function isCqStringRelayed(ev: OneBot11Event): boolean {
+  const source = cqStringSource(ev);
+  if (source === undefined) return false;
+  if (typeof ev.raw_message === 'string' && ev.raw_message !== source) return true;
+  return inspectCqString(source).foreign;
 }
 
 export function senderDisplayName(ev: OneBot11Event): string {
@@ -235,7 +299,7 @@ export function senderNickname(ev: OneBot11Event): string | undefined {
 }
 
 /**
- * 回复引用 id：优先取 message 数组中的 {type:'reply', data:{id}} 段；
+ * 回复引用 id：优先取 message 数组中的 {type:'reply', data:{id}} 段，字符串上报格式取 `[CQ:reply,id=…]`；
  * 兼容部分实现把 reply 放在事件顶层（标量或带 message_id 的对象）。
  */
 export function extractQuoteId(ev: OneBot11Event): string | undefined {
@@ -244,6 +308,9 @@ export function extractQuoteId(ev: OneBot11Event): string | undefined {
       if (seg?.type === 'reply' && seg.data?.id != null) return String(seg.data.id);
     }
   }
+  const source = cqStringSource(ev);
+  const cqReply = source !== undefined ? inspectCqString(source).replyToId : undefined;
+  if (cqReply) return cqReply;
   const reply = ev.reply;
   if (typeof reply === 'number' || typeof reply === 'string') return String(reply);
   if (reply && typeof reply === 'object' && 'message_id' in reply) {
@@ -273,6 +340,8 @@ export interface OneBot11InboundFields {
   readonly mentioned: boolean;
   readonly replyTo: { readonly id: string } | undefined;
   readonly segments?: readonly Segment[];
+  /** ADR 0067 D8：字符串上报格式下含 at / face / reply 以外的 CQ 码（见 isCqStringRelayed）。 */
+  readonly forwarded?: true;
 }
 
 /** 构造 gateway.receive 的 metadata 与提升字段（ws / wss 两个 endpoint 共用）。 */
@@ -299,6 +368,7 @@ export function formatInboundMetadata(
     mentioned,
     replyTo: quoteId ? { id: quoteId } : undefined,
     ...(segments?.length ? { segments } : {}),
+    ...(isCqStringRelayed(ev) ? { forwarded: true as const } : {}),
   };
 }
 

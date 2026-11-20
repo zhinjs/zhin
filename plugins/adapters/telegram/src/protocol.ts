@@ -129,6 +129,41 @@ export interface TelegramMessage {
     readonly longitude: number;
     readonly latitude: number;
   };
+  /** Bot API 7.0+: where a forwarded message came from. */
+  readonly forward_origin?: Readonly<Record<string, unknown>>;
+  /** Legacy forward fields (before Bot API 7.0; some gateways still send them). */
+  readonly forward_from?: TelegramUser;
+  readonly forward_from_chat?: Readonly<Record<string, unknown>>;
+  readonly forward_from_message_id?: number;
+  readonly forward_sender_name?: string;
+  readonly forward_date?: number;
+  /** A channel post automatically forwarded into the linked discussion group. */
+  readonly is_automatic_forward?: boolean;
+  /** Sent through an inline bot: the text is that bot's result, not the sender's words. */
+  readonly via_bot?: TelegramUser;
+  /** A reply to a message from another chat or topic. */
+  readonly external_reply?: Readonly<Record<string, unknown>>;
+  /** The quoted part of the replied-to message. */
+  readonly quote?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * ADR 0067 D8: the message relays content its sender did not write — a forward (current or legacy
+ * fields), an automatic channel forward, an inline-bot result, or a quote from another chat.
+ * Such a message is delivered with the IM `forwarded` marker so it never counts as the sender's
+ * original text.
+ */
+export function isTelegramRelayedMessage(msg: TelegramMessage): boolean {
+  return msg.forward_origin != null
+    || msg.forward_from != null
+    || msg.forward_from_chat != null
+    || msg.forward_from_message_id != null
+    || msg.forward_sender_name != null
+    || msg.forward_date != null
+    || msg.is_automatic_forward === true
+    || msg.via_bot != null
+    || msg.external_reply != null
+    || msg.quote != null;
 }
 
 export interface TelegramCallbackQuery {
