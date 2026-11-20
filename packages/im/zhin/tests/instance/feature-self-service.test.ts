@@ -778,7 +778,7 @@ describe('command spellings carry the real prefix', () => {
     expect(below.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'confirm-not-own', reply: 'no' })]);
   });
 
-  const escape = (text: string) => text.replace(/\//gu, '\\/');
+  const escape = (text: string) => text.replace(/[\\^$.*+?()[\]{}|/]/gu, '\\$&');
 
   for (const prefix of ['', '#', '/']) {
     it(`prefix ${JSON.stringify(prefix)}: 绑定 / 功能 / 角色 usage and follow-ups`, async () => {
