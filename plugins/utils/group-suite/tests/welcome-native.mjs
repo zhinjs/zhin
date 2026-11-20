@@ -29,8 +29,8 @@ try {
   const schedules = new FakeScheduleRootHost(new FakeClock());
   kit = await PluginTestKit.create({ projectRoot: temporary, endpoints: ['first', 'second'],
     config: { configVersion: 2, plugins: { alpha: './plugins/group-suite', beta: './plugins/group-suite' },
-      alpha: { commandNamespace: 'alpha', welcomeMessage: 'alpha {name} ({id})' },
-      beta: { commandNamespace: 'beta', welcomeMessage: 'beta {name}' } },
+      alpha: { commandNamespace: 'alpha', welcomeMessage: 'alpha ${sender.name} (${sender.id})' },
+      beta: { commandNamespace: 'beta', welcomeMessage: 'beta ${sender.name}' } },
     installResources: ({ resources }) => {
       resources.provide(scheduleRootHostToken, schedules);
       resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), schedules));
@@ -56,7 +56,7 @@ try {
   assert.equal((await emit()).length, 0);
   await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeMessage'], value: '' }]);
   assert.equal((await emit(nestedNotice)).length, 0);
-  await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeMessage'], value: 'alpha {name} ({id})' }]);
+  await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeMessage'], value: 'alpha ${sender.name} (${sender.id})' }]);
   // Address-level invalid values are unit-tested in welcome.test.ts; here keep one of them plus the schema-only extra-field cases.
   for (const invalid of [null, [{ ...nested, extra: true }],
     [{ ...nested, parent: { ...nested.parent, extra: true } }], [{ ...nested, endpoint: { ...nested.endpoint, extra: true } }]]) {
@@ -65,7 +65,7 @@ try {
     assert.equal(kit.generation, generation); assert.equal((await emit(nestedNotice)).length, 1);
   }
   const source = join(fixture, 'handlers/welcome/index.ts');
-  await put(source, (await readFile(source, 'utf8')).replace("const content = text.replaceAll", "const content = ('HMR ' + text).replaceAll"));
+  await put(source, (await readFile(source, 'utf8')).replace("data: { text } }", "data: { text: 'HMR ' + text } }"));
   assert.equal((await kit.reloadSource(source)).status, 'reloaded');
   assert.equal((await emit(nestedNotice)).length, 1); assert.match(kit.deliveries[0].payload[0].data.text, /^HMR alpha/);
   assert.equal((await emit()).length, 0);

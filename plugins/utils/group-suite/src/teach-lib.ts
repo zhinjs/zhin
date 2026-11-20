@@ -8,6 +8,7 @@ import {
   ts,
 } from './shared-runtime.js';
 import type { GroupSuiteRuntime } from './runtime-state.js';
+import { untrustedContent, type SendContent } from '@zhin.js/core/runtime';
 
 export const TEACH_USAGE_HINT = '格式：关键词 回答，或 问题|答案';
 
@@ -106,23 +107,44 @@ export function parseTeachPair(raw: string): { question: string; answer: string 
   return { question, answer };
 }
 
+/**
+ * zhinjs/zhin#1250: a taught answer is an outbound template — `${sender.name}`, `${sender.id}`,
+ * `${menu}`, `${command.checkin}`, … are filled by the outbound renderer from the incoming message,
+ * as data. Only `${time}` / `${date}` are filled here (formatted with the message's locale), in the
+ * same single pass as the regex captures `$1`–`$9`. Captures are the asker's own text: they are sent
+ * as untrusted content, so a capture (or a nickname) is never expanded as a placeholder.
+ */
+const ANSWER_LOCAL_PLACEHOLDER = /\$\{\s*(time|date)\s*\}|\$([1-9])/gu;
+const TEACH_TRUST = Object.freeze({ source: 'group-suite.teach' });
+
 function processAnswer(
   answer: string,
-  sender: { id: string; name: string },
+  locale: MessageInput['locale'],
   match?: RegExpMatchArray,
-  locale?: import('zhin.js/i18n').Locale,
-): string {
-  let result = answer;
-  result = result.replace(/\{sender\}/g, sender.name || t(locale, 'you'));
-  result = result.replace(/\{sender\.id\}/g, sender.id || '');
-  result = result.replace(/\{time\}/g, new Date().toLocaleTimeString(locale ?? 'zh-CN'));
-  result = result.replace(/\{date\}/g, new Date().toLocaleDateString(locale ?? 'zh-CN'));
-  if (match) {
-    for (let i = 1; i < match.length; i++) {
-      result = result.replace(new RegExp(`\\$${i}`, 'g'), match[i] || '');
+): SendContent {
+  const parts: SendContent[] = [];
+  let text = '';
+  let last = 0;
+  for (const found of answer.matchAll(ANSWER_LOCAL_PLACEHOLDER)) {
+    const [token, clock, group] = found;
+    const index = found.index ?? 0;
+    text += answer.slice(last, index);
+    last = index + token.length;
+    if (clock === 'time') text += new Date().toLocaleTimeString(locale ?? 'zh-CN');
+    else if (clock === 'date') text += new Date().toLocaleDateString(locale ?? 'zh-CN');
+    else if (!match || Number(group) >= match.length) text += token;
+    else {
+      const captured = match[Number(group)] ?? '';
+      if (!captured) continue;
+      if (text) parts.push(text);
+      text = '';
+      parts.push(untrustedContent(captured, TEACH_TRUST));
     }
   }
-  return result;
+  text += answer.slice(last);
+  if (parts.length === 0) return text;
+  if (text) parts.push(text);
+  return parts;
 }
 
 function qaWhereKey(row: {
@@ -301,12 +323,15 @@ export async function teachForget(
   return t(input.locale, 'questionRemoved', { question });
 }
 
-/** Try teach auto-reply; returns reply text or null. */
+/**
+ * Try teach auto-reply; returns the reply or null. The reply is the answer text (an outbound
+ * template), or — when it quotes the asker's own text — an array whose quoted parts are untrusted.
+ */
 export async function tryTeachReply(
   input: MessageInput,
   cfg: GroupSuiteConfig,
   runtime: GroupSuiteRuntime,
-): Promise<string | null> {
+): Promise<SendContent | null> {
   const content = typeof input.content === 'string' ? input.content.trim() : '';
   if (!content) return null;
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -338,13 +363,7 @@ export async function tryTeachReply(
     }
   }
 
-  const sender = resolveSender(input);
-  let answer = String(matched.answer ?? '');
-  if (matched.is_regex) {
-    const m = teachRegex(String(matched.question))?.exec(content);
-    answer = processAnswer(answer, sender, m || undefined, input.locale);
-  } else {
-    answer = processAnswer(answer, sender, undefined, input.locale);
-  }
-  return answer;
+  const answer = String(matched.answer ?? '');
+  const m = matched.is_regex ? teachRegex(String(matched.question))?.exec(content) : undefined;
+  return processAnswer(answer, input.locale, m || undefined);
 }

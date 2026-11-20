@@ -182,11 +182,11 @@
       "type": "string",
       "maxLength": 2000,
       "default": "",
-      "description": "Group welcome text. Empty disables; {name}/{id} refer to the joined member.",
+      "description": "Group welcome text, an outbound message template. Empty disables; ${sender.name} / ${sender.id} are the joined member, ${menu} / ${prefix} / ${command.*} use the sending account's command prefix.",
       "x-i18n": {
         "zh-CN": {
           "title": "入群欢迎语",
-          "description": "新成员入群时发送的文本，留空则关闭；{name} 和 {id} 代表新成员。"
+          "description": "新成员入群时发送的文本（出站消息模板），留空则关闭；${sender.name} 与 ${sender.id} 是新成员，${menu}、${prefix}、${command.*} 按发送账号的命令前缀渲染。"
         },
         "en": {
           "title": "Welcome message"

@@ -19,12 +19,19 @@ export default defineHandler({
       const owner = this.use(memberWelcomeOwnerToken);
       if (owner.ownsWelcome(notice.conversation)) return;
     }
-    const content = text.replaceAll('{name}', notice.target.name ?? notice.target.id)
-      .replaceAll('{id}', notice.target.id);
+    // #1250: the text is an outbound template; the new member is this send's `sender` (the subject
+    // of the event), passed as data, so the renderer fills `${sender.name}` / `${menu}` /
+    // `${command.*}` for the sending account and never expands placeholders inside the nickname.
+    const member = notice.target;
     const result = await this.use(outboundMessageToken).send({
       requester: this.owner.id,
       conversation: notice.conversation,
-      content: { type: 'text', data: { text: content } },
+      content: { type: 'text', data: { text } },
+      incoming: {
+        sender: { id: member.id, name: member.name || member.id },
+        content: '',
+        timestamp: notice.timestamp,
+      },
     });
     if (result.status !== 'sent') {
       // Unknown delivery must remain visible, and must never trigger an automatic duplicate send.

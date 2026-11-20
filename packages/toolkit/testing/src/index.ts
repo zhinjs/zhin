@@ -2,10 +2,10 @@ import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Adapter, createEndpointSpecification, endpointSpec, defineAdapter, type Endpoint, type AdapterDefinition, type AdapterSegmentPolicy,
   type EndpointIdentity, type EndpointEventSink, type EndpointIncomingMessage, type EndpointSendRequest } from 'zhin.js/adapter';
-import { ImRuntime, type ConversationAddress, type MessageDispatchResult,
+import { ImRuntime, installComponentHost, type ConversationAddress, type MessageDispatchResult,
   type RuntimeMessageDiagnosticsReader, type SendContent } from 'zhin.js/core/runtime';
 import { type ConversationRef, type DeliveryReceipt } from 'zhin.js';
-import { rootPluginId, type ConfigDocumentPort, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from 'zhin.js/plugin-runtime';
+import { componentHostToken, rootPluginId, type ConfigDocumentPort, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from 'zhin.js/plugin-runtime';
 import { NativeDevelopmentModuleRuntime, NodePackageResolver, RootRuntime,
   type ModuleRuntime, type RootResourceInstaller } from '@zhin.js/runtime';
 import { captureDeliveryValue } from './delivery-capture.js';
@@ -153,6 +153,8 @@ export class PluginTestKit {
       installResources: async context => {
         this.#im.install(context.resources);
         await options.installResources?.(context);
+        // Outbound `${…}` templates render as in `zhin start` (#1250) unless the test brings its own host.
+        if (!context.resources.has(componentHostToken)) installComponentHost()(context);
       },
     });
     this.#im.attach(this.#root.snapshots);

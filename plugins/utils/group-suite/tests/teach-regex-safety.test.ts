@@ -6,6 +6,7 @@ import { getTeachModel } from '../src/db-store.js';
 import { createInMemoryGroupSuiteDb } from '../src/memory-store.js';
 import { createGroupSuiteRuntime } from '../src/runtime-state.js';
 import { isSafeRegex, TEACH_REGEX_MAX_CONTENT, teachAdd, tryTeachReply } from '../src/teach-lib.js';
+import { untrustedContent } from '@zhin.js/core/runtime';
 
 const input = {
   locale: 'zh-CN' as const,
@@ -83,7 +84,9 @@ describe('teach regex safety', () => {
     expect(await teachAdd(input, enabled, '^(\\d+)号桌|已为 $1 号桌下单', true, runtime)).toContain('^(\\d+)号桌');
     await teachAdd(input, enabled, '长消息 exact', false, runtime);
 
-    expect(await tryTeachReply({ ...input, content: '12号桌 加一份' }, enabled, runtime)).toBe('已为 12 号桌下单');
+    // The capture is the asker's text: sent as untrusted content, never as template text.
+    expect(await tryTeachReply({ ...input, content: '12号桌 加一份' }, enabled, runtime))
+      .toEqual(['已为 ', untrustedContent('12', { source: 'group-suite.teach' }), ' 号桌下单']);
     const long = `7号桌${'x'.repeat(TEACH_REGEX_MAX_CONTENT)}`;
     expect(await tryTeachReply({ ...input, content: long }, enabled, runtime)).toBeNull();
     // Exact rules are not subject to the length cap, and regex rules stay off when disabled.

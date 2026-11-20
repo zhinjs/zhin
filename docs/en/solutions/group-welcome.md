@@ -13,7 +13,7 @@ In Console, open **Operations → Scheduled tasks → Administrator tasks**, cho
 
 The flow reads the [group suite](https://github.com/zhinjs/zhin/tree/main/plugins/utils/group-suite) package identity from the Host use-case catalog and lists its manageable instances. Select one explicitly; it never defaults to the first instance. If none is installed, open the package in the Plugin store and review the exact version and existing installation plan. Merely opening the Plugin store does not install it. Reconcile uncertain installation results before submitting anything again; continue with the actual instance identity returned by the Host.
 
-1. Set `welcomeMessage`, for example `Welcome {name} ({id})`. An empty message still disables welcomes.
+1. Set `welcomeMessage`, for example `Welcome ${sender.name} (${sender.id})`; the available placeholders (including `${menu}` and `${command.*}` rendered with the account's prefix) are listed in [Message Template Placeholders](../reference/message-templates.md). An empty message still disables welcomes.
 2. Restrict `welcomeConversations` to selected conversations. This first creates an empty scope.
 3. Add an exact conversation. Read the current Host's accounts, select the actual Bot, and enter the group ID plus parent and thread IDs when present.
 4. Review the summary, validate and save through the existing form, then follow the link to plugin details to request application. A draft is not active configuration.
@@ -28,7 +28,7 @@ configVersion: 2
 plugins:
   group-suite: '@zhin.js/plugin-group-suite'
 group-suite:
-  welcomeMessage: 'Welcome {name} ({id})'
+  welcomeMessage: 'Welcome ${sender.name} (${sender.id})'
   welcomeConversations: []
 ```
 

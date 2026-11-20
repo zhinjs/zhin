@@ -20,6 +20,12 @@ import {
   type SendContent,
 } from './contracts.js';
 import { JsxButtonRegistry } from './interactive-router.js';
+import { projectLocale } from './inbound-spine.js';
+import {
+  outboundCommandEnvironmentToken,
+  templateCommandPaths,
+  type OutboundCommandEnvironment,
+} from './outbound-command-environment.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import type { OutboundFallbackReason, RuntimeMessageRendering } from './message-events.js';
 import {
@@ -186,7 +192,8 @@ export interface OutboundPreviewContext extends Pick<OutboundRenderContext, 'req
 /** Shared dependencies are immutable references; only the request-local cache changes. */
 interface RenderOperation extends Pick<OutboundRenderContext, 'requester' | 'snapshot' | 'signal' | 'bindButton' | 'conversation'> {
   readonly host?: ComponentHost;
-  readonly template?: TemplateContext;
+  /** Lazy: built for the first text that contains a placeholder marker, then reused. */
+  readonly template?: (text: string) => TemplateContext;
   readonly jsxCache: WeakMap<JSXElement, Promise<unknown>>;
 }
 
@@ -221,7 +228,7 @@ export class OutboundRenderer {
     const { requester, snapshot, conversation, incoming, signal, bindButton } = context;
     signal?.throwIfAborted();
     const host = resolveComponentHost(snapshot);
-    const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
+    const ctx = conversation && host ? lazyTemplateContext(conversation, incoming, requester, snapshot) : undefined;
     const operation: RenderOperation = { requester, snapshot, host, template: ctx,
       jsxCache: context.jsxCache ?? new WeakMap(), signal, bindButton, ...(conversation ? { conversation } : {}) };
     const rendered = await this.#render(content, { operation, depth: 0,
@@ -291,7 +298,7 @@ export class OutboundRenderer {
       if (content.type === 'text') {
         const text = (content.data as Record<string, unknown> | undefined)?.text;
         if (typeof text === 'string' && text.includes(TEMPLATE_MARKER) && host && ctx) {
-          return { ...content, data: { ...content.data, text: host.compileTemplate(text, ctx) } };
+          return { ...content, data: { ...content.data, text: host.compileTemplate(text, ctx(text)) } };
         }
       }
       return content;
@@ -313,17 +320,78 @@ export class OutboundRenderer {
 function compileText(
   text: string,
   host: ComponentHost | undefined,
-  ctx: TemplateContext | undefined,
+  ctx: ((text: string) => TemplateContext) | undefined,
 ): string {
   if (!host || !ctx || !text.includes(TEMPLATE_MARKER)) return text;
-  return host.compileTemplate(text, ctx);
+  return host.compileTemplate(text, ctx(text));
+}
+
+/** `${command…}` with optional spaces, as the template PATH rule allows after trimming. */
+const COMMAND_PLACEHOLDER = /\$\{\s*command[.\s}[]/u;
+
+/**
+ * Nothing is computed until a text needs it: the base context (prefix and menu included) on the
+ * first placeholder, the requester's command paths only for a text that names `command`.
+ */
+function lazyTemplateContext(
+  conversation: ConversationRef,
+  incoming: IncomingContext | undefined,
+  requester: PluginId,
+  snapshot: RuntimeSnapshot,
+): (text: string) => TemplateContext {
+  let base: TemplateContext | undefined;
+  let withCommands: TemplateContext | undefined;
+  return (text) => {
+    base ??= buildTemplateContext(conversation, incoming, snapshot);
+    if (!COMMAND_PLACEHOLDER.test(text) || base.prefix === undefined) return base;
+    withCommands ??= withCommandPaths(base, conversation, incoming, requester, snapshot);
+    return withCommands;
+  };
+}
+
+function resolveCommandEnvironment(snapshot: RuntimeSnapshot): OutboundCommandEnvironment | undefined {
+  const value = snapshot.resources.get(snapshot.root)?.get(outboundCommandEnvironmentToken.id);
+  return typeof value === 'function' ? value as OutboundCommandEnvironment : undefined;
+}
+
+function commandEnvironmentInput(conversation: ConversationRef, incoming: IncomingContext | undefined, snapshot: RuntimeSnapshot) {
+  return { conversation, locale: projectLocale(snapshot),
+    ...(incoming?.endpointId !== undefined ? { endpointId: incoming.endpointId } : {}) };
+}
+
+function withCommandPaths(
+  base: TemplateContext,
+  conversation: ConversationRef,
+  incoming: IncomingContext | undefined,
+  requester: PluginId,
+  snapshot: RuntimeSnapshot,
+): TemplateContext {
+  try {
+    const command = templateCommandPaths(snapshot, commandEnvironmentInput(conversation, incoming, snapshot), requester, base.prefix ?? '');
+    return command ? { ...base, command } : base;
+  } catch {
+    // Placeholders stay as written; the send itself never fails over a template lookup.
+    outboundLogger.warn(formatCompact({ op: 'outbound_template', status: 'fallback', reason: 'command_paths_failed', generation: snapshot.generation }));
+    return base;
+  }
 }
 
 function buildTemplateContext(
   conversation: ConversationRef,
-  incoming?: IncomingContext,
+  incoming: IncomingContext | undefined,
+  snapshot: RuntimeSnapshot,
 ): TemplateContext {
+  let environment: Readonly<{ prefix: string; menu?: string }> | undefined;
+  const resolve = resolveCommandEnvironment(snapshot);
+  if (resolve) {
+    try {
+      environment = resolve(commandEnvironmentInput(conversation, incoming, snapshot), snapshot);
+    } catch {
+      outboundLogger.warn(formatCompact({ op: 'outbound_template', status: 'fallback', reason: 'command_environment_failed', generation: snapshot.generation }));
+    }
+  }
   return {
+    ...(environment ? { prefix: environment.prefix, ...(environment.menu !== undefined ? { menu: environment.menu } : {}) } : {}),
     adapter: conversation.endpoint.adapter,
     endpoint: conversation.endpoint.id,
     kind: conversation.kind,
