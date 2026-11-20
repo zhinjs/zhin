@@ -202,7 +202,7 @@ export async function evaluateIngressGatesAndTrigger(input: {
   ) => Promise<T>;
   /**
    * #1250 (ADR 0067 D8): runs only when the control-plane and speaking gates passed and no trigger
-   * matched the message; `true` means it answered (e.g. the reset hint) and the ingress stops there.
+   * matched the message; `true` means it handled the message (e.g. an untriggered `/clear`) and the ingress stops there.
    * `outboundBlocked` reports the control plane's outbound stop for this conversation.
    */
   readonly onUnmatched?: (outboundBlocked: (stage: string) => boolean) => Promise<boolean>;

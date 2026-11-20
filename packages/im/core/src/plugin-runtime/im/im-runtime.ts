@@ -66,6 +66,7 @@ import {
   type OutboundDeliveryExecution,
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
+import { outboundCommandEnvironmentToken } from './outbound-command-environment.js';
 import { messageLocale } from './inbound-spine.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { createInboundOriginClassifier, OutboundLedger, ledgerScopeOf } from './inbound-origin.js';
@@ -367,6 +368,8 @@ export class ImRuntime implements OutboundMessageService {
     resources.provide(permissionHostToken, this.permissionHost);
     resources.provide(commandExecutionAdmissionToken, this.#commandExecution.admission);
     resources.provide(messageBusToken, this.messageBus);
+    // #1250: outbound templates resolve `${bot.prefix}` / `${bot.menu}` with this runtime's own dispatcher.
+    resources.provide(outboundCommandEnvironmentToken, (input, snapshot) => this.#inbound.outboundCommandEnvironment(input, snapshot));
   }
 
   /** The sole Adapter ingress, also installed as endpointEventGatewayToken. */

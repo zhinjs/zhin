@@ -39,7 +39,7 @@ sidebar: false
 | `packages/im/plugin-runtime/src/persistent-state.ts` | 已有按 owner、完整 endpoint、sender 分区的用户状态 | 复用身份与存储机制，不新建进程级语言 Map |
 | `packages/im/runtime/src/host-config-schema.json` | 无统一 locale 配置，大量描述为固定中文 | 本地化显示元数据，保持配置字段和值的机器含义不变 |
 | `packages/toolkit/scaffold-wizard` | 创建和增量配置共用向导，但语言未进入共享选项 | 一次语言选择贯通向导和生成配置，避免两套实现 |
-| `packages/im/agent/src/user-profile.ts` | 已有可影响模型回复的 language/preferred_language 偏好 | 接入统一偏好前需明确优先级，不能让菜单和 Agent 各选一种语言 |
+| `packages/im/agent/src/user-profile.ts` | language/preferred_language 偏好只作参考，不决定回复语言（#1250 第 69 批） | 回复语言以用户的语言指令设置为准，见 docs/configuration/localization.md |
 
 Console UI 属于独立仓库；实施前需刷新其远程源码，不能把历史本地检索当作当前部署审计。
 

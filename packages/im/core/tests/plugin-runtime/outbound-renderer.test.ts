@@ -78,7 +78,7 @@ describe('OutboundRenderer template compilation', () => {
       incoming: incoming,
     });
     expect(result).toEqual({ type: 'text', data: { text: '结果=${2*3}' } });
-    expect(await renderer.render({ type: 'text', data: { text: '平台=${adapter}' } }, {
+    expect(await renderer.render({ type: 'text', data: { text: '平台=${bot.adapter}' } }, {
       requester: requester,
       snapshot: snapshotWithHost(),
       conversation: conversation,
@@ -99,7 +99,7 @@ describe('OutboundRenderer template compilation', () => {
 
   it('compiles templates inside arrays', async () => {
     const content = [
-      { type: 'text', data: { text: '${1+1} ${kind}' } },
+      { type: 'text', data: { text: '${1+1} ${conversation.kind}' } },
       { type: 'image', data: { url: 'a.png' } },
     ] as const;
     const result = await renderer.render(content as any, {
@@ -115,7 +115,7 @@ describe('OutboundRenderer template compilation', () => {
   });
 
   it('does not spend component recursion depth on nested plain arrays', async () => {
-    let content: SendContent = 'value=${kind}';
+    let content: SendContent = 'value=${conversation.kind}';
     for (let index = 0; index < 80; index++) content = [content];
     expect(await renderer.render(content, {
       requester: requester,
@@ -183,7 +183,7 @@ describe('OutboundRenderer template compilation', () => {
   });
 
   it('inserts echoed user content verbatim without rescanning it', async () => {
-    const result = await renderer.render('你说了: ${content}', {
+    const result = await renderer.render('你说了: ${message.content}', {
       requester: requester,
       snapshot: snapshotWithHost(),
       conversation: conversation,
@@ -214,18 +214,18 @@ describe('OutboundRenderer template compilation', () => {
   });
 
   describe('conversation context', () => {
-    it('exposes adapter', async () => {
-      const result = await renderer.render('平台=${adapter}', {
+    it('exposes bot.adapter and bot.endpoint', async () => {
+      const result = await renderer.render('平台=${bot.adapter} 账号=${bot.endpoint}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
         incoming: incoming,
       });
-      expect(result).toBe('平台=sandbox');
+      expect(result).toBe('平台=sandbox 账号=sandbox:default');
     });
 
     it('exposes conversationId and kind', async () => {
-      const result = await renderer.render('会话=${conversationId} 类型=${kind}', {
+      const result = await renderer.render('会话=${conversation.id} 类型=${conversation.kind}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
@@ -247,7 +247,7 @@ describe('OutboundRenderer template compilation', () => {
     });
 
     it('exposes incoming content', async () => {
-      const result = await renderer.render('你说了: ${content}', {
+      const result = await renderer.render('你说了: ${message.content}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
@@ -257,7 +257,7 @@ describe('OutboundRenderer template compilation', () => {
     });
 
     it('exposes messageId', async () => {
-      const result = await renderer.render('消息ID=${messageId}', {
+      const result = await renderer.render('消息ID=${message.id}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
@@ -267,7 +267,7 @@ describe('OutboundRenderer template compilation', () => {
     });
 
     it('exposes timestamp', async () => {
-      const result = await renderer.render('时间=${timestamp}', {
+      const result = await renderer.render('时间=${message.timestamp}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
@@ -277,7 +277,7 @@ describe('OutboundRenderer template compilation', () => {
     });
 
     it('exposes endpointId', async () => {
-      const result = await renderer.render('机器人=${endpointId}', {
+      const result = await renderer.render('机器人=${bot.endpointId}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
@@ -287,7 +287,7 @@ describe('OutboundRenderer template compilation', () => {
     });
 
     it('exposes mentioned', async () => {
-      const result = await renderer.render('被@=${mentioned}', {
+      const result = await renderer.render('被@=${message.mentioned}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
@@ -296,13 +296,26 @@ describe('OutboundRenderer template compilation', () => {
       expect(result).toBe('被@=true');
     });
 
+    it('leaves the removed top-level placeholders as written', async () => {
+      const text = '${adapter} ${endpoint} ${kind} ${conversationId} ${content} ${segments[0].type} ${messageId} ${timestamp} ${endpointId} ${mentioned} ${prefix} ${menu}';
+      expect(await renderer.render(text, { requester, snapshot: snapshotWithHost(), conversation, incoming })).toBe(text);
+    });
+
+    it('exposes message segments', async () => {
+      const result = await renderer.render('${message.segments[0].type}', {
+        requester, snapshot: snapshotWithHost(), conversation,
+        incoming: { ...incoming, segments: [{ type: 'image', data: { url: 'a.png' } }] },
+      });
+      expect(result).toBe('image');
+    });
+
     it('handles missing incoming gracefully', async () => {
-      const result = await renderer.render('${sender}', {
+      const result = await renderer.render('${sender} ${sender.name} ${message.content}', {
         requester: requester,
         snapshot: snapshotWithHost(),
         conversation: conversation,
       });
-      expect(result).toBe('${sender}');
+      expect(result).toBe('${sender} ${sender.name} ${message.content}');
     });
   });
 });

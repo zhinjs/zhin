@@ -2497,7 +2497,7 @@ _This Schema declares no fields._
 | `group-suite.teachCooldownMs` | number | no | `3000` | Minimum interval between two teach commands from the same member. |
 | `group-suite.teachAllowRegex` | boolean | no | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
 | `group-suite.teachPageSize` | number | no | `10` | Rules shown per page by teach-list. |
-| `group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
+| `group-suite.welcomeMessage` | string | no | `""` | Group welcome text, an outbound message template. Empty disables; ${sender.name} / ${sender.id} are the joined member, ${bot.menu} / ${bot.prefix} / ${command.*} use the sending account's command prefix. |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | no | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
 | `group-suite.welcomeConversations[].endpoint` | object | yes | — | — |
 | `group-suite.welcomeConversations[].endpoint.adapter` | string | yes | — | — |

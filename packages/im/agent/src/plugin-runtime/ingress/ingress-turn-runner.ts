@@ -23,6 +23,8 @@ import {
 import type { HostMailbox } from '../../collaboration/host-mailbox.js';
 import { runInMailTurn } from '../../collaboration/mail-turn-context.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '../../context/index.js';
+import { USER_REPLY_LOCALE_METADATA_KEY } from '../../prompt/rules/reply-language.js';
+import { readUserSetReplyLocale } from './user-reply-locale.js';
 import { runWithAgentDecisionTurn } from '../decision-runtime.js';
 import type { AgentRuntime } from '../agent-runtime.js';
 import type { CapabilityIngress } from '../capability-ingress.js';
@@ -265,6 +267,10 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           : effectiveCarrier)
         : effectiveCarrier;
       const mergedSenders = members && members.length > 1 ? mergedTurnSenders(admission.participants) : undefined;
+      // #1250 b69: only a turn answering one present sender follows that sender's own `/language`.
+      const userReplyLocale = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge
+        ? await readUserSetReplyLocale(snapshot, message) : undefined;
+      signal.throwIfAborted();
       const capabilities = liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities;
       let routed = routeSpecialistAgent(
         inbound.text,
@@ -410,9 +416,11 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             ...(sceneEvents.length ? { sceneEvents } : {}),
             ...(mergedSenders ? { mergedSenders } : {}),
             ...(liveDanmaku ? { liveDanmaku } : {}),
-            ...(ambient ? {
-              trustedMetadata: Object.freeze({ [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' }),
-            } : {}),
+            // Always written so adapter metadata cannot claim a user-set locale.
+            trustedMetadata: Object.freeze({
+              [USER_REPLY_LOCALE_METADATA_KEY]: userReplyLocale ?? false,
+              ...(ambient ? { [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' } : {}),
+            }),
             intent: gate ? Object.freeze({ kind: 'new' as const }) : await resolveProductTurnIntent(
               message,
               senderRoles,

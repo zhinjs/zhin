@@ -502,6 +502,8 @@ describe('telegram plugin runtime adapter', () => {
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'private', id: '1001' }),
       mentioned: true,
+      // #1250: the bot's own handle, so the Agent can tell `/clear@test_bot` from another bot's command.
+      metadata: expect.objectContaining({ botUsername: 'test_bot' }),
     }));
 
     await endpoint.stop();

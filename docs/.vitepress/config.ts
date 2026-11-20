@@ -180,6 +180,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   sidebarGroup('参考', [
     { text: 'API Reference', link: '/reference/api' },
+    { text: '消息模板占位符', link: '/reference/message-templates' },
     { text: '配置字段（自动生成）', link: '/configuration/generated' },
     { text: 'zhin runtime start', link: '/cli/runtime' },
   ]),
@@ -362,6 +363,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   sidebarGroup('Reference', [
     { text: 'API Reference', link: '/en/reference/api' },
+    { text: 'Message Template Placeholders', link: '/en/reference/message-templates' },
     { text: 'Configuration Fields (Generated)', link: '/en/configuration/generated' },
     { text: 'zhin runtime start', link: '/en/cli/runtime' },
   ]),

@@ -2497,7 +2497,7 @@ _该 Schema 没有声明字段。_
 | `group-suite.teachCooldownMs` | number | 否 | `3000` | 同一成员两次教学之间的最短间隔 |
 | `group-suite.teachAllowRegex` | boolean | 否 | `false` | 允许成员教学正则表达式规则。默认关闭：正则会对每条入站消息执行；只接受结构安全的表达式，并且只对不超过 200 字的消息尝试匹配。 |
 | `group-suite.teachPageSize` | number | 否 | `10` | teach-list 每页显示的问答条数 |
-| `group-suite.welcomeMessage` | string | 否 | `""` | 新成员入群时发送的文本，留空则关闭；{name} 和 {id} 代表新成员。 |
+| `group-suite.welcomeMessage` | string | 否 | `""` | 新成员入群时发送的文本（出站消息模板），留空则关闭；${sender.name} 与 ${sender.id} 是新成员，${bot.menu}、${bot.prefix}、${command.*} 按发送账号的命令前缀渲染。 |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | 否 | — | 发送欢迎语的精确会话名单。不填写时欢迎所有群；填 [] 则不欢迎任何会话。未填写父容器或话题时只匹配没有它们的会话，不支持通配。 |
 | `group-suite.welcomeConversations[].endpoint` | object | 是 | — | — |
 | `group-suite.welcomeConversations[].endpoint.adapter` | string | 是 | — | — |

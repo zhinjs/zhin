@@ -37,7 +37,7 @@ export interface EvalInboundMessage {
   readonly backgroundOwnReplies?: boolean;
   /**
    * #1250 (ADR 0067 D8): earlier plain-text messages in the same chat that nothing handled (e.g.
-   * `/clear`), stored and read back through the real core `ConversationRuntime` as an adapter that
+   * `/weather`), stored and read back through the real core `ConversationRuntime` as an adapter that
    * declares `inboundTextAuthoredBySender` delivers them. A string is this message's own sender; an
    * object may name another `senderId` or carry the adapter's `forwarded` marker (a Telegram forward).
    */
@@ -66,6 +66,13 @@ export interface EvalInboundMessage {
    * hands it over (`TurnInput.liveDanmaku`). `sender` is the carrier.
    */
   readonly liveDanmaku?: TurnLiveDanmaku;
+  /** The locale the IM ingress resolved for this message (`TurnInput.locale`). */
+  readonly locale?: 'zh-CN' | 'en';
+  /**
+   * #1250 b69: `locale` is the sender's own `/language` setting, marked by the IM ingress in trusted
+   * turn metadata; absent = the project/default fallback.
+   */
+  readonly localeSetByUser?: boolean;
   /**
    * ADR 0048 H3: `false` = an ordinary group message that neither @s nor
    * replies to the bot. The Mailbox admission policy rejects it

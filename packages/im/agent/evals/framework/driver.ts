@@ -1,4 +1,5 @@
 import { createEvalInference } from './inference.js';
+import { USER_REPLY_LOCALE_METADATA_KEY } from '../../src/prompt/rules/reply-language.js';
 import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
@@ -562,6 +563,8 @@ function buildTurn(
     principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles, origin: 'human' },
     input: {
       text: message.text,
+      ...(message.locale ? { locale: message.locale } : {}),
+      ...(message.locale && message.localeSetByUser ? { metadata: { [USER_REPLY_LOCALE_METADATA_KEY]: message.locale } } : {}),
       ...(message.images?.length
         ? { media: message.images.map((image) => ({ kind: 'image' as const, source: { kind: 'base64' as const, value: image.base64 }, mimeType: image.mimeType, ...(image.name ? { name: image.name } : {}) })) }
         : {}),

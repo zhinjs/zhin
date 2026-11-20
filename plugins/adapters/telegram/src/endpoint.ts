@@ -442,6 +442,8 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         chatType: msg.chat.type,
         userId: msg.from?.id,
         date: msg.date,
+        // The bot's own handle (getMe), so `/command@<bot>` can be told apart from another bot's command.
+        ...(this.#botUsername ? { botUsername: this.#botUsername } : {}),
       }),
     });
   }

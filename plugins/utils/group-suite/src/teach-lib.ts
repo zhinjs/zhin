@@ -8,6 +8,9 @@ import {
   ts,
 } from './shared-runtime.js';
 import type { GroupSuiteRuntime } from './runtime-state.js';
+import { untrustedContent, type SendContent } from '@zhin.js/core/runtime';
+import { createEcho, echoReply } from './echo.js';
+import { hintLegacyPlaceholders } from './welcome-template.js';
 
 export const TEACH_USAGE_HINT = '格式：关键词 回答，或 问题|答案';
 
@@ -106,23 +109,44 @@ export function parseTeachPair(raw: string): { question: string; answer: string 
   return { question, answer };
 }
 
+/**
+ * zhinjs/zhin#1250: a taught answer is an outbound template — `${sender.name}`, `${sender.id}`,
+ * `${bot.menu}`, `${command.checkin}`, … are filled by the outbound renderer from the incoming message,
+ * as data. Only `${now.time}` / `${now.date}` are filled here (formatted with the message's locale), in the
+ * same single pass as the regex captures `$1`–`$9`. Captures are the asker's own text: they are sent
+ * as untrusted content, so a capture (or a nickname) is never expanded as a placeholder.
+ */
+const ANSWER_LOCAL_PLACEHOLDER = /\$\{\s*now\.(time|date)\s*\}|\$([1-9])/gu;
+const TEACH_TRUST = Object.freeze({ source: 'group-suite.teach' });
+
 function processAnswer(
   answer: string,
-  sender: { id: string; name: string },
+  locale: MessageInput['locale'],
   match?: RegExpMatchArray,
-  locale?: import('zhin.js/i18n').Locale,
-): string {
-  let result = answer;
-  result = result.replace(/\{sender\}/g, sender.name || t(locale, 'you'));
-  result = result.replace(/\{sender\.id\}/g, sender.id || '');
-  result = result.replace(/\{time\}/g, new Date().toLocaleTimeString(locale ?? 'zh-CN'));
-  result = result.replace(/\{date\}/g, new Date().toLocaleDateString(locale ?? 'zh-CN'));
-  if (match) {
-    for (let i = 1; i < match.length; i++) {
-      result = result.replace(new RegExp(`\\$${i}`, 'g'), match[i] || '');
+): SendContent {
+  const parts: SendContent[] = [];
+  let text = '';
+  let last = 0;
+  for (const found of answer.matchAll(ANSWER_LOCAL_PLACEHOLDER)) {
+    const [token, clock, group] = found;
+    const index = found.index ?? 0;
+    text += answer.slice(last, index);
+    last = index + token.length;
+    if (clock === 'time') text += new Date().toLocaleTimeString(locale ?? 'zh-CN');
+    else if (clock === 'date') text += new Date().toLocaleDateString(locale ?? 'zh-CN');
+    else if (!match || Number(group) >= match.length) text += token;
+    else {
+      const captured = match[Number(group)] ?? '';
+      if (!captured) continue;
+      if (text) parts.push(text);
+      text = '';
+      parts.push(untrustedContent(captured, TEACH_TRUST));
     }
   }
-  return result;
+  text += answer.slice(last);
+  if (parts.length === 0) return text;
+  if (text) parts.push(text);
+  return parts;
 }
 
 function qaWhereKey(row: {
@@ -175,7 +199,7 @@ export async function teachAdd(
   payload: string,
   regex = false,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return t(input.locale, 'teachRetry');
   if (regex && !cfg.teachAllowRegex) return t(input.locale, 'regexDisabled');
@@ -192,7 +216,8 @@ export async function teachAdd(
     try {
       new RegExp(question, 'i');
     } catch (e) {
-      return t(input.locale, 'invalidRegex', { error: (e as Error).message });
+      // The engine's message quotes the pattern: user text, so it is not a template.
+      return echoReply(mark => t(input.locale, 'invalidRegex', { error: mark((e as Error).message) }));
     }
     if (!isSafeRegex(question)) return t(input.locale, 'unsafeRegex');
   }
@@ -217,6 +242,7 @@ export async function teachAdd(
   })) as Record<string, unknown>[];
 
   if (duplicate.length > 0 && !regex) {
+    hintLegacyPlaceholders('teach', input.conversation?.endpoint.id ?? '', answer);
     await QA.update({ answer, updated_at: ts() }).where(
       qaWhereKey(duplicate[0] as {
         question: string;
@@ -225,9 +251,11 @@ export async function teachAdd(
         is_regex?: number | boolean;
       }),
     );
-    return t(input.locale, 'teachUpdated', { question, answer });
+    // The stored answer is a template for the auto-reply, but quoted here it is shown as written.
+    return echoReply(mark => t(input.locale, 'teachUpdated', { question: mark(question), answer: mark(answer) }));
   }
 
+  hintLegacyPlaceholders('teach', input.conversation?.endpoint.id ?? '', answer);
   await QA.insert({
     question,
     answer,
@@ -241,9 +269,8 @@ export async function teachAdd(
     updated_at: ts(),
   });
 
-  return regex
-    ? t(input.locale, 'regexLearned', { question, answer })
-    : t(input.locale, 'teachLearned', { question, answer });
+  return echoReply(mark => t(input.locale, regex ? 'regexLearned' : 'teachLearned',
+    { question: mark(question), answer: mark(answer) }));
 }
 
 export async function teachList(
@@ -251,7 +278,7 @@ export async function teachList(
   cfg: GroupSuiteConfig,
   page = 1,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return t(input.locale, 'teachDb');
   const safePage = Math.max(1, page);
@@ -265,20 +292,21 @@ export async function teachList(
   const pageNum = Math.min(safePage, totalPages);
   const start = (pageNum - 1) * cfg.teachPageSize;
   const pageItems = allItems.slice(start, start + cfg.teachPageSize);
+  const echo = createEcho();
   const lines = pageItems.map((item, i) => {
     const prefix = item.is_regex ? t(input.locale, 'regex') : t(input.locale, 'exact');
-    const q = item.is_regex ? `/${item.question}/` : item.question;
-    return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
+    const q = item.is_regex ? `/${echo.mark(item.question)}/` : echo.mark(item.question);
+    return `${start + i + 1}. ${prefix} ${q} → ${echo.mark(item.answer)}`;
   });
   const header = t(input.locale, 'teachTitle');
-  return `${t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length })}\n${hint}`;
+  return echo.content(`${t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length })}\n${hint}`);
 }
 
 export async function teachForget(
   input: MessageInput,
   questionRaw: string,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return t(input.locale, 'teachDb');
   const question = questionRaw.trim();
@@ -289,7 +317,7 @@ export async function teachForget(
     context_type: ctxType,
     context_id: ctxId,
   })) as Record<string, unknown>[];
-  if (items.length === 0) return t(input.locale, 'questionMissing', { question });
+  if (items.length === 0) return echoReply(mark => t(input.locale, 'questionMissing', { question: mark(question) }));
   await QA.delete().where(
     qaWhereKey(items[0] as {
       question: string;
@@ -298,15 +326,18 @@ export async function teachForget(
       is_regex?: number | boolean;
     }),
   );
-  return t(input.locale, 'questionRemoved', { question });
+  return echoReply(mark => t(input.locale, 'questionRemoved', { question: mark(question) }));
 }
 
-/** Try teach auto-reply; returns reply text or null. */
+/**
+ * Try teach auto-reply; returns the reply or null. The reply is the answer text (an outbound
+ * template), or — when it quotes the asker's own text — an array whose quoted parts are untrusted.
+ */
 export async function tryTeachReply(
   input: MessageInput,
   cfg: GroupSuiteConfig,
   runtime: GroupSuiteRuntime,
-): Promise<string | null> {
+): Promise<SendContent | null> {
   const content = typeof input.content === 'string' ? input.content.trim() : '';
   if (!content) return null;
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -338,13 +369,9 @@ export async function tryTeachReply(
     }
   }
 
-  const sender = resolveSender(input);
-  let answer = String(matched.answer ?? '');
-  if (matched.is_regex) {
-    const m = teachRegex(String(matched.question))?.exec(content);
-    answer = processAnswer(answer, sender, m || undefined, input.locale);
-  } else {
-    answer = processAnswer(answer, sender, undefined, input.locale);
-  }
-  return answer;
+  const answer = String(matched.answer ?? '');
+  // Old `{name}` / `{time}` / `${menu}` answers are sent as written; tell the operator once (#1250).
+  hintLegacyPlaceholders('teach', input.conversation?.endpoint.id ?? '', answer);
+  const m = matched.is_regex ? teachRegex(String(matched.question))?.exec(content) : undefined;
+  return processAnswer(answer, input.locale, m || undefined);
 }

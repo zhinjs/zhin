@@ -21,7 +21,11 @@ describe('Agent turn content boundary', () => {
   it('recognizes only exact clear commands', () => {
     expect(isClearCommand(' /CLEAR ')).toBe(true);
     expect(isClearCommand('清空')).toBe(true);
+    // #1250: one recognizer for the triggered words and the slash spellings (`/clear`, `/reset`, `/new`).
+    expect(isClearCommand('／Reset')).toBe(true);
+    expect(isClearCommand('/new')).toBe(true);
     expect(isClearCommand('please clear')).toBe(false);
+    expect(isClearCommand('/clear all')).toBe(false);
   });
 
   it('transcribes one canonical inbound audio URL and preserves surrounding text', async () => {
