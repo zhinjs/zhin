@@ -13,7 +13,7 @@ export default defineEvalCase({
     outboundContains: ['nice day for a walk'],
     modelInputContains: [USER_SET, 'only an explicit language request in the current message overrides it'],
     modelInputNotContains: ['Reply language fallback:'],
-    systemPromptContains: ["else the user's own language setting"],
+    systemPromptContains: ["else the user's language setting"],
     systemPromptNotContains: [USER_SET],
   },
 });
