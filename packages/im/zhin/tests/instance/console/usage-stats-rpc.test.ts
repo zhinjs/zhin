@@ -88,7 +88,8 @@ describe('buildUsageStats', () => {
     expect(sessionAddressOf('qq:bot:group:a:b')).toEqual({ platform: 'qq', scope: 'group', sceneId: 'a:b' });
     // Only four-segment keys carry an address; other shapes name their platform alone (#1250 b80).
     expect(sessionAddressOf('a:b:c')).toEqual({ platform: 'a' });
-    expect(sessionAddressOf('qq::group:1')).toEqual({ platform: 'qq' });
+    // The kernel writes an empty endpoint segment for a scene without one; it still carries an address.
+    expect(sessionAddressOf('qq::group:1')).toEqual({ platform: 'qq', scope: 'group', sceneId: '1' });
   });
 });
 
