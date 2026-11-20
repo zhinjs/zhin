@@ -382,9 +382,8 @@ export function createRuntimeApprovalPort(options: {
           description: input.question,
           tip: approvalText(locale, input.humanOnly ? 'humanTip' : 'tip'),
           options: [
-            { label: approvalText(locale, input.humanOnly ? 'reject' : 'rejectAlways'), value: 'reject',
-              aliases: locale === 'en' ? ['n', 'no', 'Reject'] : ['否', '拒绝'] },
-            { label: approvalText(locale, 'once'), value: 'approve-once', aliases: locale === 'en' ? ['y', 'yes'] : ['同意', '确认'] },
+            { label: approvalText(locale, input.humanOnly ? 'reject' : 'rejectAlways'), value: 'reject', aliases: REJECT_ALIASES },
+            { label: approvalText(locale, 'once'), value: 'approve-once', aliases: APPROVE_ALIASES },
             ...(sharedConversation && !input.humanOnly ? [
               { label: approvalText(locale, 'sessionLabel'), value: 'approve-session', aliases: [approvalText(locale, 'session')] },
             ] : []),
@@ -428,9 +427,15 @@ export const SELF_APPROVAL_NOT_DECLARED_REASON = 'this operation needs approval 
 export const MASTER_NOT_PRESENT_REASON = 'the bot owner did not address the bot in this turn (merged or background messages), '
   + 'so nobody can confirm a high-risk action that follows external content';
 
-/** A confirmation of one's own request accepts 确认 / 取消 and yes / no alike, whatever the prompt's language (#1250). */
-const ONCE_REJECT_ALIASES = ['否', '拒绝', '取消', 'n', 'no', 'cancel'];
-const ONCE_APPROVE_ALIASES = ['同意', '确认', 'y', 'yes', 'confirm'];
+/**
+ * Displayed aliases of the reject / allow-once options, the same in every language (#1250 第 74 批).
+ * They only name the word class: Core's select matching gives an option aliased with a confirm word
+ * every confirm word (`确认` / `确定` / `同意` / `ok` / `yes` / `y` / `confirm` …) and one aliased with
+ * a no-answer every no-answer (`否` / `不` / `拒绝` / `no` / `n` …), whatever the prompt's language.
+ * A cancel word (`取消` / `cancel` / `退出` …) leaves the prompt, which counts as a rejection.
+ */
+const REJECT_ALIASES = Object.freeze(['否', 'no']);
+const APPROVE_ALIASES = Object.freeze(['确认', 'yes']);
 
 /** A one-shot confirmation: "allow once" or "reject", no remembered or shared grants. */
 async function askOnce(interaction: UserInteraction, input: ApprovalRequestInput, locale: Locale): Promise<ApprovalOutcome> {
@@ -442,8 +447,8 @@ async function askOnce(interaction: UserInteraction, input: ApprovalRequestInput
       description: input.question,
       tip: approvalText(locale, 'selfTip'),
       options: [
-        { label: approvalText(locale, 'reject'), value: 'reject', aliases: ONCE_REJECT_ALIASES },
-        { label: approvalText(locale, 'once'), value: 'approve-once', aliases: ONCE_APPROVE_ALIASES },
+        { label: approvalText(locale, 'reject'), value: 'reject', aliases: REJECT_ALIASES },
+        { label: approvalText(locale, 'once'), value: 'approve-once', aliases: APPROVE_ALIASES },
       ],
       ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
       signal: input.signal,

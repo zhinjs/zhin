@@ -632,7 +632,8 @@ describe('canonical IM interaction adapter', () => {
           if (request.type === 'select') {
             // Timeouts must surface as timed_out rather than defaulting to a rejection.
             expect(request.default).toBeUndefined();
-            expect(request.options?.[1]?.aliases).toEqual(['同意', '确认']);
+            expect(request.options?.[0]?.aliases).toEqual(['否', 'no']);
+            expect(request.options?.[1]?.aliases).toEqual(['确认', 'yes']);
             expect(request.options?.map(option => option.value)).toEqual([
               'reject',
               'approve-once',

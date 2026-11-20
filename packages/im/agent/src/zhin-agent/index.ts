@@ -558,7 +558,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
    * concurrent IM messages from overwriting activeBinding/bootstrapContext.
    */
   async processTurn(request: AgentTurnRequest): Promise<AgentOutputElement[]> {
-    if (isCancelIntent(request.content ?? '')) {
+    if (isCancelIntent(request.content ?? '', request.message.commandPrefix)) {
       const sessionKey = resolveIMSessionIdFromMessage(request.message);
       if (this.promptController.cancelSession(sessionKey)) {
         return [{ type: 'text', content: '已取消' }];

@@ -1,12 +1,13 @@
 /**
- * #1250 `interaction-prompt-swallows-messages` (ADR 0061 decision 11, revised): the words that leave
- * a pending prompt. Shared by every locale — a zh-CN user typing `cancel` and an en user typing
- * `取消` both leave. Kept apart from `user-interaction.ts` so it never becomes public API.
+ * #1250 `interaction-prompt-swallows-messages` (ADR 0061 decision 11, revised): when a reply leaves
+ * a pending prompt. The cancel words themselves live in `confirm-words.ts` (第 74 批，唯一词表):
+ * every locale accepts them — a zh-CN user typing `cancel` and an en user typing `取消` both leave.
+ * Only the base cancel words count here (`取消` / `退出` / `算了` / `cancel` / `quit` / `exit`);
+ * yes/no answers such as `no` or `不` stay answers of the prompt. Kept apart from
+ * `user-interaction.ts` so it never becomes public API.
  */
 import type { UserInteractionRequest } from '@zhin.js/im-contract';
-
-/** Cancel words every prompt accepts besides its own answers. */
-export const SHARED_CANCEL_VALUES: ReadonlySet<string> = new Set(['取消', '退出', 'cancel', 'exit', 'quit']);
+import { isCancelWord } from './confirm-words.js';
 
 /**
  * Prompt types that accept a cancel word. A `text` prompt only meets one when its validation
@@ -20,10 +21,6 @@ const CANCELLABLE = new Set<UserInteractionRequest['type']>(['select', 'multisel
  * cancel word cancels before it is parsed; a cancel word inside a multi-item reply stays an item.
  */
 const CANCEL_FIRST = new Set<UserInteractionRequest['type']>(['list']);
-
-function isCancelWord(raw: string): boolean {
-  return SHARED_CANCEL_VALUES.has(raw.trim().toLocaleLowerCase());
-}
 
 /**
  * Whether `raw` cancels `request`. Only called after `raw` failed to parse as an answer, so an

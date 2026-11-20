@@ -1,3 +1,4 @@
+import { isCancelWord } from 'zhin.js';
 import { resolveLocale } from 'zhin.js/i18n';
 import { reminderMessages as t } from './i18n.js';
 import type { CommandContext } from 'zhin.js/command';
@@ -38,8 +39,9 @@ export async function createPersonalReminder(
       context.signal.throwIfAborted();
       if (Date.now() >= deadline) throw new ReminderCreationDeadline();
     };
+    // #1250 第 74 批：取消词中英文都认（`取消` / `退出` / `算了` / `cancel` / `quit` / `exit`），不分会话语言。
     const checkCancel = (value: string) => {
-      if (value.trim().toLowerCase() === (locale === 'en' ? 'cancel' : '取消')) throw new ReminderCreationCancelled();
+      if (isCancelWord(value)) throw new ReminderCreationCancelled();
     };
     const stepRemaining = (stage: 'time' | 'body' | 'confirmation') => {
       checkDeadline();

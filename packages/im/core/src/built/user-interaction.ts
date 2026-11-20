@@ -1,6 +1,6 @@
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from './interaction-messages.js';
-import { SHARED_CANCEL_VALUES } from './interaction-cancel.js';
+import { isCancelWord, isConfirmWord, isNegativeAnswerWord, normalizeReplyWord } from './confirm-words.js';
 import type {
   UserInteractionContent,
   UserInteractionOption,
@@ -169,11 +169,12 @@ export function parseUserInteractionAnswer(
       const normalized = raw.toLowerCase();
       if (action && normalized === 'yes') return valid(true);
       if (action && normalized === 'no') return valid(false);
-      const confirmLabel = request.confirmLabel?.trim().toLocaleLowerCase();
-      const cancelLabel = request.cancelLabel?.trim().toLocaleLowerCase();
-      if (CONFIRM_VALUES[locale].has(normalized) || (confirmLabel && normalized === confirmLabel)) return valid(true);
-      if (CANCEL_VALUES[locale].has(normalized) || SHARED_CANCEL_VALUES.has(normalized)
-        || (cancelLabel && normalized === cancelLabel)) return valid(false);
+      // #1250 第 74 批：确认 / 取消词中英文都认，不分提问语言；`1` / `2` 是本题两个选项的序号。
+      const word = normalizeReplyWord(raw);
+      const confirmLabel = request.confirmLabel ? normalizeReplyWord(request.confirmLabel) : '';
+      const cancelLabel = request.cancelLabel ? normalizeReplyWord(request.cancelLabel) : '';
+      if (word === '1' || isConfirmWord(raw, YES_NO) || (confirmLabel && word === confirmLabel)) return valid(true);
+      if (word === '2' || isCancelWord(raw, YES_NO) || (cancelLabel && word === cancelLabel)) return valid(false);
       return invalid(t(locale, 'confirmOrCancel'));
     }
     case 'select': {
@@ -201,7 +202,7 @@ export function parseUserInteractionAnswer(
         return values.every(Number.isFinite) ? valid(Object.freeze(values)) : invalid(t(locale, 'invalidNumbers'));
       }
       if (request.valueType === 'boolean') {
-        const values = tokens.map(value => parseBoolean(value, locale));
+        const values = tokens.map(value => parseBoolean(value));
         return values.every((value) => value !== undefined)
           ? valid(Object.freeze(values as boolean[]))
           : invalid(t(locale, 'invalidBooleans'));
@@ -248,10 +249,24 @@ function renderOptions(options: readonly UserInteractionOption[]): string {
 function resolveOption<V>(options: readonly UserInteractionOption<V>[], raw: string): UserInteractionOption<V> | undefined {
   const index = Number(raw);
   if (Number.isInteger(index) && index >= 1 && index <= options.length) return options[index - 1];
-  const normalized = raw.trim().toLocaleLowerCase();
-  const matches = (candidate: string) => candidate.trim().toLocaleLowerCase() === normalized;
+  const normalized = normalizeReplyWord(raw);
+  const matches = (candidate: string) => normalizeReplyWord(candidate) === normalized;
   return options.find((option) => matches(option.label))
-    ?? options.find((option) => option.aliases?.some(matches));
+    ?? options.find((option) => option.aliases?.some(matches))
+    ?? answerWordOption(options, raw);
+}
+
+/**
+ * #1250 第 74 批：一个以确认词（或"否"类答语）为名称 / 别名的选项接受同类的所有词，
+ * 中英文都算——审批里"同意（确认 / yes）"也认 `ok`、`确定`、`y`，"拒绝（否 / no）"也认 `n`、`不`。
+ * 只有恰好一个选项属于该类时才匹配；`取消` / `退出` 不在"否"类里，仍按取消离开提问。
+ */
+function answerWordOption<V>(options: readonly UserInteractionOption<V>[], raw: string): UserInteractionOption<V> | undefined {
+  const test = isConfirmWord(raw, YES_NO) ? (word: string) => isConfirmWord(word, YES_NO)
+    : isNegativeAnswerWord(raw) ? isNegativeAnswerWord : undefined;
+  if (!test) return undefined;
+  const candidates = options.filter((option) => test(option.label) || option.aliases?.some(test));
+  return candidates.length === 1 ? candidates[0] : undefined;
 }
 
 function uniqueOptions<V>(options: readonly (UserInteractionOption<V> | undefined)[]): UserInteractionOption<V>[] {
@@ -260,12 +275,10 @@ function uniqueOptions<V>(options: readonly (UserInteractionOption<V> | undefine
   return result;
 }
 
-function parseBoolean(raw: string, locale: Locale): boolean | undefined {
-  const normalized = raw.toLowerCase();
-  if (normalized === 'true') return true;
-  if (normalized === 'false') return false;
-  if (CONFIRM_VALUES[locale].has(normalized)) return true;
-  if (CANCEL_VALUES[locale].has(normalized)) return false;
+function parseBoolean(raw: string): boolean | undefined {
+  const word = normalizeReplyWord(raw);
+  if (word === '1' || isConfirmWord(raw, YES_NO)) return true;
+  if (word === '2' || isCancelWord(raw, YES_NO)) return false;
   return undefined;
 }
 
@@ -293,8 +306,8 @@ function validBounds(minimum?: number, maximum?: number): boolean {
     && (minimum === undefined || maximum === undefined || minimum <= maximum);
 }
 
-const CONFIRM_VALUES = { 'zh-CN': new Set(['1', '是', '确认', '同意']), en: new Set(['1', 'y', 'yes', 'true', 'confirm', 'agree']) };
-const CANCEL_VALUES = { 'zh-CN': new Set(['2', '否', '取消', '拒绝']), en: new Set(['2', 'n', 'no', 'false', 'cancel', 'reject']) };
+/** confirm 提问与布尔列表都是是非问答：`是` / `否` / `no` 等是非答语也算（见 `confirm-words.ts`）。 */
+const YES_NO = Object.freeze({ yesNo: true });
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const rows: T[][] = [];

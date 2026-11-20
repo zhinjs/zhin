@@ -199,10 +199,14 @@ describe('initiator self-approval port', () => {
     expect(f.reply('alice', '取消')).toBe(true);
     await expect(first).resolves.toEqual({ status: 'denied', by: 'user' });
 
+    // #1250 第 74 批: 取消 is a cancel word, not a reject alias — it leaves the prompt (a rejection)
+    // and Core confirms with 已取消。, like every other prompt.
+    expect(f.prompts[1]).toBe('已取消。');
+
     const second = port.requestApprovalOutcome(adminRequest({ requestId: 'turn:second' }));
-    await vi.waitFor(() => expect(f.prompts).toHaveLength(2));
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(3));
     expect(f.reply('alice', '', { segments: [{ type: 'action', data: { payload: approveFirst } }] })).toBe(false);
-    const [, approveSecond] = buttonPayloads(f.prompts[1]);
+    const [, approveSecond] = buttonPayloads(f.prompts[2]);
     expect(approveSecond).not.toBe(approveFirst);
     expect(f.reply('alice', '', { segments: [{ type: 'action', data: { payload: approveSecond } }] })).toBe(true);
     await expect(second).resolves.toEqual({ status: 'approved', decision: 'approve-once' });
