@@ -59,3 +59,29 @@ export function readOperationInputResources(input: unknown, snapshot: RuntimeSna
   const read = (input as Partial<OperationInputResources>)[operationInputResources];
   return typeof read === 'function' ? read.call(input, snapshot) : undefined;
 }
+
+/**
+ * @internal ADR 0061: the outcome ledger of the inbound message an input belongs to, carried only by
+ * framework messages. `CommandIndex.dispatch` reports through it the refusal of a command a plugin
+ * dispatched from that message (#1250 第 84 批): no Core dispatcher records that dispatch.
+ */
+export const operationInputOutcome = Symbol.for('zhin.operation-input-outcome/1');
+
+/** One outcome candidate a Feature reports for the message an input belongs to. */
+export interface OperationInputOutcomeCandidate {
+  readonly outcome: 'refused';
+  /** Closed refusal code (UserFacingError `reason`), else `user_facing_error`. */
+  readonly reason: string;
+  readonly stage: 'command';
+  readonly command?: string;
+  readonly owner?: PluginId;
+}
+export interface OperationInputOutcome {
+  [operationInputOutcome](candidate: OperationInputOutcomeCandidate): boolean;
+}
+/** False when the input has no outcome ledger (not a framework message, or already settled). */
+export function reportOperationInputOutcome(input: unknown, candidate: OperationInputOutcomeCandidate): boolean {
+  if (!input || typeof input !== 'object') return false;
+  const report = (input as Partial<OperationInputOutcome>)[operationInputOutcome];
+  return typeof report === 'function' ? report.call(input, candidate) === true : false;
+}

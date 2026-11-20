@@ -17,7 +17,7 @@ import {
   type Locale,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
-import { bindOperationInput, readOperationInputResources, readOperationInputSnapshot, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { bindOperationInput, readOperationInputResources, readOperationInputSnapshot, reportOperationInputOutcome, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   describeDeniedPermit,
   parsePermitName,
@@ -112,8 +112,15 @@ export interface CommandDispatchRequest {
   readonly input: CommandMatchInput;
   readonly source?: unknown;
   readonly interactionFactory?: UserInteractionFactory;
+  /** The prefix shown in help / references; defaults to the source message's own `commandPrefix`. */
   readonly commandPrefix?: string;
+  /** Defaults to the source's own operation snapshot; passing exactly that one is the same dispatch. */
   readonly snapshot?: RuntimeSnapshot;
+  /**
+   * The command's operation factory, used as given; defaults to the source message's own (Host
+   * resources opened for the command's author). Host-only authority (an Agent dispatch lease) is
+   * never taken from a factory a caller built itself.
+   */
   readonly operation?: CapabilityOperationFactory;
   readonly locale?: Locale;
 }
@@ -617,34 +624,41 @@ export class CommandIndex {
   }
 
   async dispatch(request: CommandDispatchRequest): Promise<CommandDispatchResult> {
-    const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(request.source) : undefined;
-    // Without an explicit factory, a source that carries its own operation (a framework Message) brings
-    // that operation's resources — also with an explicit `snapshot` that is the source's own, so both
-    // ways of dispatching a message give the command the same resources (#1250 第 84 批).
-    const sourceResources = request.operation ? undefined
-      : sourceSnapshot ?? (request.snapshot !== undefined && readOperationInputSnapshot(request.source) === request.snapshot
-        ? request.snapshot : undefined);
+    // #1250 第 84 批: an explicit `snapshot` that is the source's own operation snapshot is the same
+    // dispatch as passing none — validated against this index, gated per endpoint (ADR 0050) and, without
+    // an explicit factory, given the source's own operation resources. Only a source that carries its own
+    // operation (a framework Message) has such a snapshot.
+    const own = readOperationInputSnapshot(request.source);
+    const sourceSnapshot = request.snapshot === undefined || (own !== undefined && request.snapshot === own)
+      ? this.#sourceSnapshot(own) : undefined;
+    const sourceResources = request.operation ? undefined : sourceSnapshot;
+    const effective = sourceSnapshot ? { ...request, snapshot: sourceSnapshot } : request;
     if (sourceSnapshot) {
       // ADR 0050: a Plugin switched off for this message's endpoint has no commands there, also when a
       // middleware/handler dispatches through the raw projection (Core's dispatcher passes a gated index).
       const gated = this.#gatedForEndpoint(request.source, sourceSnapshot);
-      if (gated !== this) return gated.#dispatch({ ...request, snapshot: sourceSnapshot }, sourceResources);
+      if (gated !== this) return gated.#dispatch(effective, sourceResources);
     }
-    return this.#dispatch(sourceSnapshot ? { ...request, snapshot: sourceSnapshot } : request, sourceResources);
+    return this.#dispatch(effective, sourceResources);
   }
 
   /**
    * `sourceResources`: the snapshot of the source's own operation when its resources are read from the
-   * source (no explicit factory). They are read from the author-bound view of the source (#1250 第 84
-   * 批): its factory opens Host resources only for that very author, and delegated (`delegatedFrom`) when the view was
-   * bound from a plugin author (a plugin dispatching a Root command), so the Host withholds Root-only
-   * dispatch authority — the command still runs. Nothing here refuses the dispatch.
+   * source (no explicit factory: a plugin middleware / handler / button callback dispatching the
+   * message it received; Core's dispatcher always passes its factory). They are read from the
+   * author-bound view of the source (#1250 第 84 批): its factory opens Host resources only for that
+   * very author, and delegated (`delegatedFrom`) when the view was bound from a plugin author (a plugin
+   * dispatching a Root command), so the Host withholds Root-only dispatch authority — the command still
+   * runs. Nothing here refuses the dispatch. A command's refusal (UserFacingError) on this path is also
+   * reported as the message's `refused` outcome (ADR 0061), since no Core dispatcher records it.
    */
   async #dispatch(request: CommandDispatchRequest, sourceResources: RuntimeSnapshot | undefined): Promise<CommandDispatchResult> {
     const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
     const operationSnapshot = request.snapshot ?? this.snapshot;
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
-    const prefix = commandPrefix ?? '';
+    // #1250 第 84 批: a middleware / handler rarely knows the prefix; the message it dispatches does.
+    const sourcePrefix = commandPrefix ?? sourceCommandPrefix(source);
+    const prefix = sourcePrefix ?? '';
     if (this.#menu) {
       const keyword = this.#menu.keyword ?? commandMessages(locale, 'menuKeyword');
       const menuResult = await this.#dispatchMenu(input, { commandPrefix: prefix, snapshot: operationSnapshot, locale, keyword, source });
@@ -706,7 +720,7 @@ export class CommandIndex {
         operation,
         interaction: interactionFactory?.(authorSource), adapter: definition.adapter,
         presentation: { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
-          source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) },
+          source && typeof source === 'object' && 'conversation' in source ? sourcePrefix : undefined, locale) },
       }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options,
         ...(match.regex ? { match: match.regex } : {}) }));
       return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
@@ -716,6 +730,10 @@ export class CommandIndex {
       const text = userFacingErrorText(error, locale);
       if (text === undefined) throw error;
       const refusalReason = userFacingRefusalReason((error as { reason?: unknown }).reason);
+      if (sourceResources) {
+        reportOperationInputOutcome(source, { outcome: 'refused', reason: refusalReason ?? 'user_facing_error', stage: 'command',
+          command: match.command.name, owner: match.command.slot.owner });
+      }
       return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: text, refused: true,
         ...(refusalReason ? { refusalReason } : {}) });
     } finally {
@@ -772,8 +790,7 @@ export class CommandIndex {
    * `context.project()` in a middleware or handler dispatches as that message's real author. The
    * operation's snapshot must hold this very index; one kept across a reload is refused.
    */
-  #sourceSnapshot(source: unknown): RuntimeSnapshot | undefined {
-    const bound = readOperationInputSnapshot(source);
+  #sourceSnapshot(bound: RuntimeSnapshot | undefined): RuntimeSnapshot | undefined {
     if (!bound) return undefined;
     if (bound !== this.snapshot && ![...bound.projections.values()].includes(this)) {
       throw new Error(`This CommandIndex (generation ${this.snapshot.generation}) is not the command projection of the message's generation `
@@ -1118,6 +1135,13 @@ function commandSuggestionName(record: CommandRecord, locale: Locale): string {
 }
 
 /** The message's resolved language, else the same project language messages use ({@link projectLocale}). */
+/** The command prefix the dispatched message carries (`Message.commandPrefix`), if any. */
+function sourceCommandPrefix(source: unknown): string | undefined {
+  if (!source || typeof source !== 'object') return undefined;
+  const prefix = (source as { readonly commandPrefix?: unknown }).commandPrefix;
+  return typeof prefix === 'string' ? prefix : undefined;
+}
+
 function commandLocale(source: unknown, snapshot: RuntimeSnapshot): Locale {
   const locale = source && typeof source === 'object' && 'locale' in source ? source.locale : undefined;
   return isLocale(locale) ? locale : projectLocale(snapshot);

@@ -4,12 +4,15 @@
  * message (the one Core hands to `imOperationResourcesToken.open`), so an Agent management Root
  * command retains the generation that dispatched it, not whichever generation is current by then.
  *
- * Internal module: deliberately not re-exported. The resource view checks token identity, and
- * (#1250 第 84 批) offers it only to operations whose owner is the Root plugin, so a plugin that
- * deep-imports this module still cannot retain (and pin) a dispatching generation. A Root operation a
- * plugin dispatched (its message view was bound from a plugin author, `delegatedFrom`) does not get it
- * either; it gets {@link dispatchLeaseWithheldToken} instead, so a command that needs the lease can
- * tell the sender to send it directly.
+ * Internal module: deliberately not re-exported. Token identity is not the guard (#1250 第 84 批):
+ * a token's id is readable, and a caller of `CommandIndex.dispatch` may pass its own `operation`
+ * factory whose resource view answers `has` / `use` for any token. What a command accepts as the
+ * dispatch lease is a port the Host issued ({@link issueDispatchLease}, recorded in a module-private
+ * WeakSet and checked with {@link isIssuedDispatchLease}); anything else is no lease at all. The Host
+ * issues it only to operations whose owner is the Root plugin and that no plugin dispatched (a
+ * message view bound from a plugin author, `delegatedFrom`); a plugin-dispatched Root operation gets
+ * {@link dispatchLeaseWithheldToken} instead, and a command that needs the lease tells the sender to
+ * send it directly.
  */
 import { createRootPrivateToken, type SnapshotLease } from '@zhin.js/plugin-runtime';
 
@@ -35,3 +38,24 @@ export const dispatchLeaseToken = createRootPrivateToken<DispatchLeasePort>(
 export const dispatchLeaseWithheldToken = createRootPrivateToken<true>(
   'zhin.agent.dispatch-lease-withheld', 'The dispatch lease was withheld from a plugin-dispatched Root operation',
 );
+
+/** Ports the Host issued; a look-alike object (same shape, same token) is not in here. */
+const issuedDispatchLeases = new WeakSet<object>();
+
+/**
+ * @internal Host only (`createHostOperationResources`): the dispatch lease port of one Root IM
+ * operation, frozen and recorded as Host-issued.
+ */
+export function issueDispatchLease(port: DispatchLeasePort): DispatchLeasePort {
+  const issued: DispatchLeasePort = Object.freeze({
+    retain: port.retain,
+    ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}),
+  });
+  issuedDispatchLeases.add(issued);
+  return issued;
+}
+
+/** True only for a port {@link issueDispatchLease} returned: what a resource view hands out is checked, not trusted. */
+export function isIssuedDispatchLease(value: unknown): value is DispatchLeasePort {
+  return typeof value === 'object' && value !== null && issuedDispatchLeases.has(value);
+}

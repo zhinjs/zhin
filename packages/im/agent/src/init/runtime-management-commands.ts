@@ -12,9 +12,12 @@
  * 只接受人类来源：由命令分发统一过滤（第 84 批，`@zhin.js/core` 的 `isNonHumanOrigin`）——消息 `origin`
  * （或无可信来源时的 `metadata.origin`）不是 `human` 时不进任何命令，结局 `ignored_bot` / `non_human_origin`。
  *
- * 需要分发租约的命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）由插件中间件 / handler /
- * 按钮回调经 `CommandIndex.dispatch` 转发时，Host 不给租约（第 84 批，`dispatchLeaseWithheldToken`）：命令
- * 不执行，回复可读提示请用户直接发送该命令，结局 `refused` / `direct_command_required`。`memory` 不需要租约，照常执行。
+ * 需要分发租约的命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）只认 Host 签发的租约端口
+ * （第 84 批，`isIssuedDispatchLease`）。由插件中间件 / handler / 按钮回调经 `CommandIndex.dispatch` 转发时
+ * Host 不给租约（`dispatchLeaseWithheldToken`），调用方自造 `operation` 资源视图也拿不到：命令不执行，以
+ * UserFacingError（原因 `direct_command_required`）拒绝，`dispatch` 结果的 `value` 是请用户直接发送该命令的提示
+ * （带消息的命令前缀），由转发的中间件回复出去；未传 `operation` 时 `CommandIndex.dispatch` 自己把这条消息的
+ * 结局记为 `refused` / `direct_command_required`。`memory` 不需要租约，照常执行。
  */
 import { defineCommand, UserFacingError, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
 import type { Message } from '@zhin.js/core/runtime';
@@ -26,7 +29,7 @@ import { jumpSessionTree, listSessionTree } from '../session/session-tree-comman
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import { resolveRuntimeSenderRoles } from '../plugin-runtime/ingress/request-capabilities.js';
-import { dispatchLeaseToken, dispatchLeaseWithheldToken } from '../plugin-runtime/inference/dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken, isIssuedDispatchLease } from '../plugin-runtime/inference/dispatch-lease.js';
 
 /** Management commands need any zhin chat role (`trusted` or higher) on the conversation's chain. */
 export const RUNTIME_MANAGEMENT_PERMIT = 'trusted';
@@ -52,7 +55,8 @@ export interface RuntimeManagementDispatch {
   readonly signal: AbortSignal;
   /**
    * An independent lease on the generation that dispatched the command (the IM runtime's own lease
-   * for the message, retained); absent when the operation has no Host resources.
+   * for the message, retained). The management commands always set it (#1250 第 84 批: without a
+   * Host-issued lease they do not run).
    */
   readonly retainLease?: () => SnapshotLease;
   /**
@@ -142,14 +146,17 @@ class DirectCommandRequiredError extends UserFacingError {
 }
 
 /**
- * The dispatch of `command`: its signal and, with Host resources, the dispatching generation. A Root
- * operation a plugin dispatched has Host resources but no lease: the command does not run (`name` is
- * its path, for the reply).
+ * The dispatch of `command`: its signal and the dispatching generation (`name` is its path, for the
+ * reply). Only a dispatch lease the Host issued counts (#1250 第 84 批): a plugin-dispatched Root
+ * operation has the Host resources without it (`dispatchLeaseWithheldToken`), and a resource view a
+ * caller supplied itself (an explicit `operation` factory answering `has` / `use` for the lease
+ * token, or no Host resources at all) holds no issued lease either. Then the command does not run
+ * and the sender reads a request to send it directly — in production every directly sent command has
+ * the Host's resources, since the Agent Host that registers these commands also provides them.
  */
 function dispatchOf(command: CommandRun & Pick<CommandContext, 'formatCommand'>, name: string): RuntimeManagementDispatch {
-  if (command.has(dispatchLeaseWithheldToken)) throw new DirectCommandRequiredError(command.formatCommand(name) ?? name);
-  if (!command.has(dispatchLeaseToken)) return { signal: command.signal };
-  const port = command.use(dispatchLeaseToken);
+  const port = !command.has(dispatchLeaseWithheldToken) && command.has(dispatchLeaseToken) ? command.use(dispatchLeaseToken) : undefined;
+  if (!isIssuedDispatchLease(port)) throw new DirectCommandRequiredError(command.formatCommand(name) ?? name);
   return { signal: command.signal, retainLease: () => port.retain(),
     ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}) };
 }

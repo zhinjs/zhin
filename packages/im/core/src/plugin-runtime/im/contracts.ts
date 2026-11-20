@@ -2,7 +2,7 @@ import type { EndpointChildLease, EndpointControl, EndpointManagement } from '@z
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import { createRootPrivateToken, resolveLocale, type PluginId, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader, type Locale } from '@zhin.js/plugin-runtime';
-import { operationInputBinding, operationInputSignal, operationInputResources, operationInputSnapshot, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { operationInputBinding, operationInputOutcome, operationInputSignal, operationInputResources, operationInputSnapshot, operationSession, type OperationInputOutcomeCandidate, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
 import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
@@ -613,6 +613,14 @@ export class RuntimeMessage implements MessageBase {
   /** @internal The inbound outcome ledger (ADR 0061); reports after settlement are ignored by it. */
   [inboundOutcomeSink](): InboundOutcomeSink | undefined {
     return this.#operation.outcomes;
+  }
+
+  /**
+   * @internal A Feature's outcome for this message (see `reportOperationInputOutcome`): the refusal of a
+   * command a plugin dispatched from it (#1250 第 84 批). Reports after settlement are ignored.
+   */
+  [operationInputOutcome](candidate: OperationInputOutcomeCandidate): boolean {
+    return this.#operation.outcomes?.report({ ...candidate }) ?? false;
   }
 
   /** @internal The command/handler author's actual leased operation. */

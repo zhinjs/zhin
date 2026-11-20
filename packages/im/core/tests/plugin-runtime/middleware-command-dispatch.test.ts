@@ -222,6 +222,21 @@ describe('CommandIndex.dispatch from a plugin middleware (issue #1250)', () => {
     } finally { await f.close(); }
   });
 
+  it('gates an explicit snapshot that is the message\'s own like no snapshot: unmatched, no resources opened (#1250 第 84 批)', async () => {
+    const opened: OpenedOperation[] = [];
+    const snapshotHook = Symbol.for('zhin.operation-input-snapshot/1');
+    const f = await fixture((commands, input) => commands.dispatch({ input: 'vote', source: input,
+      snapshot: (input as unknown as Record<symbol, () => RuntimeSnapshot>)[snapshotHook]!() }), { 'command-author|root/one': { enabled: false } }, opened);
+    try {
+      await f.receive('btn:vote:1');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ matched: false, status: 'unmatched' })]);
+      expect(f.seen).toEqual([]);
+      expect(opened).toEqual([]);
+      expect(f.endpoint.sent).toEqual([]);
+    } finally { await f.close(); }
+  });
+
   it('fails closed when a retained message dispatches after its turn has ended', async () => {
     const f = await fixture(async () => Object.freeze({ matched: false, status: 'unmatched' }) as CommandDispatchResult);
     try {

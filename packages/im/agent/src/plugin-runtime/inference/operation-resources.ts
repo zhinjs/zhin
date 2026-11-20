@@ -19,7 +19,7 @@ import {
 import { getLogger } from '@zhin.js/logger';
 import type { HostInference } from './host.js';
 import { resolveInferenceMessageContext, resolveInferenceTurnContext } from './turn-context.js';
-import { dispatchLeaseToken, dispatchLeaseWithheldToken, type DispatchLeasePort } from './dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken, issueDispatchLease, type DispatchLeasePort } from './dispatch-lease.js';
 
 interface OperationResourcesOptions {
   readonly host: HostInference;
@@ -105,8 +105,10 @@ export function createHostOperationResources(options: OperationResourcesOptions)
       },
     });
     // #1250 第 83 批: the exact generation this operation was dispatched in, retained on demand.
+    // #1250 第 84 批: issued (recorded as Host-made), so a look-alike port from a caller's own
+    // `operation` factory is not taken for it.
     const dispatchLease: DispatchLeasePort | undefined = input.dispatchLease
-      ? Object.freeze({
+      ? issueDispatchLease({
         retain: () => input.snapshots.retain(input.lease),
         ...(input.conversationSequence !== undefined ? { conversationSequence: input.conversationSequence } : {}),
       })

@@ -160,6 +160,28 @@ describe('command execution policy', () => {
     f.setNow(1100);
     expect(await index.execute('cool')).toBe('cool-ok');
   });
+  it('spends no cooldown when reading the source\'s operation resources fails (#1250 第 84 批)', async () => {
+    const f = setup();
+    let fail = true;
+    const control = f.budget.openOperation({ snapshot: f.snapshot, conversation: { endpoint: { adapter: 'test', id: 'account' }, kind: 'private', id: 'user' },
+      senderId: 'alice', retirementSignal: f.retirement.signal, reply: async () => {} });
+    // A framework-shaped source: its own operation snapshot, and a resource hook that fails once.
+    const source = Object.freeze({
+      [Symbol.for('zhin.operation-input-snapshot/1')]: () => f.snapshot,
+      [Symbol.for('zhin.operation-input-resources/1')]: () => { if (fail) throw new Error('resources unavailable'); return undefined; },
+    });
+    control.bind(source, f.root);
+    const execute = vi.fn(() => 'ok');
+    const index = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'cool', source: '/command/index.ts',
+      definition: defineCommand({ execution: { cooldownMs: 1000 }, execute }) })], f.snapshot);
+    await expect(index.dispatch({ input: 'cool', source })).rejects.toThrow('resources unavailable');
+    expect(execute).not.toHaveBeenCalled();
+    fail = false;
+    expect(await index.dispatch({ input: 'cool', source })).toMatchObject({ status: 'executed', value: 'ok' });
+    // The successful run is the one that starts the cooldown.
+    expect(await index.dispatch({ input: 'cool', source })).toMatchObject({ status: 'limited', limit: { reason: 'cooldown' } });
+    await control.finish();
+  });
   it('still refuses policy-bearing dispatch without a bound operation and without the budget resource', async () => {
     const f = setup();
     const index = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',

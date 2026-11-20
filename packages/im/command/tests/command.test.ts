@@ -2036,6 +2036,21 @@ describe('central command argument declarations', () => {
     expect(index.list()[0]?.usage).toBe('daily remind <minutes> [--count <integer>]');
   });
 
+  it('takes the prefix from the dispatched message when the caller passes none (#1250 第 84 批)', async () => {
+    const owner = rootPluginId();
+    const references: (string | undefined)[] = [];
+    const definition = defineCommand({ description: 'Reminder', params: { minutes: { type: 'integer', min: 1 } },
+      execute: context => { references.push(context.formatCommand('remind')); return 'ok'; } });
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'remind', source: '/commands/remind/index.ts', definition });
+    const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+    const source = { conversation: { endpoint: { adapter: 'test', id: 'account' }, kind: 'private', id: 'alice' }, commandPrefix: '#' };
+    expect(String((await index.dispatch({ input: 'remind --help', source })).value)).toContain('#remind <minutes>');
+    await index.dispatch({ input: 'remind 3', source });
+    // An explicit prefix still wins (Core's dispatcher passes the one it matched).
+    await index.dispatch({ input: 'remind 3', source, commandPrefix: '!' });
+    expect(references).toEqual(['#remind', '!remind']);
+  });
+
   it('leaves normal chat, token-prefix accidents and ambiguous dynamic input unmatched', async () => {
     const index = indexFor(defineCommand({ params: { value: { type: 'integer' } }, execute: () => 'ok' }), '$value', { name: 'value', type: 'integer' });
     await expect(index.dispatch({ input: 'hello everyone' })).resolves.toEqual({ matched: false, status: 'unmatched' });

@@ -9,10 +9,21 @@ import {
   type RuntimeManagementDispatch,
   type RuntimeManagementOperation,
 } from '../../src/init/runtime-management-commands.js';
-import { dispatchLeaseToken, dispatchLeaseWithheldToken } from '../../src/plugin-runtime/inference/dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken, issueDispatchLease } from '../../src/plugin-runtime/inference/dispatch-lease.js';
 
 /** `@zhin.js/feature-kit`'s operation hook: the IM runtime's per-message operation resources. */
 const operationInputResources = Symbol.for('zhin.operation-input-resources/1');
+
+type Resources = { has(token: unknown): boolean; use(token: unknown): unknown };
+
+/** What the Agent Host offers a Root operation sent directly: a Host-issued dispatch lease. */
+function leaseResources(retain: () => SnapshotLease = () => ({ value: undefined, active: true, release() {} }) as unknown as SnapshotLease): Resources {
+  const port = issueDispatchLease({ retain });
+  return { has: token => token === dispatchLeaseToken, use: token => {
+    if (token !== dispatchLeaseToken) throw new Error('unexpected token');
+    return port;
+  } };
+}
 
 /**
  * zhinjs/zhin#1250 第 83 批: the Agent management commands are Root commands. These tests run them
@@ -58,7 +69,9 @@ function harness(options: {
   const dispatcher = new MessageDispatcher(() => prefix);
 
   async function send(content: string, at: { kind?: 'private' | 'group' | 'channel'; role?: Role; locale?: 'zh-CN' | 'en';
-    metadata?: Record<string, unknown>; resources?: { has(token: unknown): boolean; use(token: unknown): unknown } } = {}) {
+    metadata?: Record<string, unknown>; resources?: Resources | null } = {}) {
+    // Sent directly, the Host offers the dispatch lease (production: every message's IM operation).
+    const resources = at.resources === null ? undefined : at.resources ?? leaseResources();
     const kind = at.kind ?? 'group';
     const outcomes: Record<string, unknown>[] = [];
     const sink = { report: (candidate: Record<string, unknown>) => { outcomes.push(candidate); return true; }, enter() {} };
@@ -71,8 +84,8 @@ function harness(options: {
       $reply: vi.fn(async () => ({ status: 'sent' })),
       [inboundOutcomeSink]: () => sink,
       // The IM runtime's operation resources for this message (Host-provided in production).
-      ...(at.resources ? { [operationInputResources]: () => ({ signal: new AbortController().signal,
-        create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources: at.resources }) }) } : {}),
+      ...(resources ? { [operationInputResources]: () => ({ signal: new AbortController().signal,
+        create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources }) }) } : {}),
     } as unknown as Message;
     const route = vi.fn(async () => true);
     const outcome = await executeInboundTurnSpine({
@@ -182,19 +195,34 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
   it('hands every command the generation that dispatched it, from the message\'s operation resources', async () => {
     const lease = { release: vi.fn() } as unknown as SnapshotLease;
     const retain = vi.fn(() => lease);
-    const resources = { has: (token: unknown) => token === dispatchLeaseToken, use: (token: unknown) => {
-      if (token !== dispatchLeaseToken) throw new Error('unexpected token');
-      return { retain };
-    } };
+    const resources = leaseResources(retain);
     const h = harness();
     await h.send('/models', { role: 'trusted', resources });
     expect(h.dispatches[0]!.retainLease?.()).toBe(lease);
     expect(retain).toHaveBeenCalledOnce();
     await h.send('/reset', { resources });
     expect(h.clear.mock.calls[0]![1].retainLease?.()).toBe(lease);
-    // Without Host operation resources there is no generation to retain.
-    await h.send('/health', { role: 'trusted' });
-    expect(h.dispatches[1]!.retainLease).toBeUndefined();
+  });
+
+  it('takes only a Host-issued dispatch lease: a look-alike or missing one gets the direct-send request (#1250 第 84 批)', async () => {
+    // What a plugin's own `operation` factory can hand out: the lease token (its id is readable)
+    // answered with a port of the right shape that the Host never issued.
+    const retain = vi.fn(() => ({ release() {} }) as unknown as SnapshotLease);
+    const forged = { has: (token: unknown) => (token as { id?: string } | undefined)?.id === 'zhin.agent.dispatch-lease',
+      use: () => ({ retain, conversationSequence: 1 }) };
+    const h = harness();
+    for (const resources of [forged, null]) {
+      for (const [content, role] of [['/models', 'trusted'], ['/reset', 'trusted'], ['/reset', undefined]] as const) {
+        const sent = await h.send(content, { kind: 'private', ...(role ? { role } : {}), resources });
+        expect(sent.reply).toBe(`ℹ️ 该命令不能经插件转发执行，请直接发送 ${content}。`);
+        expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'direct_command_required' }));
+      }
+    }
+    expect(retain).not.toHaveBeenCalled();
+    expect(h.opened).toEqual([]);
+    expect(h.clear).not.toHaveBeenCalled();
+    expect(h.archiveSession).not.toHaveBeenCalled();
+    expect(h.list).not.toHaveBeenCalled();
   });
 
   it('asks the sender to send a command directly when a plugin forwarded it, without the dispatch lease (#1250 第 84 批)', async () => {
