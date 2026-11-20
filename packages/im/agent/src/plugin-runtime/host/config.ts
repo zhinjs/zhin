@@ -7,7 +7,6 @@ import { existsSync, realpathSync } from 'node:fs';
 import { parseMcpToolPermit } from '../mcp-tool-permit.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import {
-  expandEnvironmentValue,
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
@@ -27,6 +26,11 @@ export type AgentHostAIConfig = NonNullable<ConstructorParameters<typeof AIServi
 
 type McpServerConfig = NonNullable<AgentHostAIConfig['mcpServers']>[number];
 
+/**
+ * The `ai` block of an already environment-expanded host config document (the instance passes
+ * the document its EnvStore expanded with `.env` and process variables). No second expansion
+ * runs here: it could not see `.env`, and it would re-expand `${…}` text a variable's value holds.
+ */
 export async function resolveAiConfig(
   config: RuntimeConfigDocument | ConfigDocumentPort,
 ): Promise<AgentHostAIConfig | undefined> {
@@ -40,7 +44,7 @@ export async function resolveAiConfig(
       'Configuration key "ai.workroom" has been removed in ADR 0048. Declare shared rooms under "ai.venues" and agent collaboration ceilings under "agents/<name>/agent.json" ("collaboration").',
     );
   }
-  const expanded = expandEnvironmentValue(ai, (key) => process.env[key]) as AgentHostAIConfig;
+  const expanded = ai as AgentHostAIConfig;
   resolveAgentHostVenues(expanded);
   resolveAgentHostExternalPeers(expanded);
   return expanded;

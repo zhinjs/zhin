@@ -32,6 +32,8 @@ export function environmentExpressionSource(input: unknown): EnvironmentExpressi
 /** Keep the existing private password entry and offline imports on one syntax boundary. */
 export function normalizeApiKeyMaterial(input: ApiKeyMaterial): ApiKeyMaterial {
   if (input.source) return { source: environmentExpressionSource(input.source) };
+  // Deliberately broader than a valid reference: a mistyped template (`${KEY:-x`) is refused as an
+  // expression instead of being stored as a literal key.
   if (input.key.includes('${')) return { source: environmentExpressionSource({ kind: 'environment-expression', expression: input.key }) };
   if (!input.key.trim()) throw new InferenceAuthenticationError('not-authorized');
   return { key: input.key };

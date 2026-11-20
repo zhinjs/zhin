@@ -5,7 +5,7 @@
       "package": "zhin.js",
       "type": "minor",
       "version": "1.10.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——`zhin.js/i18n` 新增导出 `formatList()` 与类型 `FormatListOptions`（主入口经 `@zhin.js/plugin-runtime` 同时得到 `formatList`、`queryLocale`、`projectLocale`）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——`config` 命令 permit 改为 `owner@global` + `private()`"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——`zhin.js/i18n` 新增导出 `formatList()` 与类型 `FormatListOptions`（主入口经 `@zhin.js/plugin-runtime` 同时得到 `formatList`、`queryLocale`、`projectLocale`）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——`config` 命令 permit 改为 `owner@global` + `private()`；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——主入口经 `@zhin.js/plugin-runtime`（`export *`）同时得到 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与相关类型，插件（如 code-runner、calendar）据此判断未展开的 `${VAR}`。同属 1.10.0。"
     },
     {
       "package": "@zhin.js/gateway",
@@ -35,13 +35,13 @@
       "package": "@zhin.js/plugin-runtime",
       "type": "minor",
       "version": "1.5.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——出站模板 TemplateContext 重组为分组字段（不兼容：旧顶层占位符不再展开）：`bot`（`adapter`、`endpoint`、`endpointId` 与新增的 `prefix`、`menu`，新增导出类型 `TemplateBot`）、`conversation`（`kind`、`id`）、`sender`（`id`、`name`、`roles`；也承载事件触发发送的主体，如入群的新成员，经 `incoming.sender` 传入）、`message`（`content`、`segments`、`id`、`timestamp`、`mentioned`）与新增的 `command`（新增导出类型 `TemplateCommandPaths`），按发出消息的账号渲染带前缀的命令写法，所有插件可用；所有占位符至少两段，不与配置加载时的环境变量展开冲突。1.4.1 已发布，本次为 1.5.0，npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增 `formatList()`、类型 `FormatListOptions`、`queryLocale()`（Console 路由严格解析 `?locale=`）与 `projectLocale()`（从 `@zhin.js/core/runtime` 移入）。同属 1.5.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——出站模板 TemplateContext 重组为分组字段（不兼容：旧顶层占位符不再展开）：`bot`（`adapter`、`endpoint`、`endpointId` 与新增的 `prefix`、`menu`，新增导出类型 `TemplateBot`）、`conversation`（`kind`、`id`）、`sender`（`id`、`name`、`roles`；也承载事件触发发送的主体，如入群的新成员，经 `incoming.sender` 传入）、`message`（`content`、`segments`、`id`、`timestamp`、`mentioned`）与新增的 `command`（新增导出类型 `TemplateCommandPaths`），按发出消息的账号渲染带前缀的命令写法，所有插件可用；所有占位符至少两段，不与配置加载时的环境变量展开冲突。1.4.1 已发布，本次为 1.5.0，npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增 `formatList()`、类型 `FormatListOptions`、`queryLocale()`（Console 路由严格解析 `?locale=`）与 `projectLocale()`（从 `@zhin.js/core/runtime` 移入）。同属 1.5.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——新增 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与类型 `EnvironmentReference`、`EnvironmentReferenceMatch`、`EnvironmentReferenceOperator`、`EnvironmentLookup`（`${VAR}` / `env://` 引用识别与展开共用同一个解析器）。同属 1.5.0。"
     },
     {
       "package": "@zhin.js/host-http",
       "type": "minor",
       "version": "1.8.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增导出 `invalidLocaleResponse()`（Console 路由与插件市场搜索共用的 `?locale=` 400 响应，中英文一致）。1.7.1 已发布，本次为 1.8.0，npm 上 1.8.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增导出 `invalidLocaleResponse()`（Console 路由与插件市场搜索共用的 `?locale=` 400 响应，中英文一致）。1.7.1 已发布，本次为 1.8.0，npm 上 1.8.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——删除导出 `ENVIRONMENT_REFERENCE_PATTERN`（改用 `@zhin.js/plugin-runtime` 的 `isWholeEnvironmentReference()`，不留兼容）。同属 1.8.0。"
     },
     {
       "package": "@zhin.js/console-protocol",

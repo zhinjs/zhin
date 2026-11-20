@@ -15,6 +15,10 @@ async function main() {
   const envFile = path.join(project, '.env');
   const env = { ...(fs.existsSync(envFile) ? parseEnv(fs.readFileSync(envFile, 'utf8')) : {}), ...process.env };
   const config = parse(fs.readFileSync(path.join(project, 'zhin.config.yml'), 'utf8'));
+  // Deliberately not the shared parser (`@zhin.js/plugin-runtime` expandEnvironmentValue): this
+  // script runs with plain `node` against a project, before / without a build, and cannot import
+  // TypeScript sources. It only reads plain `${VAR}` credentials for a read-only preflight;
+  // `${VAR:-default}` is not expanded here (the Runtime does that).
   const resolve = (value) => typeof value === 'string'
     ? value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, key) => env[key] ?? '') : value;
   const report = { kind: 'live-auth-only', time: new Date().toISOString(), node: process.version,

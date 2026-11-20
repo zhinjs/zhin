@@ -314,4 +314,18 @@ describe('maskConfigValue', () => {
     expect(maskConfigValue({ type: 'object', properties: { a: { 'x-zhin-config': { hidden: true } }, b: { type: 'string' } } }, ['x'], { a: 'v', b: 'ok' }))
       .toEqual({ a: REDACTED_CONFIG_VALUE, b: 'ok' });
   });
+
+  it('masks only references the shared parser recognizes; other `${` text is a literal, still masked under a secret key', () => {
+    expect(maskConfigValue(null, ['x'], {
+      ref: '${A}', defaulted: '${A:-d}', inner: 'pre${A}post', uri: 'env://A',
+      unclosed: 'p${ss', digit: '${1X}', badUri: 'env://bad-name',
+      password: 'p${ss', apiKey: '${1X}',
+    })).toEqual({
+      ref: REDACTED_CONFIG_VALUE, defaulted: REDACTED_CONFIG_VALUE, inner: REDACTED_CONFIG_VALUE, uri: REDACTED_CONFIG_VALUE,
+      unclosed: 'p${ss', digit: '${1X}', badUri: 'env://bad-name',
+      password: REDACTED_CONFIG_VALUE, apiKey: REDACTED_CONFIG_VALUE,
+    });
+    expect(maskConfigValue({ type: 'object', properties: { label: { type: 'string', writeOnly: true } } }, ['x', 'label'], 'p${ss'))
+      .toBe(REDACTED_CONFIG_VALUE);
+  });
 });

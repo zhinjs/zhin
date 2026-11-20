@@ -110,7 +110,9 @@ describe('zhin ai account list (#1250 ai-account-cli-no-list)', () => {
     expect(text).toContain('服务：OpenAI 官方（service:1）');
     expect(text).toContain('读取环境变量 OPENAI_API_KEY');
     expect(text).toContain('⚠ 环境变量未设置');
-    expect(text).toContain('读取环境变量 PRIMARY_API_KEY, BACKUP_API_KEY');
+    // Same parser as expansion: defaults do not nest, so `${BACKUP_API_KEY` is default text, not a reference.
+    expect(text).toContain('读取环境变量 PRIMARY_API_KEY');
+    expect(text).not.toContain('BACKUP_API_KEY');
     expect(text.indexOf('account:1')).toBeLessThan(text.indexOf('account:2'));
   });
 

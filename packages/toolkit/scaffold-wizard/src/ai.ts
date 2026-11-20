@@ -1,4 +1,4 @@
-import type { Locale } from '@zhin.js/plugin-runtime';
+import { parseEnvironmentReference, type Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
@@ -271,10 +271,12 @@ export function materializeAIPlan(config: AISetupConfig): Record<string, unknown
         ];
       })),
     };
-    const env = provider.apiKey?.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u);
-    if (provider.apiKey && !env) throw new Error('AI setup keys must use an environment reference');
+    // The key becomes an `env://VAR` account source, which has no default: only a whole `${VAR}`.
+    const reference = provider.apiKey ? parseEnvironmentReference(provider.apiKey) : undefined;
+    const variable = reference?.default === undefined ? reference?.variable : undefined;
+    if (provider.apiKey && !variable) throw new Error('AI setup keys must use an environment reference');
     accounts[name] = { service: name, auth: driver === 'ollama' && !provider.apiKey
-      ? { method: 'none' } : { method: 'api-key', ...(env ? { source: `env://${env[1]}` } : {}) } };
+      ? { method: 'none' } : { method: 'api-key', ...(variable ? { source: `env://${variable}` } : {}) } };
     for (const model of models) {
       const profile = `${name}:${model}`; profiles[profile] = { account: name, model };
       if (name === primary && !chosen) chosen = profile;

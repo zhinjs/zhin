@@ -85,6 +85,22 @@ describe('createAdapterConsoleRpc uses the exact owned runtime account authority
     await expect(rpc.methods.get('endpoint-add')!.handler({ id: 'new', values: { token: 'synthetic' } }, call)).rejects.toMatchObject({ code: 'unsupported' });
     const f = await accountRuntimeFixture({ noDatabase: true }); await expect(rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'new', values: { token: 'synthetic' } }), f.call())).rejects.toMatchObject({ code: 'unsupported' });
   });
+  it('shows an env field only as a whole ${VAR} without default; ${VAR:-default} is masked (the default can be the secret)', async () => {
+    const rpc = createAdapterConsoleRpc({ ...spec, getConfig: () => ({ endpoints: [
+      { id: 'plain', token: '${DEMO_TOKEN}' },
+      { id: 'defaulted', token: '${DEMO_TOKEN:-synthetic-default-secret}' },
+      { id: 'assigned', token: '${DEMO_TOKEN:=synthetic-assigned-secret}' },
+      { id: 'malformed', token: '${DEMO_TOKEN' },
+    ] }) });
+    const status = await rpc.methods.get('status')!.handler({}, { signal: new AbortController().signal });
+    expect(status).toMatchObject({ configured: [
+      { id: 'plain', values: { token: '${DEMO_TOKEN}' } },
+      { id: 'defaulted', values: { token: '••••••' } },
+      { id: 'assigned', values: { token: '••••••' } },
+      { id: 'malformed', values: { token: '••••••' } },
+    ] });
+    expect(JSON.stringify(status)).not.toContain('synthetic-');
+  });
   it('exposes platform actions with existing permission metadata and filters the displayed action list', async () => {
     const handler = vi.fn(async () => ({ message: 'ok', details: { state: 'waiting' } }));
     const rpc = createAdapterConsoleRpc({ ...spec, availableActions: () => ['bind'], actions: { bind: { label: 'Bind', handler }, hidden: { label: 'Hidden', handler } } });
