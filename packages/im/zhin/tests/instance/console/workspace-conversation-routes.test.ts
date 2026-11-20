@@ -223,6 +223,18 @@ describe.skipIf(!sqliteAvailable)('Console workspace directory', () => {
     expect((await (await other.commands({ type: 'group', id: 'room' })).json()).data.quick).toEqual(['/菜单']);
   });
 
+  it('answers an unsupported ?locale= on quick commands with 400 invalid_locale and keeps zh-CN without one (#1250 batch 77)', async () => {
+    const f = await fixture({ commands: { prefix: '/', names: ['ping'] } });
+    for (const locale of ['en-US', 'fr', '']) {
+      const response = await f.commands({ type: 'group', id: 'room', locale });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ success: false, code: 'invalid_locale', error: 'locale 只能是 zh-CN 或 en（locale must be zh-CN or en）' });
+    }
+    const absent = await f.commands({ type: 'group', id: 'room' });
+    expect(absent.status).toBe(200);
+    expect((await absent.json()).data.quick).toEqual(['/菜单', '/ping']);
+  });
+
   it('guards quick commands like the directory: credentials, live binding and a valid scene', async () => {
     const f = await fixture({ commands: { names: ['ping'] } });
     expect((await f.commands({}, 'demo')).status).toBe(403);

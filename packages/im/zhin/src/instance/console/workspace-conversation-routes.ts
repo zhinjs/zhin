@@ -1,4 +1,4 @@
-import { HttpBodyError, readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import { HttpBodyError, invalidLocaleResponse, readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import { queryLocale, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import {
@@ -9,7 +9,6 @@ import {
   type WorkspaceConversationInput,
 } from './workspace-conversations.js';
 import { noStore } from './no-store.js';
-import { invalidLocaleResponse } from './query-locale.js';
 import { sandboxQuickCommands } from './sandbox-quick-commands.js';
 
 /** Metadata only: no message replay, migration, expiry, or task execution. */

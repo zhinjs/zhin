@@ -10,9 +10,8 @@ export const CONSOLE_PAGE_SECTIONS = Object.freeze([
 export type ConsolePageSection = (typeof CONSOLE_PAGE_SECTIONS)[number];
 
 /**
- * Display language of Page `titleI18n` / `keywords` and declarative UI (#1250 batch 77; replaces
- * `PageKeywordLocale` and `DeclarativeUiLocale`). Kept dependency-free like the sections above;
- * `tests/contracts/locale-types.test.ts` keeps it equal to `ConsoleLocale` of
+ * Display language of Page `titleI18n` / `keywords` and declarative UI. Kept dependency-free like
+ * the sections above; `tests/contracts/locale-types.test.ts` keeps it equal to `ConsoleLocale` of
  * `@zhin.js/console-protocol` and `Locale` of `@zhin.js/plugin-runtime`.
  */
 export type ConsoleLocale = 'zh-CN' | 'en';

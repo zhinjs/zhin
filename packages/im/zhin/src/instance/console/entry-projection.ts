@@ -1,4 +1,4 @@
-import type { Locale } from '@zhin.js/plugin-runtime';
+import { queryLocale, type Locale } from '@zhin.js/plugin-runtime';
 import {
   extractBearerToken,
   publicConsoleAccess,
@@ -38,7 +38,7 @@ export type ExtendedRuntimeConsolePage = RuntimeConsolePage & {
 };
 
 export interface ProjectConsoleEntriesOptions {
-  readonly locale?: string;
+  readonly locale?: Locale;
   readonly runtimeEnvHint?: 'development' | 'production';
 }
 
@@ -57,37 +57,31 @@ export function requestConsoleAccess(
   return http.tokenRegistry.resolveAccess(token);
 }
 
+/**
+ * `?locale=` of a page-title route, read with {@link queryLocale}: absent stays `undefined`
+ * (untranslated titles), a supported value is that {@link Locale}, and an unsupported or repeated
+ * value is `null`, which the route answers with `invalidLocaleResponse()`.
+ */
+export function pageTitleLocale(url: URL): Locale | undefined | null {
+  if (!url.searchParams.has('locale')) return undefined;
+  return queryLocale(url.searchParams) ?? null;
+}
+
+/** `titleI18n[locale]` when it is a non-blank string, else `title`; `locale` is already a supported {@link Locale}. */
 export function resolveLocalizedPageTitle(
   title: string,
   titleI18n?: ConsolePageTitleI18n,
-  locale?: string,
+  locale?: Locale,
 ): string {
-  if (!locale || !titleI18n || typeof titleI18n !== 'object') return title;
-  const map = titleI18n as Record<string, unknown>;
-  const direct = map[locale];
-  if (typeof direct === 'string' && direct.trim()) return direct;
-  const normalized = locale.toLowerCase();
-  const langPrefix = normalized.split('-')[0] ?? normalized;
-  if (langPrefix === 'zh') {
-    const zh = map['zh-CN'] ?? map.zh;
-    if (typeof zh === 'string' && zh.trim()) return zh;
-  } else if (langPrefix === 'en') {
-    const en = map.en ?? map['en-US'];
-    if (typeof en === 'string' && en.trim()) return en;
-  }
-  for (const [key, value] of Object.entries(map)) {
-    if (key.toLowerCase().startsWith(langPrefix) && typeof value === 'string' && value.trim()) {
-      return value;
-    }
-  }
-  return title;
+  const localized = locale && titleI18n && typeof titleI18n === 'object' ? titleI18n[locale] : undefined;
+  return typeof localized === 'string' && localized.trim() ? localized : title;
 }
 
 /** Pages the caller may open. Defaults to public access, never to the operator's view. */
 export async function listPages(
   consoleRuntime: ConsoleRuntime,
   access: ConsoleAccess = publicConsoleAccess,
-  options?: { readonly locale?: string },
+  options?: { readonly locale?: Locale },
 ): Promise<readonly ExtendedRuntimeConsolePage[]> {
   const pages = await consoleRuntime.runView(access, (catalog) => catalog.pages());
   return Object.freeze(pages.map((rawPage) => {
@@ -240,7 +234,7 @@ export function projectConsoleEntries(
 export function buildConsoleEntriesBody(
   pages: readonly ExtendedRuntimeConsolePage[],
   runtimeEnvHint: 'development' | 'production' = defaultRuntimeEnvHint(),
-  options?: { readonly locale?: string },
+  options?: { readonly locale?: Locale },
 ): ConsoleEntriesBody {
   return projectConsoleEntries(pages, {
     runtimeEnvHint,

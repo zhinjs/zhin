@@ -65,6 +65,16 @@ describe('operation-scoped command localization', () => {
     expect((await index.dispatch({ input: 'menu', source: message('zh-CN') })).menu?.locale).toBe('zh-CN');
   });
 
+  it('falls back to the project language, not zh-CN, when the message carries an unsupported locale (#1250 batch 77)', async () => {
+    const slots = [command('list', defineCommand({ description: '查看提醒', descriptionI18n: { en: 'List reminders' }, execute: () => 'ok' }))];
+    const englishProject = new CommandIndex(slots, snapshot(slots, 'en'), {});
+    const unsupported = { ...message(), locale: 'en-US' };
+    expect((await englishProject.dispatch({ input: 'menu', source: unsupported })).menu?.locale).toBe('en');
+    expect((await englishProject.dispatch({ input: 'menu', source: { ...message(), locale: 'fr' } })).menu?.locale).toBe('en');
+    const chineseProject = new CommandIndex(slots, snapshot(slots, 'zh-CN'), {});
+    expect((await chineseProject.dispatch({ input: '菜单', source: unsupported })).menu?.locale).toBe('zh-CN');
+  });
+
   it('preserves explicit menu keywords and pins a navigation operation to its original locale', async () => {
     const slots = Array.from({ length: 31 }, (_, index) => command(`item${index}`, defineCommand({ execute() {} }), root));
     const state = snapshot(slots);

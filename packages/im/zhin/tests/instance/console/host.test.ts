@@ -9,6 +9,7 @@ import {
   registerConsoleHttp,
 } from '../../../src/instance/console/host.js';
 import { projectConsoleEntries } from '../../../src/instance/console/entry-projection.js';
+import { registerConsoleEntryRoutes } from '../../../src/instance/console/entry-routes.js';
 
 const call = (handler: HttpHandler, url: string) => {
   const parsed = new URL(url);
@@ -143,7 +144,7 @@ describe('Console topology Host endpoint', () => {
       localName: 'ambient',
       route: '/ambient',
       title: '群潜望',
-      titleI18n: { 'zh-CN': '群潜望', 'en-US': 'Ambient Insights' },
+      titleI18n: { 'zh-CN': '群潜望', en: 'Ambient Insights' },
       description: 'Ambient group radar',
       icon: 'Radar',
       group: 'Agent',
@@ -167,7 +168,7 @@ describe('Console topology Host endpoint', () => {
       id: 'ambient',
       name: 'ambient',
       title: 'Ambient Insights',
-      titleI18n: { 'zh-CN': '群潜望', 'en-US': 'Ambient Insights' },
+      titleI18n: { 'zh-CN': '群潜望', en: 'Ambient Insights' },
       description: 'Ambient group radar',
       icon: 'Radar',
       group: 'Agent',
@@ -228,5 +229,62 @@ describe('Console topology Host endpoint', () => {
     expect(pagesResponse.status).toBe(200);
     expect(pagesResponse.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(await pagesResponse.text()).toContain('Ambient group radar');
+  });
+});
+
+describe('Console page routes ?locale= (#1250 batch 77)', () => {
+  const invalidLocale = { success: false, code: 'invalid_locale', error: 'locale 只能是 zh-CN 或 en（locale must be zh-CN or en）' };
+  const page = {
+    id: 'root/status:status', localName: 'status', route: '/status', title: '状态', module: '/status.js', hash: 'h1',
+    titleI18n: { 'zh-CN': '运行状态', en: 'Status' },
+  };
+  const consoleRuntime = {
+    runView: async (_access: unknown, operation: (catalog: unknown) => unknown) => operation({ pages: () => [page] }),
+  } as unknown as ConsoleRuntime;
+  const handlers = () => {
+    const route = vi.fn();
+    const http = { route, tokenRegistry: new TokenRegistry() } as never;
+    registerConsoleHttp({ http, console: consoleRuntime, clientOutDir: '/tmp/client', projectRoot: '/tmp/project' });
+    const hostRoutes = [...route.mock.calls];
+    route.mockClear();
+    registerConsoleEntryRoutes({ http, consoleRuntime });
+    const handler = (calls: unknown[][], path: string) => calls.find((call) => call[1] === path)?.[2] as HttpHandler;
+    return {
+      'GET /entries (entry-routes)': handler(route.mock.calls, '/entries'),
+      'GET /entries (host)': handler(hostRoutes, '/entries'),
+      'GET /console/api/pages': handler(hostRoutes, '/console/api/pages'),
+      'GET /console': handler(hostRoutes, '/console'),
+      'GET /pages': handler(hostRoutes, '/pages'),
+    };
+  };
+  const paths: Record<string, string> = {
+    'GET /entries (entry-routes)': '/entries', 'GET /entries (host)': '/entries',
+    'GET /console/api/pages': '/console/api/pages', 'GET /console': '/console', 'GET /pages': '/pages',
+  };
+
+  it.each(Object.keys(paths))('%s answers an unsupported or repeated locale with 400 invalid_locale', async (name) => {
+    const handler = handlers()[name as keyof ReturnType<typeof handlers>];
+    for (const query of ['locale=en-US', 'locale=fr', 'locale=', 'locale=en&locale=zh-CN']) {
+      const response = await call(handler, `http://localhost${paths[name]}?${query}`);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual(invalidLocale);
+    }
+  });
+
+  it.each(Object.keys(paths))('%s keeps the untranslated title without a locale and translates a supported one', async (name) => {
+    const handler = handlers()[name as keyof ReturnType<typeof handlers>];
+    const absent = await call(handler, `http://localhost${paths[name]}`);
+    expect(absent.status).toBe(200);
+    const english = await call(handler, `http://localhost${paths[name]}?locale=en`);
+    expect(english.status).toBe(200);
+    if (name.startsWith('GET /entries')) {
+      expect((await absent.json()).entries[0].title).toBe('状态');
+      expect((await english.json()).entries[0].title).toBe('Status');
+    } else if (name === 'GET /console/api/pages') {
+      expect((await absent.json()).pages[0].title).toBe('状态');
+      expect((await english.json()).pages[0].title).toBe('Status');
+    } else {
+      expect(absent.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    }
   });
 });

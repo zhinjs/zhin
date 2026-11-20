@@ -7,13 +7,12 @@
  * Like the task results route, only the live connection owner's messages are listed: a record whose
  * sender is neither the owner nor the owner's simulated id (ADR 0060 §5.4) is never returned.
  */
-import { jsonResponse, type HttpHost } from '@zhin.js/host-http';
+import { invalidLocaleResponse, jsonResponse, type HttpHost } from '@zhin.js/host-http';
 import { formatMessageOutcome, type MessageOutcomeReader, type MessageOutcomeRecord } from '@zhin.js/core/runtime';
 import { queryLocale, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { ConsoleConversationOutcome } from '@zhin.js/console-protocol';
 import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
-import { invalidLocaleResponse } from './query-locale.js';
 
 const MAX_MESSAGE_ID = 2048;
 const LIMIT = 20;

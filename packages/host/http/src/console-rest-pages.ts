@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HttpHost } from './http-host.js';
 import { readJsonBody } from './json-body.js';
+import { invalidLocaleResponse } from './locale-response.js';
 import { jsonResponse } from '@zhin.js/host-http-contract';
 import {
   MarketplaceDetailCache,
@@ -457,9 +458,7 @@ function registerMarketplaceRoutes(
     const official = url.searchParams.get('official') ?? undefined;
     // Absent: untranslated names; an unsupported or repeated `locale` is a 400 like every Console route.
     const locale = url.searchParams.has('locale') ? queryLocale(url.searchParams) : undefined;
-    if (!locale && url.searchParams.has('locale')) {
-      return jsonResponse(400, { success: false, code: 'invalid_locale', error: 'locale must be zh-CN or en' });
-    }
+    if (!locale && url.searchParams.has('locale')) return invalidLocaleResponse();
     const searchKeyword = q.trim().toLowerCase();
 
     try {

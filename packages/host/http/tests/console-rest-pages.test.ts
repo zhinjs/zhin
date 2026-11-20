@@ -460,6 +460,19 @@ describe('console-rest-pages marketplace', () => {
     expect(information.total).toBe(1);
   });
 
+  it('GET /pub/marketplace/search 对不支持或重复的 locale 返回 400 invalid_locale，缺省时 200（#1250 第 77 批）', async () => {
+    const base = await startHost(baseCtx(), marketplaceOptions);
+    for (const query of ['locale=en-US', 'locale=fr', 'locale=', 'locale=en&locale=zh-CN']) {
+      const response = await fetch(`${base}/pub/marketplace/search?q=rss&${query}`);
+      expect(response.status).toBe(400);
+      // The same bilingual body as every instance Console route (`invalidLocaleResponse`).
+      expect(await response.json()).toEqual({ success: false, code: 'invalid_locale', error: 'locale 只能是 zh-CN 或 en（locale must be zh-CN or en）' });
+    }
+    const absent = await fetch(`${base}/pub/marketplace/search?q=rss`);
+    expect(absent.status).toBe(200);
+    expect((await json(absent)).data[0]).toMatchObject({ displayName: 'RSS' });
+  });
+
   it('GET /pub/marketplace/detail/:name 返回包详情（scoped 名可带斜杠）', async () => {
     const base = await startHost(baseCtx(), marketplaceOptions);
     const body = await json(await fetch(
