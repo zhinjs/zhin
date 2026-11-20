@@ -1,10 +1,10 @@
 import { defineCommand } from 'zhin.js/command';
-import type { Message } from '@zhin.js/core/runtime';
+import type { Message, SendContent } from '@zhin.js/core/runtime';
 import { groupSuiteConfigFor, type GroupSuiteConfig } from '../../src/config.js';
 import { teachAdd } from '../../src/teach-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
-export default defineCommand<GroupSuiteConfig, string, Message>({
+export default defineCommand<GroupSuiteConfig, SendContent, Message>({
   permit: ['group()', 'trusted'],
   description: '教我正则问答（需开启 teachAllowRegex；属于 teach 问答，不是 keyword 关键词回复）', descriptionI18n: { en: "Teach a regular-expression Q&A pair (needs teachAllowRegex; part of teach Q&A, not keyword replies)" },
   alias: ['teach regex'],

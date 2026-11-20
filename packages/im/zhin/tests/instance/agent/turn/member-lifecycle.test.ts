@@ -107,7 +107,14 @@ describe('MemberLifecycle — welcome (ADR 0037 §1.1)', () => {
       { type: 'mention', id: 'u1', name: '阿强' },
       { type: 'text', text: ' ' },
       { type: 'mention', id: 'u2', name: '小美' },
-      { type: 'text', text: '（阿强、小美）来到 g1，群规 https://r {oops}' },
+      // #1250: filled-in values are data parts (sent untrusted), the template text stays a template.
+      { type: 'text', text: '（' },
+      { type: 'text', text: '阿强、小美', literal: true },
+      { type: 'text', text: '）来到 ' },
+      { type: 'text', text: 'g1', literal: true },
+      { type: 'text', text: '，群规 ' },
+      { type: 'text', text: 'https://r', literal: true },
+      { type: 'text', text: ' {oops}' },
     ]);
     expect(await flow.rows()).toEqual([
       ['member_lifecycle', 'defer', 'welcome_merged'],
