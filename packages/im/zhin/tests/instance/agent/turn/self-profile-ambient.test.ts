@@ -3,7 +3,7 @@ import { assistantTextReply } from '../../../../../agent/tests/helpers/mock-llm-
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, type Endpoint, type EndpointProfile } from '@zhin.js/adapter';
 import { ImRuntime, ingressRouteToken } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
-import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotLease, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 
 it('identifies an unaddressed group participant from the original native account without a profile network read', async () => {
@@ -19,7 +19,9 @@ it('identifies an unaddressed group participant from the original native account
   const adapter = new NativeAdapter();
   const inference = ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":false,"confidence":0.9,"reason":"not addressed"}') });
   const executeLeased = vi.fn();
-  const route = new AgentTurnIngressRoute({ withInferenceScope: inference.withInferenceScope, projectRoot: '/host', im, runtime: { executeLeased } as never,
+  const route = new AgentTurnIngressRoute({ withInferenceScope: inference.withInferenceScope, projectRoot: '/host', im,
+    // The route runs only on a lease the Root's real store issued (the IM runtime's own lease for the message).
+    runtime: { executeLeased, ownsLease: (lease: SnapshotLease) => store.owns(lease) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
       getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', nickname: 'Configured AI nickname', mcpServers: [] }) }),

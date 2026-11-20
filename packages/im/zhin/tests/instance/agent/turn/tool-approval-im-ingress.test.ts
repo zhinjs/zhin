@@ -2,7 +2,7 @@ import { RuntimeMessage } from '../../../../../core/src/plugin-runtime/im/contra
 import { describe, expect, it, vi } from 'vitest';
 import { AiControlPlane, DecisionEventLog } from '@zhin.js/agent';
 import { ToolApprovalQueue, resolveToolHardGateImApproval } from '@zhin.js/agent/security';
-import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type RuntimeSnapshot, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
 
@@ -27,9 +27,11 @@ function harness() {
   const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
   const executeLeased = vi.fn(async () => ({ status: 'completed', output: [] }));
   const observeInbound = vi.fn(async () => ({ blocked: null }));
+  // The IM runtime's lease for the message: the route runs only on a lease the Root's store issued.
+  const lease = { value: snapshot, active: true } as unknown as SnapshotLease;
   const route = new AgentTurnIngressRoute({
     projectRoot: process.cwd(),
-    runtime: { executeLeased } as never,
+    runtime: { executeLeased, ownsLease: (candidate: SnapshotLease) => candidate === lease } as never,
     im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: {
@@ -66,7 +68,7 @@ function harness() {
         presentation: { commands: { prefix: '/' } },
       },
     );
-    const handled = await route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined);
+    const handled = await route.route(message, lease, rootPluginId(), undefined);
     return { handled, reply };
   };
   return { queue, card, send, executeLeased };

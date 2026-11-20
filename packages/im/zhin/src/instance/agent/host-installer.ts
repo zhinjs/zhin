@@ -37,6 +37,7 @@ import {
   venueRegistryToken,
 } from '@zhin.js/core';
 import {
+  createIngressRouteFacade,
   groupRuleViolationToken,
   imOperationResourcesToken,
   ingressRouteToken,
@@ -435,10 +436,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,
       resolveConversationPresentation: conversationPresentation,
+      // #1250 第 85 批: the management paths take only a lease this Host's own dispatch handed out.
+      holdsDispatchLease: lease => operationResources.holdsDispatchLease(lease),
       withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
       withModelScope: (input, operation) => options.inference.withDeploymentModels({ ...input, service }, operation),
     });
-    resources.provide(ingressRouteToken, ingressRoute);
+    // #1250 第 85 批: a Root-private token (plugin scopes cannot read it; the IM runtime reads it through
+    // the Root's real SnapshotStore), and even so it carries only the IM runtime's hooks (`preRoute` /
+    // `shouldRouteBeforeDispatch` / `route`); the route object itself, its options (the Agent runtime,
+    // the SnapshotStore) and its Host-only management paths stay here.
+    resources.provide(ingressRouteToken, createIngressRouteFacade(ingressRoute));
     // #1250 第 83 批: the Agent management commands (`models`, `health`, `tree`, `fork`, `compact`,
     // `reset`, and with semantic memory `memory` / `memory forget`) are Root commands: menu, help,
     // near-miss hints, permits and the `command_replied` outcome come from the command dispatch.
@@ -449,6 +456,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         // #1250 第 84 批: only the dispatch lease ports this Host's own operation resources issued (the
         // `im` port provided above) count; a port from another factory (a plugin's) does not.
         isDispatchLease: port => operationResources.isDispatchLease(port),
+        // #1250 第 85 批: this Host wired those resources (`imOperationResourcesToken` above). The token is
+        // Root-private, so the commands cannot see it in the run-time snapshot; the Host declares it.
+        hostResourcesInstalled: true,
         // Each command retains the generation that dispatched it (an operation resource bound to the
         // IM runtime's own lease for the message), never whichever generation is current by then.
         open: (message, dispatch, run) => ingressRoute.runManagementOperation(message, dispatch, run),

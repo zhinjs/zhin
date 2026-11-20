@@ -208,12 +208,17 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
  * Reasons whose wording the outcome's template would misstate (#1250): a prompt replaced by a newer
  * prompt in the same conversation was not left by the sender; a `reset` (the clear command) that did
  * not clear was a command, not an unaddressed chat message (第 84 批); an Agent management command on an
- * instance without the Host's operation resources was not declined by a plugin (第 84 批).
+ * instance without the Host's operation resources was not declined by a plugin (第 84 批); nor was one
+ * a plugin forwarded, or whose dispatch lease the Host refused (第 85 批).
  */
 const REASON_TEMPLATES: Readonly<Partial<Record<MessageOutcome, Readonly<Record<string, MessageOutcomeTemplate>>>>> = Object.freeze({
   refused: Object.freeze({
     management_unavailable: tpl('管理命令在此实例不可用，没有执行。', 'Management commands are not available on this instance; nothing was run.',
       '管理命令 {command} 未执行：实例未接 Agent Host 的操作资源（{reason}）。', 'Management command {command} not run: the instance has no Agent Host operation resources ({reason}).'),
+    direct_command_required: tpl('这条命令经插件转发时不能执行，没有执行；请直接发送它。', 'This command cannot run when a plugin forwards it; nothing was run. Send it directly.',
+      '管理命令 {command} 未执行：由插件转发，Host 不提供分发租约（{reason}）。', 'Management command {command} not run: forwarded by a plugin, so the Host withheld the dispatch lease ({reason}).'),
+    dispatch_lease_rejected: tpl('这条管理命令没有通过本实例的校验，没有执行。', 'This management command failed this instance\'s check; nothing was run.',
+      '管理命令 {command} 未执行：Host 拒绝了不是本实例分发交出的租约（{reason}）。', 'Management command {command} not run: the Host refused a lease its own dispatch did not hand out ({reason}).'),
   }),
   not_addressed: Object.freeze({
     clear_command: tpl('清空指令只在我会回复你的地方生效（群里要 @ 我），这次没有清空。',

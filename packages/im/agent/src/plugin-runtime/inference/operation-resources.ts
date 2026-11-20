@@ -58,6 +58,11 @@ export function createHostOperationResources(options: OperationResourcesOptions)
   agent: AgentOperationResourcesPort;
   /** True only for a dispatch lease port this factory instance issued to one of its Root IM operations. */
   isDispatchLease(port: unknown): boolean;
+  /**
+   * #1250 第 85 批: true only for a lease a port this factory instance issued handed out (its
+   * `retain()`); a lease acquired from the SnapshotStore directly is not one.
+   */
+  holdsDispatchLease(lease: unknown): boolean;
 }> {
   const issuer = createDispatchLeaseIssuer();
   const contextOptions = {
@@ -142,6 +147,7 @@ export function createHostOperationResources(options: OperationResourcesOptions)
   }
   return Object.freeze({
     isDispatchLease: (port: unknown) => issuer.isIssued(port),
+    holdsDispatchLease: (lease: unknown) => issuer.holds(lease),
     im: {
       open: (input) =>
         open({

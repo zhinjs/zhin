@@ -17,6 +17,10 @@
  * 2. The Host side (`AgentTurnIngressRoute.runManagementOperation` / `clearAsCommand`) checks the
  *    lease `retain()` returns against the real SnapshotStore (`AgentRuntime.ownsLease`) and refuses
  *    a lease that store did not issue.
+ * 3. #1250 第 85 批: a lease from the real store is not enough either — anyone holding the store could
+ *    `acquire()` one. The Host side also requires that the lease is one an issued port's own
+ *    `retain()` returned ({@link DispatchLeaseIssuer.holds}), so only a lease handed out through this
+ *    Host's dispatch is accepted.
  *
  * The Host issues the port only to operations whose owner is the Root plugin and that no plugin
  * dispatched (a message view bound from a plugin author, `delegatedFrom`); a plugin-dispatched Root
@@ -54,6 +58,11 @@ export interface DispatchLeaseIssuer {
   issue(port: DispatchLeasePort): DispatchLeasePort;
   /** True only for a port this issuer's {@link DispatchLeaseIssuer.issue} returned. */
   isIssued(value: unknown): value is DispatchLeasePort;
+  /**
+   * #1250 第 85 批: true only for a lease the `retain()` of a port this issuer issued returned (a lease
+   * acquired from the store directly, or retained through anything else, is not).
+   */
+  holds(lease: unknown): boolean;
 }
 
 /**
@@ -63,15 +72,22 @@ export interface DispatchLeaseIssuer {
  */
 export function createDispatchLeaseIssuer(): DispatchLeaseIssuer {
   const issued = new WeakSet<object>();
+  const retained = new WeakSet<object>();
   return Object.freeze({
     issue(port: DispatchLeasePort): DispatchLeasePort {
+      const retain = port.retain;
       const frozen: DispatchLeasePort = Object.freeze({
-        retain: port.retain,
+        retain: () => {
+          const lease = retain();
+          if (typeof lease === 'object' && lease !== null) retained.add(lease);
+          return lease;
+        },
         ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}),
       });
       issued.add(frozen);
       return frozen;
     },
     isIssued: (value: unknown): value is DispatchLeasePort => typeof value === 'object' && value !== null && issued.has(value),
+    holds: (lease: unknown): boolean => typeof lease === 'object' && lease !== null && retained.has(lease),
   });
 }

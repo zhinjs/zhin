@@ -44,12 +44,12 @@ import {
   interactionResult,
   isAddressedMessage,
   messageLocale,
-  resolveIngressRoute,
   resolveRoomMembership,
   runInboundMiddlewareAndSpine,
   withEndpointEventPayload,
   type InboundInteractionPort,
   type InboundOutcome,
+  type IngressRoute,
 } from './inbound-spine.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-ledger.js';
@@ -75,6 +75,11 @@ interface InboundRuntimeContext {
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
   createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal; conversationSequence?: number; delegatedFrom?: PluginId }>): OperationResourceView | undefined;
+  /**
+   * #1250 第 85 批: the generation's ingress route for `lease` (the Root-private `ingressRouteToken`, read
+   * through the Root's real SnapshotStore). Absent: no ingress route runs.
+   */
+  resolveIngressRoute?(lease: SnapshotLease): IngressRoute | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** One-time secrets (ADR 0060 §3.3 claim code): handled before anything records, logs or routes them. */
   readonly inboundSecret?: InboundSecretGuard;
@@ -529,7 +534,7 @@ export class InboundRuntime {
             admission,
             signal: operationSignal,
             interactionFactory,
-            ingressRoute: resolveIngressRoute(lease.value),
+            ingressRoute: this.context.resolveIngressRoute?.(lease),
             diagnostics: this.context.diagnostics,
             runHandlers: () => dispatchInboundHandlers({
               lease,
