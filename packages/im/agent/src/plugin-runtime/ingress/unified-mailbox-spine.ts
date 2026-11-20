@@ -116,7 +116,6 @@ export const ingressMessages = createMessages({
 });
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
-const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
 const DEFAULT_AI_TRIGGER_PREFIXES = ['#', 'AI:', 'ai:'];
 const DEFAULT_AI_TRIGGER_IGNORE_PREFIXES = ['/', '!', '！'];
 
@@ -127,20 +126,17 @@ export function resolveTriggerTimeoutMs(trigger?: AITriggerConfig): number {
     : DEFAULT_TRIGGER_TIMEOUT_MS;
 }
 
-export function renderTriggerError(trigger: AITriggerConfig | undefined, detail: string): string {
-  const template = trigger?.errorTemplate?.trim()
-    ? trigger.errorTemplate
-    : DEFAULT_TRIGGER_ERROR_TEMPLATE;
-  return template.replace('{error}', detail);
-}
-
 /**
- * Chat reply for a failed turn: the configured `errorTemplate` when there is one, otherwise a line a
- * member would say, with the cause appended only for the owner.
+ * Chat reply for a failed turn: the configured `errorTemplate` when there is one (operator text, its
+ * first `{error}` replaced by the error message), otherwise {@link chatFailureLine}: a line a member
+ * would say, with the cause appended only for the owner. #1250 第 81 批: there is no built-in
+ * template of its own; the chat failure line is the one default.
  */
 export function renderChatTurnError(trigger: AITriggerConfig | undefined, error: unknown, master: boolean, locale?: Locale): string {
   const detail = error instanceof Error ? error.message : String(error);
-  if (trigger?.errorTemplate?.trim()) return renderTriggerError(trigger, detail);
+  const template = trigger?.errorTemplate;
+  // A callback, so `$&` / `$'` in the error message stay literal text.
+  if (template?.trim()) return template.replace('{error}', () => detail);
   return chatFailureLine(error instanceof TriggerTimeoutError ? 'turn_timeout' : 'turn_error', { master, detail, locale });
 }
 

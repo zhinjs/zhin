@@ -106,6 +106,51 @@ describe('message outcome codes (ADR 0061 §1)', () => {
     expect(formatMessageOutcome(record, { audience: 'admin', locale: 'en' })).not.toContain('boom');
     expect(formatMessageOutcome(record, { audience: 'admin', locale: 'en', includeDetail: true })).toContain('boom');
   });
+
+  it('renders through one bilingual catalog: zh-CN by default, `—` for every missing value (#1250 第 81 批)', () => {
+    const timeout = { outcome: 'model_timeout' as const, stage: 'model' as const, reason: 'turn_timeout' };
+    expect(formatMessageOutcome(timeout, { audience: 'sender' })).toBe('模型服务没有响应，这次没回上，请稍后再试。');
+    expect(formatMessageOutcome(timeout, { audience: 'sender', locale: 'en' })).toBe('The model did not respond; please try again later.');
+    expect(formatMessageOutcome(timeout, { audience: 'admin' })).toBe('模型超时（turn_timeout）。');
+    // No reason, no owner, no command: each placeholder reads `—`; an empty string counts as missing.
+    expect(formatMessageOutcome({ outcome: 'model_error' }, { audience: 'admin', locale: 'en' })).toBe('Model failed (—).');
+    expect(formatMessageOutcome({ outcome: 'command_replied', command: '', owner: 'root/x' }, { audience: 'admin' }))
+      .toBe('指令 —（插件 root/x）。');
+    // `stage` prefers `lastStage`; hidden admin detail reads `—` too.
+    expect(formatMessageOutcome({ outcome: 'unrecorded', stage: 'ingress', lastStage: 'command' }, { audience: 'admin', locale: 'en' }))
+      .toBe('No outcome recorded, last stage command; a framework bug.');
+    expect(formatMessageOutcome({ outcome: 'tool_failed_reported', detail: 'boom' }, { audience: 'admin' })).toBe('工具失败：—。');
+    // A value is inserted once: braces in it are not read as another placeholder.
+    expect(formatMessageOutcome({ outcome: 'command_replied', command: '{owner}' }, { audience: 'sender', locale: 'en' }))
+      .toBe('Ran command {owner}.');
+    // A reason without its own template, and a code from a newer writer, keep a readable text.
+    expect(formatMessageOutcome({ outcome: 'interaction_cancelled', reason: 'other' }, { audience: 'sender' })).toBe('你退出了这次提问，没有继续。');
+    expect(formatMessageOutcome({ outcome: 'not_a_code' as MessageOutcome }, { audience: 'sender', locale: 'en' })).toBe('No outcome was recorded.');
+  });
+
+  it('renders every code and reason template in both audiences and languages without leftover placeholders (#1250 第 81 批)', () => {
+    // An unknown placeholder fails at import (load-time check); here every catalog entry renders.
+    const records = [...MESSAGE_OUTCOMES.map((outcome) => ({ outcome })), { outcome: 'interaction_cancelled' as const, reason: 'superseded' }];
+    for (const record of records) {
+      for (const audience of ['sender', 'admin'] as const) {
+        for (const locale of ['zh-CN', 'en'] as const) {
+          const text = formatMessageOutcome(record, { audience, locale, includeDetail: true });
+          expect([record, audience, locale, text]).toEqual([record, audience, locale, expect.not.stringMatching(/\{\w+\}/u)]);
+        }
+      }
+    }
+    expect(formatMessageOutcome({ outcome: 'interaction_cancelled', reason: 'superseded' }, { audience: 'admin', locale: 'en' }))
+      .toBe('Prompt replaced by a newer prompt in the conversation, asked by — (—).');
+  });
+
+  it('looks reason templates up by own keys only: prototype keys fall back to the code template (#1250 第 81 批)', () => {
+    for (const reason of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(formatMessageOutcome({ outcome: 'interaction_cancelled', reason }, { audience: 'sender' })).toBe('你退出了这次提问，没有继续。');
+      expect(formatMessageOutcome({ outcome: 'model_error', reason }, { audience: 'admin', locale: 'en' })).toBe(`Model failed (${reason}).`);
+    }
+    expect(formatMessageOutcome({ outcome: 'constructor' as MessageOutcome, reason: 'superseded' }, { audience: 'sender', locale: 'en' }))
+      .toBe('No outcome was recorded.');
+  });
 });
 
 describe('InboundOutcomeLedger (ADR 0061 §4.1)', () => {
