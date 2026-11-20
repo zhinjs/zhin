@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { JsxButtonRegistry } from '../../src/plugin-runtime/im/interactive-router.js';
+import { inboundOutcomeSink } from '../../src/plugin-runtime/im/inbound-outcome-ledger.js';
 
 const root = rootPluginId();
 const conversation = { endpoint: { id: 'ep', adapter: 'test' }, kind: 'group' as const, id: 'g1' };
@@ -16,13 +17,16 @@ function snapshot(host?: PermissionHost): RuntimeSnapshot {
   } as unknown as RuntimeSnapshot;
 }
 
-function click(sender: Record<string, unknown>) {
+function click(sender: Record<string, unknown>, at: { readonly kind: string } = conversation) {
   const replies: unknown[] = [];
-  return { replies, message: { conversation, sender, locale: 'zh-CN', $reply: async (content: unknown) => { replies.push(content); } } as never };
+  const outcomes: unknown[] = [];
+  const sink = { report: (candidate: unknown) => { outcomes.push(candidate); return true; }, enter() {} };
+  return { replies, outcomes, message: { conversation: at, sender, locale: 'zh-CN', $reply: async (content: unknown) => { replies.push(content); },
+    [inboundOutcomeSink]: () => sink } as never };
 }
 
 describe('<Button permit> (ADR 0056 §5: the clicker is checked by the shared evaluator)', () => {
-  it('runs the callback only for clickers meeting the permit and tells others why', async () => {
+  it('runs the callback only for clickers meeting the permit; others are refused silently in a group (#1250)', async () => {
     const host = new PermissionHost();
     const current = snapshot(host);
     const registry = new JsxButtonRegistry();
@@ -36,11 +40,28 @@ describe('<Button permit> (ADR 0056 §5: the clicker is checked by the shared ev
     const member = click({ id: 'm' });
     expect(await registry.dispatch(member.message, payload, current)).toBe(true);
     expect(onClick).not.toHaveBeenCalled();
-    expect(JSON.stringify(member.replies)).toContain('你不能使用这个按钮：需要你是本群群主或管理员。');
+    expect(member.replies).toEqual([]);
+    expect(member.outcomes).toEqual([{ outcome: 'permission_denied', reason: 'button_permit', stage: 'interaction', reply: 'no' }]);
 
     const admin = click({ id: 'a', platform: { standing: 'admin' } });
     await registry.dispatch(admin.message, payload, current);
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells a clicker in a private chat why the button is refused (#1250)', async () => {
+    const host = new PermissionHost();
+    const current = snapshot(host);
+    const registry = new JsxButtonRegistry();
+    const onClick = vi.fn(() => '已处理');
+    const dm = { endpoint: conversation.endpoint, kind: 'private' as const, id: 'm' };
+    const batch = registry.prepare({ requester: root, conversation: dm } as never, current);
+    const payload = (batch.bind({ label: '处理', onClick, permit: ['admin'] }) as { data: { rows: { payload: string }[][] } }).data.rows[0]![0]!.payload;
+    batch.activate(new Set([payload]));
+    const member = click({ id: 'm' }, dm);
+    expect(await registry.dispatch(member.message, payload, current)).toBe(true);
+    expect(onClick).not.toHaveBeenCalled();
+    expect(JSON.stringify(member.replies)).toContain('你不能使用这个按钮');
+    expect(member.outcomes).toEqual([{ outcome: 'permission_denied', reason: 'button_permit', stage: 'interaction', reply: 'yes' }]);
   });
 
   it('fails closed without a Permission host and rejects removed spellings or payload buttons', async () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSyntheticMessage } from '@zhin.js/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -59,8 +59,14 @@ describe('OwnerApprovalRuntime commands', () => {
   });
 
   it('rejects non-owner private chat', () => {
-    const denied = runtime.handleCommand(ownerContext('other'), '/approve always bash');
+    const onUnauthorized = vi.fn();
+    const denied = runtime.handleCommand({ ...ownerContext('other'), onUnauthorized }, '/approve always bash');
     expect(denied).toMatch(/仅全局聊天主人（global owner）/);
+    // #1250: flagged as unauthorized (silent in a group); a global owner in a group is only told to use a private chat.
+    expect(onUnauthorized).toHaveBeenCalledWith('not_global_owner');
+    const ownerInGroup = vi.fn();
+    expect(runtime.handleCommand({ ...ownerContext(), scope: 'group', onUnauthorized: ownerInGroup }, '/approve list')).toMatch(/仅全局聊天主人/);
+    expect(ownerInGroup).not.toHaveBeenCalled();
     // #1250: the chat-role model (ADR 0056 / 0060), not a plugin config field; binding comes first.
     expect(denied).toContain('「绑定 <码>」');
     expect(denied).toContain('Console「聊天角色」里给自己授予全局 owner');

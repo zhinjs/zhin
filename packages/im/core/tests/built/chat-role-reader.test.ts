@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ChatRoleService, isChatIdentity, type ChatRoleEntry } from '../../src/built/roles.js';
 import { chatRolesToken, createChatRoleReader, hasChatRole, implicitChatPrincipalId, isOwner } from '../../src/built/chat-role-reader.js';
-import { renderCommandFeedback } from '../../src/plugin-runtime/im/command-feedback.js';
+import { commandFeedbackToken, renderCommandFeedback } from '../../src/plugin-runtime/im/command-feedback.js';
 
 const grant = (entry: Omit<ChatRoleEntry, 'source'>): ChatRoleEntry => ({ ...entry, source: 'grant' });
 
@@ -124,8 +124,8 @@ describe('simulated senders and the Console speaker (ADR 0060 §5.4)', () => {
 describe('command denial text (ADR 0060 §5.3)', () => {
   const snapshot = { root: 'root', generation: 1, resources: new Map() } as never;
   const denied = (permit: string) => ({ matched: true, status: 'denied', command: 'x', owner: 'root/p', denial: { permit, reason: 'r' } }) as never;
-  const message = (standing?: string) => ({ locale: 'zh-CN', sender: { id: 'u', ...(standing ? { platform: { standing } } : {}) },
-    conversation: { endpoint: { id: 'e', adapter: 'qq' }, kind: 'group', id: 'g' } }) as never;
+  const message = (standing?: string, kind = 'private') => ({ locale: 'zh-CN', sender: { id: 'u', ...(standing ? { platform: { standing } } : {}) },
+    conversation: { endpoint: { id: 'e', adapter: 'qq' }, kind, id: 'g' } }) as never;
 
   it('points zhin role denials at the owner / Console, and tells group owners their standing is not a role', async () => {
     expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).toContain('Console「聊天角色」');
@@ -135,6 +135,22 @@ describe('command denial text (ADR 0060 §5.3)', () => {
     // Platform conditions keep their own explanation; other conditions stay generic.
     expect((await renderCommandFeedback(denied('platform:admin'), message(), snapshot))?.content).toBe('无法执行此指令：r');
     expect((await renderCommandFeedback(denied('group'), message(), snapshot))?.content).toBe('没有权限执行此指令。');
+  });
+
+  it('renders nothing in a group or channel when the sender lacks the permission; place and Bot conditions still answer (#1250)', async () => {
+    for (const kind of ['group', 'channel']) {
+      for (const permit of ['owner@global', 'trusted', 'role(admin)', 'platform:admin', 'platform-role:r1', 'user(u9)', 'custom.permit']) {
+        expect(await renderCommandFeedback(denied(permit), message(undefined, kind), snapshot)).toBeUndefined();
+      }
+      expect((await renderCommandFeedback(denied('private()'), message(undefined, kind), snapshot))?.content).toBe('没有权限执行此指令。');
+      expect((await renderCommandFeedback(denied('bot:admin'), message(undefined, kind), snapshot))?.content).toBe('无法执行此指令：r');
+    }
+    // A Root renderer is not asked either.
+    const renderer = vi.fn(() => 'custom');
+    const custom = { root: 'root', generation: 1, resources: new Map([['root', new Map([[commandFeedbackToken.id, renderer]])]]) } as never;
+    expect(await renderCommandFeedback(denied('trusted'), message(undefined, 'group'), custom)).toBeUndefined();
+    expect(renderer).not.toHaveBeenCalled();
+    expect((await renderCommandFeedback(denied('trusted'), message(), custom))?.content).toBe('custom');
   });
 
   it('resolves stored people: grants follow the person, below global only on the scope adapter (ADR 0060 Q10)', () => {

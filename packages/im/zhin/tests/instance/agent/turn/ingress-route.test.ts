@@ -1218,9 +1218,10 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
       expect(f.archiveSession).toHaveBeenCalledOnce();
       expect(owner.$reply).toHaveBeenCalledOnce();
       expect(owner.$reply.mock.calls[0]![0]).not.toContain('已清空本会话的 AI 多轮上下文');
-      // Member: the management command's permission answer stands; nothing is cleared.
+      // Member: the management command's permission answer stands; nothing is cleared. #1250: the refusal is
+      // the message's `permission_denied` outcome, replied in this private chat (silent in a group).
       const member = await f.run('/reset');
-      expect(member.record).toMatchObject({ outcome: 'command_replied' });
+      expect(member.record).toMatchObject({ outcome: 'permission_denied', reason: 'not_operator', reply: 'yes' });
       expect(f.archiveSession).toHaveBeenCalledOnce();
       // ...and points the member at /clear, which clears their own session.
       expect(member.$reply.mock.calls[0]![0]).toContain('/clear');

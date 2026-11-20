@@ -1757,6 +1757,28 @@ describe('内置菜单命令', () => {
       .toMatchObject({ status: 'denied', denial: { permit: 'platform:admin' } });
   });
 
+  it('names a failing condition on the sender before a failing place or Bot condition (#1250)', async () => {
+    const { root, slots, snapshot } = menuSnapshot();
+    const teach = createCapabilitySlot({
+      owner: root, feature: commandFeatureId, localName: 'teach', source: '/commands/teach/index.ts',
+      definition: defineCommand({ description: '教学', permit: ['group()', 'bot:admin', 'trusted'], execute: () => 'taught' }),
+    });
+    const all = [...slots, teach];
+    const withHost = { ...snapshot, capabilities: new Map(all.map(slot => [slot.id, slot])) } as RuntimeSnapshot;
+    const host = new PermissionHost();
+    host.setBotStandingResolver(async () => ({ standing: 'member' }));
+    withHost.resources.get(root)!.set(permissionHostToken.id, host);
+    const index = new CommandIndex(all, withHost, {});
+    const at = (kind: string, chatRole?: string) => ({ conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind, id: 'g' },
+      sender: { id: 'm', ...(chatRole ? { chatRole } : {}) } });
+    // Neither the place nor the role: the role is named (a group answers that silently).
+    expect(await index.dispatch({ input: 'teach', source: at('channel') })).toMatchObject({ status: 'denied', denial: { permit: 'trusted' } });
+    expect(await index.dispatch({ input: 'teach', source: at('private') })).toMatchObject({ status: 'denied', denial: { permit: 'trusted' } });
+    // The sender holds the role: the place, then the Bot condition, is named as before.
+    expect(await index.dispatch({ input: 'teach', source: at('private', 'trusted') })).toMatchObject({ status: 'denied', denial: { permit: 'group()' } });
+    expect(await index.dispatch({ input: 'teach', source: at('group', 'trusted') })).toMatchObject({ status: 'denied', denial: { permit: 'bot:admin' } });
+  });
+
   it('菜单列表自动加上 commandPrefix', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });

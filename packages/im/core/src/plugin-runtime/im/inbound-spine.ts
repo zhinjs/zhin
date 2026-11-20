@@ -44,6 +44,7 @@ import type { MessageDispatchOutcome } from './message-dispatcher.js';
 import { formatConversationLog } from './message-events.js';
 import { enterInboundOutcomeStage, inboundOutcomeReplied, reportInboundOutcome } from './inbound-outcome-ledger.js';
 import { interactionEndCandidate, interactionEndOf } from './interaction-end.js';
+import { silencesCommandDenial } from './interaction-refusal.js';
 import type { MessageOutcomeCandidate } from './message-outcome.js';
 export {
   arbitrateRoomInboundDeduplication,
@@ -800,7 +801,9 @@ function reportCommandOutcome(message: Message, result: MessageDispatchResult): 
     case 'denied': {
       const permit = (result as { denial?: { permit?: string } }).denial?.permit;
       const category = typeof permit === 'string' && permit ? permit.split(/[:.]/u)[0] : undefined;
-      reportInboundOutcome(message, { ...base, outcome: 'permission_denied', reason: category ? `denied:${category}` : 'denied' });
+      // #1250: silent in a group or channel when the sender lacks the permission (see command feedback).
+      reportInboundOutcome(message, { ...base, outcome: 'permission_denied', reason: category ? `denied:${category}` : 'denied',
+        ...(silencesCommandDenial(message.conversation, permit) ? { reply: 'no' as const } : {}) });
       return;
     }
     case 'limited':

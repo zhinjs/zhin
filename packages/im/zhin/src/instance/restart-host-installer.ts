@@ -16,6 +16,7 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { senderIsGlobalOwner, type ImRuntime } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { unauthorizedCommandReply } from './unauthorized-command-reply.js';
 
 const RESTART_RECEIPT_RELATIVE_PATH = join('.zhin', 'restart-receipt.json');
 /** Stale restart receipts older than 5 minutes are discarded without sending. */
@@ -215,9 +216,12 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
                 ...(reason ? { detail: Object.freeze({ reason }) } : {}) });
             } catch { /* audit never breaks a command */ }
           };
+          // zhinjs/zhin#1250: refusals of senders without the permission are silent in a group or channel.
+          const unauthorized = (text: string, reason: string, authorized = false) => unauthorizedCommandReply({
+            input: command.input, kind: scene?.kind, text, reason, command: 'restart', authorized });
           if (!allowed || !session || !scene) {
             audit('restart', 'denied', 'not-global-owner');
-            return messages(locale, 'denied');
+            return unauthorized(messages(locale, 'denied'), 'not-global-owner');
           }
           if (!options.restartSupported()) {
             audit('restart', 'denied', 'unsupported');
@@ -241,8 +245,15 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
           const awaiting = pending.get(pendingKey);
           if (!awaiting || awaiting.expiresAt < now() || awaiting.conversationKey !== conversationKey) {
             if (awaiting && awaiting.expiresAt < now()) pending.delete(pendingKey);
-            audit('restart', 'denied', 'confirmation-missing');
-            return messages(locale, 'confirmMissing', { command: restartCommand });
+            // Confirming a restart another owner asked for here (none of the sender's own is waiting):
+            // not the sender's confirmation. The reason stays `confirmation-not-own` (audit and outcome),
+            // but the sender is a global owner (checked above): a mistake of someone authorized, so the
+            // hint is replied to in a group as well (#1250).
+            const othersOnly = !awaiting && [...pending].some(([key, entry]) =>
+              key !== pendingKey && entry.conversationKey === conversationKey && entry.expiresAt >= now());
+            audit('restart', 'denied', othersOnly ? 'confirmation-not-own' : 'confirmation-missing');
+            const missing = messages(locale, 'confirmMissing', { command: restartCommand });
+            return othersOnly ? unauthorized(missing, 'confirmation-not-own', true) : missing;
           }
           pending.delete(pendingKey);
           try {

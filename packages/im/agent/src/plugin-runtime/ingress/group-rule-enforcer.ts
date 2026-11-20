@@ -845,6 +845,11 @@ export interface GroupRuleCommandInput {
   /** 发送者的显示语言与本会话的真实命令前缀（#1250），回复里提到的命令按它拼写。 */
   readonly locale?: Locale;
   readonly commandPrefix?: string;
+  /**
+   * zhinjs/zhin#1250: called when the reply refuses a sender who may not approve / reject / disable
+   * group rules (`reason`: closed code); the ingress then stays silent in the group.
+   */
+  readonly onUnauthorized?: (reason: string) => void;
 }
 
 const RULE_COMMAND = /^rules?(?:\s+(approve|reject|disable)\s+(\S+))?\s*$/iu;
@@ -989,19 +994,25 @@ export class GroupRuleImChannel {
     const match = input.commandText ? RULE_COMMAND.exec(input.commandText) : null;
     if (!match) return null;
     const locale = input.locale;
+    const verb = match[1]?.toLowerCase();
+    // #1250: `rule approve|reject|disable` from someone who may not decide is refused for the permission
+    // before anything else (silent in a group or channel): only approvers hear that the command is for
+    // groups only or that rules are unavailable.
+    if (verb && !this.#isApprover(input)) {
+      input.onUnauthorized?.('not_rule_approver');
+      return t(locale, 'approverOnly');
+    }
     if (input.scope !== 'group') return t(locale, 'groupOnly');
     const store = this.#deps.rules();
     if (!store) return t(locale, 'unavailable');
     const scene = { platform: input.platform, sceneId: `group:${input.sceneId}` };
     try {
       const open = (await store.list(scene)).filter((rule) => rule.status === 'active' || rule.status === 'pending');
-      const verb = match[1]?.toLowerCase();
       if (!verb) {
         return open.length
           ? [t(locale, 'listHeader'), ...open.map(rule => summaryLine(rule, locale))].join('\n')
           : t(locale, 'listEmpty');
       }
-      if (!this.#isApprover(input)) return t(locale, 'approverOnly');
       const key = match[2]!.toLowerCase();
       const actorId = input.senderId;
       const common = { actorId, ...(input.endpoint ? { endpoint: input.endpoint } : {}) };

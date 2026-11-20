@@ -54,6 +54,11 @@ export interface ImApprovalCommandInput {
   readonly senderIsGlobalOwner?: boolean;
   /** The sender's display language for the reply (#1250); absent: the default language. */
   readonly locale?: Locale;
+  /**
+   * zhinjs/zhin#1250: called when the reply refuses a sender who may settle no card here (`reason`:
+   * closed code). The ingress then answers only in a private chat; the returned text is unchanged.
+   */
+  readonly onUnauthorized?: (reason: string) => void;
 }
 
 export interface ImApprovalChannelPort {
