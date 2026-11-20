@@ -1,3 +1,4 @@
+import { USER_REPLY_LOCALE_METADATA_KEY } from '../../src/prompt/rules/reply-language.js';
 import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createInteractiveRun, type InteractiveRun } from '../../src/core/interactive-run.js';
@@ -667,4 +668,29 @@ it('does not treat failed deferred re-completion as a successful tool tail eligi
   expect(result.reply).not.toContain('Originally continued after a hidden error');
   expect(appended).toContainEqual(expect.objectContaining({ role: 'assistant', stopReason: 'error', errorMessage: 'Deferred re-completion failed' }));
   expect(appended.filter(message => message.role === 'user' && JSON.stringify(message).includes('Automatic continuation'))).toHaveLength(0);
+});
+
+it('names a /language setting on progress, continuation and exhausted requests (#1250 b69)', async () => {
+  const llm = scripted((index) => ({ tool: 'write_file', args: { path: `f${index}` } }), {
+    summary: 'Done so far.', progress: 'Working on it.',
+  });
+  await run({
+    llm, rawContent: '整理文件并总结', tools: [tool('write_file')], maxIterations: 2,
+    toolBudget: { extendBy: 0, autoContinue: 'on', maxContinuations: 1, progressMinIntervalMs: 0, progressMaxUpdates: 1 },
+    turn: {
+      origin: { kind: 'im', platform: 'fixture', endpoint: 'bot', scope: 'private', sceneId: 'u' },
+      principal: { subjectId: 'u', roles: ['user'] }, session: { key: 'k' },
+      policy: { permissions: [], unattended: false },
+      input: { locale: 'en', text: '整理文件并总结', metadata: { [USER_REPLY_LOCALE_METADATA_KEY]: 'en' } },
+    },
+    progressSink: async () => {},
+  });
+  const calls = llm.calls.filter(call => /progress update|tool-call steps/u.test(lastUserText(call.context)));
+  expect(calls.length).toBeGreaterThanOrEqual(2);
+  for (const call of calls) {
+    const instruction = lastUserText(call.context);
+    expect(instruction).toContain('Reply language (set by the user with /language): en.');
+    expect(instruction).not.toContain('Reply language fallback:');
+    expect(instruction).toContain('only an explicit language request in the current message overrides it');
+  }
 });

@@ -18,7 +18,7 @@ import {
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { turnReplyMessages } from './turn-reply-messages.js';
-import { REPLY_LANGUAGE_RULE } from '../prompt/rules/reply-language.js';
+import { REPLY_LANGUAGE_RULE, formatReplyLanguageLine } from '../prompt/rules/reply-language.js';
 import { omitInlineBinaryInAssistantMessages } from '../media/inline-binary.js';
 
 const logger = getLogger('ZhinAgent:ExhaustedTurnReply');
@@ -30,11 +30,12 @@ export const EXHAUSTED_TURN_SUMMARY_TIMEOUT_MS = 30_000;
 export const EXHAUSTED_TURN_FALLBACK_REPLY =
   turnReplyMessages('zh-CN', 'exhausted');
 
-export function buildExhaustedTurnInstruction(maxIterations: number, locale?: Locale): string {
+export function buildExhaustedTurnInstruction(maxIterations: number, locale?: Locale, localeSetByUser = false): string {
+  const language = formatReplyLanguageLine(locale, localeSetByUser);
   return [
     `[System notice] You have used all ${maxIterations} tool-call steps for this turn, and tools are now disabled.`,
     REPLY_LANGUAGE_RULE,
-    ...(locale === undefined ? [] : [`Reply language fallback: ${locale}.`]),
+    ...(language === undefined ? [] : [language]),
     'Reply to the user directly in a few short sentences:',
     '1. What you have done or found so far.',
     '2. What is still left to do.',
@@ -45,6 +46,8 @@ export function buildExhaustedTurnInstruction(maxIterations: number, locale?: Lo
 
 export interface ExhaustedTurnSummaryInput {
   readonly locale?: Locale;
+  /** #1250 b69: `locale` is the sender's own `/language` setting rather than the project fallback. */
+  readonly localeSetByUser?: boolean;
   readonly transport: LlmCompletionPort;
   readonly model: Model;
   readonly systemPrompt: string;
@@ -77,7 +80,7 @@ export async function summarizeExhaustedTurn(
         messages: [
           // #1250 第 29 批：本轮助手原文里的内嵌媒体载荷不回送模型。
           ...omitInlineBinaryInAssistantMessages(input.messages),
-          createUserMessage(buildExhaustedTurnInstruction(input.maxIterations, input.locale)),
+          createUserMessage(buildExhaustedTurnInstruction(input.maxIterations, input.locale, input.localeSetByUser)),
         ],
         tools: undefined,
       },
