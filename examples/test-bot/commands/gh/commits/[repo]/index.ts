@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { ghApiMessage, resolveGhClient } from '../../../../lib/github-api.js';
+import { ghApiMessage, ghDate, resolveGhClient } from '../../../../lib/github-api.js';
 
 export default defineCommand({
   description: '查看提交记录',
@@ -19,7 +19,7 @@ export default defineCommand({
     }>;
     if (!commits.length) return '没有找到提交记录';
     return commits.map((c) =>
-      `• ${c.sha.substring(0, 7)} ${c.commit?.message?.split('\n')[0] ?? '?'}\n  ${c.commit?.author?.name || '?'} | ${c.commit?.author?.date?.split('T')[0] || '?'}`,
+      `• ${c.sha.substring(0, 7)} ${c.commit?.message?.split('\n')[0] ?? '?'}\n  ${c.commit?.author?.name || '?'} | ${ghDate(c.commit?.author?.date)}`,
     ).join('\n\n');
   },
 });

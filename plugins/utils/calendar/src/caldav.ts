@@ -9,7 +9,7 @@ import type {
   CalendarProvider,
   CreateEventInput,
 } from "./types.js";
-import { formatInZone } from "./time.js";
+import { dateInZone, formatInZone } from "./time.js";
 
 export interface CalDavOptions {
   readonly calendarUrl: string;
@@ -167,7 +167,7 @@ export function parseCalDavEvents(
   return events;
 }
 
-function buildVevent(input: CreateEventInput, uid: string): string {
+function buildVevent(input: CreateEventInput, uid: string, timezone: string): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -175,17 +175,12 @@ function buildVevent(input: CreateEventInput, uid: string): string {
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${toUtcStamp(new Date())}`,
+    // All-day dates are the configured zone's calendar day, not the UTC day (#1250).
     input.all_day
-      ? `DTSTART;VALUE=DATE:${input.start
-          .toISOString()
-          .slice(0, 10)
-          .replace(/-/g, "")}`
+      ? `DTSTART;VALUE=DATE:${dateInZone(input.start, timezone).replace(/-/g, "")}`
       : `DTSTART:${toUtcStamp(input.start)}`,
     input.all_day
-      ? `DTEND;VALUE=DATE:${input.end
-          .toISOString()
-          .slice(0, 10)
-          .replace(/-/g, "")}`
+      ? `DTEND;VALUE=DATE:${dateInZone(input.end, timezone).replace(/-/g, "")}`
       : `DTEND:${toUtcStamp(input.end)}`,
     `SUMMARY:${input.title.replace(/\n/g, " ")}`,
   ];
@@ -242,7 +237,7 @@ export function createCalDavProvider(options: CalDavOptions): CalendarProvider {
           "content-type": "text/calendar; charset=utf-8",
           "if-none-match": "*",
         },
-        body: buildVevent(input, uid),
+        body: buildVevent(input, uid, options.timezone),
         signal,
       });
       if (response.status !== 201 && response.status !== 204) {

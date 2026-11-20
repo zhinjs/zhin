@@ -162,6 +162,16 @@ The image keeps your project's own `zhin.config.yml`, while the Secret projects 
 printf '%s\n' "$OWNER_PASSWORD" | kubectl exec -i deploy/zhin -- ./node_modules/.bin/zhin console init -y --owner admin --password-stdin
 ```
 
+### Process time zone (`TZ`) {#timezone}
+
+The image is based on `node:*-slim`, and `.env.example` and Compose default to `TZ=UTC`; systemd and Kubernetes keep the host's or container's system zone (usually UTC in Kubernetes too). The following features have no time-zone setting of their own and take "today" in the **process zone** (`TZ`, else the system zone):
+
+- the lottery plugin (`@zhin.js/plugin-lottery`): the daily report date, the `predict_date` of pending predictions and the "already recommended today" check;
+- the Agent: the daily notes file `data/memory/global/<YYYY-MM-DD>.md`, when the daily affinity gain cap resets, and the run time shown by `schedule_add` for one-off jobs;
+- the process monitor's tracking start date, RSS preview item times, the Bilibili `bili-login` expiry date and the GitHub `whoami` binding time.
+
+In a UTC process, 00:00–08:00 in Beijing still counts as the previous day. For users in UTC+8, set `TZ=Asia/Shanghai` in `.env` (systemd reads it through `EnvironmentFile`, Kubernetes injects it with the Secret) and restart. Node.js ships full time-zone data, so the `slim` image needs no `tzdata` package. The reminder, ledger, answers, earthquake and calendar plugins take the day in their own `timezone` setting and ignore `TZ`.
+
 ### Creating the first owner {#first-owner}
 
 A new deployment's project database has no Console owner yet. Until it has one, `http.token` (`HTTP_TOKEN` in `.env`) is a **bootstrap token**: anyone who holds it and can reach the Host can create the first owner and, through it, read and write the configuration, `.env`, the database and project files. So:

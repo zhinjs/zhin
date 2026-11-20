@@ -51,7 +51,7 @@ describe('daily report', () => {
       numbers: { red: [1, 2, 3, 4, 5, 6], blue: [7] },
       source: 'fucai',
     }] });
-    const report = await buildDailyReport(db, ['kl8', 'ssq'], { pickCount: 5, historyLimit: 100 }, new Date('2026-07-11T12:00:00Z'));
+    const report = await buildDailyReport(db, ['kl8', 'ssq'], { pickCount: 5, historyLimit: 100 }, new Date(2026, 6, 11, 12));
     expect(report.picks.length).toBe(2);
     expect(report.disclaimer).toBe(DISCLAIMER);
     const text = formatDailyReportText(report);

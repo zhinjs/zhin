@@ -8,6 +8,7 @@ import {
   UserRelationStore,
   applyAffinitySignal,
   classifyAffinityCue,
+  dayKey,
   deriveRelation,
   emptyRelation,
   relationFromRow,
@@ -20,12 +21,27 @@ import { countBusinessToolCalls, recordRelationTurn } from '../src/user-relation
 import { createUserProfileTool } from '../src/tool/context-tools.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '../src/context/turn-envelope.js';
 
-const T0 = Date.parse('2026-10-27T02:00:00Z');
+// Local 10:00: the daily cap resets at local midnight (#1250), so the fixture must not straddle one in any zone.
+const T0 = new Date(2026, 9, 27, 10).getTime();
 const signal = (text: string, extra: Partial<Parameters<typeof applyAffinitySignal>[1]> = {}) => ({
   addressed: true, isMaster: false, text, toolCalls: 0, ...extra,
 });
 
 describe('affinity rules', () => {
+  it('resets the daily gain cap at local midnight, not UTC midnight (#1250)', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    try {
+      expect(dayKey(Date.parse('2026-01-05T17:00:00Z'))).toBe('2026-01-06');
+      let record = { ...emptyRelation('qq', 'u1', 0), gainDay: '2026-01-05', gainToday: AFFINITY_DAILY_GAIN_CAP };
+      record = applyAffinitySignal(record, signal('谢谢'), Date.parse('2026-01-05T17:00:00Z')).record;
+      expect(record.gainDay).toBe('2026-01-06');
+      expect(record.affinity).toBe(3);
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+
   it('classifies praise, insult, chat, tool-only, ambient and master', () => {
     expect(classifyAffinityCue(signal('谢谢你'))).toBe('praise');
     expect(classifyAffinityCue(signal('谢谢 傻逼'))).toBe('insult');

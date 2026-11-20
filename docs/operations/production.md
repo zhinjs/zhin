@@ -162,6 +162,16 @@ kubectl port-forward service/zhin 8068:8068
 printf '%s\n' "$OWNER_PASSWORD" | kubectl exec -i deploy/zhin -- ./node_modules/.bin/zhin console init -y --owner admin --password-stdin
 ```
 
+### 进程时区（`TZ`） {#timezone}
+
+官方镜像基于 `node:*-slim`，`.env.example` 与 Compose 默认 `TZ=UTC`；systemd 与 Kubernetes 则沿用宿主或容器的系统时区（Kubernetes 容器通常也是 UTC）。下列功能没有自己的时区配置，按**进程时区**（`TZ`，否则系统时区）取“今天”：
+
+- 彩票插件（`@zhin.js/plugin-lottery`）：每日推荐日期、待评预测的 `predict_date`、“今天是否已推荐”的判断；
+- Agent：每日笔记文件 `data/memory/global/<YYYY-MM-DD>.md`、好感度每日增长上限的重置时刻、`schedule_add` 一次性任务的执行时间显示；
+- 进程监控的统计起始日、RSS 预览条目时间、B 站 `bili-login` 的过期日期、GitHub `whoami` 的绑定时间。
+
+在 UTC 进程里，北京时间 0–8 点仍会被算作前一天。面向东八区用户时在 `.env` 中设置 `TZ=Asia/Shanghai`（systemd 写在 `EnvironmentFile` 指向的 `.env`，Kubernetes 随 Secret 注入），然后重启。Node.js 自带完整时区数据，`slim` 镜像无需额外安装 `tzdata`。提醒、记账、答案之书、地震速报与日历插件按各自的 `timezone` 配置取日，不受 `TZ` 影响。
+
 ### 首次创建所有者 {#first-owner}
 
 新部署还没有 Console 所有者（账号在 `.zhin/gateway.db`）。这时 `http.token`（`.env` 里的 `HTTP_TOKEN`）是**初始化令牌**：任何持有它、能连到 Host 的人都可以创建第一个所有者，进而读写配置、`.env`、数据库与项目文件。所以：
