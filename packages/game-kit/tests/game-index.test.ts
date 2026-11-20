@@ -31,8 +31,8 @@ function index(...games: RuntimeRegisteredGame[]): GameIndex {
 describe('GameIndex', () => {
   it('lists games by id and resolves aliases', () => {
     const games = index(
-      { id: 'z-last', title: 'Z', icon: '🎮', description: 'z', commandPrefix: '/z' },
-      { id: 'a-first', title: 'A', icon: '🎮', description: 'a', commandPrefix: '/a', aliases: ['first'] },
+      { id: 'z-last', title: 'Z', icon: '🎮', description: 'z' },
+      { id: 'a-first', title: 'A', icon: '🎮', description: 'a', aliases: ['first'] },
     );
     expect(games.list().map((game) => game.id)).toEqual(['a-first', 'z-last']);
     expect(games.get('first')?.id).toBe('a-first');
@@ -44,7 +44,6 @@ describe('GameIndex', () => {
       title: 'Guess',
       icon: '🎮',
       description: 'Guess a number',
-      commandPrefix: '/guess',
       menus: [{ id: 'start', label: 'Start' }],
     });
     const game = games.get('guess');
@@ -60,7 +59,7 @@ describe('GameIndex', () => {
     expect(index().formatHelp()).toContain('暂无已加载的游戏插件');
     const text = index({
       id: 'guess', title: '猜数字', icon: '🔢', description: '七步猜中',
-      commandPrefix: '/猜数', commandPath: 'guess', quickStart: '开始',
+      commandPath: 'guess', quickStart: '开始',
     }).formatHelp('zh-CN', (path, owner) => owner === childPluginId(rootPluginId(), 'guess') ? `!!games ${path}` : undefined);
     expect(text).toContain('猜数字');
     expect(text).toContain('!!games guess');
@@ -70,7 +69,7 @@ describe('GameIndex', () => {
 
   it('uses translated metadata and does not invent a command without an indexed formatter', () => {
     const games = index({ id: 'guess', title: '猜数字', titleI18n: { en: 'Guess the Number' }, icon: '🔢',
-      description: '猜中秘密', descriptionI18n: { en: 'Find the secret number' }, commandPrefix: '/猜数', commandPath: 'guess' });
+      description: '猜中秘密', descriptionI18n: { en: 'Find the secret number' }, commandPath: 'guess' });
     const help = games.formatHelp('en');
     expect(help).toContain('Game lobby');
     expect(help).toContain('Guess the Number');
@@ -82,8 +81,8 @@ describe('GameIndex', () => {
 
   it('rejects duplicate ids and aliases in one generation', () => {
     expect(() => index(
-      { id: 'guess', title: 'A', icon: '', description: '', commandPrefix: '/a', aliases: ['play'] },
-      { id: 'other', title: 'B', icon: '', description: '', commandPrefix: '/b', aliases: ['play'] },
+      { id: 'guess', title: 'A', icon: '', description: '', aliases: ['play'] },
+      { id: 'other', title: 'B', icon: '', description: '', aliases: ['play'] },
     )).toThrow('Duplicate Game name');
   });
 });

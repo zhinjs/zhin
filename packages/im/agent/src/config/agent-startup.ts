@@ -307,7 +307,7 @@ export interface AgentStartupConfig {
     respondToPrivate?: boolean;
     /** 触发关键词（可选） */
     keywords?: string[];
-    /** 忽略的前缀（命令前缀，避免与命令冲突，默认 ['/', '!', '！']） */
+    /** 除适配器真实 commandPrefix 外额外视为命令的前缀（不当 AI 消息、不进合并窗口；默认 ['/', '!', '！']） */
     ignorePrefixes?: string[];
     /** 超时时间（毫秒，默认 60000） */
     timeout?: number;

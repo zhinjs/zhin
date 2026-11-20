@@ -24,7 +24,6 @@ export default defineGamePlugin<SessionService>({
     title: '21 点',
     icon: '🃏',
     description: '经典 Blackjack，要牌或停牌挑战庄家',
-    commandPrefix: '/21点',
     quickStart: '开始',
     aliases: ['bj', '21点'],
     menus: [

@@ -261,7 +261,7 @@
     "export * from './base-session-service.js';",
     "export * from './board-sender.js';",
     "export * from './choice-keyboard.js';",
-    "export * from './command-alias.js';",
+    "export * from './command-match.js';",
     "export * from './command-message.js';",
     "export * from './define-game-plugin.js';",
     "export * from './deterministic-random.js';",
