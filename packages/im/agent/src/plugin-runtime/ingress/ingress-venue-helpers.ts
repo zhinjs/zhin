@@ -410,7 +410,7 @@ export async function tryStopActiveMailTurn(input: {
     message,
     reply,
   } = input;
-  if (!gate || !isCancelIntent(matchedContent)) return false;
+  if (!gate || !isCancelIntent(matchedContent, message.commandPrefix)) return false;
 
   let stoppedKey = sessionKey;
   let stopped = await gate.stop(sessionKey, senderId, senderRoles.isMaster, entryActorName);

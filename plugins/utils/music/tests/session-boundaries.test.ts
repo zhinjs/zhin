@@ -51,12 +51,13 @@ describe('Music flow identity at command and middleware boundaries', () => {
     await searchCommand.execute(context(runtime, second, { keyword: 'second' }) as never);
     expect(sessions.get(firstKey)?.keyword).toBe('first');
     expect(sessions.get(secondKey)?.keyword).toBe('second');
-    const wrongLanguage = input(original, '取消', 'zh-CN');
+    const notCancel = input(original, '算了吧我再想想', 'zh-CN');
     const next = vi.fn();
-    await selectionMiddleware.handle(context(runtime, wrongLanguage, {}) as never, next);
+    await selectionMiddleware.handle(context(runtime, notCancel, {}) as never, next);
     expect(next).toHaveBeenCalledOnce();
     expect(sessions.get(firstKey)).toBeDefined();
-    const cancel = input(original, 'cancel', 'zh-CN');
+    // #1250 第 74 批: cancel words are not tied to the flow's language (算了 ends an English flow).
+    const cancel = input(original, '算了', 'zh-CN');
     cancel.metadata.endpointId = 'different-metadata-does-not-change-identity';
     await selectionMiddleware.handle(context(runtime, cancel, {}) as never, vi.fn());
     expect(cancel.$reply).toHaveBeenCalledWith('Music selection cancelled.');

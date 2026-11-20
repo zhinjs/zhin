@@ -230,11 +230,13 @@ describe('UserInteraction via ImRuntime', () => {
       expect(JSON.stringify(sent[0])).toContain('Confirm');
       expect(commandExecuted).toHaveBeenLastCalledWith('en', '/ask', '/ask');
       locale = 'zh-CN';
-      await receive(im, incomingMessage('确认'));
+      await receive(im, incomingMessage('也许'));
       await vi.waitFor(() => expect(sent.length).toBeGreaterThan(1));
       expect(getResult()).toBeUndefined();
+      // The prompt keeps its language (the hint stays English) …
       expect(JSON.stringify(sent.at(-1))).toContain('Choose confirm or cancel');
-      await receive(im, incomingMessage('confirm'));
+      // … while its answers are not tied to it (#1250 第 74 批): a Chinese 确认 confirms an English prompt.
+      await receive(im, incomingMessage('确认'));
       await first;
       expect(getResult()).toBe(true);
       const beforeSecond = sent.length;

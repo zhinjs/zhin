@@ -30,7 +30,7 @@ A personal preference takes priority, including in groups and channels. It is sh
 
 The personal language also sets the language of AI replies (see [AI-generated content](#ai-generated-content)): after `/language en`, the AI answers in English even when asked in Chinese, unless the current message explicitly asks for another language (such as "answer in Chinese"). Users who never set a personal language are unaffected.
 
-Confirmations, follow-up questions, music selections, and menu pagination keep their starting language until completion. A preference change affects new operations. Chinese flows accept their Chinese confirmation/cancellation text; English flows accept the English equivalent. Valid button actions and numeric choices retain their existing scope. The language command does not bypass a pending interaction.
+Confirmations, follow-up questions, music selections, and menu pagination keep their starting language until completion. A preference change affects new operations. Confirmation and cancellation replies are accepted in Chinese or English whatever the flow's language (`yes` in a Chinese flow and `取消` in an English one both count). Valid button actions and numeric choices retain their existing scope. The language command does not bypass a pending interaction.
 
 The default menu entry is `menu` in English and `菜单` in Chinese. Explicitly configured menu keywords and custom labels remain unchanged.
 

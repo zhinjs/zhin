@@ -72,6 +72,8 @@ export interface IngressEvalCase {
   readonly scope?: 'private' | 'group';
   /** How long each running turn takes on the virtual clock. */
   readonly turnMs: number;
+  /** The dispatcher's command prefix: a prefixed cancel word (`/cancel`) is a cancel intent only with it. */
+  readonly commandPrefix?: string;
   readonly gate?: Partial<Readonly<{ maxQueuedTurns: number; queueTtlMs: number; supersedeSameSender: boolean }>>;
   readonly messages: readonly IngressEvalMessage[];
   readonly expect: IngressEvalExpectations;
@@ -184,7 +186,7 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
     next += 1;
     const sender = arrival.sender.id;
     const isMaster = evalSenderRoles(arrival.sender).includes('owner');
-    if (isCancelIntent(arrival.text)) {
+    if (isCancelIntent(arrival.text, definition.commandPrefix)) {
       await flush();
       const result: TurnStopResult = await gate.stop(sessionKey, sender, isMaster);
       stops.push(`${sender}:${result}`);

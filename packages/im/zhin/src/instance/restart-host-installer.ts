@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
-import type { ChatRoleService } from '@zhin.js/core';
+import { isConfirmWord, type ChatRoleService } from '@zhin.js/core';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
 import { readOperationSession, type OperationSession } from '@zhin.js/feature-kit';
 import {
@@ -24,7 +24,6 @@ export const DEFAULT_ENDPOINT_ONLINE_WAIT_MS = 15_000;
 const ENDPOINT_POLL_INTERVAL_MS = 200;
 /** #1250: a `restart` must be confirmed by the same sender in the same conversation within this window. */
 export const RESTART_CONFIRM_WINDOW_MS = 60_000;
-const CONFIRM_WORDS = new Set(['confirm', '确认']);
 
 const messages = createMessages({
   description: {
@@ -234,7 +233,8 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
             audit('restart', 'ok', 'confirmation-requested');
             return messages(locale, 'confirmPrompt', { seconds, command: confirmCommand });
           }
-          if (!CONFIRM_WORDS.has(action)) {
+          // #1250 第 74 批：确认词中英文都认（`confirm` / `确认` / `确定` / `ok` / `yes` …，见 `@zhin.js/core`）。
+          if (!isConfirmWord(action)) {
             return messages(locale, 'usage', { command: restartCommand, confirm: confirmCommand, seconds });
           }
           const awaiting = pending.get(pendingKey);
