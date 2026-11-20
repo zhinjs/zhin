@@ -39,6 +39,8 @@ import type { AgentCommandPresentation } from '../../init/command-presentation.j
 import { auditAmbientDecision } from './ingress-ambient-stage.js';
 import { auditStaleReply, reactionOf } from './ingress-delivery-helpers.js';
 import { tryHandleIngressCommands } from './ingress-management-stage.js';
+import { runManagementOperation } from './ingress-management-operation.js';
+import type { RuntimeManagementOperation } from '../../init/runtime-management-commands.js';
 import { turnFailureOutcome, turnSuccessOutcome } from './ingress-outcomes.js';
 import {
   createAnnouncementDispatcher,
@@ -364,6 +366,11 @@ export interface AgentTurnIngressRouteOptions {
     operation: (scope: InferenceOperationScope) => Promise<T>) => Promise<T>;
   readonly withModelScope?: <T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; signal: AbortSignal }>,
     operation: () => Promise<T>) => Promise<T>;
+  /**
+   * #1250 第 83 批: a lease on the current generation for an Agent management Root command's
+   * inference (`models`, `health`); absent, those commands fail like an unconfigured inference.
+   */
+  readonly acquireLease?: () => SnapshotLease;
   readonly runtime: AgentRuntime;
   readonly im: ImRuntime;
   readonly transcribeUrl?: InboundAudioUrlTranscriber;
@@ -559,6 +566,20 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return this.#memberLifecycle.ownsWelcome(conversation);
   }
 
+  /**
+   * #1250 第 83 批: runs an Agent management Root command (`createRuntimeManagementCommands`) for
+   * `message` against the session its AI turn would use, holding a generation lease meanwhile.
+   */
+  runManagementOperation<T>(message: Message, signal: AbortSignal, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
+    const options = this.options;
+    return runManagementOperation({
+      message, signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
+      ...(options.acquireLease ? { acquireLease: options.acquireLease } : {}),
+      ...(options.withInferenceScope ? { withInferenceScope: options.withInferenceScope } : {}),
+      ...(options.withModelScope ? { withModelScope: options.withModelScope } : {}),
+    }, run);
+  }
+
   #noteSpoke(key: string): void {
     this.#ambientEngagement()?.noteSpoke(key);
     this.#coldField.reset(key);
@@ -688,12 +709,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
     }
 
     if (await tryHandleIngressCommands({
-      message, lease, operationSignal, sessionKey: initialSessionKey, senderRoles, turnAccess,
-      ownerId, effectiveEndpoint, agent: options.agent, groupRules: this.#groupRules,
-      toolApprovalIm: options.toolApprovalIm,
-      withInference: (inferInput, run) => this.#withInference(inferInput, run),
-      withModelScope: options.withModelScope, reply,
-      replyFixed: text => replyFixed(initialSessionKey, text),
+      message, turnAccess, ownerId, effectiveEndpoint, agent: options.agent, groupRules: this.#groupRules,
+      toolApprovalIm: options.toolApprovalIm, reply,
     })) {
       reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'agent_gate', command: 'agent' });
       return true;

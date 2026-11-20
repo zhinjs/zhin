@@ -1,174 +1,235 @@
 /**
- * Plugin Runtime 管理命令面。
+ * Agent 管理命令（zhinjs/zhin#1250 第 83 批）：Root 命令，由 Agent Host 注册到 Command Feature。
  *
- * 由 Agent Host 在 unmatched route 前拦截，不进入普通 Agent turn。
+ * 和其他 Root 命令一样走命令分发（MessageDispatcher）：出现在菜单 / 帮助里，有近似指令提示，参数由
+ * 命令模块解析，结局记 `command_replied`，权限走 permit DSL（`trusted`：本会话链上任一 zhin 聊天角色，
+ * 与原来的 `hostRole !== undefined` 等价）。群里无权限者静默（`permission_denied`），私聊说明原因。
+ * 命令认领的消息不进 AI 回合。
  */
-import type { ChatRole } from '@zhin.js/core';
+import { defineCommand, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
+import { reportInboundOutcome, type Message } from '@zhin.js/core/runtime';
+import type { InferenceClient } from '@zhin.js/ai/provider';
 import { describeCommandDenial } from '@zhin.js/permission';
 import { managementMessages as t } from './management-messages.js';
-import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from './command-presentation.js';
-import type { AIService } from '../service.js';
-import type { InferenceClient } from '@zhin.js/ai/provider';
 import { asPrivate } from '../internal/as-private.js';
-import {
-  jumpSessionTree,
-  listSessionTree,
-} from '../session/session-tree-commands.js';
+import { jumpSessionTree, listSessionTree } from '../session/session-tree-commands.js';
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
-
-/** The sender's host-wide chat role (`RuntimeSenderRoles` of the Agent ingress). */
-export type RuntimeManagementSenderRoles = {
-  readonly hostRole?: ChatRole;
-};
+import { resolveRuntimeSenderRoles } from '../plugin-runtime/ingress/request-capabilities.js';
 
 /** Management commands need any zhin chat role (`trusted` or higher) on the conversation's chain. */
-const CHAT_ROLE_PERMIT = 'trusted';
+export const RUNTIME_MANAGEMENT_PERMIT = 'trusted';
 
-export type RuntimeManagementDeps = AgentCommandPresentation & {
-  readonly service: AIService;
+/** What one management command invocation reads for its message (held open until it settles). */
+export interface RuntimeManagementOperation {
+  /** The session the message's AI turn would use (the sender's own session; a live room's scene task). */
+  readonly sessionKey: string;
   /** Trusted operation-bound directory; listing does not require a selected chat model. */
   readonly inference?: Pick<InferenceClient, 'list'>;
   /** Host resolves deployment-only summary authority lazily for model-using commands. */
   readonly withModelScope?: <T>(operation: () => Promise<T>) => Promise<T>;
-  readonly zhinAgent: ZhinAgent;
-  readonly sessionKey: string;
-  readonly content: string;
-  readonly senderRoles: RuntimeManagementSenderRoles;
   /**
-   * Enables `/memory` and `/forget` (#734): anyone can view or forget the
-   * semantic memory stored about themselves (their own `user` scope). Without
-   * it these commands pass through.
+   * ADR 0067 D8: sends a fixed-template reply and records it as this session's own delivery. Used
+   * by `reset`, whose answers are fixed strings; other replies may carry stored content (memory,
+   * session tree) and keep counting as background.
+   */
+  readonly replyFixed?: (text: string) => Promise<unknown>;
+}
+
+export interface RuntimeManagementCommandHost {
+  readonly zhinAgent: ZhinAgent;
+  /**
+   * Enables `memory` and `memory forget` (#734): anyone can view or forget the semantic memory
+   * stored about themselves (their own `user` scope). Without it neither command is registered.
    */
   readonly semanticMemory?: SemanticMemoryRuntime | null;
-  readonly senderId?: string;
-  /**
-   * zhinjs/zhin#1250: called when the reply is a refusal because the sender lacks the operator role
-   * (`reason`: closed code). The ingress then answers only in a private chat and stays silent in a
-   * group or channel; the returned text is unchanged.
-   */
-  readonly onUnauthorized?: (reason: string) => void;
-};
+  /** Opens the operation for `message`; resources it holds (a generation lease) end when `run` settles. */
+  open<T>(message: Message, signal: AbortSignal, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T>;
+}
+
+/** One Root command: its local path (`memory/forget` → `memory forget`) and definition. */
+export interface RuntimeManagementCommand {
+  readonly name: string;
+  readonly definition: CommandDefinition;
+}
 
 const MEMORY_LIST_LIMIT = 20;
 
-function parseLeadingInt(rest: string): number | undefined {
-  const n = Number.parseInt(rest.trim(), 10);
-  return Number.isFinite(n) && n >= 1 ? n : undefined;
+const descriptions = {
+  models: { 'zh-CN': '列出可用的语言模型', en: 'List the available language models' },
+  health: { 'zh-CN': '查看 AI 服务健康状态', en: 'Show the AI service health' },
+  tree: { 'zh-CN': '查看会话分支点，或跳转到第 N 个', en: 'List session branch points, or jump to point N' },
+  fork: { 'zh-CN': '从第 N 个会话分支点继续', en: 'Continue from session branch point N' },
+  compact: { 'zh-CN': '压缩当前会话的上下文', en: 'Compact the current session context' },
+  reset: { 'zh-CN': '归档当前会话（主人或受信任用户）', en: 'Archive the current session (owners and trusted users)' },
+  memory: { 'zh-CN': '查看关于你的记忆', en: 'Show the memories about you' },
+  forget: { 'zh-CN': '遗忘关于你的记忆', en: 'Forget memories about you' },
+} as const;
+
+function described(key: keyof typeof descriptions): Pick<CommandDefinition, 'description' | 'descriptionI18n'> {
+  return { description: descriptions[key]['zh-CN'], descriptionI18n: { en: descriptions[key].en } };
+}
+
+function inputOf(command: CommandContext): Message {
+  if (!command.input) throw new Error('Agent management commands need an inbound message');
+  return command.input as unknown as Message;
 }
 
 /**
- * 若 `content` 是管理命令则返回回复文案；否则 `null`（交回 AI / 其它处理）。
+ * `reset` keeps its own refusal (it points everyone else at the clear command), so it checks the
+ * permit itself: the same `permission_denied` outcome as a permit refusal, silent in a group or
+ * channel, the reason in a private chat.
  */
-export async function handleRuntimeManagementCommand(
-  deps: RuntimeManagementDeps,
-): Promise<string | null> {
-  // ai.health is an existing explicit bare entry, independent of the prefixed commands.
-  const bareHealth = /^ai\.health\s*$/iu.test(deps.content.trim());
-  const text = managementCommandText(deps.content, deps.commandPrefix);
-  if (!text && !bareHealth) return null;
-  const locale = deps.locale;
-  const command = (name: string) => managementCommandReference(name, deps.commandPrefix)!;
-
-  // Any zhin chat role on this conversation's chain: the permit `trusted`, whose refusal says so.
-  const isOperator = deps.senderRoles.hostRole !== undefined;
-  const agent = asPrivate(deps.zhinAgent);
-  const denied = (text: string): string => {
-    deps.onUnauthorized?.('not_operator');
-    return text;
-  };
-
-  if (/^models\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
-    if (!deps.inference) throw new Error('Inference operation is not configured');
-    const profiles = await deps.inference.list({ kind: 'language' });
-    const r = [t(locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
-    return r;
-  }
-
-  if (/^tree\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
-    return listSessionTree(agent, deps.sessionKey, deps);
-  }
-
-  const treeJump = text?.match(/^tree\s+(\d+)\s*$/iu);
-  if (treeJump) {
-    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
-    const n = parseLeadingInt(treeJump[1] ?? '');
-    if (n == null) return t(locale, 'usage', { command: command('tree') + ' 2' });
-    return deps.withModelScope
-      ? deps.withModelScope(() => jumpSessionTree(agent, deps.sessionKey, n, locale))
-      : jumpSessionTree(agent, deps.sessionKey, n, locale);
-  }
-
-  const fork = text?.match(/^fork\s+(\d+)\s*$/iu);
-  if (fork) {
-    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
-    const n = parseLeadingInt(fork[1] ?? '');
-    if (n == null) return t(locale, 'usage', { command: command('fork') + ' 2' });
-    return deps.withModelScope
-      ? deps.withModelScope(() => jumpSessionTree(agent, deps.sessionKey, n, locale))
-      : jumpSessionTree(agent, deps.sessionKey, n, locale);
-  }
-
-  if (/^compact\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
-    const compact = () => deps.zhinAgent.compactSession(deps.sessionKey, locale);
-    const result = await (deps.withModelScope ? deps.withModelScope(compact) : compact());
-    return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
-  }
-
-  if (/^reset\s*$/iu.test(text ?? '')) {
-    // #1250: reset stays operator-only; everyone else is pointed at the clear command, which clears
-    // the same (their own) session context.
-    if (!isOperator) return denied(t(locale, 'resetDenied', { denial: describeCommandDenial(CHAT_ROLE_PERMIT, locale) }));
-    const ok = await deps.zhinAgent.archiveSession(deps.sessionKey);
-    return t(locale, ok ? 'archived' : 'noSession');
-  }
-
-  const memoryReply = await handleOwnMemoryCommand(deps, text ?? '');
-  if (memoryReply != null) return memoryReply;
-
-  if (bareHealth) {
-    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
-    if (!deps.inference) throw new Error('Inference operation is not configured');
-    const profiles = await deps.inference.list({ kind: 'language' });
-    return `${t(locale, 'health')}\n${profiles.length} configured language profiles`;
-
-  }
-
-  return null;
+function refuseReset(command: CommandContext): string | undefined {
+  const message = inputOf(command);
+  const quiet = message.conversation.kind !== 'private';
+  reportInboundOutcome(message, {
+    outcome: 'permission_denied', reason: 'not_operator', stage: 'command', command: 'reset', reply: quiet ? 'no' : 'yes',
+  });
+  return quiet ? undefined : t(command.locale, 'resetDenied', { denial: describeCommandDenial(RUNTIME_MANAGEMENT_PERMIT, command.locale) });
 }
 
-/** `/memory` lists and `/forget <key|id|all>` deletes the sender's own user-scope memory. */
-async function handleOwnMemoryCommand(deps: RuntimeManagementDeps, text: string): Promise<string | null> {
-  const locale = deps.locale;
-  const command = managementCommandReference('forget', deps.commandPrefix)!;
-  const runtime = deps.semanticMemory;
-  const isList = /^memory\s*$/iu.test(text ?? '');
-  // Prefix test plus slice (no backtracking regex over user input).
-  const isForget = /^forget(?:\s|$)/iu.test(text ?? '');
-  if (!isList && !isForget) return null;
-  if (!runtime?.active || !deps.senderId) return null;
-  const signal = new AbortController().signal;
-  const scope = { scope: 'user' as const, scope_key: deps.senderId };
+async function listLanguageProfiles(operation: RuntimeManagementOperation) {
+  if (!operation.inference) throw new Error('Inference operation is not configured');
+  return operation.inference.list({ kind: 'language' });
+}
 
-  if (isList) {
-    const entries = await runtime.list({ ...scope, limit: MEMORY_LIST_LIMIT }, signal);
-    if (entries.length === 0) return t(locale, 'noMemory');
-    return [t(locale, 'memories', { count: entries.length })]
-      .concat(entries.map((entry, index) => `${index + 1}. ${entry.key}: ${entry.content}  [id ${entry.id}]`))
-      .concat(t(locale, 'forgetHint', { command }))
-      .join('\n');
-  }
+function withModelScope<T>(operation: RuntimeManagementOperation, run: () => Promise<T>): Promise<T> {
+  return operation.withModelScope ? operation.withModelScope(run) : run();
+}
 
-  const target = text.slice('forget'.length).trim();
-  if (!target) return t(locale, 'forgetUsage', { command });
-  const entries = await runtime.list({ ...scope, limit: Number.MAX_SAFE_INTEGER }, signal);
-  const matches = target.toLowerCase() === 'all'
-    ? entries
-    : entries.filter((entry) => entry.id === target || entry.key === target);
-  if (matches.length === 0) return t(locale, 'noMatch', { target });
-  for (const entry of matches) await runtime.delete(entry.id, signal);
-  return t(locale, 'forgotten', { count: matches.length });
+/**
+ * The Agent's Root management commands: `models`, `health`, `tree`, `fork`, `compact`, `reset`, and —
+ * with semantic memory — `memory` / `memory forget`. No execution policy: like before, they have no
+ * cooldown (the operator-only ones are not reachable by bystanders, `memory` reads only the sender's
+ * own entries).
+ */
+export function createRuntimeManagementCommands(host: RuntimeManagementCommandHost): readonly RuntimeManagementCommand[] {
+  const agent = () => asPrivate(host.zhinAgent);
+  const open = <T>(command: CommandContext, run: (operation: RuntimeManagementOperation) => Promise<T>) =>
+    host.open(inputOf(command), command.signal, run);
+  const commands: RuntimeManagementCommand[] = [
+    {
+      name: 'models',
+      definition: defineCommand({
+        ...described('models'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
+        execute: command => open(command, async operation => {
+          const profiles = await listLanguageProfiles(operation);
+          return [t(command.locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
+        }),
+      }),
+    },
+    {
+      name: 'health',
+      definition: defineCommand({
+        ...described('health'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
+        execute: command => open(command, async operation => {
+          const profiles = await listLanguageProfiles(operation);
+          return `${t(command.locale, 'health')}\n${profiles.length} configured language profiles`;
+        }),
+      }),
+    },
+    {
+      name: 'tree',
+      definition: defineCommand({
+        ...described('tree'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
+        params: { index: { type: 'integer', optional: true, min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
+        execute: command => open(command, async operation => {
+          const index = command.params.index;
+          if (typeof index === 'number') {
+            return withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, index, command.locale));
+          }
+          const tree = command.formatCommand('tree');
+          const fork = command.formatCommand('fork');
+          return listSessionTree(agent(), operation.sessionKey, { locale: command.locale,
+            ...(tree !== undefined && fork !== undefined ? { references: { tree, fork } } : {}) });
+        }),
+      }),
+    },
+    {
+      name: 'fork',
+      definition: defineCommand({
+        ...described('fork'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
+        params: { index: { type: 'integer', min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
+        execute: command => open(command, operation =>
+          withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, command.params.index, command.locale))),
+      }),
+    },
+    {
+      name: 'compact',
+      definition: defineCommand({
+        ...described('compact'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
+        execute: command => open(command, async operation => {
+          const result = await withModelScope(operation, () => host.zhinAgent.compactSession(operation.sessionKey, command.locale));
+          return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
+        }),
+      }),
+    },
+    {
+      name: 'reset',
+      definition: defineCommand({
+        // No declarative permit: the refusal also says how to clear one's own context (see refuseReset).
+        ...described('reset'), options: {},
+        execute: async command => {
+          if (resolveRuntimeSenderRoles(inputOf(command)).hostRole === undefined) return refuseReset(command);
+          return open(command, async operation => {
+            const text = t(command.locale, await host.zhinAgent.archiveSession(operation.sessionKey) ? 'archived' : 'noSession');
+            if (!operation.replyFixed) return text;
+            await operation.replyFixed(text);
+            return undefined;
+          });
+        },
+      }),
+    },
+  ];
+  const memory = host.semanticMemory;
+  if (memory) commands.push(...memoryCommands(memory));
+  return Object.freeze(commands);
+}
+
+/** `memory` lists and `memory forget <key|id|all>` deletes the sender's own user-scope memory. */
+function memoryCommands(runtime: SemanticMemoryRuntime): RuntimeManagementCommand[] {
+  const scopeOf = (command: CommandContext): Readonly<{ scope: 'user'; scope_key: string }> | string => {
+    if (!runtime.active) return t(command.locale, 'memoryUnavailable');
+    const senderId = inputOf(command).sender?.id?.trim();
+    return senderId ? { scope: 'user', scope_key: senderId } : t(command.locale, 'memoryIdentity');
+  };
+  const forgetCommand = (command: CommandContext) => command.formatCommand('memory forget') ?? 'memory forget';
+  return [
+    {
+      name: 'memory',
+      definition: defineCommand({
+        ...described('memory'), options: {},
+        execute: async command => {
+          const scope = scopeOf(command);
+          if (typeof scope === 'string') return scope;
+          const entries = await runtime.list({ ...scope, limit: MEMORY_LIST_LIMIT }, command.signal);
+          if (entries.length === 0) return t(command.locale, 'noMemory');
+          return [t(command.locale, 'memories', { count: entries.length })]
+            .concat(entries.map((entry, index) => `${index + 1}. ${entry.key}: ${entry.content}  [id ${entry.id}]`))
+            .concat(t(command.locale, 'forgetHint', { command: forgetCommand(command) }))
+            .join('\n');
+        },
+      }),
+    },
+    {
+      name: 'memory/forget',
+      definition: defineCommand({
+        ...described('forget'), options: {},
+        execute: async command => {
+          const scope = scopeOf(command);
+          if (typeof scope === 'string') return scope;
+          const target = command.args.join(' ').trim();
+          if (!target) return t(command.locale, 'forgetUsage', { command: forgetCommand(command) });
+          const entries = await runtime.list({ ...scope, limit: Number.MAX_SAFE_INTEGER }, command.signal);
+          const matches = target.toLowerCase() === 'all'
+            ? entries
+            : entries.filter(entry => entry.id === target || entry.key === target);
+          if (matches.length === 0) return t(command.locale, 'noMatch', { target });
+          for (const entry of matches) await runtime.delete(entry.id, command.signal);
+          return t(command.locale, 'forgotten', { count: matches.length });
+        },
+      }),
+    },
+  ];
 }

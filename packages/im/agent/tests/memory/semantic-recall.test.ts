@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import { SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
 import { RECALL_HEADER, resolveRecallOptions } from '../../src/memory/semantic-recall.js';
-import { handleRuntimeManagementCommand } from '../../src/init/runtime-management-commands.js';
+import { runManagementCommand } from '../helpers/management-command.js';
 
 const view = { sessionKey: 'im:qq:bot:group:g1', subjectId: 'alice', platform: 'qq' };
 const signal = new AbortController().signal;
@@ -66,36 +66,29 @@ describe('semantic recall (#734)', () => {
   });
 });
 
-describe('/memory and /forget', () => {
-  const base = {
-    commandPrefix: '/',
-    service: {} as never,
-    zhinAgent: {} as never,
-    sessionKey: 'im:qq:bot:private:alice',
-    senderRoles: {},
-    senderId: 'alice',
-  };
-
+describe('/memory and /memory forget', () => {
   it('lists and forgets only the sender\'s own memory', async () => {
     const { runtime, repository } = await runtimeWith(2);
     await repository.upsert({ scope: 'user', scope_key: 'alice', key: 'pet', content: '橘猫团子' });
     await repository.upsert({ scope: 'user', scope_key: 'bob', key: 'pet', content: 'bob 的狗' });
-    const run = (content: string) => handleRuntimeManagementCommand({ ...base, content, semanticMemory: runtime });
+    const run = (name: 'memory' | 'memory/forget', ...args: string[]) =>
+      runManagementCommand(name, { args, senderId: 'alice', host: { semanticMemory: runtime } });
 
-    const listed = await run('/memory');
+    const listed = await run('memory');
     expect(listed).toContain('关于你的记忆（2 条）');
     expect(listed).toContain('橘猫团子');
     expect(listed).not.toContain('bob');
     expect(listed).not.toContain('茶话会');
 
-    expect(await run('/forget pet')).toContain('已遗忘 1 条');
+    expect(await run('memory/forget', 'pet')).toContain('已遗忘 1 条');
     expect(await repository.find({ scope: 'user', scope_key: 'bob', key: 'pet' })).not.toBeNull();
-    expect(await run('/forget all')).toContain('已遗忘 1 条');
-    expect(await run('/memory')).toContain('没有关于你的记忆');
-    expect(await run('/forget nothing')).toContain('没有找到');
+    expect(await run('memory/forget', 'all')).toContain('已遗忘 1 条');
+    expect(await run('memory')).toContain('没有关于你的记忆');
+    expect(await run('memory/forget', 'nothing')).toContain('没有找到');
   });
 
-  it('passes through when semantic memory is not active', async () => {
-    expect(await handleRuntimeManagementCommand({ ...base, content: '/memory' })).toBeNull();
+  it('says so when semantic memory is not active', async () => {
+    expect(await runManagementCommand('memory', { senderId: 'alice', host: { semanticMemory: new SemanticMemoryRuntime() } }))
+      .toBe('ℹ️ 未启用长期记忆。');
   });
 });

@@ -3,12 +3,13 @@ import { createMessages } from '@zhin.js/plugin-runtime';
 export const managementMessages = createMessages({
   models: { 'zh-CN': '🤖 可用模型:', en: '🤖 Available models:' },
   more: { 'zh-CN': '  ... 还有 {count} 个', en: '  ... {count} more' },
-  usage: { 'zh-CN': 'ℹ️ 用法：{command}', en: 'ℹ️ Usage: {command}' },
   // `{denial}`: the shared management-command refusal (`describeCommandDenial('trusted', …)`, `@zhin.js/permission`).
   resetDenied: { 'zh-CN': '{denial}要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。', en: '{denial} To clear your own AI conversation context, send /clear or 清空 (mention the bot first in a group).' },
   archived: { 'zh-CN': '✅ 已归档当前会话，下次 @ 将使用新上下文', en: '✅ The current session was archived. The next mention will start a new context.' },
   noSession: { 'zh-CN': 'ℹ️ 无活跃会话可归档', en: 'ℹ️ No active session to archive.' },
   health: { 'zh-CN': '🏥 AI 服务健康状态:', en: '🏥 AI service health:' },
+  memoryUnavailable: { 'zh-CN': 'ℹ️ 未启用长期记忆。', en: 'ℹ️ Long-term memory is not enabled.' },
+  memoryIdentity: { 'zh-CN': 'ℹ️ 请在有真实发送者身份的聊天中查看你的记忆。', en: 'ℹ️ View your memories from a chat with a sender identity.' },
   noMemory: { 'zh-CN': 'ℹ️ 目前没有关于你的记忆。', en: 'ℹ️ There are no memories about you.' },
   memories: { 'zh-CN': '🧠 关于你的记忆（{count} 条）：', en: '🧠 Memories about you ({count}):' },
   forgetHint: { 'zh-CN': '发送 {command} <key 或 id> 遗忘一条，{command} all 全部遗忘。', en: 'Send {command} <key or id> to forget one memory, or {command} all to forget all.' },

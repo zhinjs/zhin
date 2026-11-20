@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import type { ToolExecutionContext } from '@zhin.js/tool';
-import { handleRuntimeManagementCommand } from '../../src/init/runtime-management-commands.js';
+import { runManagementCommand } from '../helpers/management-command.js';
 import {
   createNativeSemanticMemoryToolFeatures,
   SemanticMemoryRuntime,
@@ -69,10 +69,8 @@ describe('native semantic-memory tools', () => {
     expect(recalled?.text).not.toContain('oolong');
     expect(recalled?.entries[0]?.source_turn).toBe('turn-correction');
 
-    const forgotten = await handleRuntimeManagementCommand({
-      commandPrefix: '/', content: '/forget preference:drink', service: {} as never,
-      zhinAgent: {} as never, senderRoles: {},
-      senderId: view.subjectId, sessionKey: view.sessionKey, semanticMemory: reader,
+    const forgotten = await runManagementCommand('memory/forget', {
+      args: ['preference:drink'], senderId: view.subjectId, host: { semanticMemory: reader },
     });
     expect(forgotten).toContain('已遗忘 1 条');
     expect(await reader.recall(view, 'tea', context.signal)).toBeNull();

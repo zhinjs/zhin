@@ -163,6 +163,19 @@ describe('installAgentHost', () => {
     expect(resources.has(ingressRouteToken)).toBe(true);
   });
 
+  it('registers the Agent management commands as Root commands when the Command Feature is present (#1250 第 83 批)', async () => {
+    const withCommands = { ...(context(new Scope(rootPluginId())) as object), hasFeature: (feature: string) => feature === 'zhin.command' };
+    await install()(withCommands as never);
+    const added = vi.mocked((withCommands as unknown as { addFeature: (...args: unknown[]) => void }).addFeature).mock.calls
+      .filter(([feature]) => feature === 'zhin.command').map(([, name]) => name);
+    // Semantic memory is off in this fixture: `memory` / `memory forget` are not registered.
+    expect(added).toEqual(['models', 'health', 'tree', 'fork', 'compact', 'reset']);
+    const without = context(new Scope(rootPluginId()));
+    await install()(without);
+    expect(vi.mocked((without as unknown as { addFeature: (...args: unknown[]) => void }).addFeature).mock.calls
+      .filter(([feature]) => feature === 'zhin.command')).toEqual([]);
+  });
+
   it('captures each real bootstrap source before formatting its headings', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-files-'));
     try {

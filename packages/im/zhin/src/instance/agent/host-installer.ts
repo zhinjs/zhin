@@ -64,7 +64,9 @@ import {
   botBootstrapFilenames,
   hasBotBootstrapFile,
   describeApprovalChannelConflicts,
+  createRuntimeManagementCommands,
 } from '@zhin.js/agent';
+import { commandFeatureId } from '@zhin.js/command';
 import {
   AgentRuntime,
   agentOperationResourcesToken,
@@ -166,7 +168,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
   // #1250: one board across generations — a retained generation keeps its MCP clients.
   const mcpStatus = new HostMcpStatusBoard({ onEvent: logMcpStatusEvent });
   const conversationPresentation = createConversationPresentationResolver(() => options.snapshots);
-  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, watchProjectFiles }) => {
+  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, hasFeature, watchProjectFiles }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -435,8 +437,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveConversationPresentation: conversationPresentation,
       withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
       withModelScope: (input, operation) => options.inference.withDeploymentModels({ ...input, service }, operation),
+      ...(options.snapshots ? { acquireLease: () => options.snapshots!.acquire() } : {}),
     });
     resources.provide(ingressRouteToken, ingressRoute);
+    // #1250 第 83 批: the Agent management commands (`models`, `health`, `tree`, `fork`, `compact`,
+    // `reset`, and with semantic memory `memory` / `memory forget`) are Root commands: menu, help,
+    // near-miss hints, permits and the `command_replied` outcome come from the command dispatch.
+    if (hasFeature?.(commandFeatureId)) {
+      for (const command of createRuntimeManagementCommands({
+        zhinAgent,
+        semanticMemory: semanticMemory ?? null,
+        open: (message, operationSignal, run) => ingressRoute.runManagementOperation(message, operationSignal, run),
+      })) addFeature(commandFeatureId, command.name, command.definition);
+    }
     // #1012 A9 方案②：插件旧欢迎（group-suite）发送前询问；会话开启 welcome.enabled 时让给 MemberLifecycle。
     const memberWelcomeOwner: MemberWelcomeOwner = Object.freeze({
       ownsWelcome: (conversation: ConversationRef) => ingressRoute.ownsMemberWelcome(conversation),
