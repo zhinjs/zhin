@@ -1,5 +1,5 @@
 import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
-import { createMessages } from 'zhin.js/i18n';
+import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
 import { continueGame, startGame } from './game-flow.js';
 import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';
 
@@ -20,8 +20,8 @@ const messages = createMessages({
  * `pinyin` / `char` otherwise. The legacy `start_pinyin` / `start_char` stay accepted
  * (`normalizeChainAction`), they are just no longer advertised.
  */
-export function chainStartAction(mode: MatchMode, locale?: string): string {
-  const chinese = !locale || locale.startsWith('zh');
+export function chainStartAction(mode: MatchMode, locale?: Locale): string {
+  const chinese = resolveLocale(locale) === 'zh-CN';
   return mode === 'char' ? (chinese ? '同字' : 'char') : (chinese ? '同音' : 'pinyin');
 }
 

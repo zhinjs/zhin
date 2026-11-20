@@ -2,7 +2,7 @@ import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
-import { isLocale, readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import { isLocale, readPluginConfigurationMap, type Locale } from '@zhin.js/plugin-runtime';
 import { readApplicationPluginDeclaration, updateDotenvFile } from '@zhin.js/runtime';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import {
@@ -29,7 +29,7 @@ export function clonePluginConfigurationMap(
   return { ...readPluginConfigurationMap(config) };
 }
 
-export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult, locale: 'zh-CN' | 'en' = 'zh-CN'): void {
+export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult, locale: Locale = 'zh-CN'): void {
   for (const instance of result.instances) {
     const plugins = clonePluginConfigurationMap(config);
     setPluginInstanceConfig(config, instance, mergeAdapterInstanceConfig(
@@ -74,7 +74,7 @@ function mergeAdapterInstanceConfig(
   instanceKey: string,
   existing: unknown,
   next: Record<string, unknown>,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): Record<string, unknown> {
   if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return next;
   const current = existing as Record<string, unknown>;
@@ -154,7 +154,7 @@ export async function appendWizardEnvVars(
   adapters?: AdapterSetupResult,
   ai?: AISetupConfig,
   database?: DatabaseConfig,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): Promise<void> {
   // AI may start without a model (added later in Console); only a chosen provider yields a plan.
   if (ai?.enabled && Object.keys(ai.providers ?? {}).length) await saveAIPlanProposal(projectDir, materializeAIPlan(ai));
@@ -256,7 +256,7 @@ export function finalizeWizardOptions(options: InitOptions): void {
 }
 
 /** 将 InitOptions 中的 wizard 结果合并进已有 zhin 配置对象 */
-export function applyWizardOptionsToConfig(config: Record<string, unknown>, options: InitOptions, locale: 'zh-CN' | 'en' = options.locale ?? 'zh-CN'): void {
+export function applyWizardOptionsToConfig(config: Record<string, unknown>, options: InitOptions, locale: Locale = options.locale ?? 'zh-CN'): void {
   if (options.locale !== undefined) {
     if (!isLocale(options.locale)) throw new TypeError('Unsupported project locale');
     config.locale = options.locale;

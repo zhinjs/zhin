@@ -18,6 +18,7 @@ import {
   selectRootConfigFile,
   type ConfigPatch,
   type RootConfigFormat,
+  type Locale,
 } from '@zhin.js/plugin-runtime';
 
 const CONSOLE_URL = 'https://console.zhin.dev';
@@ -112,7 +113,7 @@ function findProjectConfigPath(cwd: string): string | null {
   return selectRootConfigFile(existing) ?? null;
 }
 
-export function loadProjectConfig(cwd = process.cwd(), configPath?: string, locale: 'zh-CN' | 'en' = 'zh-CN'): LoadedProjectConfig {
+export function loadProjectConfig(cwd = process.cwd(), configPath?: string, locale: Locale = 'zh-CN'): LoadedProjectConfig {
   const resolvedPath = configPath ? path.resolve(cwd, configPath) : findProjectConfigPath(cwd);
   if (!resolvedPath) {
     return {
@@ -208,7 +209,7 @@ function ensureHttp(config: Record<string, unknown>, mutations: string[]): void 
   }
 }
 
-export function createProjectConfigPlan(options: ProjectConfigPlanOptions, locale: 'zh-CN' | 'en' = 'zh-CN'): ProjectConfigPlan {
+export function createProjectConfigPlan(options: ProjectConfigPlanOptions, locale: Locale = 'zh-CN'): ProjectConfigPlan {
   const cwd = options.cwd ?? options.loaded?.cwd ?? process.cwd();
   const configuredFormat = options.format
     ?? (options.configPath ? configFormatFromPath(options.configPath) ?? undefined : undefined);
@@ -269,7 +270,7 @@ const PROJECT_CONFIG_PATCH_CONTEXT = 3;
  * {@link applyProjectConfigPlan} would write (comments and key order kept), not from a
  * re-serialised document.
  */
-export function renderProjectConfigPatch(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function renderProjectConfigPatch(plan: ProjectConfigPlan, locale: Locale = 'zh-CN'): string {
   if (!plan.changed) return wizardText(locale, "配置无需改动。");
   const format = plan.format ?? 'yaml';
   const name = (plan.relativePath ?? 'zhin.config.yml').split(path.sep).join('/');
@@ -327,7 +328,7 @@ function previewProjectConfigSource(plan: ProjectConfigPlan): string | undefined
   }
 }
 
-export async function applyProjectConfigPlan(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<boolean> {
+export async function applyProjectConfigPlan(plan: ProjectConfigPlan, locale: Locale = 'zh-CN'): Promise<boolean> {
   if (!plan.changed) return false;
   if (!plan.writable || !plan.configPath || !plan.format) return false;
   const document = createConfigDocument(plan.configPath);
@@ -362,7 +363,7 @@ function hasConsoleOrigin(origins: readonly string[]): boolean {
   });
 }
 
-export function applyConsoleConfigFixes(config: Record<string, unknown>, locale: 'zh-CN' | 'en' = 'zh-CN'): boolean {
+export function applyConsoleConfigFixes(config: Record<string, unknown>, locale: Locale = 'zh-CN'): boolean {
   const plan = createProjectConfigPlan({
     cwd: process.cwd(),
     config,

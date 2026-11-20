@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageSegment } from '@zhin.js/client';
+import type { MessageSegment, ConsoleLocale } from '@zhin.js/client';
 import { hasPlaygroundKeyboard, type PlaygroundMessage, type PlaygroundScope } from './playgroundState.js';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
-import { sandboxText, type SandboxLocale } from './messages.js';
+import { sandboxText } from './messages.js';
 
 export interface SandboxHistoryBinding {
   readonly connectionId: string;
@@ -28,7 +28,7 @@ interface HistoryOwner {
 export function useSandboxHistory(
   binding: SandboxHistoryBinding | undefined,
   onHistory: (update: HistoryUpdate) => void,
-  locale: SandboxLocale = 'zh-CN',
+  locale: ConsoleLocale = 'zh-CN',
 ) {
   const key = binding ? JSON.stringify([captureSandboxRequestContext().apiBase, binding.connectionId, binding.sessionKey,
     binding.scope.adapter, binding.scope.id, binding.scene.type, binding.scene.id, binding.ownerId]) : '';
@@ -102,7 +102,7 @@ const text = (value: unknown): value is string => typeof value === 'string' && v
 const validTime = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && Number.isFinite(new Date(value).getTime());
 
 /** Validate the server address before projecting any message into the active scene. */
-export function readSandboxHistoryPage(body: unknown, binding: SandboxHistoryBinding, before?: number, locale: SandboxLocale = 'zh-CN'): HistoryPage {
+export function readSandboxHistoryPage(body: unknown, binding: SandboxHistoryBinding, before?: number, locale: ConsoleLocale = 'zh-CN'): HistoryPage {
   function fail(): never { throw Error('History response does not match the current conversation'); }
   const data = record(record(body)?.data);
   const matches = (value: unknown) => {

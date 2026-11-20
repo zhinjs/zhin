@@ -8,6 +8,7 @@
  *   dialog's confirm button (决策 5).
  * - No `zk-` classes and no injected styles: everything comes from `@zhin.js/console-ui/styles.css`.
  */
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import React, { useId, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -31,7 +32,6 @@ import {
   type ButtonProps,
   type RefreshControlProps,
 } from '@zhin.js/console-ui';
-import type { PluginUiLocale } from '../ui/locale.js';
 
 /** Tones of the declarative contract (`DeclarativeBadgeTone`). */
 export type RendererTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
@@ -85,7 +85,7 @@ export function buttonVariantFor(variant: string | undefined, fallback: UiButton
 }
 
 /** The default confirmation of a dangerous action without its own `confirm`: 「确认<动作名>？」. */
-export function defaultConfirmMessage(label: string, locale: PluginUiLocale): string {
+export function defaultConfirmMessage(label: string, locale: ConsoleLocale): string {
   return locale === 'en' ? `Confirm ${label}?` : `确认${label}？`;
 }
 
@@ -95,7 +95,7 @@ export function defaultConfirmMessage(label: string, locale: PluginUiLocale): st
  */
 export function resolveConfirmMessage(
   input: { readonly variant?: string; readonly confirm?: string; readonly label: string },
-  locale: PluginUiLocale,
+  locale: ConsoleLocale,
 ): string | undefined {
   if (input.confirm && input.confirm.trim()) return input.confirm;
   return isDangerVariant(input.variant) ? defaultConfirmMessage(input.label, locale) : undefined;
@@ -118,7 +118,7 @@ export interface ActionButtonProps {
   readonly confirmLabel?: string;
   /** Irreversible actions: the text the user must type before confirming. */
   readonly confirmText?: string;
-  readonly locale: PluginUiLocale;
+  readonly locale: ConsoleLocale;
   readonly title?: string;
   readonly 'aria-label'?: string;
   readonly 'aria-expanded'?: boolean;

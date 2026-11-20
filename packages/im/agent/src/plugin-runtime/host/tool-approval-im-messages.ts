@@ -42,8 +42,6 @@ export const toolApprovalImMessages = createMessages({
   selfFile: { 'zh-CN': '  {kind} {path}（+{added} -{removed}）', en: '  {kind} {path} (+{added} -{removed})' },
   selfMoreFiles: { 'zh-CN': '  …另 {count} 个文件', en: '  …{count} more files' },
   selfConfig: { 'zh-CN': '配置：{paths}', en: 'Config: {paths}' },
-  listSeparator: { 'zh-CN': '，', en: ', ' },
-  detailSeparator: { 'zh-CN': '；', en: '; ' },
   selfImpact: { 'zh-CN': '影响：{impact}', en: 'Impact: {impact}' },
   selfImpactDetail: { 'zh-CN': '影响：{impact}（{detail}）', en: 'Impact: {impact} ({detail})' },
   impactNone: { 'zh-CN': '无需重载', en: 'no reload needed' },

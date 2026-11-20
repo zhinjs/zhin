@@ -78,6 +78,12 @@ describe('auto platform guidance (ADR 0044 §4)', () => {
     expect(text).toContain('可禁言（1分钟–30天）');
   });
 
+  it('renders the zh template when no locale is given (#1250 batch 77: the default is zh-CN, not en)', () => {
+    const text = buildStablePlatformGuidance(caps('group', 'admin'))!;
+    expect(text).toBe(buildStablePlatformGuidance(caps('group', 'admin'), { locale: 'zh-CN' }));
+    expect(text.startsWith('# 平台')).toBe(true);
+  });
+
   it('is deterministic and byte-stable across sessions of the same kind', () => {
     const a = buildStablePlatformGuidance(caps('group', 'admin'), { locale: 'en' });
     const b = buildStablePlatformGuidance(caps('group', 'admin'), { locale: 'en' });

@@ -1,10 +1,11 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from '@zhin.js/scaffold-wizard';
 import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs-extra';
 
-export async function ensurePnpmInstalled(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<void> {
+export async function ensurePnpmInstalled(locale: Locale = 'zh-CN'): Promise<void> {
   try {
     execSync('pnpm --version', { stdio: 'ignore' });
     console.log(chalk.green(wizardText(locale, "✓ 检测到 pnpm 已安装")));
@@ -58,7 +59,7 @@ export type InstallOutcome = 'ok' | 'partial';
 
 export async function installDependencies(
   projectPath: string,
-  locale: 'zh-CN' | 'en' = 'zh-CN',
+  locale: Locale = 'zh-CN',
   run: (command: string, cwd: string) => void = (command, cwd) => { execSync(command, { cwd, stdio: 'inherit' }); },
 ): Promise<InstallOutcome> {
   try {
@@ -101,7 +102,7 @@ export async function installDependencies(
  *（Node 版本 / pnpm / 配置 / Console 登录条件 / 端口占用，彩色 ✅/⚠️/❌ 输出）。
  * 自检失败（含 doctor 检出 error 的退出码）不阻断创建流程。
  */
-export async function runPostInstallDoctor(projectPath: string, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<void> {
+export async function runPostInstallDoctor(projectPath: string, locale: Locale = 'zh-CN'): Promise<void> {
   console.log(chalk.blue(wizardText(locale, "🩺 安装后自检（zhin doctor）...")));
   console.log('');
   try {

@@ -109,6 +109,7 @@ export {
   type HttpResponseStream,
   type HttpResponseStreamOptions,
 } from '@zhin.js/host-http-contract';
+export { invalidLocaleResponse } from './locale-response.js';
 export { isRuntimeConsoleRpcType, RUNTIME_CONSOLE_RPC_TYPES } from './console-rpc-types.js';
 export { createUnknownRpcLog, unknownRpcLog, type UnknownRpcLog, type UnknownRpcLogEntry } from './unknown-rpc.js';
 export {

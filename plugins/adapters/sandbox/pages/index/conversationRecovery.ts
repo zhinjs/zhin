@@ -1,4 +1,4 @@
-import type { MessageSegment } from '@zhin.js/client';
+import type { MessageSegment, ConsoleLocale } from '@zhin.js/client';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
 
 export interface PendingInteraction {
@@ -84,7 +84,7 @@ export interface ConversationOutcome {
  * Why one sent message got (or did not get) a reply: `null` on a Host without the route,
  * `undefined` while the message is still being processed (not settled yet).
  */
-export async function readMessageOutcome(connectionId: string, sessionKey: string, messageId: string, locale: 'zh-CN' | 'en',
+export async function readMessageOutcome(connectionId: string, sessionKey: string, messageId: string, locale: ConsoleLocale,
   signal?: AbortSignal, context: SandboxRequestContext = captureSandboxRequestContext()): Promise<ConversationOutcome | null | undefined> {
   const url = new URL('/api/conversations/outcomes', `${context.apiBase || window.location.origin}/`);
   url.searchParams.set('connectionId', connectionId);
@@ -102,7 +102,7 @@ export async function readMessageOutcome(connectionId: string, sessionKey: strin
  * The notice for a message nobody answered: only outcomes with no chat reply by design
  * (`reply: 'no'`), with the code and reason so the run log and the trace can be matched.
  */
-export function quietOutcomeNotice(outcome: ConversationOutcome | null | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'): string | null {
+export function quietOutcomeNotice(outcome: ConversationOutcome | null | undefined, locale: ConsoleLocale = 'zh-CN'): string | null {
   if (!outcome || outcome.reply !== 'no') return null;
   const code = `${outcome.outcome}${outcome.reason ? ` · ${outcome.reason}` : ''}`;
   return locale === 'en' ? `${outcome.text} (${code})` : `${outcome.text}（${code}）`;
@@ -115,7 +115,7 @@ const FAILED_OUTCOMES: ReadonlySet<string> = new Set(['internal_error', 'deliver
  * outcome settled. A failure is an error; an outcome without a reply is a quiet notice; a reply
  * needs no notice. `undefined` (not settled yet) is decided by the caller after its last attempt.
  */
-export function actionOutcomeFeedback(outcome: ConversationOutcome | null | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'):
+export function actionOutcomeFeedback(outcome: ConversationOutcome | null | undefined, locale: ConsoleLocale = 'zh-CN'):
   { readonly tone: 'error' | 'quiet'; readonly text: string } | null {
   if (!outcome) return null;
   const code = `${outcome.outcome}${outcome.reason ? ` · ${outcome.reason}` : ''}`;

@@ -479,7 +479,8 @@
     "packages/im/schedule-feature/tests/types/config.ts",
     "packages/im/feature-kit/tests/construction-types.fixture.ts",
     "packages/im/agent/tests/types/ai-completion-contract.ts",
-    "tests/fixtures/database-types/third-party.ts"
+    "tests/fixtures/database-types/third-party.ts",
+    "tests/contracts/locale-types.test.ts"
   ],
   "exclude": [
     "node_modules",

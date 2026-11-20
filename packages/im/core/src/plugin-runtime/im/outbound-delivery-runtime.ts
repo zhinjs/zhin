@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { projectLocale, runRuntimeMiddleware } from './inbound-spine.js';
+import { runRuntimeMiddleware } from './inbound-spine.js';
 import {
+  projectLocale,
   resolveLocale,
   type CapabilityId,
   type RuntimeSnapshot,

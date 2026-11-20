@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MarkdownContent, type MessageSegment } from '@zhin.js/client';
+import { MarkdownContent, type MessageSegment, type ConsoleLocale } from '@zhin.js/client';
 import { Button } from '@zhin.js/console-ui';
-import { sandboxText, type SandboxLocale } from './messages.js';
+import { sandboxText } from './messages.js';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
 import { prependResultPage, readConversationResults, readPendingInteractions, resultDeliveryStatus,
   type PendingInteraction, type RecoveredResultPage } from './conversationRecovery.js';
@@ -9,7 +9,7 @@ import { prependResultPage, readConversationResults, readPendingInteractions, re
 export interface ConversationRecoveryProps {
   readonly connectionId: string;
   readonly sessionKey: string;
-  readonly locale: SandboxLocale;
+  readonly locale: ConsoleLocale;
   readonly hidden?: boolean;
   readonly requestContext?: SandboxRequestContext;
   /** Existing transport activity invalidates this read; it is not an approval acknowledgement. */

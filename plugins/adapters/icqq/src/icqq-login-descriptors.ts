@@ -5,7 +5,7 @@
  * commands all render these descriptors. Copy blocks with device data are `sensitive`; the helper
  * script is static text and never contains device or user data.
  */
-import type { Locale } from 'zhin.js/i18n';
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import type { LoginChallengeDescriptor, LoginHelpStep } from '@zhin.js/core';
 import { messages as t } from './i18n.js';
 
@@ -169,7 +169,7 @@ const SCRIPT_TEXT = {
  * same text becomes a one-line bookmarklet.
  */
 export function icqqAuthHelperScript(locale?: Locale): string {
-  const text = SCRIPT_TEXT[locale === 'en' ? 'en' : 'zh-CN'];
+  const text = SCRIPT_TEXT[resolveLocale(locale)];
   const s = (value: string) => JSON.stringify(value);
   return [
     '(function () {',

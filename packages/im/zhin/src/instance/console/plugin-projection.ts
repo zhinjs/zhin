@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { PluginNodeSnapshot, RuntimeSnapshot, Locale } from '@zhin.js/plugin-runtime';
 import { NodePackageResolver, PackageResolutionError } from '@zhin.js/runtime';
 import { readDeclaredPlugins, readProjectPluginLifecycleState } from '@zhin.js/runtime';
 import { displayConsolePath } from './display-path.js';
@@ -31,7 +31,7 @@ export type ConsolePluginListItem = {
   readonly metadata?: NonNullable<PluginNodeSnapshot['metadata']>;
   readonly displayName?: string;
   /** Console display-name translations (`metadata.displayNameI18n`); the Console picks one by interface locale. */
-  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly displayNameI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly icon?: string;
 };
 

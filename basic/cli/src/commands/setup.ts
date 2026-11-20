@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { formatDisplayPath } from '@zhin.js/logger';
-import { readPluginConfigurationMap, resolveLocale } from '@zhin.js/plugin-runtime';
+import { readPluginConfigurationMap, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
@@ -40,7 +40,7 @@ function collectValues(value: string, previous: string[] = []): string[] {
   return previous.includes(value) ? previous : [...previous, value];
 }
 
-async function setupBootstrapFiles(cwd: string, locale: 'zh-CN' | 'en' = 'zh-CN', yes = false): Promise<void> {
+async function setupBootstrapFiles(cwd: string, locale: Locale = 'zh-CN', yes = false): Promise<void> {
   console.log('');
   console.log(chalk.blue(wizardText(locale, "📝 设置引导文件")));
   console.log('');

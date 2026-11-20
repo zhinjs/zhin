@@ -15,6 +15,7 @@
  * "Side-effect tool" = any tool not declared read-only (`readOnly` / `isReadOnly`), the same rule
  * restricted turns already use; undeclared tools count as writing.
  */
+import { formatList, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import { inlineToolName, type ToolCallRecord } from './tool-calls-user-format.js';
 
 /** Tools whose failure is internal plumbing, never an operation the user asked for. */
@@ -75,7 +76,7 @@ const ACTION_KIND_PATTERNS: ReadonlyArray<readonly [UnexecutedActionKind, RegExp
   ['message', /send|message|post|notice|announce|reply|forward/i],
 ];
 
-const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<Locale, string>>>> = {
   reminder: { 'zh-CN': '提醒', en: 'reminders' },
   memory: { 'zh-CN': '记忆', en: 'memory' },
   config: { 'zh-CN': '配置', en: 'configuration' },
@@ -93,8 +94,8 @@ const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<
  * a failure in their result may have partly taken effect, so they get a weaker line than calls that never
  * ran or threw.
  */
-export function formatUnexecutedNotice(calls: readonly ToolCallRecord[], locale?: string): string {
-  const lang = locale?.toLowerCase().startsWith('en') ? 'en' : 'zh-CN';
+export function formatUnexecutedNotice(calls: readonly ToolCallRecord[], locale?: Locale): string {
+  const lang = resolveLocale(locale);
   const notRun = calls.filter((call) => call.reported !== true);
   const reported = calls.filter((call) => call.reported === true);
   const parts: string[] = [];
@@ -108,7 +109,7 @@ export function formatUnexecutedNotice(calls: readonly ToolCallRecord[], locale?
   return `（${parts.join('；')}）`;
 }
 
-function kindLabels(calls: readonly ToolCallRecord[], lang: 'zh-CN' | 'en'): { labels: string[]; unknown: boolean } {
+function kindLabels(calls: readonly ToolCallRecord[], lang: Locale): { labels: string[]; unknown: boolean } {
   const labels: string[] = [];
   let unknown = false;
   for (const call of calls) {
@@ -126,11 +127,11 @@ function kindLabels(calls: readonly ToolCallRecord[], lang: 'zh-CN' | 'en'): { l
 function chineseKinds(calls: readonly ToolCallRecord[]): string {
   const { labels, unknown } = kindLabels(calls, 'zh-CN');
   if (labels.length === 0) return '部分';
-  return `${labels.join('、')}${labels.length > 1 || unknown ? '等' : ''}`;
+  return `${formatList('zh-CN', labels)}${labels.length > 1 || unknown ? '等' : ''}`;
 }
 
 function englishKinds(calls: readonly ToolCallRecord[]): string {
   const { labels, unknown } = kindLabels(calls, 'en');
   if (labels.length === 0) return 'some actions';
-  return unknown ? `${labels.join(', ')} and other actions` : labels.join(', ');
+  return unknown ? `${formatList('en', labels)} and other actions` : formatList('en', labels);
 }

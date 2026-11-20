@@ -8,7 +8,7 @@ import {
 
 const expectedSurface = new Map([
   ['zhin.js/i18n', ['createMessages', 'DEFAULT_LOCALE', 'SUPPORTED_LOCALES', 'isLocale', 'resolveLocale',
-    'projectLocaleToken', 'Locale', 'MessageCatalog', 'MessageValues']],
+    'formatList', 'FormatListOptions', 'projectLocaleToken', 'Locale', 'MessageCatalog', 'MessageValues']],
   ['@zhin.js/host-http', [
     'AuthenticatedTokenPrincipal', 'HttpHost', 'HttpHostAddress', 'WsConnection',
     'WsHandle', 'AuthScope', 'HttpHandler', 'ListedRoute', 'OpenApiParameter',

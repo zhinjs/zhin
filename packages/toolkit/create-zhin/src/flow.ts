@@ -13,7 +13,8 @@ import {
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 import type { CreateArgs } from './args.js';
-import { createText, type CreateLocale } from './messages.js';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { createText } from './messages.js';
 import { applyCreateDefaults } from './stable-yes-defaults.js';
 import { generateToken, isValidProjectName } from './utils.js';
 
@@ -26,9 +27,9 @@ export type PromptFn = (questions: PromptQuestion[]) => Promise<Record<string, u
 /** Injected so tests can record which questions are asked. */
 export interface CreateFlowDeps {
   readonly prompt: PromptFn;
-  readonly configureDatabase: (locale: CreateLocale) => Promise<DatabaseConfig>;
-  readonly configureAdapters: (locale: CreateLocale) => Promise<AdapterSetupResult>;
-  readonly configureAI: (locale: CreateLocale) => Promise<NonNullable<InitOptions['ai']>>;
+  readonly configureDatabase: (locale: Locale) => Promise<DatabaseConfig>;
+  readonly configureAdapters: (locale: Locale) => Promise<AdapterSetupResult>;
+  readonly configureAI: (locale: Locale) => Promise<NonNullable<InitOptions['ai']>>;
   readonly generateToken: () => string;
 }
 
@@ -60,7 +61,7 @@ export function databaseDefaults(dialect: DatabaseConfig['dialect']): DatabaseCo
 }
 
 /** Non-interactive `--adapter <name>` (shared with `zhin setup --adapter`). */
-export function buildAdapterSetup(values: readonly string[], locale: CreateLocale): Promise<AdapterSetupResult> {
+export function buildAdapterSetup(values: readonly string[], locale: Locale): Promise<AdapterSetupResult> {
   return buildDefaultAdapterSetup(values, locale);
 }
 
@@ -76,7 +77,7 @@ export interface ResolvedCreate {
  */
 export async function resolveCreateOptions(
   args: CreateArgs,
-  locale: CreateLocale,
+  locale: Locale,
   deps: CreateFlowDeps = defaultCreateFlowDeps,
 ): Promise<ResolvedCreate> {
   const options: InitOptions = {
@@ -156,7 +157,7 @@ export function buildConsoleSetupLink(apiBaseUrl: string, token?: string): strin
 }
 
 export interface CreateSummaryInput {
-  readonly locale: CreateLocale;
+  readonly locale: Locale;
   readonly projectName: string;
   readonly skipInstall: boolean;
   readonly options: InitOptions;

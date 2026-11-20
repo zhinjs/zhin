@@ -1,4 +1,4 @@
-export type SandboxLocale = 'zh-CN' | 'en';
+import type { ConsoleLocale } from '@zhin.js/client';
 
 /** Authored interface copy only; unknown/user text is returned unchanged. */
 export const sandboxEnglish: Readonly<Record<string, string>> = {
@@ -290,7 +290,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "拖放、粘贴或用附件按钮上传本地文件，发送时带 Sandbox 托管的签名地址": "Drop, paste or attach local files; they are sent as signed Sandbox-hosted links"
 };
 
-export function sandboxText(locale: SandboxLocale, message: string, values: readonly unknown[] = []): string {
+export function sandboxText(locale: ConsoleLocale, message: string, values: readonly unknown[] = []): string {
   const text = locale === 'en' && Object.hasOwn(sandboxEnglish, message) ? sandboxEnglish[message]! : message;
   return text.replace(/\{(\d+)\}/gu, (slot, index: string) => Number(index) < values.length ? String(values[Number(index)]) : slot);
 }

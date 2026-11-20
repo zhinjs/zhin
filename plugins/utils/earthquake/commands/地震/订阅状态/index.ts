@@ -1,5 +1,6 @@
 import { messages as t } from '../../../src/i18n.js';
 import { defineCommand } from 'zhin.js/command';
+import { formatList } from 'zhin.js/i18n';
 import { conversationError, extractConversation } from '../../../src/conversation.js';
 import { formatEventTime, sourceLabel } from '../../../src/format.js';
 import { earthquakeServiceToken } from '../../../src/runtime.js';
@@ -17,7 +18,7 @@ export default defineCommand({
     const timezone = service.config.timezone;
     const lines: string[] = [];
     if (subscription) {
-      const regionText = subscription.regions.length > 0 ? subscription.regions.join(locale === 'en' ? ', ' : '、') : t(locale, 'global');
+      const regionText = subscription.regions.length > 0 ? formatList(locale, subscription.regions) : t(locale, 'global');
       lines.push(t(locale, 'subscription', { magnitude: subscription.minMagnitude.toFixed(1), regions: regionText }));
     } else {
       lines.push(t(locale, 'emptyStatus'));

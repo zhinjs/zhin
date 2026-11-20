@@ -1,5 +1,6 @@
 import { messages as t } from '../../../src/i18n.js';
 import { canManageConversation, defineCommand, describeConversationManagerDenial } from 'zhin.js/command';
+import { formatList } from 'zhin.js/i18n';
 import { conversationError, extractConversation } from '../../../src/conversation.js';
 import { earthquakeServiceToken } from '../../../src/runtime.js';
 import { parseSubscribeArgs } from '../../../src/subscribe-args.js';
@@ -34,7 +35,7 @@ export default defineCommand({
         createdBy: target.senderId,
         createdAt: new Date().toISOString(),
       });
-      const regionText = parsed.regions.length > 0 ? parsed.regions.join(locale === 'en' ? ', ' : '、') : t(locale, 'global');
+      const regionText = parsed.regions.length > 0 ? formatList(locale, parsed.regions) : t(locale, 'global');
       const lines = [
         t(locale, created ? 'subscribed' : 'updated', { magnitude: minMagnitude.toFixed(1), regions: regionText }),
       ];

@@ -27,6 +27,7 @@ import type {
 import { AsyncResource } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '@zhin.js/logger';
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import type { AgentCore } from '../core/agent-core.js';
 import type { InteractiveRun } from '../core/interactive-run.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -689,14 +690,14 @@ const SUPPLEMENT_LEAD = /^\s*(?:补充|更正|update\b|addendum\b|correction\b)/
  * stopped). A failed entry turn keeps its outcome: the human hears that the follow-up could not be put
  * together.
  */
-export function asSupplement(result: ActorTurnOutcome, locale: string | undefined): ActorTurnOutcome | undefined {
+export function asSupplement(result: ActorTurnOutcome, locale: Locale | undefined): ActorTurnOutcome | undefined {
   if (result.status === 'cancelled') return undefined;
   if (result.status === 'failed') return result;
   const reply = result.reply ?? '';
   if (!reply.trim() || isNoReply(reply)) return undefined;
   const text = stripNoReplyMarker(reply);
   if (!text) return undefined;
-  const lead = locale?.toLowerCase().startsWith('en') ? 'Update: ' : '补充：';
+  const lead = resolveLocale(locale) === 'en' ? 'Update: ' : '补充：';
   return Object.freeze({ ...result, reply: SUPPLEMENT_LEAD.test(text) ? text : `${lead}${text}` });
 }
 
@@ -713,7 +714,7 @@ export type SupplementPlan =
  */
 export function planSupplement(
   result: ActorTurnOutcome,
-  input: Readonly<{ failures: boolean; locale: string | undefined }>,
+  input: Readonly<{ failures: boolean; locale: Locale | undefined }>,
 ): SupplementPlan {
   if (result.status === 'cancelled') return { kind: 'cancelled' };
   const supplement = asSupplement(result, input.locale);
@@ -723,22 +724,22 @@ export function planSupplement(
 }
 
 /** Fixed line when the entry model declined to tell a failure that arrived after the answer. */
-export function supplementFailureLine(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
+export function supplementFailureLine(locale: Locale | undefined): string {
+  return resolveLocale(locale) === 'en'
     ? 'Update: the background task did not finish.'
     : '补充：后台任务没有完成。';
 }
 
 /** One line for further failures of a request whose first failure was already told. */
-function moreFailuresLine(count: number, locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
+function moreFailuresLine(count: number, locale: Locale | undefined): string {
+  return resolveLocale(locale) === 'en'
     ? `${count} more background task${count === 1 ? '' : 's'} did not finish.`
     : `另有 ${count} 项后台任务没有完成。`;
 }
 
 /** One line closing a request whose background collaboration the guard stopped. */
-function collaborationStoppedLine(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
+function collaborationStoppedLine(locale: Locale | undefined): string {
+  return resolveLocale(locale) === 'en'
     ? 'The background task stopped: it reached the collaboration limit for this request.'
     : '后台任务已停止：这次请求的协作次数到了上限。';
 }
@@ -746,8 +747,8 @@ function collaborationStoppedLine(locale: string | undefined): string {
 /** Why the human is told a background task did not reach them. */
 type BackgroundFailure = 'aggregation_failed' | 'delivery_failed' | 'budget_exhausted' | 'empty_result';
 
-function backgroundFailureNotice(reason: BackgroundFailure, locale: string | undefined): string {
-  const en = locale?.toLowerCase().startsWith('en');
+function backgroundFailureNotice(reason: BackgroundFailure, locale: Locale | undefined): string {
+  const en = resolveLocale(locale) === 'en';
   switch (reason) {
     case 'aggregation_failed':
       return en
@@ -769,8 +770,8 @@ function backgroundFailureNotice(reason: BackgroundFailure, locale: string | und
 }
 
 /** Short line after a partial answer whose turn ran out of budget. */
-function budgetStoppedLine(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
+function budgetStoppedLine(locale: Locale | undefined): string {
+  return resolveLocale(locale) === 'en'
     ? '(The task ran out of its budget; this is as far as it got.)'
     : '（后台任务的预算用完了，以上是目前得到的结果。）';
 }

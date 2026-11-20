@@ -9,6 +9,13 @@ export const CONSOLE_PAGE_SECTIONS = Object.freeze([
 
 export type ConsolePageSection = (typeof CONSOLE_PAGE_SECTIONS)[number];
 
+/**
+ * Display language of Page `titleI18n` / `keywords` and declarative UI. Kept dependency-free like
+ * the sections above; `tests/contracts/locale-types.test.ts` keeps it equal to `ConsoleLocale` of
+ * `@zhin.js/console-protocol` and `Locale` of `@zhin.js/plugin-runtime`.
+ */
+export type ConsoleLocale = 'zh-CN' | 'en';
+
 export function isConsolePageSection(value: unknown): value is ConsolePageSection {
   return typeof value === 'string' && (CONSOLE_PAGE_SECTIONS as readonly string[]).includes(value);
 }
@@ -22,18 +29,15 @@ export function optionalPageSection(value: unknown): ConsolePageSection | undefi
   return value;
 }
 
-/** Locales `keywords` can be given per language for (same as `titleI18n`). */
-export type PageKeywordLocale = 'zh-CN' | 'en';
-
 /**
  * Search aliases of a page for the Console command palette (ADR 0063 决策 3 第 3 条): one list for
  * every language, or lists per language (e.g. `{ 'zh-CN': ['抽奖'], en: ['lottery'] }`).
  */
 export type PageKeywords =
   | readonly string[]
-  | Readonly<Partial<Record<PageKeywordLocale, readonly string[]>>>;
+  | Readonly<Partial<Record<ConsoleLocale, readonly string[]>>>;
 
-const PAGE_KEYWORD_LOCALES: readonly PageKeywordLocale[] = ['zh-CN', 'en'];
+const PAGE_KEYWORD_LOCALES: readonly ConsoleLocale[] = ['zh-CN', 'en'];
 const MAX_PAGE_KEYWORDS = 32;
 const MAX_PAGE_KEYWORD_LENGTH = 64;
 
@@ -65,7 +69,7 @@ export function optionalPageKeywords(value: unknown): PageKeywords | undefined {
   const input = value as Record<string, unknown>;
   const unknownLocales = Object.keys(input).filter((key) => !(PAGE_KEYWORD_LOCALES as readonly string[]).includes(key));
   if (unknownLocales.length > 0) throw new TypeError(`Unknown Page keywords locale: ${unknownLocales.sort().join(', ')}`);
-  const out: Partial<Record<PageKeywordLocale, readonly string[]>> = {};
+  const out: Partial<Record<ConsoleLocale, readonly string[]>> = {};
   for (const locale of PAGE_KEYWORD_LOCALES) {
     if (input[locale] !== undefined) out[locale] = keywordList(input[locale], `Page keywords.${locale}`);
   }
@@ -73,16 +77,16 @@ export function optionalPageKeywords(value: unknown): PageKeywords | undefined {
 }
 
 /** Keywords for one locale: a plain list applies to every locale; missing locales give `[]`. */
-export function pageKeywordsFor(keywords: PageKeywords | undefined, locale: PageKeywordLocale): readonly string[] {
+export function pageKeywordsFor(keywords: PageKeywords | undefined, locale: ConsoleLocale): readonly string[] {
   if (!keywords) return [];
   if (Array.isArray(keywords)) return keywords as readonly string[];
-  return (keywords as Readonly<Partial<Record<PageKeywordLocale, readonly string[]>>>)[locale] ?? [];
+  return (keywords as Readonly<Partial<Record<ConsoleLocale, readonly string[]>>>)[locale] ?? [];
 }
 
 export interface PageMetadata {
   readonly title?: string;
   /** Explicit display titles; missing locales retain title. */
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   readonly icon?: string;
   readonly order?: number;
   readonly hideInNav?: boolean;
@@ -101,7 +105,7 @@ export interface PageMetadata {
 
 export interface NormalizedPageMetadata {
   readonly title: string;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   readonly icon?: string;
   readonly order: number;
   readonly hideInNav: boolean;
@@ -294,7 +298,7 @@ function stringList(value: unknown, label: string): readonly string[] {
 function pageTitleTranslations(value: unknown): NormalizedPageMetadata['titleI18n'] {
   if (value === undefined) return undefined;
   const input = requireRecord(value, 'Page titleI18n');
-  const output: Partial<Record<'zh-CN' | 'en', string>> = {};
+  const output: Partial<Record<ConsoleLocale, string>> = {};
   for (const [locale, title] of Object.entries(input)) {
     if (locale !== 'zh-CN' && locale !== 'en') throw new TypeError(`Unsupported Page titleI18n locale: ${locale}`);
     const text = optionalString(title, `Page titleI18n.${locale}`);
@@ -312,7 +316,6 @@ export type DeclarativeI18nText =
 
 export type DeclarativeBadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 export type DeclarativeButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export type DeclarativeUiLocale = 'zh-CN' | 'en';
 /** Framework-agnostic renderable value (string, number, boolean, null, undefined, or JSX/ReactNode in browser). */
 export type DeclarativeRenderable = unknown;
 
@@ -347,7 +350,7 @@ export type DeclarativeValueExpr =
   | { readonly $i18n: string; readonly fallback?: string | number | boolean };
 
 /** Picks the viewer's locale from a `{ 'zh-CN' | zh | en: … }` record; plain values pass through. */
-export function pickLocalizedDataValue(value: unknown, locale: DeclarativeUiLocale): unknown {
+export function pickLocalizedDataValue(value: unknown, locale: ConsoleLocale): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
   return locale === 'en'
@@ -390,7 +393,7 @@ export function resolveDataPath(data: unknown, path: string): unknown {
 export function evaluateDeclarativeValue(
   exprOrKey: unknown,
   data: unknown,
-  locale: DeclarativeUiLocale = 'en',
+  locale: ConsoleLocale = 'en',
 ): unknown {
   if (exprOrKey === null || exprOrKey === undefined) return undefined;
   if (typeof exprOrKey === 'string') {
@@ -483,7 +486,7 @@ export function evaluateDeclarativeValue(
 
 export interface DeclarativePageContext<TData = Record<string, unknown>> {
   readonly pluginId: string;
-  readonly locale: DeclarativeUiLocale;
+  readonly locale: ConsoleLocale;
   readonly t: (key: string, ...values: readonly (string | number)[]) => string;
   readonly resource: {
     readonly state: 'loading' | 'ready' | 'empty' | 'error' | 'stale';
@@ -864,7 +867,7 @@ export interface ConsolePageBlueprint<TData = Record<string, unknown>> {
   readonly kind: 'zhin.console.page-blueprint';
   readonly version: 1;
   readonly title: string;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   readonly description?: string;
   readonly dataSource: {
     readonly action: string;
@@ -942,7 +945,7 @@ export type AdapterPageComponent = ((
 
 export function resolveDeclarativeText(
   text: DeclarativeI18nText | undefined,
-  preferredLocale: 'en' | 'zh-CN' = 'en',
+  preferredLocale: ConsoleLocale = 'en',
 ): string {
   if (!text) return '';
   if (typeof text === 'string') return text;
@@ -1228,7 +1231,7 @@ export const createCommentReviewPage = defineCommentReviewPage;
 // ── Multi-Surface Blueprint Projection (IM Card & CLI TUI) ─────────────────
 
 export interface BlueprintProjectionOptions {
-  readonly locale?: DeclarativeUiLocale;
+  readonly locale?: ConsoleLocale;
   readonly pluginId?: string;
   readonly maxRows?: number;
 }
@@ -1285,7 +1288,7 @@ export interface BlueprintImCardProjection {
 
 function createProjectionContext<TData = Record<string, unknown>>(
   data: TData | undefined,
-  locale: DeclarativeUiLocale,
+  locale: ConsoleLocale,
   pluginId: string,
   dictionary?: Readonly<Record<string, string>>,
 ): DeclarativePageContext<TData> {
@@ -1343,7 +1346,7 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
   data?: TData,
   options: BlueprintProjectionOptions = {},
 ): Readonly<BlueprintImCardProjection> {
-  const locale: DeclarativeUiLocale = options.locale ?? 'zh-CN';
+  const locale: ConsoleLocale = options.locale ?? 'zh-CN';
   const maxRows = Math.max(1, options.maxRows ?? 10);
   const recordData = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
 

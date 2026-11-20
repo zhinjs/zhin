@@ -5,7 +5,7 @@ import {
   type SelfChangeApprovalArgs,
 } from '../../index.js';
 import type { SendContent } from '@zhin.js/core';
-import { formatDateTime, type Locale } from '@zhin.js/plugin-runtime';
+import { formatDateTime, formatList, type Locale } from '@zhin.js/plugin-runtime';
 import { cardLine, cardLiteral, joinCardLines, type CardLine, type CardValues } from '../../init/card-text.js';
 import { managementCommandReference, type AgentCommandPresentation } from '../../init/command-presentation.js';
 import {
@@ -291,7 +291,7 @@ export function formatSelfChangeCard(entry: ToolApprovalEntry, presentation: Age
   }));
   const impact = impactLabel(args.impact, locale);
   const impactDetail = Array.isArray(args.impactDetail) && args.impactDetail.length > 0
-    ? args.impactDetail.join(t(locale, 'detailSeparator'))
+    ? formatList(locale, args.impactDetail, { separator: 'semicolon' })
     : undefined;
   const commands = cardCommands(entry, presentation);
   // Summary, ids, paths, the diff excerpt and the trial details come from the model, the change or the
@@ -305,7 +305,7 @@ export function formatSelfChangeCard(entry: ToolApprovalEntry, presentation: Age
     files.length > 0 ? line(locale, 'selfFiles', { count: files.length }) : undefined,
     ...shown,
     files.length > shown.length ? line(locale, 'selfMoreFiles', { count: files.length - shown.length }) : undefined,
-    configPaths.length > 0 ? line(locale, 'selfConfig', { paths: cardLiteral(configPaths.join(t(locale, 'listSeparator'))) }) : undefined,
+    configPaths.length > 0 ? line(locale, 'selfConfig', { paths: cardLiteral(formatList(locale, configPaths, { separator: 'comma' })) }) : undefined,
     ...diffExcerptLines(args, locale),
     impactDetail === undefined
       ? line(locale, 'selfImpact', { impact })
@@ -358,7 +358,7 @@ function trialLine(args: Partial<SelfChangeApprovalArgs>, locale: Locale | undef
   if (skipped.length === 0) return line(locale, 'selfTrial', { verdict });
   const omitted = typeof args.skippedChecksOmitted === 'number' && args.skippedChecksOmitted > 0 ? args.skippedChecksOmitted : 0;
   const more = omitted > 0 ? t(locale, 'selfTrialMore', { count: omitted }) : '';
-  return line(locale, 'selfTrialSkipped', { verdict, names: cardLiteral(skipped.join(t(locale, 'listSeparator'))), more });
+  return line(locale, 'selfTrialSkipped', { verdict, names: cardLiteral(formatList(locale, skipped, { separator: 'comma' })), more });
 }
 
 function impactLabel(impact: unknown, locale: Locale | undefined): string {

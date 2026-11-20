@@ -1,4 +1,4 @@
-import { createMessages, resolveLocale } from 'zhin.js/i18n';
+import { createMessages, formatList, resolveLocale } from 'zhin.js/i18n';
 import { channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import {
   answersFor,
@@ -172,7 +172,7 @@ export async function handleChoice(
       const revealed = riddleHint(entry);
       const hint = revealed.kind === 'first'
         ? messages(locale, 'hintFirst', { p0: revealed.char })
-        : messages(locale, 'hintChoices', { p0: revealed.choices.join(messages(locale, 'separator')) });
+        : messages(locale, 'hintChoices', { p0: formatList(locale, revealed.choices) });
       const penalty = Math.min(HINT_PENALTY, session.score);
       await services.updateSession(session.id, { hints_used: session.hints_used + 1, score: session.score - penalty });
       const updated = (await services.getById(session.id))!;
@@ -224,7 +224,6 @@ export const HINTS_PER_ROUND = 3;
 const messages = createMessages({
   hintFirst: { 'zh-CN': "第 1 个字是「{p0}」", en: "The first character is 「{p0}」" },
   hintChoices: { 'zh-CN': "答案是这几个字之一：{p0}", en: "The answer is one of: {p0}" },
-  separator: { 'zh-CN': "、", en: ", " },
   hintsLeft: { 'zh-CN': "本局还可提示 {p0}/{p1} 次", en: "Hints left this round: {p0}/{p1}" },
   hintsExhausted: { 'zh-CN': "本局的 {p0} 次提示已经用完，直接作答或回复「跳过」。", en: "All {p0} hints of this round are used. Answer, or reply 跳过 (skip)." },
   hintPenalty: { 'zh-CN': "（使用提示 -{p0} 分）", en: "(Hint used: -{p0} points)" },

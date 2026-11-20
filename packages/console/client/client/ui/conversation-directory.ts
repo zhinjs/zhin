@@ -8,6 +8,7 @@
  * conversation picker lists. Reads go through the existing Console RPCs, so the existing
  * permission map applies (`endpoint.view`; a principal without it simply gets no names).
  */
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { captureAuthRequest, consoleRpc } from '../console-utils/remoteApi.js';
 
@@ -259,13 +260,13 @@ export function endpointShortName(endpointId: string): string | undefined {
   return name || undefined;
 }
 
-const KIND_LABELS: Readonly<Record<ConversationKind, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+const KIND_LABELS: Readonly<Record<ConversationKind, Readonly<Record<ConsoleLocale, string>>>> = {
   private: { 'zh-CN': '私聊', en: 'Private' },
   group: { 'zh-CN': '群聊', en: 'Group' },
   channel: { 'zh-CN': '频道', en: 'Channel' },
 };
 
-export function conversationKindLabel(kind: ConversationKind, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function conversationKindLabel(kind: ConversationKind, locale: ConsoleLocale = 'zh-CN'): string {
   return KIND_LABELS[kind][locale];
 }
 
@@ -275,7 +276,7 @@ export function conversationKindLabel(kind: ConversationKind, locale: 'zh-CN' | 
  */
 export function formatConversationLabel(
   description: ConversationDescription,
-  locale: 'zh-CN' | 'en' = 'zh-CN',
+  locale: ConsoleLocale = 'zh-CN',
   options: { readonly showAccount?: boolean } = {},
 ): string {
   const { address } = description;

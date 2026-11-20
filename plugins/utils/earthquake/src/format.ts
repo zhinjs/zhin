@@ -1,5 +1,5 @@
 import { formatDateTime } from 'zhin.js';
-import type { Locale } from 'zhin.js/i18n';
+import { formatList, type Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 /** Plain-text rendering, safe for every adapter (no markup, no platform segments). */
 import { eventMagnitude } from './filters.js';
@@ -48,7 +48,7 @@ export function formatSourceWarnings(outcomes: readonly SourceOutcome[], locale:
     const reason = outcome.skipped ? t(locale, 'cooling') : outcome.error ?? t(locale, 'failed');
     return `${sourceLabel(outcome.source)}（${reason}）`;
   });
-  return t(locale, 'sourceWarning', { sources: parts.join(locale === 'en' ? '; ' : '；') });
+  return t(locale, 'sourceWarning', { sources: formatList(locale, parts, { separator: 'semicolon' }) });
 }
 
 export function formatEventList(options: {

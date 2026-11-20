@@ -1,3 +1,4 @@
+import { formatList, type Locale } from 'zhin.js/i18n';
 import {
   definePluginConsoleRpc,
   PluginConsoleRpcError,
@@ -43,26 +44,26 @@ export interface ModerationCheckTextResult {
   /** Sources that flagged the text, with their severity and reason. */
   readonly flaggedSources?: readonly { readonly sourceId: string; readonly severity: string; readonly reason?: string }[];
   /** Localized summaries for the Console page (`$i18n`). */
-  readonly decisionI18n?: Readonly<Record<'zh-CN' | 'en', string>>;
-  readonly severityI18n?: Readonly<Record<'zh-CN' | 'en', string>>;
-  readonly actionsI18n?: Readonly<Record<'zh-CN' | 'en', string>>;
+  readonly decisionI18n?: Readonly<Record<Locale, string>>;
+  readonly severityI18n?: Readonly<Record<Locale, string>>;
+  readonly actionsI18n?: Readonly<Record<Locale, string>>;
   readonly hitsText?: string;
   readonly sourcesText?: string;
 }
 
-const DECISION_LABELS: Readonly<Record<ModerationCheckTextResult['decision'], Readonly<Record<'zh-CN' | 'en', string>>>> = {
+const DECISION_LABELS: Readonly<Record<ModerationCheckTextResult['decision'], Readonly<Record<Locale, string>>>> = {
   allow: { 'zh-CN': '通过', en: 'Allowed' },
   flag: { 'zh-CN': '标记（不拦截）', en: 'Flagged (not blocked)' },
   block: { 'zh-CN': '拦截', en: 'Blocked' },
 };
-const SEVERITY_LABELS: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+const SEVERITY_LABELS: Readonly<Record<string, Readonly<Record<Locale, string>>>> = {
   pass: { 'zh-CN': '无风险', en: 'None' },
   low: { 'zh-CN': '低', en: 'Low' },
   medium: { 'zh-CN': '中', en: 'Medium' },
   high: { 'zh-CN': '高', en: 'High' },
   critical: { 'zh-CN': '严重', en: 'Critical' },
 };
-const ACTION_LABELS: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', string>>>> = {
+const ACTION_LABELS: Readonly<Record<string, Readonly<Record<Locale, string>>>> = {
   allow: { 'zh-CN': '放行', en: 'allow' },
   log: { 'zh-CN': '记录日志', en: 'log' },
   reply: { 'zh-CN': '回复提醒', en: 'reply with a warning' },
@@ -71,7 +72,7 @@ const ACTION_LABELS: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', str
   recall: { 'zh-CN': '撤回消息', en: 'recall the message' },
 };
 
-function labelOf(table: Readonly<Record<string, Readonly<Record<'zh-CN' | 'en', string>>>>, key: string) {
+function labelOf(table: Readonly<Record<string, Readonly<Record<Locale, string>>>>, key: string) {
   return table[key] ?? { 'zh-CN': key, en: key };
 }
 
@@ -162,10 +163,9 @@ async function handleCheckText(
       severity: source.severity,
       ...(source.reason ? { reason: source.reason } : {}),
     }));
-  const join = (locale: 'zh-CN' | 'en', values: readonly string[]) => values.join(locale === 'en' ? ', ' : '、');
   const actionsI18n = {
-    'zh-CN': actions.length ? join('zh-CN', actions.map((action) => labelOf(ACTION_LABELS, action)['zh-CN'])) : '无',
-    en: actions.length ? join('en', actions.map((action) => labelOf(ACTION_LABELS, action).en)) : 'none',
+    'zh-CN': actions.length ? formatList('zh-CN', actions.map((action) => labelOf(ACTION_LABELS, action)['zh-CN'])) : '无',
+    en: actions.length ? formatList('en', actions.map((action) => labelOf(ACTION_LABELS, action).en)) : 'none',
   };
   const sourcesText = flaggedSources
     .map((source) => `${source.sourceId}（${source.severity}${source.reason ? `：${source.reason}` : ''}）`)

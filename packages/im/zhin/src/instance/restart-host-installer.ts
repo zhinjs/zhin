@@ -8,6 +8,7 @@ import { readOperationSession, type OperationSession } from '@zhin.js/feature-ki
 import {
   createMessages,
   normalizeDeliveryTarget,
+  resolveLocale,
   type DeliveryTarget,
   type Locale,
   type RuntimeSnapshot,
@@ -123,7 +124,7 @@ export async function consumePendingRestartReceipt(
       return null;
     }
     const target = normalizeDeliveryTarget(parsed.target);
-    const locale: Locale = parsed.locale === 'en' ? 'en' : 'zh-CN';
+    const locale = resolveLocale(parsed.locale);
     return Object.freeze({
       version: 1,
       requestedAt: parsed.requestedAt,

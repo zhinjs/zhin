@@ -7,7 +7,7 @@ import {
   isMediaToolWithBinaryPayload,
   sanitizeToolResult,
 } from '@zhin.js/ai';
-import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
+import { createMessages, formatList, type Locale } from '@zhin.js/plugin-runtime';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { ReplyFallback } from '../event/turn-event.js';
 
@@ -61,7 +61,6 @@ const fallbackMessages = createMessages({
     'zh-CN': '模型未返回可见内容（可能为推理型模型空回复或上下文过长）',
     en: 'The model returned no visible content (a reasoning model may have replied empty, or the context is too long)',
   },
-  toolSeparator: { 'zh-CN': '、', en: ', ' },
   scheduleNamed: { 'zh-CN': '「{label}」（{id}）', en: '"{label}" ({id})' },
   scheduleNextNoTools: {
     'zh-CN': '请检查任务的执行计划和可用工具，或先用 schedule_preview 预演',
@@ -131,7 +130,7 @@ export function inlineToolName(name: string): string {
 export function formatReplyFallback(fallback: ReplyFallback, context: ReplyFallbackContext = {}): string {
   const t = (key: Parameters<typeof fallbackMessages>[1], values?: Parameters<typeof fallbackMessages>[2]) =>
     fallbackMessages(context.locale, key, values);
-  const tools = fallback.tools?.length ? fallback.tools.map(inlineToolName).join(t('toolSeparator')) : '';
+  const tools = fallback.tools?.length ? formatList(context.locale, fallback.tools.map(inlineToolName)) : '';
   const cause = fallback.cause === 'no_tools'
     ? t('causeNoTools')
     : fallback.cause === 'tool_denied'

@@ -3,6 +3,7 @@
  * can see (with mocked results), the scripted model responses, and the
  * expected harness behaviour.
  */
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { RESERVED_TOOL_NAME_PREFIXES, RESERVED_TOOL_NAMES } from '../../src/reserved-tools.js';
 import type { ZhinAgentConfig } from '../../src/config/zhin-agent-config.js';
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
@@ -67,7 +68,7 @@ export interface EvalInboundMessage {
    */
   readonly liveDanmaku?: TurnLiveDanmaku;
   /** The locale the IM ingress resolved for this message (`TurnInput.locale`). */
-  readonly locale?: 'zh-CN' | 'en';
+  readonly locale?: Locale;
   /**
    * #1250 b69: `locale` is the sender's own `/language` setting, marked by the IM ingress in trusted
    * turn metadata; absent = the project/default fallback.

@@ -1,6 +1,7 @@
+import type { ConsoleLocale } from '@zhin.js/client';
 import React, { useMemo } from 'react';
 import QRCode from 'qrcode';
-import { sandboxText, type SandboxLocale } from '../messages.js';
+import { sandboxText } from '../messages.js';
 import { stringField, type SandboxSegmentRenderer } from './context.js';
 
 /**
@@ -25,7 +26,7 @@ export function qrCodePath(text: string): { readonly size: number; readonly path
   }
 }
 
-function QrCodeMessage({ text, locale }: { readonly text: string; readonly locale: SandboxLocale }) {
+function QrCodeMessage({ text, locale }: { readonly text: string; readonly locale: ConsoleLocale }) {
   const code = useMemo(() => qrCodePath(text), [text]);
   const margin = 2;
   return (

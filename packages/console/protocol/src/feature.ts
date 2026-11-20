@@ -5,6 +5,7 @@
  * the configuration file; the other three are stored in the project database (ADR 0057 §2).
  */
 
+import type { ConsoleLocale } from './locale.js';
 export const FEATURE_RPC = Object.freeze({
   LIST: 'feature.list',
   MATRIX: 'feature.matrix',
@@ -170,7 +171,7 @@ export interface ConsoleFeatureSummary {
   readonly plugin: string;
   readonly displayName: string;
   /** Translations of `displayName` keyed by Console locale (`metadata.displayNameI18n`); absent without any. */
-  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly displayNameI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   readonly levels: readonly ConsoleFeatureLevel[];
   /** False for Plugins without business configuration: they only get the three-level switch. */
   readonly hasSchema: boolean;
@@ -204,7 +205,7 @@ export interface ConsoleFeatureMatrixRow {
   readonly plugin: string;
   readonly displayName: string;
   /** See {@link ConsoleFeatureSummary.displayNameI18n}. */
-  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly displayNameI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   /** Row category; absent from older Hosts. */
   readonly kind?: ConsoleFeatureKind;
   /** Commands / components / tools this plugin contributes; absent from older Hosts. */

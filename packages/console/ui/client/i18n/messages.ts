@@ -5,6 +5,11 @@
  */
 export const CONSOLE_UI_LOCALES = Object.freeze(['zh-CN', 'en'] as const);
 
+/**
+ * Declared here, not re-exported from `@zhin.js/console-protocol`: this component library has no
+ * `@zhin.js/*` dependency (ADR 0063). `tests/contracts/locale-types.test.ts` keeps it equal to
+ * `ConsoleLocale` and to `Locale` of `@zhin.js/plugin-runtime`.
+ */
 export type ConsoleUiLocale = (typeof CONSOLE_UI_LOCALES)[number];
 
 export const DEFAULT_CONSOLE_UI_LOCALE: ConsoleUiLocale = 'zh-CN';
@@ -100,7 +105,13 @@ export const CONSOLE_UI_MESSAGES: Readonly<Record<ConsoleUiLocale, ConsoleUiMess
   en: Object.freeze({ ...en }),
 });
 
-/** Maps any BCP 47 tag onto a built-in locale: `zh*` → zh-CN, `en*` → en, otherwise the default. */
+/**
+ * Maps any BCP 47 tag onto a built-in locale: `zh*` → zh-CN, `en*` → en, otherwise the default.
+ *
+ * Deliberately lenient, unlike `resolveLocale()` of `@zhin.js/plugin-runtime`: the input is the
+ * host's display language, and hosts outside Zhin pass browser tags such as `navigator.language`
+ * (`en-US`, `zh-TW`) straight to `ConsoleUiI18nProvider`, whose documented contract accepts any tag.
+ */
 export function resolveConsoleUiLocale(locale: string | undefined | null): ConsoleUiLocale {
   if (!locale) return DEFAULT_CONSOLE_UI_LOCALE;
   const lower = locale.toLowerCase();

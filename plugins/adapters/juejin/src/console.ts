@@ -6,7 +6,7 @@
  * - 配置（白名单、sendMode、Cookie 等）不在这里改：用 YAML / 环境变量 / config:patch。
  */
 import { definePluginConsoleRpc, PluginConsoleRpcError, type PluginConsoleRpc, type PluginConsoleRpcInput, type PluginConsoleRpcCall, type PluginConsoleRpcJson } from 'zhin.js';
-import { isLocale, type Locale } from 'zhin.js/i18n';
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { juejinEndpoints, type JuejinEndpointDirectory, type JuejinEndpointView } from './endpoint-directory.js';
 import { JuejinReviewError } from './endpoint.js';
 import { draftArticleUrl, findDraft, reviewErrorText } from './review.js';
@@ -20,10 +20,6 @@ export const JUEJIN_REVIEW_PERMISSION = 'juejin:review';
 export const JUEJIN_LOGIN_PERMISSION = 'juejin:login';
 
 const DRAFTS_PER_ENDPOINT = 50;
-
-function localeOf(input: PluginConsoleRpcInput): Locale | undefined {
-  return typeof input.locale === 'string' && isLocale(input.locale) ? input.locale : undefined;
-}
 
 function requireString(input: PluginConsoleRpcInput, key: string, label: string): string {
   const value = input[key];
@@ -113,11 +109,11 @@ export function createJuejinConsoleRpc(): PluginConsoleRpc {
         handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const found = findDraft(registry, id);
-          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new JuejinReviewError('not_found', id), localeOf(input)));
+          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new JuejinReviewError('not_found', id), resolveLocale(input.locale)));
           try {
             const { draft, replyId } = await found.endpoint.approveDraft(id);
             return { id, url: draftArticleUrl(draft), ...(replyId ? { replyId } : {}) };
-          } catch (error) { return reviewFailure(id, error, localeOf(input)); }
+          } catch (error) { return reviewFailure(id, error, resolveLocale(input.locale)); }
         }),
       },
       edit: {
@@ -126,11 +122,11 @@ export function createJuejinConsoleRpc(): PluginConsoleRpc {
           const id = requireString(input, 'id', '草稿 ID');
           const message = typeof input.message === 'string' ? input.message : '';
           const found = findDraft(registry, id);
-          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new JuejinReviewError('not_found', id), localeOf(input)));
+          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new JuejinReviewError('not_found', id), resolveLocale(input.locale)));
           try {
             const draft = found.endpoint.editDraft(id, message);
             return { id, message: draft.message };
-          } catch (error) { return reviewFailure(id, error, localeOf(input)); }
+          } catch (error) { return reviewFailure(id, error, resolveLocale(input.locale)); }
         }),
       },
       drop: {
@@ -138,10 +134,10 @@ export function createJuejinConsoleRpc(): PluginConsoleRpc {
         handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const found = findDraft(registry, id);
-          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new JuejinReviewError('not_found', id), localeOf(input)));
+          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new JuejinReviewError('not_found', id), resolveLocale(input.locale)));
           try {
             return { id, dropped: found.endpoint.discardDraft(id) };
-          } catch (error) { return reviewFailure(id, error, localeOf(input)); }
+          } catch (error) { return reviewFailure(id, error, resolveLocale(input.locale)); }
         }),
       },
       'login-check': {

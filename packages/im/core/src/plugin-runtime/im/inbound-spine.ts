@@ -12,8 +12,7 @@ import {
 } from '@zhin.js/middleware';
 import {
   createToken,
-  projectLocaleToken,
-  resolveLocale,
+  projectLocale,
   userLocalePreferencesToken,
   type GenerationAdmissionGate,
   type Locale,
@@ -201,11 +200,6 @@ function middlewareProjection(snapshot: RuntimeSnapshot): MiddlewareIndex | unde
 export function supportsIncrementalOutbound(snapshot: RuntimeSnapshot, adapter: string): boolean {
   return middlewareProjection(snapshot)?.list().every(record => record.target !== 'outbound'
     || record.adapter !== undefined && record.adapter !== adapter || record.incremental === true) ?? true;
-}
-
-export function projectLocale(snapshot: RuntimeSnapshot): Locale {
-  return resolveLocale(snapshot.resources.get(snapshot.root)?.get(projectLocaleToken.id)
-    ?? (snapshot.config.get(snapshot.root) as { locale?: unknown } | undefined)?.locale);
 }
 
 /** Resolve once per operation; callbacks retain the original operation's language. */
