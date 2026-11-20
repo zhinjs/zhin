@@ -1,4 +1,4 @@
-import { AMBIENT_FEATURE_ID } from '@zhin.js/core/runtime';
+import { AMBIENT_FEATURE_ID, inboundOutcomeSink } from '@zhin.js/core/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
   applyConfigPatches, childPluginId, createCapabilitySlot, featureId, rootPluginId,
@@ -432,13 +432,19 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
   });
 
   it('requires an explicit confirmation for global switches and restarts', async () => {
-    const { run, setGlobalEnabled, audits, roles } = await harness(on, {}, ['root']);
+    const { run, setGlobalEnabled, audits, roles, deps } = await harness(on, {}, ['root']);
     await promote(roles, 'other');
     const admin = actor({ user: 'root' });
     expect(await run(admin, '关闭 rss 全局')).toBe('全局停用 rss 会重启实例。确认请在 2 分钟内发送：功能 确认 123456');
     expect(setGlobalEnabled).not.toHaveBeenCalled();
     expect(await run(admin, '确认 000000')).toBe('没有待确认的操作，或确认码已过期。');
     expect(await run(actor({ user: 'other', standing: 'owner' }), '确认 123456')).toBe('没有待确认的操作，或确认码已过期。');
+    // zhinjs/zhin#1250: the code is another sender's, refused as not theirs (silent in a group when installed);
+    // a wrong code of the sender's own is the ordinary mistake.
+    await expect(runFeatureChat({ tokens: ['确认', '123456'], actor: actor({ user: 'other' }), locale: 'zh-CN' }, deps))
+      .rejects.toMatchObject({ reason: 'confirm-not-own' });
+    await expect(runFeatureChat({ tokens: ['确认', '000000'], actor: admin, locale: 'zh-CN' }, deps))
+      .rejects.toMatchObject({ reason: 'confirm-missing' });
     expect(await run(admin, '确认 123456')).toBe('已停用 rss（全局），实例正在重启。');
     expect(setGlobalEnabled).toHaveBeenCalledWith('rss', false);
     expect(audits.at(-1)).toMatchObject({ action: 'feature.chat:disable', target: 'global:', outcome: 'ok' });
@@ -689,8 +695,44 @@ describe('command spellings carry the real prefix', () => {
     const dm = { conversation: { kind: 'private' as const, id: 'boss', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } };
     const say = async (input: string, prefix: string, source: object = group, locale: 'zh-CN' | 'en' = 'zh-CN') =>
       (await index.dispatch({ input, source: { ...source, locale }, commandPrefix: prefix })).value as string;
-    return { say, dm };
+    /** Dispatches with a recording outcome ledger (the inbound message's own, in production). */
+    const send = async (input: string, sender: string, kind: 'group' | 'private') => {
+      const outcomes: { outcome: string; reason?: string; reply?: string }[] = [];
+      const sink = { report: (candidate: never) => { outcomes.push(candidate); return true; }, enter() {} };
+      const source = { conversation: { kind, id: kind === 'group' ? '100' : sender, endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
+        sender: { id: sender }, locale: 'zh-CN', [inboundOutcomeSink]: () => sink };
+      const result = await index.dispatch({ input, source, commandPrefix: '' });
+      return { value: result.value as string | undefined, refused: (result as { refused?: boolean }).refused === true, outcomes };
+    };
+    return { say, dm, send, deps };
   }
+
+  it('stays silent to a sender without the permission in a group and explains in a private chat (#1250)', async () => {
+    const { send } = await installed();
+    const cases = [['功能 关闭 rss', 'not-admin'], ['功能', 'not-admin'], ['角色 列表', 'not-admin'], ['角色 授予 u9 admin 账号', 'role-denied']] as const;
+    for (const [text, reason] of cases) {
+      const quiet = await send(text, 'stranger', 'group');
+      expect(quiet.value).toBeUndefined();
+      expect(quiet.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason, reply: 'no', stage: 'command' })]);
+      const dm = await send(text, 'stranger', 'private');
+      expect(dm.value).toContain('admin');
+      expect(dm.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason, reply: 'yes' })]);
+    }
+  });
+
+  it('keeps answering the mistakes of a sender who holds the permission in a group (#1250)', async () => {
+    const { send } = await installed();
+    const usage = await send('功能 乱写', 'boss', 'group');
+    expect(usage.value).toMatch(/^用法：/u);
+    expect(usage.refused).toBe(true);
+    expect(usage.outcomes).toEqual([]);
+    const expired = await send('功能 确认 999999', 'boss', 'group');
+    expect(expired.value).toBe('没有待确认的操作，或确认码已过期。');
+    // Granting owner needs an owner above: a role refusal, silent in the group.
+    const above = await send('角色 授予 u9 owner 账号', 'boss', 'group');
+    expect(above.value).toBeUndefined();
+    expect(above.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'owner-denied', reply: 'no' })]);
+  });
 
   const escape = (text: string) => text.replace(/\//gu, '\\/');
 

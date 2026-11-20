@@ -211,6 +211,37 @@ describe('ImToolApprovalChannel commands', () => {
     expect(queue.get(card.id)?.status).toBe('pending');
   });
 
+  it('flags refusals of senders who could settle no card, never an approver\'s venue or card mistakes (#1250)', () => {
+    const { queue, channel } = setup();
+    const card = queue.enqueue(DANGEROUS_CALL);
+    const flagged = (overrides: Partial<ImApprovalCommandInput>, text = `approve ${card.id}`) => {
+      const onUnauthorized = vi.fn();
+      const reply = channel.handleCommand(command(text, { ...overrides, onUnauthorized }));
+      return { reply, reasons: onUnauthorized.mock.calls.map(call => call[0]) };
+    };
+    // A member in a group (the ingress stays silent there) and in a private chat (the ingress explains).
+    expect(flagged({ senderId: 'member-7', scope: 'group', sceneId: BUSINESS_GROUP })).toMatchObject({ reasons: ['not_approver'] });
+    expect(flagged({ senderId: 'member-7', sceneId: 'member-7' })).toMatchObject({ reasons: ['not_approver'] });
+    // An approver in the wrong venue or with a wrong id is told so.
+    expect(flagged({ scope: 'group', sceneId: BUSINESS_GROUP })).toMatchObject({ reasons: [] });
+    expect(flagged({}, 'approve tap_missing')).toMatchObject({ reasons: [] });
+    expect(queue.get(card.id)?.status).toBe('pending');
+    expect(flagged({})).toMatchObject({ reasons: [] });
+    expect(flagged({})).toMatchObject({ reasons: [] });
+  });
+
+  it('flags a non-approver while the channel is off, but not an approver (#1250)', () => {
+    const { queue, channel } = setup({ enabled: false, approverIds: ['admin-1'] });
+    const card = queue.enqueue(DANGEROUS_CALL);
+    const member = vi.fn();
+    expect(channel.handleCommand(command(`approve ${card.id}`, { senderId: 'member-7', scope: 'group', sceneId: '5', onUnauthorized: member }))).toContain('未开启');
+    expect(member).toHaveBeenCalledWith('not_approver');
+    // `isImApprover` needs the channel on: a listed approver while it is off is refused like anyone else.
+    const approver = vi.fn();
+    channel.handleCommand(command(`approve ${card.id}`, { onUnauthorized: approver }));
+    expect(approver).toHaveBeenCalledWith('not_approver');
+  });
+
   it('does not settle a card from another platform even for a cross-platform approver', () => {
     const { queue, channel } = setup({ enabled: true, approverIds: ['admin-1'] });
     const card = queue.enqueue(DANGEROUS_CALL);

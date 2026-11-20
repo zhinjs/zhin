@@ -845,6 +845,11 @@ export interface GroupRuleCommandInput {
   /** 发送者的显示语言与本会话的真实命令前缀（#1250），回复里提到的命令按它拼写。 */
   readonly locale?: Locale;
   readonly commandPrefix?: string;
+  /**
+   * zhinjs/zhin#1250: called when the reply refuses a sender who may not approve / reject / disable
+   * group rules (`reason`: closed code); the ingress then stays silent in the group.
+   */
+  readonly onUnauthorized?: (reason: string) => void;
 }
 
 const RULE_COMMAND = /^rules?(?:\s+(approve|reject|disable)\s+(\S+))?\s*$/iu;
@@ -1001,7 +1006,10 @@ export class GroupRuleImChannel {
           ? [t(locale, 'listHeader'), ...open.map(rule => summaryLine(rule, locale))].join('\n')
           : t(locale, 'listEmpty');
       }
-      if (!this.#isApprover(input)) return t(locale, 'approverOnly');
+      if (!this.#isApprover(input)) {
+        input.onUnauthorized?.('not_rule_approver');
+        return t(locale, 'approverOnly');
+      }
       const key = match[2]!.toLowerCase();
       const actorId = input.senderId;
       const common = { actorId, ...(input.endpoint ? { endpoint: input.endpoint } : {}) };

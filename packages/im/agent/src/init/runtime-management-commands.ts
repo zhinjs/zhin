@@ -37,6 +37,12 @@ export type RuntimeManagementDeps = AgentCommandPresentation & {
    */
   readonly semanticMemory?: SemanticMemoryRuntime | null;
   readonly senderId?: string;
+  /**
+   * zhinjs/zhin#1250: called when the reply is a refusal because the sender lacks the operator role
+   * (`reason`: closed code). The ingress then answers only in a private chat and stays silent in a
+   * group or channel; the returned text is unchanged.
+   */
+  readonly onUnauthorized?: (reason: string) => void;
 };
 
 const MEMORY_LIST_LIMIT = 20;
@@ -61,9 +67,13 @@ export async function handleRuntimeManagementCommand(
 
   const isOperator = deps.senderRoles.isMaster || deps.senderRoles.isTrusted;
   const agent = asPrivate(deps.zhinAgent);
+  const denied = (text: string): string => {
+    deps.onUnauthorized?.('not_operator');
+    return text;
+  };
 
   if (/^models\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return t(locale, 'denied');
+    if (!isOperator) return denied(t(locale, 'denied'));
     if (!deps.inference) throw new Error('Inference operation is not configured');
     const profiles = await deps.inference.list({ kind: 'language' });
     const r = [t(locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
@@ -71,13 +81,13 @@ export async function handleRuntimeManagementCommand(
   }
 
   if (/^tree\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return t(locale, 'denied');
+    if (!isOperator) return denied(t(locale, 'denied'));
     return listSessionTree(agent, deps.sessionKey, deps);
   }
 
   const treeJump = text?.match(/^tree\s+(\d+)\s*$/iu);
   if (treeJump) {
-    if (!isOperator) return t(locale, 'denied');
+    if (!isOperator) return denied(t(locale, 'denied'));
     const n = parseLeadingInt(treeJump[1] ?? '');
     if (n == null) return t(locale, 'usage', { command: command('tree') + ' 2' });
     return deps.withModelScope
@@ -87,7 +97,7 @@ export async function handleRuntimeManagementCommand(
 
   const fork = text?.match(/^fork\s+(\d+)\s*$/iu);
   if (fork) {
-    if (!isOperator) return t(locale, 'denied');
+    if (!isOperator) return denied(t(locale, 'denied'));
     const n = parseLeadingInt(fork[1] ?? '');
     if (n == null) return t(locale, 'usage', { command: command('fork') + ' 2' });
     return deps.withModelScope
@@ -96,7 +106,7 @@ export async function handleRuntimeManagementCommand(
   }
 
   if (/^compact\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return t(locale, 'denied');
+    if (!isOperator) return denied(t(locale, 'denied'));
     const compact = () => deps.zhinAgent.compactSession(deps.sessionKey, locale);
     const result = await (deps.withModelScope ? deps.withModelScope(compact) : compact());
     return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
@@ -105,7 +115,7 @@ export async function handleRuntimeManagementCommand(
   if (/^reset\s*$/iu.test(text ?? '')) {
     // #1250: reset stays operator-only; everyone else is pointed at the clear command, which clears
     // the same (their own) session context.
-    if (!isOperator) return t(locale, 'resetDenied', { command: command('reset') });
+    if (!isOperator) return denied(t(locale, 'resetDenied', { command: command('reset') }));
     const ok = await deps.zhinAgent.archiveSession(deps.sessionKey);
     return t(locale, ok ? 'archived' : 'noSession');
   }
@@ -114,7 +124,7 @@ export async function handleRuntimeManagementCommand(
   if (memoryReply != null) return memoryReply;
 
   if (bareHealth) {
-    if (!isOperator) return t(locale, 'denied');
+    if (!isOperator) return denied(t(locale, 'denied'));
     if (!deps.inference) throw new Error('Inference operation is not configured');
     const profiles = await deps.inference.list({ kind: 'language' });
     return `${t(locale, 'health')}\n${profiles.length} configured language profiles`;

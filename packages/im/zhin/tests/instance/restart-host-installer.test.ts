@@ -234,19 +234,29 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
     }
   });
 
-  it('lets a global owner restart from a group; others there are denied and cannot confirm', async () => {
+  it('lets a global owner restart from a group; others there are silently refused and cannot confirm', async () => {
     const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
+    const latestOutcome = () => f.im.messageOutcomes.list({ limit: 1 })[0];
     try {
-      // A non-owner in the group gets the same denial as anywhere else.
+      // zhinjs/zhin#1250: a non-owner in the group gets no reply (the private-chat denial is covered above);
+      // the refusal is still audited and recorded as the message's outcome.
       await f.receive('!!重启', { sender: 'stranger', kind: 'group', conversationId: 'group-777' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(f.client.sendNative).not.toHaveBeenCalled();
+      expect(latestOutcome()).toMatchObject({ outcome: 'permission_denied', reason: 'not-global-owner', reply: 'no', command: 'restart' });
+      expect(f.audit).toHaveBeenLastCalledWith(expect.objectContaining({
+        actor: 'chat:platform:stranger', outcome: 'denied', detail: { reason: 'not-global-owner' } }));
       await f.receive('!!重启', { sender: 'alice', kind: 'group', conversationId: 'group-777' });
       expect(lastReplyText(f.client)).toContain('60 秒内回复 !!restart confirm');
-      // Another member (even another global owner) cannot confirm alice's request in the same group.
+      const sent = f.client.sendNative.mock.calls.length;
+      // Another member (even another global owner) cannot confirm alice's request in the same group,
+      // and neither is answered there.
       await f.receive('!!restart confirm', { sender: 'stranger', kind: 'group', conversationId: 'group-777' });
-      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      expect(latestOutcome()).toMatchObject({ outcome: 'permission_denied', reason: 'not-global-owner', reply: 'no' });
       await f.receive('!!restart confirm', { sender: 'bob', kind: 'group', conversationId: 'group-777' });
-      expect(lastReplyText(f.client)).toContain('没有待确认的重启');
+      expect(latestOutcome()).toMatchObject({ outcome: 'permission_denied', reason: 'confirmation-not-own', reply: 'no' });
+      expect(f.audit).toHaveBeenLastCalledWith(expect.objectContaining({
+        actor: 'chat:platform:bob', outcome: 'denied', detail: { reason: 'confirmation-not-own' } }));
+      expect(f.client.sendNative).toHaveBeenCalledTimes(sent);
       // Alice confirming from her private chat is another conversation.
       await f.receive('!!restart confirm', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
       expect(lastReplyText(f.client)).toContain('没有待确认的重启');
@@ -316,6 +326,48 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
       await waitForRestartTimer();
       expect(f.requestRestart).not.toHaveBeenCalled();
       expect(await consumePendingRestartReceipt(f.project)).toBeNull();
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('still answers a global owner\'s own mistakes in a group (#1250)', async () => {
+    const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
+    try {
+      await f.receive('!!restart', { sender: 'alice', kind: 'group', conversationId: 'group-1' });
+      await f.receive('!!restart now', { sender: 'alice', kind: 'group', conversationId: 'group-1' });
+      expect(lastReplyText(f.client)).toContain('用法');
+      f.advance(60_001);
+      await f.receive('!!restart confirm', { sender: 'alice', kind: 'group', conversationId: 'group-1' });
+      expect(lastReplyText(f.client)).toContain('没有待确认的重启');
+      // Nothing pending anywhere: an owner's stray confirm is told so too.
+      await f.receive('!!restart confirm', { sender: 'bob', kind: 'group', conversationId: 'group-1' });
+      expect(lastReplyText(f.client)).toContain('没有待确认的重启');
+      expect(f.im.messageOutcomes.list({ limit: 1 })[0]?.outcome).not.toBe('permission_denied');
+      await waitForRestartTimer();
+      expect(f.requestRestart).not.toHaveBeenCalled();
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('cancels the restart and says so when the receipt cannot be written', async () => {
+    const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
+    try {
+      await f.receive('!!restart', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      // `.zhin` is a file: the receipt directory cannot be created.
+      await writeFile(join(f.project, '.zhin'), 'not a directory');
+      await f.receive('!!restart confirm', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      expect(lastReplyText(f.client)).toContain('无法写入重启回执，已取消重启');
+      expect(f.audit).toHaveBeenLastCalledWith(expect.objectContaining({
+        actor: 'chat:platform:alice', action: 'instance.chat:restart', outcome: 'error',
+        detail: { reason: 'receipt-not-persisted' },
+      }));
+      await waitForRestartTimer();
+      expect(f.requestRestart).not.toHaveBeenCalled();
+      // The confirmation was used up: confirming again finds nothing to confirm.
+      await f.receive('!!restart confirm', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      expect(lastReplyText(f.client)).toContain('没有待确认的重启');
     } finally {
       await f.close();
     }

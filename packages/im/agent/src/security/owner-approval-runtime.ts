@@ -25,6 +25,12 @@ export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
    */
   readonly senderIsGlobalOwner: boolean;
   readonly scope: 'private' | 'group' | 'channel';
+  /**
+   * zhinjs/zhin#1250: called when the reply refuses a sender who is no global owner (`reason`: closed
+   * code); the ingress then stays silent in a group. A global owner in a group is still told to use
+   * a private chat.
+   */
+  readonly onUnauthorized?: (reason: string) => void;
 }
 
 export class OwnerApprovalRuntime {
@@ -82,6 +88,7 @@ export class OwnerApprovalRuntime {
     const command = managementCommandReference('approve', context.commandPrefix)!;
     const address = ownerCommandAddress(context);
     if (context.scope !== 'private' || !address || !context.senderIsGlobalOwner) {
+      if (!context.senderIsGlobalOwner) context.onUnauthorized?.('not_global_owner');
       return t(locale, 'denied');
     }
 

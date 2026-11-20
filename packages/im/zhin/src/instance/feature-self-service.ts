@@ -25,6 +25,7 @@ import {
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleSubjectFailure,
 } from '@zhin.js/core';
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
+import { unauthorizedCommandReply } from './unauthorized-command-reply.js';
 
 export interface FeatureSelfServiceConfig {
   readonly enabled: boolean;
@@ -577,7 +578,11 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
       const pending = deps.pending?.get(actorName(actor));
       const now = deps.now?.() ?? Date.now();
       if (!pending || pending.code !== words[1] || pending.expiresAt < now || pending.conversationKey !== actor.conversationKey) {
-        return refuse('confirm-missing', messages(locale, 'confirmMissing'));
+        // zhinjs/zhin#1250: the code belongs to another sender's confirmation here (none of the
+        // sender's own matches): refused like an unauthorized one, not as an expired code.
+        const othersCode = !pending && [...deps.pending?.entries() ?? []].some(([key, entry]) => key !== actorName(actor)
+          && entry.code === words[1] && entry.conversationKey === actor.conversationKey && entry.expiresAt >= now);
+        return refuse(othersCode ? 'confirm-not-own' : 'confirm-missing', messages(locale, 'confirmMissing'));
       }
       deps.pending?.delete(actorName(actor));
       if (!administers('')) return refuse('not-admin', messages(locale, 'denied'));
@@ -836,6 +841,13 @@ export interface InstallFeatureSelfServiceOptions extends Omit<FeatureSelfServic
   readonly onActor?: (actor: FeatureChatActor) => void;
 }
 
+/**
+ * Refusals for lack of permission (zhinjs/zhin#1250): no admin role at the scope, a role change above
+ * the sender's own, or a confirmation code that belongs to another sender. Mistakes of a sender who
+ * holds the permission (usage, expired code, validation) are not among them.
+ */
+const UNAUTHORIZED_REFUSALS: ReadonlySet<string> = new Set(['not-admin', 'role-denied', 'owner-denied', 'peer-denied', 'confirm-not-own']);
+
 /** Root commands `feature` (alias `功能`) and `role` (alias `角色`); only when enabled. */
 export function installFeatureSelfService(options: InstallFeatureSelfServiceOptions): RootResourceInstaller {
   const pending = new Map<string, PendingGlobal>();
@@ -851,11 +863,20 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
       return resolved.actor;
     };
     // Refusals throw (FeatureChatRefusal): the reply is the same, the outcome is `refused` with the reason.
-    const run = (command: CommandContext, execute: typeof runFeatureChat, localPath: 'feature' | 'role') => {
+    // zhinjs/zhin#1250: a refusal for lack of permission is the `permission_denied` outcome instead, and
+    // silent in a group or channel (a private chat still says why).
+    const run = async (command: CommandContext, execute: typeof runFeatureChat, localPath: 'feature' | 'role') => {
       const clientAdapter = operationClientAdapter(command.input);
       const invocation = command.formatCommand(localPath);
-      return execute({ tokens: featureChatTokens(command), actor: actorOf(command), locale: command.locale,
-        ...(clientAdapter ? { clientAdapter } : {}), ...(invocation ? { command: invocation } : {}) }, { ...options, pending });
+      const actor = actorOf(command);
+      try {
+        return await execute({ tokens: featureChatTokens(command), actor, locale: command.locale,
+          ...(clientAdapter ? { clientAdapter } : {}), ...(invocation ? { command: invocation } : {}) }, { ...options, pending });
+      } catch (error) {
+        if (!(error instanceof FeatureChatRefusal) || !UNAUTHORIZED_REFUSALS.has(error.reason ?? '')) throw error;
+        return unauthorizedCommandReply({ input: command.input, kind: typeof actor === 'object' ? actor.kind : undefined,
+          text: error.message, reason: error.reason!, command: localPath });
+      }
     };
     context.addFeature(commandFeatureId, 'feature', defineCommand({
       description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },

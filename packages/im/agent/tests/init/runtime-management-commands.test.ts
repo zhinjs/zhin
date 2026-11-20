@@ -17,6 +17,7 @@ describe('handleRuntimeManagementCommand', () => {
   });
 
   it('denies non-operators for /models', async () => {
+    const onUnauthorized = vi.fn();
     const reply = await handleRuntimeManagementCommand({
       service: { listModels: vi.fn() } as never,
       zhinAgent: {} as never,
@@ -24,8 +25,36 @@ describe('handleRuntimeManagementCommand', () => {
       commandPrefix: '/',
       content: '/models',
       senderRoles: { isMaster: false, isTrusted: false },
+      onUnauthorized,
     });
     expect(reply).toContain('owner / admin / trusted');
+    // #1250: the refusal is flagged so the ingress can stay silent in a group.
+    expect(onUnauthorized).toHaveBeenCalledWith('not_operator');
+  });
+
+  it('flags every operator-only refusal and nothing an operator sends (#1250)', async () => {
+    for (const content of ['/models', '/tree', '/tree 2', '/fork 2', '/compact', '/reset', 'ai.health']) {
+      const onUnauthorized = vi.fn();
+      const archiveSession = vi.fn();
+      const compactSession = vi.fn();
+      expect(await handleRuntimeManagementCommand({
+        service: {} as never, zhinAgent: { archiveSession, compactSession } as never, sessionKey: 'test:session',
+        commandPrefix: '/', content, senderRoles: { isMaster: false, isTrusted: false }, onUnauthorized,
+      })).toContain('owner / admin / trusted');
+      expect(onUnauthorized).toHaveBeenCalledWith('not_operator');
+      expect(archiveSession).not.toHaveBeenCalled();
+      expect(compactSession).not.toHaveBeenCalled();
+    }
+    const onUnauthorized = vi.fn();
+    expect(await handleRuntimeManagementCommand({
+      service: {} as never, zhinAgent: {} as never, sessionKey: 'test:session', commandPrefix: '/', content: '/tree x',
+      senderRoles, onUnauthorized,
+    })).toBeNull();
+    expect(await handleRuntimeManagementCommand({
+      service: {} as never, zhinAgent: { archiveSession: vi.fn().mockResolvedValue(false) } as never, sessionKey: 'test:session',
+      commandPrefix: '/', content: '/reset', senderRoles, onUnauthorized,
+    })).toContain('无活跃会话');
+    expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
   it('keeps reset operator-only and points everyone else at /clear (#1250)', async () => {

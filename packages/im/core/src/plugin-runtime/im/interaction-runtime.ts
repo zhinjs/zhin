@@ -22,6 +22,7 @@ import {
   type UserInteractionView,
 } from '../../built/user-interaction.js';
 import { tagInteractionOwner } from './interaction-end.js';
+import { refuseInteraction } from './interaction-refusal.js';
 import { isInteractionCancelFirst, isInteractionCancelReply } from '../../built/interaction-cancel.js';
 import { randomUUID } from 'node:crypto';
 import {
@@ -229,6 +230,11 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const payload = this.#router.resolvePayload(message, { snapshot: effectiveSnapshot });
     if (payload && effectiveSnapshot && await this.#buttons.dispatch(message, payload, effectiveSnapshot)) return true;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
+      // zhinjs/zhin#1250: another sender's live prompt — not expired, just not this sender's to answer.
+      if (this.#askedOfAnother(message, payload, effectiveSnapshot)) {
+        await refuseInteraction(message, t(message.locale, 'expired'), 'interaction_not_own');
+        return true;
+      }
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }
@@ -637,6 +643,17 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       unsubscribers.push(() => lifetime.removeEventListener('abort', abort));
     }
     return claim;
+  }
+
+  /** True when `payload` is an action of a live prompt asked of another sender in this conversation. */
+  #askedOfAnother(message: Message, payload: string, snapshot: RuntimeSnapshot | undefined): boolean {
+    const prefix = `${conversationRefKey(message.conversation)}:`;
+    const own = this.#conversationKey(message);
+    for (const [key, claim] of this.#claims) {
+      if (key === own || !key.startsWith(prefix)) continue;
+      if (claim.actions.has(payload) && claim.isLiveFor(message.generation, snapshot)) return true;
+    }
+    return false;
   }
 
   #conversationKey(source: UserInteractionSource, subjectId = source.sender?.id ?? ''): string {

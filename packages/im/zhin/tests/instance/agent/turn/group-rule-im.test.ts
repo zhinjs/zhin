@@ -70,6 +70,16 @@ describe('group rule IM channel', () => {
     const rule = await submitted();
     const code = groupRuleHashShort(rule.contentHash);
     expect(await command(`rule approve ${code}`, { senderId: 'u-2', senderChatRole: undefined })).toContain('只有本群群主或管理员');
+    // #1250: the refusal is flagged as unauthorized (the ingress stays silent in the group); listing is open to everyone.
+    const onUnauthorized = vi.fn();
+    await command(`rule reject ${code}`, { senderId: 'u-2', senderChatRole: undefined, onUnauthorized });
+    expect(onUnauthorized).toHaveBeenCalledWith('not_rule_approver');
+    const listing = vi.fn();
+    expect(await command('rules', { senderId: 'u-2', senderChatRole: undefined, onUnauthorized: listing })).toContain(code);
+    expect(listing).not.toHaveBeenCalled();
+    const admin = vi.fn();
+    expect(await command('rule approve nope', { onUnauthorized: admin })).not.toContain('只有本群群主或管理员');
+    expect(admin).not.toHaveBeenCalled();
     expect((await store.get(rule.id))!.status).toBe('pending');
     expect(await command(`rule approve ${code}`, { senderId: 'u-7', senderChatRole: undefined })).toContain('已生效');
   });
