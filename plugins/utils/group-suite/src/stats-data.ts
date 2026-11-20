@@ -1,5 +1,7 @@
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
+import type { SendContent } from '@zhin.js/core/runtime';
+import { createEcho, echoReply } from './echo.js';
 export interface StatsRankEntry {
   rank: number;
   userId: string;
@@ -77,27 +79,29 @@ export function buildStatsRankReportData(
   };
 }
 
-export function formatRankText(data: StatsRankReportData, locale?: Locale): string {
+/** Nicknames are member data: quoted as written, never expanded as outbound template text (#1250). */
+export function formatRankText(data: StatsRankReportData, locale?: Locale): SendContent {
   if (data.empty) return t(locale, 'statsEmpty', { title: data.title });
   const medals = ["🥇", "🥈", "🥉"];
+  const echo = createEcho();
   const lines = data.entries.map((entry) => {
     const prefix = entry.rank <= 3 ? medals[entry.rank - 1] : `${entry.rank}.`;
-    return t(locale, 'statsRow', { prefix, name: entry.name, count: entry.count });
+    return t(locale, 'statsRow', { prefix, name: echo.mark(entry.name), count: entry.count });
   });
   let footer = t(locale, 'statsFooter', { people: data.participantCount, messages: data.totalMessages });
   if (data.myRank != null && data.myCount != null) {
     footer += t(locale, 'statsMyFooter', { rank: data.myRank, count: data.myCount });
   }
-  return `${data.title}\n${lines.join("\n")}${footer}`;
+  return echo.content(`${data.title}\n${lines.join("\n")}${footer}`);
 }
 
-export function formatMyStatsText(data: MyStatsReportData, locale?: Locale): string {
-  return [
-    t(locale, 'myStatsTitle', { name: data.userName, scope: data.scope }),
+export function formatMyStatsText(data: MyStatsReportData, locale?: Locale): SendContent {
+  return echoReply(mark => [
+    t(locale, 'myStatsTitle', { name: mark(data.userName), scope: data.scope }),
     t(locale, 'todayMessages', { count: data.todayCount }),
     t(locale, 'weekMessages', { count: data.weekCount }),
     t(locale, 'monthMessages', { count: data.monthCount }),
     t(locale, 'totalMessages', { count: data.totalCount }),
     t(locale, 'activeDays', { count: data.activeDays }),
-  ].join("\n");
+  ].join("\n"));
 }

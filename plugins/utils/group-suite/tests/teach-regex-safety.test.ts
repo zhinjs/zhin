@@ -1,4 +1,5 @@
 import Ajv2020 from 'ajv/dist/2020.js';
+import { plainText } from './plain-text.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import schema from '../schema.json' with { type: 'json' };
 import { resolveGroupSuiteConfig } from '../src/config.js';
@@ -6,6 +7,7 @@ import { getTeachModel } from '../src/db-store.js';
 import { createInMemoryGroupSuiteDb } from '../src/memory-store.js';
 import { createGroupSuiteRuntime } from '../src/runtime-state.js';
 import { isSafeRegex, TEACH_REGEX_MAX_CONTENT, teachAdd, tryTeachReply } from '../src/teach-lib.js';
+import { untrustedContent } from '@zhin.js/core/runtime';
 
 const input = {
   locale: 'zh-CN' as const,
@@ -58,11 +60,11 @@ describe('teach regex safety', () => {
   it('teach-regex refuses the catastrophic patterns and regex rules when disabled', async () => {
     const runtime = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
     const enabled = resolveGroupSuiteConfig({ teachAllowRegex: true });
-    expect(await teachAdd(input, enabled, '(\\w+\\s?)+$ boom', true, runtime)).toBe('该正则可能导致性能问题，请简化');
-    expect(await teachAdd(input, enabled, '(.*a){10}$ boom', true, runtime)).toBe('该正则可能导致性能问题，请简化');
+    expect(plainText(await teachAdd(input, enabled, '(\\w+\\s?)+$ boom', true, runtime))).toBe('该正则可能导致性能问题，请简化');
+    expect(plainText(await teachAdd(input, enabled, '(.*a){10}$ boom', true, runtime))).toBe('该正则可能导致性能问题，请简化');
     // `|` is always read as the question/answer separator, so this one is cut to an invalid pattern first.
-    expect(await teachAdd(input, enabled, '(a|aa)+$ boom', true, runtime)).toMatch(/正则表达式不合法|性能问题/);
-    expect(await teachAdd(input, resolveGroupSuiteConfig({}), '^hi$|hello', true, runtime)).toBe('管理员已禁用正则问答');
+    expect(plainText(await teachAdd(input, enabled, '(a|aa)+$ boom', true, runtime))).toMatch(/正则表达式不合法|性能问题/);
+    expect(plainText(await teachAdd(input, resolveGroupSuiteConfig({}), '^hi$|hello', true, runtime))).toBe('管理员已禁用正则问答');
     expect(await getTeachModel(runtime.db)!.select()).toEqual([]);
   });
 
@@ -80,10 +82,12 @@ describe('teach regex safety', () => {
   it('only tries regex rules on short messages, compiles each rule once and still fills captures', async () => {
     const runtime = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
     const enabled = resolveGroupSuiteConfig({ teachAllowRegex: true, teachCooldownMs: 0 });
-    expect(await teachAdd(input, enabled, '^(\\d+)号桌|已为 $1 号桌下单', true, runtime)).toContain('^(\\d+)号桌');
+    expect(plainText(await teachAdd(input, enabled, '^(\\d+)号桌|已为 $1 号桌下单', true, runtime))).toContain('^(\\d+)号桌');
     await teachAdd(input, enabled, '长消息 exact', false, runtime);
 
-    expect(await tryTeachReply({ ...input, content: '12号桌 加一份' }, enabled, runtime)).toBe('已为 12 号桌下单');
+    // The capture is the asker's text: sent as untrusted content, never as template text.
+    expect(await tryTeachReply({ ...input, content: '12号桌 加一份' }, enabled, runtime))
+      .toEqual(['已为 ', untrustedContent('12', { source: 'group-suite.teach' }), ' 号桌下单']);
     const long = `7号桌${'x'.repeat(TEACH_REGEX_MAX_CONTENT)}`;
     expect(await tryTeachReply({ ...input, content: long }, enabled, runtime)).toBeNull();
     // Exact rules are not subject to the length cap, and regex rules stay off when disabled.

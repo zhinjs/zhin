@@ -56,6 +56,7 @@ import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-
 import { QUIET_MESSAGE_OUTCOMES, type MessageOutcomeRecord } from './message-outcome.js';
 import { defaultCommandPrefixResolver, MessageDispatcher, normalizeCommandInputText } from './message-dispatcher.js';
 import { suggestCommandReply } from './command-suggestion.js';
+import type { OutboundCommandEnvironmentInput } from './outbound-command-environment.js';
 import { interactionMessages } from '../../built/interaction-messages.js';
 import {
   formatConversationLog,
@@ -137,6 +138,17 @@ export class InboundRuntime {
     bind?: { readonly subjectId: string },
   ): UserInteraction | undefined {
     return this.context.interactions.createForMessage(message, bind);
+  }
+
+  /**
+   * zhinjs/zhin#1250: the command environment of an outbound send's account, computed by the same
+   * dispatcher (and prefix resolver) as inbound command dispatch on that account.
+   */
+  outboundCommandEnvironment(input: OutboundCommandEnvironmentInput, snapshot: RuntimeSnapshot): Readonly<{ prefix: string; menu?: string }> {
+    const source = { conversation: input.conversation, locale: input.locale,
+      ...(input.endpointId !== undefined ? { endpointId: input.endpointId } : {}) };
+    // The resolver and the feature gate read only the conversation, the endpoint name and the locale.
+    return this.#dispatcher.commandEnvironment(source as unknown as Message, snapshot);
   }
 
   async receive(

@@ -28,7 +28,7 @@ plugins:
 group-suite:
   keywordReply: true
   ephemeralKeywords: false
-  welcomeMessage: "" # 默认关闭；可设为 欢迎 {name} ({id})
+  welcomeMessage: "" # 默认关闭；可设为 "欢迎 ${sender.name}！发送 ${bot.menu} 查看功能"
   basePointsMin: 10
   basePointsMax: 30
   streakBonus: 5
@@ -71,7 +71,7 @@ group-suite:
 
 - 适配器、账号、会话层可以覆盖 `welcomeMessage`、`basePointsMin`、`basePointsMax`、`streakBonus`、`streakCap`、`rankSize`、`teachMaxPerGroup`、`teachCooldownMs`、`teachPageSize`。
 - `keywordReply`、`ephemeralKeywords`（决定存储方式）、`welcomeConversations`、`teachAllowRegex`（正则安全）只能在全局层修改。
-- 开启 `features.selfService.enabled` 后，群里的 `admin` 可以用 `功能 设置 group-suite welcomeMessage "欢迎 {name}"` 改本群欢迎语，也可以改 `rankSize`、`teachCooldownMs`、`teachPageSize`（`selfServiceFields`）；积分与问答上限只能在 Console 改。
+- 开启 `features.selfService.enabled` 后，群里的 `admin` 可以用 `功能 设置 group-suite welcomeMessage "欢迎 ${sender.name}"` 改本群欢迎语，也可以改 `rankSize`、`teachCooldownMs`、`teachPageSize`（`selfServiceFields`）；积分与问答上限只能在 Console 改。
 - 命令、中间件与入群欢迎都按所在会话读取有效配置，改动原地生效。推荐用会话层开关（`功能 关闭 group-suite`）代替 `welcomeConversations` 这类按群名单。
 
 ## 使用与权限
@@ -93,13 +93,47 @@ group-suite:
 | `skills/<name>/tools/<tool>/index.ts` | Skill 激活后披露签到查询、排行、统计和群公告 Tool |
 | `pages/index` + `pluginConsoleRpcToken` | Console「群管套件」页面（`group-suite:read`），展示签到记录数、问答词条数、签到排行榜与关键词问答规则 |
 
+### 欢迎语与问答回答里的占位符
+
+`welcomeMessage` 和 `teach` / `teach-regex` 的回答都是出站消息模板，可用的字段见
+[消息模板占位符](../../../docs/reference/message-templates.md)：
+
+| 写法 | 含义 |
+|---|---|
+| `${sender.name}` / `${sender.id}` | 欢迎语里是新成员；问答里是提问的人 |
+| `${bot.menu}` | 发送账号的菜单入口（带该账号的命令前缀与菜单关键词，例如 `#菜单`）；菜单关闭时原样保留 |
+| `${bot.prefix}` | 发送账号的命令前缀，没有前缀时为空 |
+| `${command.checkin}`、`${command.stats_rank}` | 本插件命令在该账号下的写法（带前缀与命名空间）；命令名里的 `-` 写成 `_` |
+| `${now.time}` / `${now.date}` | 仅问答回答：当前时间 / 日期，按提问者的语言格式化（由本插件填写） |
+| `$1`–`$9` | 仅 `teach-regex` 回答：正则捕获组 |
+
+同一个实例的不同账号可以有不同前缀，同一句模板会按发出消息的账号分别渲染。例：
+
+```yaml
+group-suite:
+  welcomeMessage: "欢迎 ${sender.name}！发送 ${bot.menu} 查看功能，${command.checkin} 每日签到"
+```
+
+所有占位符都至少两段（带点号），不会和配置文件加载时的环境变量引用（`${NAME}`）冲突，配置文件、群内 `功能 设置` 与问答回答里写法相同。
+
+模板只做一次扫描：新成员昵称、提问内容、正则捕获组都只当数据，里面写的 `${bot.menu}` 不会再被展开。
+
+账号配置了命令前缀、欢迎语里却直接写了「帮助」「菜单」「help」「menu」而没有用 `${bot.menu}` / `${bot.prefix}` 时，
+插件在该账号收到第一条群消息时打一条 warn（每个账号与文本一次，只对本插件实际负责欢迎的群：在 `welcomeConversations` 内、且未由 Agent 会话欢迎接管）；`zhin doctor` 看不到插件按账号的配置。
+
+旧写法 `{name}`、`{id}`、`{sender}`、`{sender.id}`、`{time}`、`{date}`、单段 `${menu}` / `${prefix}` 等不再展开，也不会自动迁移。
+欢迎语与已存问答首次用到时，插件按账号与文本各打一条 warn，列出每个旧写法对应的新写法（如 `{name} → ${sender.name}`）。
+
+命令回复里引用的存储内容——`teach` 的确认、`teach-list`、`forget`、`keyword-add` / `keyword-list` / `keyword-remove`、排行与个人统计里的昵称——按存储原样显示，不当模板展开：
+教会 `你好|你好 ${sender.name}` 后，确认消息显示的就是 `你好 ${sender.name}`，真正自动回复时才填成提问者的名字。
+
 ### 两套自动回复：teach 问答 与 keyword 关键词回复
 
 本插件有两套**互相独立**的自动回复，数据、开关和匹配方式都不同，互不可见（`teach-list` 看不到关键词，`keyword-list` 看不到问答）。两个 list 命令的末尾都会提示另一套的存在。
 
 | | teach 问答（`teach` / `teach-regex` / `teach-list` / `forget`） | 关键词回复（`keyword-add` / `keyword-list` / `keyword-remove`） |
 |---|---|---|
-| 匹配方式 | **整条消息**与问题完全一致；开启 `teachAllowRegex` 后可用 `teach-regex` 正则匹配，回答可引用 `$1` 等捕获组 | 消息**包含**关键词即回复（子串匹配） |
+| 匹配方式 | **整条消息**与问题完全一致；开启 `teachAllowRegex` 后可用 `teach-regex` 正则匹配，回答可引用 `$1`–`$9` 捕获组 | 消息**包含**关键词即回复（子串匹配） |
 | 开关 | 有数据库时始终生效 | 需 `keywordReply: true` |
 | 存储 | 插件自有问答表（插件数据库） | Database Host 会话状态（或显式 `ephemeralKeywords: true` 的临时词库） |
 | 额外能力 | 冷却 `teachCooldownMs`、命中计数、分页 `teachPageSize`、上限 `teachMaxPerGroup` | 一群最多 200 条、整体 < 64 KiB |
@@ -122,7 +156,7 @@ group-suite:
 
 ```yaml
 group-suite:
-  welcomeMessage: "欢迎 {name} ({id})"
+  welcomeMessage: "欢迎 ${sender.name}（${sender.id}）"
   welcomeConversations:
     - endpoint:
         adapter: "<复制实际 conversation.endpoint.adapter>"

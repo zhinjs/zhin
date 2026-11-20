@@ -1,4 +1,5 @@
 import { messages as t } from './i18n.js';
+import type { SendContent } from '@zhin.js/core/runtime';
 import { conversationKey, requireConversation, type ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getStatsModel } from './db-store.js';
@@ -159,7 +160,7 @@ export async function statsRankText(
   fromDate: string,
   title: string,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   await flushStatsBuffer(runtime);
   const groupId = resolveGroupId(input);
   const stats = await queryStats(groupId, fromDate, runtime);
@@ -168,7 +169,7 @@ export async function statsRankText(
   return formatRankText(data, input.locale);
 }
 
-export async function myStatsText(input: MessageInput, runtime: GroupSuiteRuntime): Promise<string> {
+export async function myStatsText(input: MessageInput, runtime: GroupSuiteRuntime): Promise<SendContent> {
   await flushStatsBuffer(runtime);
   const M = getStatsModel(runtime.db);
   if (!M) return t(input.locale, 'statsDb');

@@ -32,17 +32,19 @@ describe('group-suite layered feature config (ADR 0050 / 0055)', () => {
   it('welcomes with the group-level welcome text', async () => {
     const sent: unknown[] = [];
     const resolver: GroupSuiteConfigResolver = { configFor: target =>
-      (target as { conversation: { id: string } }).conversation.id === 'g2' ? { welcomeMessage: '本群欢迎 {name}' } : {} };
+      (target as { conversation: { id: string } }).conversation.id === 'g2' ? { welcomeMessage: '本群欢迎 ${sender.name}' } : {} };
     const self = {
-      config: { welcomeMessage: '欢迎 {name}' }, owner: { id: 'owner' },
+      config: { welcomeMessage: '欢迎 ${sender.name}' }, owner: { id: 'owner' },
       has: (token: unknown) => token === groupSuiteConfigStore,
       use: (token: unknown) => token === groupSuiteConfigStore ? resolver
-        : token === outboundMessageToken ? { send: async (input: { content: { data: { text: string } } }) => { sent.push(input.content.data.text); return { status: 'sent' }; } } : undefined,
+        : token === outboundMessageToken ? { send: async (input: { content: { data: { text: string } }; incoming: unknown }) => { sent.push([input.content.data.text, input.incoming]); return { status: 'sent' }; } } : undefined,
     };
     for (const id of ['g1', 'g2']) {
       await (welcome.handle as (this: unknown, input: unknown) => Promise<void>).call(self, { payload: {
-        name: 'notice.group.member_increase', conversation: { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'group', id }, target: { id: 'u', name: 'Bob' } } });
+        name: 'notice.group.member_increase', conversation: { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'group', id }, target: { id: 'u', name: 'Bob' }, timestamp: 1 } });
     }
-    expect(sent).toEqual(['欢迎 Bob', '本群欢迎 Bob']);
+    // The handler hands the template and the member (as data) to the outbound chain, which renders it.
+    const member = { sender: { id: 'u', name: 'Bob' }, content: '', timestamp: 1 };
+    expect(sent).toEqual([['欢迎 ${sender.name}', member], ['本群欢迎 ${sender.name}', member]]);
   });
 });
