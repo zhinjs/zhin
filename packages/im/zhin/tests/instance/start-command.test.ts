@@ -69,6 +69,16 @@ describe('start command unset ${VAR} warning (#1250)', () => {
     expect(message).not.toMatch(/QQ_APPID|QQ_SECRET/u);
   });
 
+  it('does not warn about references with a default', () => {
+    const warn = vi.fn();
+    warnUnsetConfigEnvPlaceholders({ http: { port: '${PORT:-8068}', token: '${HTTP_TOKEN:=}' }, x: { url: 'http://${HOST}/' } },
+      () => undefined, 'zhin.config.yml', { warn });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0]![0]);
+    expect(message).toContain('${HOST}');
+    expect(message).not.toMatch(/PORT|HTTP_TOKEN/u);
+  });
+
   it('stays silent when only a disabled plugin references unset variables', () => {
     const warn = vi.fn();
     warnUnsetConfigEnvPlaceholders(document, name => (name === 'HTTP_TOKEN' || name === 'RSS_KEY' ? 'set' : undefined), 'zhin.config.yml', { warn });

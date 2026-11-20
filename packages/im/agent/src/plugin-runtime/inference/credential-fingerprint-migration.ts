@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ProviderAccount } from '@zhin.js/ai/provider';
+import { parseEnvUri } from '@zhin.js/plugin-runtime';
 import { credentialMaterialFingerprint, type CredentialPayload, type OpenCredential } from './credentials.js';
 import type { AccountRuntimeContext } from './account-runtime-helpers.js';
 
@@ -16,7 +17,7 @@ function environmentSource(ctx: AccountRuntimeContext, account: ProviderAccount,
   const source = account.authentication.method === 'api-key'
     ? account.authentication.source ?? current.payload.source : undefined;
   if (!source || account.ownerId !== ctx.options.hostOwnerId) return undefined;
-  if (typeof source === 'string' && !/^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/u.test(source)) return undefined;
+  if (typeof source === 'string' && parseEnvUri(source) === undefined) return undefined;
   return source;
 }
 

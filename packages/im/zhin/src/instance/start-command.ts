@@ -1,4 +1,4 @@
-import { resolveHostCredentialSource, type CapabilityId } from '@zhin.js/plugin-runtime';
+import { createEnvironmentLookup, findUnsetEnvironmentReferences, parseEnvUri, resolveHostCredentialSource, type CapabilityId, type EnvironmentLookup } from '@zhin.js/plugin-runtime';
 import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
 import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
 import { prepareFeatureOverrideMigration } from './feature-override-migration.js';
@@ -514,7 +514,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           resolveConfiguredEndpointKeys: () => {
             const candidate = context.readCandidateSnapshot?.();
             if (candidate && candidate.generation !== context.generation) throw new Error('Endpoint validation targets another candidate generation');
-            return readConfiguredEndpointKeys(config, candidate);
+            return readConfiguredEndpointKeys(config, candidate, name => hostEnvironment.get(name));
           },
           extraTools: speechHandle?.tools,
           audioTranscriber: speechHandle,
@@ -531,8 +531,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         projectRoot: options.root,
         secureCredentialProvider: {
           resolve(secretRef) {
-            const match = /^env:\/\/([A-Z_][A-Z0-9_]*)$/u.exec(secretRef);
-            return match ? hostEnvironment.get(match[1]!) : undefined;
+            const variable = parseEnvUri(secretRef);
+            return variable ? hostEnvironment.get(variable) : undefined;
           },
         },
       })(context);
@@ -1152,9 +1152,10 @@ function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): vo
 }
 
 /**
- * Warns once about `${VAR}` placeholders whose variable is unset. The business block of an
- * instance listed in `disable_plugins` (same key as its alias) is skipped: that plugin never
- * loads, so its unset variables are not a startup problem.
+ * Warns once about `${VAR}` placeholders whose variable is unset (the same check as the
+ * gateway's config validation, `findUnsetEnvironmentReferences`: `${VAR:-…}` / `${VAR:=…}`
+ * never count). The business block of an instance listed in `disable_plugins` (same key as its
+ * alias) is skipped: that plugin never loads, so its unset variables are not a startup problem.
  */
 export function warnUnsetConfigEnvPlaceholders(
   document: unknown,
@@ -1162,38 +1163,17 @@ export function warnUnsetConfigEnvPlaceholders(
   configFile: string,
   logger: Pick<ReturnType<typeof getLogger>, 'warn'> = getLogger('setup'),
 ): void {
-  const unset = new Set<string>();
-  const visit = (value: unknown): void => {
-    if (typeof value === 'string') {
-      for (const match of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
-        const varName = match[1];
-        if (varName && getEnv(varName) === undefined) {
-          unset.add(varName);
-        }
-      }
-      return;
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    if (value && typeof value === 'object') {
-      for (const item of Object.values(value)) visit(item);
-    }
-  };
+  let checked: unknown = document;
   if (document && typeof document === 'object' && !Array.isArray(document)) {
     const record = document as Record<string, unknown>;
     const disabled = new Set(Array.isArray(record.disable_plugins)
       ? record.disable_plugins.filter((key): key is string => typeof key === 'string')
       : []);
-    for (const [key, value] of Object.entries(record)) {
-      if (!disabled.has(key)) visit(value);
-    }
-  } else {
-    visit(document);
+    checked = Object.entries(record).filter(([key]) => !disabled.has(key)).map(([, value]) => value);
   }
-  if (unset.size > 0) {
-    const vars = [...unset].map(name => `\${${name}}`).join(', ');
+  const unset = findUnsetEnvironmentReferences(checked, name => getEnv(name) !== undefined);
+  if (unset.length > 0) {
+    const vars = unset.map(name => `\${${name}}`).join(', ');
     const rel = relative(process.cwd(), configFile) || configFile;
     logger.warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
   }
@@ -1304,10 +1284,15 @@ export function runtimeSandboxOwners(snapshot: RuntimeSnapshot | undefined): Rea
   return owners;
 }
 
-/** Reads Bot Endpoint identities from the candidate config, not the old live ImRuntime. */
+/**
+ * Reads Bot Endpoint identities from the candidate config, not the old live ImRuntime. Without a
+ * candidate the raw config document is expanded with `environment` (the instance passes its
+ * EnvStore, so `.env` variables count; default: the process environment only).
+ */
 export async function readConfiguredEndpointKeys(
   config: RuntimeConfigDocument | ConfigDocumentPort,
   candidate?: RuntimeSnapshot,
+  environment: EnvironmentLookup = createEnvironmentLookup(process.env),
 ): Promise<ReadonlySet<string>> {
   const keys = new Set<string>();
   const adapters = candidate?.projections.get(adapterFeatureId);
@@ -1327,7 +1312,7 @@ export async function readConfiguredEndpointKeys(
   const document = await readConfigDocumentValue(config);
   if (!document || typeof document !== 'object') return keys;
   const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
-  const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;
+  const expanded = expandEnvironmentValue(plugins, environment) as Record<string, unknown>;
   for (const [adapter, raw] of Object.entries(expanded)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const endpoints = (raw as Record<string, unknown>).endpoints;

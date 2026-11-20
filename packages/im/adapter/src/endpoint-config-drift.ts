@@ -24,7 +24,7 @@
  * inside lists (a credential-like list key such as `tokens`, or list items that are credentials).
  */
 import { isDeepStrictEqual } from 'node:util';
-import type { PluginId } from '@zhin.js/plugin-runtime';
+import { environmentReferencesIn, type PluginId } from '@zhin.js/plugin-runtime';
 import { AdapterManagementError, type EndpointDesiredRecord } from './adapter-types.js';
 import { readConfigurationPath, writeConfigurationPath } from './configuration-fields.js';
 import { endpointCreationConfiguration } from './endpoint-profile.js';
@@ -213,11 +213,7 @@ function looselyEqual(expanded: unknown, saved: unknown): boolean {
 
 /** A value that still carries a `${VAR}` reference somewhere. */
 export function hasEnvironmentReference(value: unknown): boolean {
-  if (typeof value === 'string') return value.includes('${');
-  if (value && typeof value === 'object') {
-    try { return JSON.stringify(value).includes('${'); } catch { return false; }
-  }
-  return false;
+  return referencedVariables(value).length > 0;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -362,11 +358,14 @@ export interface EndpointWritebackPlaceholder {
   readonly reason?: 'credential' | 'reference_mismatch' | 'reference_unresolved';
 }
 
-/** `${VAR}` names inside a stored value. */
+/** Variables the `${VAR}` / `${VAR:-…}` / `${VAR:=…}` references inside a stored value read. */
 function referencedVariables(value: unknown): readonly string[] {
   let text: string;
-  try { text = typeof value === 'string' ? value : JSON.stringify(value) ?? ''; } catch { return []; }
-  return [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/gu)].map(match => match[1] ?? '').filter(Boolean);
+  if (typeof value === 'string') text = value;
+  else if (value && typeof value === 'object') {
+    try { text = JSON.stringify(value) ?? ''; } catch { return []; }
+  } else return [];
+  return environmentReferencesIn(text).map(reference => reference.variable);
 }
 
 /**

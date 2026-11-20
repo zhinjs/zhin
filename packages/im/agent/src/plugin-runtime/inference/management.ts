@@ -30,7 +30,7 @@ import {
 } from '@zhin.js/ai/provider';
 import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
 import { MODEL_FALLBACK_NOTICE, modelAvailability, type ModelAvailabilityRegistry, type ModelFallbackEvent, type ModelUnavailability } from '@zhin.js/ai';
-import { createHostDocumentCipher } from '@zhin.js/plugin-runtime';
+import { createHostDocumentCipher, parseEnvironmentReference, parseEnvUri } from '@zhin.js/plugin-runtime';
 import { InferenceAuthenticationError, InferenceCredentialStore, credentialMaterialFingerprint, environmentExpressionSource, normalizeApiKeyMaterial, type EnvironmentExpressionSource } from './credentials.js';
 import { createPersonalModelFetch } from './personal-network.js';
 import { HostAccountRuntime, type AccountStatusView } from './account-runtime.js';
@@ -88,10 +88,10 @@ export class InferenceManagementError extends Error {
 }
 
 const API_KEY_VARIABLE = /^[A-Za-z_][A-Za-z0-9_]*_API_KEY$/u;
-/** The variable an `env://NAME` source or a `${NAME…}` expression reads. */
+/** The variable an `env://NAME` source or a whole `${NAME}` / `${NAME:-…}` / `${NAME:=…}` expression reads. */
 export function environmentVariableName(source: string | EnvironmentExpressionSource): string | undefined {
   const text = typeof source === 'string' ? source : source.expression;
-  return /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(text)?.[1] ?? /^\$\{([A-Za-z_][A-Za-z0-9_]*)/u.exec(text)?.[1];
+  return parseEnvUri(text) ?? parseEnvironmentReference(text)?.variable;
 }
 /** A rejected apply carries its original error and proof that no mutation was invoked. */
 export class InferenceApplyRejectedError extends Error {

@@ -4,12 +4,10 @@
  * (the system picks a free port — tests and embedded use). Anything else is a configuration error:
  * the Host never falls back to the default port for an invalid value.
  */
+import { isWholeEnvironmentReference } from '@zhin.js/plugin-runtime';
 
 /** Port the Host listens on when `http.port` is not configured (same as the scaffold writes). */
 export const DEFAULT_HTTP_PORT = 8068;
-
-/** A whole `${VAR}` / `${VAR:-default}` reference (the form the config schema accepts for a port). */
-export const ENVIRONMENT_REFERENCE_PATTERN = /^\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=][^}]*)?\}$/u;
 
 export class InvalidHttpPortError extends Error {
   constructor(readonly field: string, readonly value: unknown, readonly reason: string) {
@@ -33,7 +31,7 @@ export function describeInvalidPortValue(value: unknown): string | undefined {
     if (value < 0 || value > 65_535) return `端口必须在 1–65535 之间，当前值 ${value}`;
     return undefined;
   }
-  if (typeof value === 'string' && ENVIRONMENT_REFERENCE_PATTERN.test(value.trim())) return undefined;
+  if (typeof value === 'string' && isWholeEnvironmentReference(value.trim())) return undefined;
   return `端口必须是 1–65535 的整数或 \${VAR} 形式的环境变量引用，当前值 ${show(value)}`;
 }
 
@@ -44,7 +42,7 @@ export function describeInvalidPortValue(value: unknown): string | undefined {
  */
 export function parseHttpPort(value: unknown, field: string, raw?: unknown): number | undefined {
   if (value === undefined || value === null) return undefined;
-  const fromReference = typeof raw === 'string' && ENVIRONMENT_REFERENCE_PATTERN.test(raw.trim()) ? `（来自 ${raw.trim()}）` : '';
+  const fromReference = typeof raw === 'string' && isWholeEnvironmentReference(raw.trim()) ? `（来自 ${raw.trim()}）` : '';
   let port: number;
   if (typeof value === 'number') port = value;
   else if (typeof value === 'string' && /^\d+$/u.test(value.trim())) port = Number(value.trim());

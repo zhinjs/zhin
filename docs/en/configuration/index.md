@@ -159,6 +159,23 @@ An unset variable without a default expands to an empty string. For fields such 
 
 Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name and defaults to `development`. Keep secrets in environment variables, never in the configuration file.
 
+Rules (the instance, the gateway, the Console and the CLI share one parser, so recognition always matches expansion):
+
+- A variable name starts with a letter or `_`, followed by letters, digits or `_`. `${1A}`, `${A-B}`, `${A:x}` and an unclosed `${A` are not references and stay as written.
+- A default runs from `:-` / `:=` to the first `}` and may be empty (`${VAR:-}`). Both forms behave the same: the default applies when the variable is unset **or empty**; `:=` does not assign the variable.
+- A value may hold several references and surrounding text (`http://${HOST}:${PORT:-80}`). There is no escape: `$${VAR}` expands to `$` followed by the value.
+- "Missing environment variable" reports (the startup warning, `missingEnv` in Console validation results) list only references without a default whose variable is unset; a reference with a default (even an empty one) is never missing.
+- Fields that take a whole reference only (such as `http.port`) accept `${VAR}` and both default forms; surrounding whitespace is ignored.
+
+### `${VAR}` versus `env://`
+
+| Syntax | Where | Meaning |
+|--------|-------|---------|
+| `${VAR}` / `${VAR:-default}` | Any string value in `zhin.config.yml` | Expanded to the variable's value when the configuration loads; may be embedded in text and may carry a default |
+| `env://VAR` | Only AI account credential sources, `ai.accounts.*.auth.source` (written by `zhin ai account add`, the scaffold and legacy-config migration) | The whole value names one variable: the Host reads it when it authorizes the account, and it is never expanded into the configuration; no default, no surrounding text |
+
+An `env://…` value in an ordinary configuration field is not expanded and stays as written; write `${VAR}` to reference an environment variable there.
+
 ## Top-Level Keys
 
 | Key | Type | Description |

@@ -9,10 +9,7 @@ import {
 import { join } from 'node:path';
 import { DEFAULT_HTTP_PORT, type ConsolePrincipal, type ConsoleRequestMeta, type HttpHost, type HttpHostOptions } from '@zhin.js/host-http';
 import type { A2AMailboxTransport, RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
-import {
-  expandEnvironmentValue,
-  type RootResourceInstaller,
-} from '@zhin.js/runtime';
+import type { RootResourceInstaller } from '@zhin.js/runtime';
 
 /**
  * The `@zhin.js/mcp/runtime` surface used here, typed locally: `@zhin.js/mcp` dev-depends on
@@ -210,7 +207,8 @@ async function resolveProtocolConfig(
   http: HttpHostOptions,
 ): Promise<ProtocolConfig> {
   const raw = isConfigPort(config) ? (await config.read()).document : config;
-  const document = expandEnvironmentValue(raw, (key) => process.env[key]) as Record<string, unknown>;
+  // `config` is the host config the instance's EnvStore already expanded; no second pass.
+  const document = (raw ?? {}) as Record<string, unknown>;
   const httpDocument = asRecord(document.http);
   const publicUrl = typeof httpDocument?.publicUrl === 'string'
     ? httpDocument.publicUrl.trim().replace(/\/+$/u, '')

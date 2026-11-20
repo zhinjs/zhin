@@ -4,7 +4,7 @@ import {
   type EndpointSecretResolver,
 } from '@zhin.js/adapter';
 import type { ConsoleConfigProjectPatchResult } from '@zhin.js/console-protocol';
-import { readPluginConfigurationMap, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { environmentReferencesIn, readPluginConfigurationMap, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { isSecretConfigKey, parsePluginConfigSchema, type JsonSchema } from '@zhin.js/runtime';
 
 /** Configuration file reads/writes the instance already owns (RuntimeConfigDocument + ConsoleConfigurationStore). */
@@ -84,7 +84,7 @@ export function createEndpointSecretResolver(expand: (value: string) => string):
   return Object.freeze({
     async resolve(reference: string, context: Readonly<{ signal: AbortSignal }>) {
       context.signal.throwIfAborted();
-      if (typeof reference !== 'string' || !reference.includes('${')) {
+      if (typeof reference !== 'string' || environmentReferencesIn(reference).length === 0) {
         throw new AdapterManagementError('invalid_configuration', 'Endpoint credential reference is invalid');
       }
       const value = expand(reference);
