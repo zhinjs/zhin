@@ -5,7 +5,7 @@
       "package": "zhin.js",
       "type": "minor",
       "version": "1.10.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。"
     },
     {
       "package": "@zhin.js/gateway",
@@ -17,13 +17,13 @@
       "package": "@zhin.js/agent",
       "type": "minor",
       "version": "1.10.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——Trace 会话摘要新增 `origin`、`platform`、`scope_kind`、`scene_label`、`display_name`、`conversations`、`conversations_total`；`@zhin.js/agent/trace` 新增导出 `sanitizeOriginText`、`turnOriginDisplayName` 等来源命名函数与 `withSessionScheduleLabels`；工具审批卡片新增 `origin`（`ToolApprovalCardOrigin`）、`platform`、`scopeKind`、`sceneLabel`、`displayName`。1.9.1 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 73 批——审批卡/群规卡格式化函数改收 presentation 对象（不再接受前缀字符串）。同属 1.10.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——Trace 会话摘要新增 `origin`、`platform`、`scope_kind`、`scene_label`、`display_name`、`conversations`、`conversations_total`；`@zhin.js/agent/trace` 新增导出 `sanitizeOriginText`、`turnOriginDisplayName` 等来源命名函数与 `withSessionScheduleLabels`；工具审批卡片新增 `origin`（`ToolApprovalCardOrigin`）、`platform`、`scopeKind`、`sceneLabel`、`displayName`。1.9.1 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 73 批——审批卡/群规卡格式化函数改收 presentation 对象（不再接受前缀字符串）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，`@zhin.js/agent/turn` 的 `isCancelIntent()` 新增可选参数 `commandPrefix`。同属 1.10.0。"
     },
     {
       "package": "@zhin.js/core",
       "type": "minor",
       "version": "1.14.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 65 批——`IncomingMessage` 新增 `forwarded`，`recordIncoming` 新增选项 `textAuthoredBySender`，新增导出 `adapterDeclaresInboundTextAuthoredBySender`；IM 运行时为声明能力的适配器在私聊未改动的纯文本入站写入 HMAC 证据（ADR 0067 D8）。1.13.1 已发布，本次为 1.14.0，npm 上 1.14.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 65 批——`IncomingMessage` 新增 `forwarded`，`recordIncoming` 新增选项 `textAuthoredBySender`，新增导出 `adapterDeclaresInboundTextAuthoredBySender`；IM 运行时为声明能力的适配器在私聊未改动的纯文本入站写入 HMAC 证据（ADR 0067 D8）。1.13.1 已发布，本次为 1.14.0，npm 上 1.14.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`。同属 1.14.0。"
     },
     {
       "package": "@zhin.js/adapter",

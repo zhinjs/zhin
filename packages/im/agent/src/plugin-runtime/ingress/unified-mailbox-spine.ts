@@ -216,7 +216,7 @@ export function isMergeableGroupTurn(input: Readonly<{
   const kind = input.message.conversation.kind;
   if (kind !== 'group' && kind !== 'channel') return false;
   if (!input.plainText || input.isMaster) return false;
-  if (isCancelIntent(input.content)) return false;
+  if (isCancelIntent(input.content, input.message.commandPrefix)) return false;
   const text = input.message.content.trim();
   const prefixes = input.trigger?.prefixes?.length ? input.trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
   if (prefixes.some((prefix) => prefix && text.startsWith(prefix))) return false;

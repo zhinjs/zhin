@@ -1,3 +1,4 @@
+import { isCancelWord } from 'zhin.js';
 import { resolveLocale } from 'zhin.js/i18n';
 import { reminderMessages as t } from './i18n.js';
 import type { CommandContext } from 'zhin.js/command';
@@ -38,8 +39,9 @@ export async function createPersonalReminder(
       context.signal.throwIfAborted();
       if (Date.now() >= deadline) throw new ReminderCreationDeadline();
     };
+    // #1250 第 74 批：取消词中英文都认（`取消` / `退出` / `算了` / `cancel` / `quit` / `exit`），不分会话语言。
     const checkCancel = (value: string) => {
-      if (value.trim().toLowerCase() === (locale === 'en' ? 'cancel' : '取消')) throw new ReminderCreationCancelled();
+      if (isCancelWord(value)) throw new ReminderCreationCancelled();
     };
     const stepRemaining = (stage: 'time' | 'body' | 'confirmation') => {
       checkDeadline();
@@ -59,8 +61,9 @@ export async function createPersonalReminder(
       })).trim();
       checkDeadline(); checkCancel(reply); return reply;
     };
+    // #1250 第 74 批审查 L2: command arguments are data — only answers to a waiting question cancel,
+    // so `/remind create 明天9点 退出` creates a reminder whose text is 退出.
     let expression = parameters.when?.trim();
-    if (expression) checkCancel(expression);
     let parsed: ReturnType<typeof parseNaturalReminderTime> | undefined;
     let timeError = '';
     while (!parsed) {
@@ -75,7 +78,6 @@ export async function createPersonalReminder(
       }
     }
     let text = parameters.text?.trim();
-    if (text) checkCancel(text);
     let textError = '';
     while (!text || text.length > 500 || isCommand(text)) {
       if (text) textError = isCommand(text) ? t(locale, 'bodyCommand') : t(locale, 'bodyLimit');
