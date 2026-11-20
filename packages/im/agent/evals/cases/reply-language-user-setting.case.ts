@@ -1,6 +1,6 @@
 import { defineEvalCase } from '../framework/index.js';
 
-const USER_SET = 'Reply language (set by the user with /language): en.';
+const USER_SET = 'Reply language (set by the user with the language command): en.';
 
 export default defineEvalCase({
   id: 'reply-language-user-setting',
@@ -13,7 +13,7 @@ export default defineEvalCase({
     outboundContains: ['nice day for a walk'],
     modelInputContains: [USER_SET, 'only an explicit language request in the current message overrides it'],
     modelInputNotContains: ['Reply language fallback:'],
-    systemPromptContains: ["else the user's /language setting"],
+    systemPromptContains: ["else the user's own language setting"],
     systemPromptNotContains: [USER_SET],
   },
 });

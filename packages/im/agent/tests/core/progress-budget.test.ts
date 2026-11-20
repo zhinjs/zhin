@@ -689,7 +689,7 @@ it('names a /language setting on progress, continuation and exhausted requests (
   expect(calls.length).toBeGreaterThanOrEqual(2);
   for (const call of calls) {
     const instruction = lastUserText(call.context);
-    expect(instruction).toContain('Reply language (set by the user with /language): en.');
+    expect(instruction).toContain('Reply language (set by the user with the language command): en.');
     expect(instruction).not.toContain('Reply language fallback:');
     expect(instruction).toContain('only an explicit language request in the current message overrides it');
   }

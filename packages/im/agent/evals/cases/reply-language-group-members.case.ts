@@ -13,7 +13,7 @@ export default defineEvalCase({
   expect: {
     outboundContains: ['Here is the summary.', '这是总结。'],
     requestInputContains: {
-      1: ['Reply language (set by the user with /language): en.'],
+      1: ['Reply language (set by the user with the language command): en.'],
       2: ['Reply language fallback: zh-CN.'],
     },
     stableSystemPrompt: true,

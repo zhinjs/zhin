@@ -26,11 +26,11 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         key: {
           type: 'string',
           enum: [...USER_PROFILE_KEYS],
-          description: '偏好维度（固定 8 个，同一维度覆盖写入）: name 名字, language 语言（仅参考，回复语言以 /language 为准）, timezone 时区, style 回复风格, interests 兴趣, dislikes 不喜欢的, occupation 职业, location 所在地。其他内容用 note。',
+          description: '偏好维度（固定 8 个，同一维度覆盖写入）: name 名字, language 语言（仅参考，回复语言以用户的语言指令设置为准）, timezone 时区, style 回复风格, interests 兴趣, dislikes 不喜欢的, occupation 职业, location 所在地。其他内容用 note。',
         },
         value: {
           type: 'string',
-          description: '偏好值（set 需要）；note/unnote/call_me/tone 的内容也放这里。language 只作参考、不决定回复语言：回复语言以用户自己用语言指令（如 /language en）的设置为准；用户想改回复语言时，提示他发送语言指令，不要用 set 写 language。',
+          description: '偏好值（set 需要）；note/unnote/call_me/tone 的内容也放这里。language 只作参考、不决定回复语言：回复语言以用户自己用语言指令 language 的设置为准；用户想改回复语言时，提示他发送语言指令（命令名 language，带上 [Turn context] 里的命令前缀，不要猜前缀），不要用 set 写 language。',
         },
       },
       required: ['action'],
@@ -80,7 +80,7 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
           const saved = `已保存: ${normalized} = ${(await profiles.get(userId, normalized)) ?? ''}`;
           // #1250 b69: the reply language belongs to the user's own `/language` setting.
           return normalized === 'language'
-            ? `${saved}（仅作参考，不改变回复语言；要固定回复语言请让用户发送语言指令，如 /language en）`
+            ? `${saved}（仅作参考，不改变回复语言；要固定回复语言请让用户发送语言指令 language，带上本会话的命令前缀）`
             : saved;
         }
         case 'delete': {

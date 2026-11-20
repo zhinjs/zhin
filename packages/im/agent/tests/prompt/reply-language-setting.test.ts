@@ -27,7 +27,7 @@ const userSet = (locale: 'en' | 'zh-CN') => ({ [USER_REPLY_LOCALE_METADATA_KEY]:
 describe('reply language set with /language', () => {
   it('ranks the current message request, then /language, then the written language, then SOUL.md', () => {
     const explicit = REPLY_LANGUAGE_RULE.indexOf('explicit reply-language request first');
-    const setting = REPLY_LANGUAGE_RULE.indexOf("the user's /language setting");
+    const setting = REPLY_LANGUAGE_RULE.indexOf("the user's language setting");
     const written = REPLY_LANGUAGE_RULE.indexOf('match their actual request');
     const fallback = REPLY_LANGUAGE_RULE.indexOf('use Reply language fallback');
     const soul = REPLY_LANGUAGE_RULE.indexOf('SOUL.md');
@@ -50,7 +50,7 @@ describe('reply language set with /language', () => {
     const context = buildTurnContextEnvelope({ turn: imTurn('alice', {
       text: '今天天气怎么样？', locale: 'en', metadata: userSet('en'),
     }) })!;
-    expect(context).toContain('Reply language (set by the user with /language): en.');
+    expect(context).toContain('Reply language (set by the user with the language command): en.');
     expect(context).not.toContain('Reply language fallback:');
   });
 
@@ -58,7 +58,7 @@ describe('reply language set with /language', () => {
     for (const metadata of [undefined, {}, { [USER_REPLY_LOCALE_METADATA_KEY]: false }]) {
       const context = buildTurnContextEnvelope({ turn: imTurn('bob', { text: '今天天气怎么样？', locale: 'en', ...(metadata ? { metadata } : {}) }) })!;
       expect(context).toContain('Reply language fallback: en.');
-      expect(context).not.toContain('set by the user with /language');
+      expect(context).not.toContain('set by the user with the language command');
     }
   });
 
@@ -75,7 +75,7 @@ describe('reply language set with /language', () => {
       turn: imTurn('alice', { text: '帮我查一下', locale: 'en', metadata: userSet('en') }),
       profileSummary: '[User profile]\n- language: 中文',
     })!;
-    expect(context).toContain('Reply language (set by the user with /language): en.');
+    expect(context).toContain('Reply language (set by the user with the language command): en.');
     expect(context).toContain('- language: 中文');
     expect(context).toContain('a language in [User profile] is only a reference');
   });
@@ -84,16 +84,16 @@ describe('reply language set with /language', () => {
     const alice = buildTurnContextEnvelope({ turn: imTurn('alice', { text: 'hi', locale: 'en', metadata: userSet('en') }) })!;
     const bob = buildTurnContextEnvelope({ turn: imTurn('bob', { text: 'hi', locale: 'zh-CN', metadata: {} }) })!;
     const carol = buildTurnContextEnvelope({ turn: imTurn('carol', { text: 'hi', locale: 'zh-CN', metadata: userSet('zh-CN') }) })!;
-    expect(alice).toContain('Reply language (set by the user with /language): en.');
+    expect(alice).toContain('Reply language (set by the user with the language command): en.');
     expect(bob).toContain('Reply language fallback: zh-CN.');
-    expect(bob).not.toContain('/language');
-    expect(carol).toContain('Reply language (set by the user with /language): zh-CN.');
+    expect(bob).not.toContain('set by the user with the language command');
+    expect(carol).toContain('Reply language (set by the user with the language command): zh-CN.');
   });
 
   it('uses the same wording for the progress and exhausted-turn instructions', () => {
     for (const instruction of [buildProgressSummaryInstruction('en', true), buildExhaustedTurnInstruction(3, 'en', true)]) {
       expect(instruction).toContain(REPLY_LANGUAGE_RULE);
-      expect(instruction).toContain('Reply language (set by the user with /language): en.');
+      expect(instruction).toContain('Reply language (set by the user with the language command): en.');
     }
     for (const instruction of [buildProgressSummaryInstruction('en'), buildExhaustedTurnInstruction(3, 'en')]) {
       expect(instruction).toContain('Reply language fallback: en.');
