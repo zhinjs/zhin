@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { build as esbuild, stop as stopEsbuild, type BuildOptions, type BuildResult, type Plugin as EsbuildPlugin } from 'esbuild';
-import type ts from 'typescript';
+import { resolveBlueprintRelativeImport, transpileBlueprintGraph } from './blueprint-transpile.js';
 import {
   assertPageLocalName,
   buildBlueprintFromSpec,
@@ -31,10 +30,7 @@ import {
 } from '@zhin.js/console-contract';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
-import {
-  assertLayoutModule,
-  extractPageMetadata,
-} from './static-metadata.js';
+import { readClientMetadata } from './metadata-worker.js';
 import {
   ALLOWED_ESM_CANONICAL,
   rewriteBareImportsForBrowser,
@@ -228,11 +224,6 @@ const CONSOLE_CONTRACT_STUB = [
   'export function createCommentReviewPage(reviewSpec = {}) { return defineCommentReviewPage(reviewSpec); }',
 ].join('\n');
 
-const require = createRequire(import.meta.url);
-function tsCompiler(): typeof ts {
-  return require('typescript') as typeof ts;
-}
-
 const PURE_CONSOLE_CONTRACT_TARGET: Readonly<Record<string, unknown>> = Object.freeze({
   definePage: (metadata: Record<string, unknown> = {}) => Object.freeze({ ...metadata }),
   defineLayout: (metadata: Record<string, unknown> = {}) => Object.freeze({ ...metadata }),
@@ -286,7 +277,7 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
   async load<T = unknown>(source: string, request: ClientModuleRequest): Promise<T> {
     const absSource = resolve(source);
     const text = await readFile(absSource, 'utf8');
-    const metadata = metadataFor(text, absSource, request);
+    const metadata = await metadataFor(text, absSource, request);
     const hash = contentHash(text);
     const fileName = `${safe(request.owner)}-${safe(request.localName)}-${hash}.js`;
     const output = join(this.#outDir, fileName);
@@ -308,12 +299,13 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
 
     const extracted =
       String(request.feature) === pageFeature && !absSource.endsWith('.tsx')
-        ? tryExtractPureBlueprint(text, absSource)
+        ? await tryExtractPureBlueprint(text, absSource)
         : undefined;
     const blueprint = extracted?.blueprint;
 
-    // Pure `.ts` Blueprint pages are synthesized directly from in-process `ts.transpileModule`
-    // output (zero `esbuild` child process), while `.tsx` or non-blueprint pages use `bundlePageEntry`.
+    // Pure `.ts` Blueprint pages are synthesized directly from per-module esbuild `transform`
+    // output (no bundling, no resident TypeScript compiler — #1250), while `.tsx` or
+    // non-blueprint pages use `bundlePageEntry`.
     const bundled = extracted
       ? synthesizePureBlueprintModule(absSource, extracted.modules, request, metadata)
       : await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
@@ -376,32 +368,31 @@ interface ExtractedPureBlueprint {
   readonly modules: ReadonlyMap<string, TranspiledBlueprintModule>;
 }
 
-function tryExtractPureBlueprint(
+async function tryExtractPureBlueprint(
   sourceText: string,
   absSource: string,
-): ExtractedPureBlueprint | undefined {
+): Promise<ExtractedPureBlueprint | undefined> {
   if (!PURE_BLUEPRINT_CALL_RE.test(sourceText) || FORBIDDEN_BROWSER_IMPORT_RE.test(sourceText)) {
     return undefined;
   }
   try {
-    const ts = tsCompiler();
+    const sources = await withEsbuildService(() => transpileBlueprintGraph(
+      absSource,
+      sourceText,
+      (text) => !FORBIDDEN_BROWSER_IMPORT_RE.test(text),
+    ));
     const evaluatedCache = new Map<string, Record<string, unknown>>();
     const modules = new Map<string, TranspiledBlueprintModule>();
-    const evalModule = (filePath: string, rawText?: string): Record<string, unknown> => {
+    const evalModule = (filePath: string): Record<string, unknown> => {
       const resolved = resolve(filePath);
       const cached = evaluatedCache.get(resolved);
       if (cached) return cached;
-      const text = rawText ?? readFileSync(resolved, 'utf8');
-      if (FORBIDDEN_BROWSER_IMPORT_RE.test(text)) {
+      const source = sources.get(resolved);
+      if (!source) throw new Error(`Blueprint module was not transpiled: ${resolved}`);
+      if (source.code === undefined || FORBIDDEN_BROWSER_IMPORT_RE.test(source.text)) {
         throw new Error(`Browser dependency in ${resolved}`);
       }
-      const transpiled = ts.transpileModule(text, {
-        fileName: resolved,
-        compilerOptions: {
-          module: ts.ModuleKind.CommonJS,
-          target: ts.ScriptTarget.ES2022,
-        },
-      });
+      const code = source.code;
       const exportsObj: Record<string, unknown> = {};
       const importMap: Record<string, string> = {};
       evaluatedCache.set(resolved, exportsObj);
@@ -414,37 +405,23 @@ function tryExtractPureBlueprint(
           importMap[specifier] = '@zhin.js/console-contract';
           return PURE_CONSOLE_CONTRACT_EXPORTS;
         }
-        if (specifier.startsWith('.')) {
-          const baseDir = dirname(resolved);
-          const candidates = [
-            resolve(baseDir, specifier),
-            resolve(baseDir, specifier.replace(/\.js$/u, '.ts')),
-            resolve(baseDir, `${specifier}.ts`),
-            resolve(baseDir, `${specifier}.js`),
-            resolve(baseDir, specifier, 'index.ts'),
-            resolve(baseDir, specifier, 'index.js'),
-          ];
-          for (const candidate of candidates) {
-            if (candidate.endsWith('.tsx') || candidate.endsWith('.jsx')) continue;
-            if (statSync(candidate, { throwIfNoEntry: false })?.isFile() === true) {
-              const target = resolve(candidate);
-              importMap[specifier] = target;
-              return evalModule(target);
-            }
-          }
+        const target = resolveBlueprintRelativeImport(resolved, specifier);
+        if (target) {
+          importMap[specifier] = target;
+          return evalModule(target);
         }
         throw new Error(`Unsupported import in pure blueprint page: ${specifier}`);
       };
-      const fn = new Function('exports', 'require', transpiled.outputText);
+      const fn = new Function('exports', 'require', code);
       fn(exportsObj, localRequire);
       modules.set(resolved, {
-        code: transpiled.outputText,
+        code,
         imports: Object.freeze({ ...importMap }),
       });
       return exportsObj;
     };
 
-    const modExports = evalModule(absSource, sourceText);
+    const modExports = evalModule(absSource);
     const defaultExport = modExports.default;
     const rawBp =
       typeof defaultExport === 'function'
@@ -502,7 +479,7 @@ function synthesizePureBlueprintModule(
   });
 
   return [
-    '// Pure Server-Driven Blueprint (zero-esbuild synthesized module)',
+    '// Pure Server-Driven Blueprint (unbundled synthesized module)',
     'const __zhin_contract__ = (() => {',
     '  const exports = {};',
     cjsContractStub,
@@ -550,13 +527,18 @@ let activeEsbuildCalls = 0;
 let stopEsbuildTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function runEsbuild(options: BuildOptions & { write: false }): Promise<BuildResult<{ write: false }>> {
+  return withEsbuildService(() => esbuild(options));
+}
+
+/** Runs esbuild work on the shared service and stops the service once it has been idle briefly. */
+async function withEsbuildService<T>(run: () => Promise<T>): Promise<T> {
   activeEsbuildCalls += 1;
   if (stopEsbuildTimer) {
     clearTimeout(stopEsbuildTimer);
     stopEsbuildTimer = undefined;
   }
   try {
-    return await esbuild(options);
+    return await run();
   } finally {
     activeEsbuildCalls -= 1;
     if (activeEsbuildCalls === 0) {
@@ -988,12 +970,10 @@ function manifestSource(root: string, source: string): string {
   return result.split(sep).join('/');
 }
 
-function metadataFor(source: string, fileName: string, request: ClientModuleRequest): unknown {
-  if (request.feature === pageFeature) return extractPageMetadata(source, fileName);
-  if (request.feature === layoutFeature) {
-    assertLayoutModule(source, fileName);
-    return undefined;
-  }
+/** Parsed off the main thread so the TypeScript compiler does not stay resident (#1250). */
+async function metadataFor(source: string, fileName: string, request: ClientModuleRequest): Promise<unknown> {
+  if (request.feature === pageFeature) return readClientMetadata('page', source, fileName);
+  if (request.feature === layoutFeature) return readClientMetadata('layout', source, fileName);
   throw new Error(`Unsupported client Feature: ${request.feature}`);
 }
 
