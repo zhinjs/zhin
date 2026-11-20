@@ -204,8 +204,11 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
             allowed = false;
           }
           const scene = session?.scene;
-          const actor = `chat:${scene?.endpoint.adapter ?? 'unknown'}:${session?.sender?.id ?? 'unknown'}`;
-          const target = scene ? `${scene.endpoint.id}:${scene.kind}:${scene.id}`.slice(0, 512) : undefined;
+          // Endpoint ids join their parts with NUL; audit rows and logs show them with `/` (readable, searchable).
+          const endpointLabel = scene ? scene.endpoint.id.replaceAll('\u0000', '/') : undefined;
+          // The gateway bridge drops audit entries whose actor exceeds 256 characters.
+          const actor = `chat:${scene?.endpoint.adapter ?? 'unknown'}:${session?.sender?.id ?? 'unknown'}`.slice(0, 256);
+          const target = scene ? `${endpointLabel}:${scene.kind}:${scene.id}`.slice(0, 512) : undefined;
           const audit = (action: string, outcome: ConsoleAuditEntry['outcome'], reason?: string) => {
             try {
               options.audit?.({ actor, action: `instance.chat:${action}`, ...(target ? { target } : {}), outcome,
@@ -260,7 +263,7 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
             op: 'instance_restart_requested',
             source: 'chat',
             adapter: scene.endpoint.adapter,
-            endpoint: scene.endpoint.id,
+            endpoint: endpointLabel,
             conversation: `${scene.kind}:${scene.id}`,
             sender: session.sender?.id ?? '',
           }));
