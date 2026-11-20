@@ -14,7 +14,7 @@ import {
 import { looksLikeRawToolMarkup, stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { turnReplyMessages } from './turn-reply-messages.js';
-import { REPLY_LANGUAGE_RULE } from '../prompt/rules/reply-language.js';
+import { REPLY_LANGUAGE_RULE, formatReplyLanguageLine } from '../prompt/rules/reply-language.js';
 import { omitInlineBinaryInAssistantMessages } from '../media/inline-binary.js';
 
 export type ProgressUpdateTrigger = 'progress' | 'extension' | 'continuation';
@@ -40,18 +40,21 @@ export function friendlyProgressText(raw: string | undefined): string | undefine
   return text.length > MAX_PROGRESS_CHARS ? `${text.slice(0, MAX_PROGRESS_CHARS - 1)}…` : text;
 }
 
-export function buildProgressSummaryInstruction(locale?: Locale): string {
+export function buildProgressSummaryInstruction(locale?: Locale, localeSetByUser = false): string {
+  const language = formatReplyLanguageLine(locale, localeSetByUser);
   return [
     '[System notice] Tools are disabled for this reply.',
     'Write a 1-2 sentence progress update for the user: what is done so far and what you will do next.',
     REPLY_LANGUAGE_RULE,
-    ...(locale === undefined ? [] : [`Reply language fallback: ${locale}.`]),
+    ...(language === undefined ? [] : [language]),
     'Plain natural language only: no tool names, file paths, commands, code or raw output.',
   ].join('\n');
 }
 
 export interface ProgressSummaryInput {
   readonly locale?: Locale;
+  /** #1250 b69: `locale` is the sender's own `/language` setting rather than the project fallback. */
+  readonly localeSetByUser?: boolean;
   readonly transport: LlmCompletionPort;
   readonly model: Model;
   readonly systemPrompt: string;
@@ -71,7 +74,7 @@ export async function summarizeProgress(input: ProgressSummaryInput): Promise<st
       {
         systemPrompt: input.systemPrompt,
         // #1250 第 29 批：本轮助手原文里的内嵌媒体载荷不回送模型。
-        messages: [...omitInlineBinaryInAssistantMessages(input.messages), createUserMessage(buildProgressSummaryInstruction(input.locale))],
+        messages: [...omitInlineBinaryInAssistantMessages(input.messages), createUserMessage(buildProgressSummaryInstruction(input.locale, input.localeSetByUser))],
         tools: undefined,
       },
       { signal, sessionId: input.sessionId },

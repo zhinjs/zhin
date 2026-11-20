@@ -1,5 +1,6 @@
 import { assistantTextReply } from '../../../../../agent/tests/helpers/mock-llm-api.js';
 import { ingressInferenceFixture } from './inference-fixture.js';
+import { userSetReplyLocale } from '../../../../../agent/src/prompt/rules/reply-language.js';
 import { RuntimeMessage } from '../../../../../core/src/plugin-runtime/im/contracts.js';
 import { MessageDispatcher } from '../../../../../core/src/plugin-runtime/im/message-dispatcher.js';
 import { RuntimeInteractionCoordinator } from '../../../../../core/src/plugin-runtime/im/interaction-runtime.js';
@@ -13,7 +14,8 @@ import { InboundOutcomeLedger, inboundOutcomeSink } from '@zhin.js/core/runtime'
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../core/src/plugin-runtime/im/conversation-runtime.js';
 import { executeInboundTurnSpine } from '../../../../../core/src/plugin-runtime/im/inbound-spine.js';
-import { rootPluginId, SnapshotStore, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { rootPluginId, SnapshotStore, userLocalePreferencesToken, type Locale, type RuntimeSnapshot,
+  type UserLocalePreferences } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '@zhin.js/agent/runtime';
 
@@ -411,10 +413,18 @@ describe('CLI progressive reply ingress', () => {
 
 
 function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; text: string; enabled?: boolean; errorTemplate?: string;
-  execute?: (request: TurnRequest) => Promise<unknown> }) {
+  execute?: (request: TurnRequest) => Promise<unknown>;
+  /** #1250 b69: `/language` settings by sender id, served through the root preference port. */
+  preferences?: Readonly<Record<string, Locale>>; senderId?: string; metadata?: Readonly<Record<string, unknown>> }) {
   const endpoint = { adapter: 'root', id: 'root\u0000zhin.adapter\u0000fixture' };
-  const conversation = { endpoint, kind: 'private' as const, id: 'user' };
-  const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
+  const conversation = { endpoint, kind: 'private' as const, id: options.senderId ?? 'user' };
+  const preferencePort: UserLocalePreferences | undefined = options.preferences ? {
+    get: async (_endpoint, senderId) => options.preferences![senderId],
+    set: async () => {},
+  } : undefined;
+  const resources = preferencePort
+    ? new Map([[rootPluginId(), new Map<string, unknown>([[userLocalePreferencesToken.id, preferencePort]])]]) : new Map();
+  const snapshot = { root: rootPluginId(), resources, tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
   const dispatcher = new MessageDispatcher(() => options.prefix!);
   const coordinator = new RuntimeInteractionCoordinator();
   const reply = vi.fn(async (content: unknown) => {
@@ -428,8 +438,8 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
       conversation: conversation,
       content: options.text,
       // The bot owner (ADR 0056: Runtime-set chat role).
-      sender: { id: 'user', chatRole: 'owner', chatRoleLevels: { owner: 'global' } },
-      metadata: {},
+      sender: { id: options.senderId ?? 'user', chatRole: 'owner', chatRoleLevels: { owner: 'global' } },
+      metadata: options.metadata ?? {},
       segments: [],
       endpointId: 'bot',
       mentioned: false,
@@ -505,6 +515,45 @@ it('localizes the ingress error fallback and preserves a configured template', a
     execute: async () => { throw new Error('upstream'); } });
   await custom.run();
   expect(custom.reply).toHaveBeenCalledWith('原配置: upstream');
+});
+
+describe('#1250 b69 reply language set with /language', () => {
+  async function captured(options: Parameters<typeof localizedIngress>[0]) {
+    let input: TurnRequest['input'] | undefined;
+    const flow = localizedIngress({ prefix: '!', enabled: true, ...options,
+      execute: async (request) => { input = request.input; return { status: 'completed', output: [] }; } });
+    expect(await flow.run()).toBe(true);
+    return input!;
+  }
+
+  it('marks the turn locale as the sender\'s own setting, so the turn context names /language', async () => {
+    const input = await captured({ locale: 'en', text: '今天天气怎么样', preferences: { user: 'en' } });
+    expect(input.locale).toBe('en');
+    expect(input.metadata).toMatchObject({ zhinUserLocale: 'en' });
+    expect(userSetReplyLocale(input)).toBe('en');
+  });
+
+  it('keeps the project fallback when the sender never set a language', async () => {
+    const input = await captured({ locale: 'en', text: '今天天气怎么样', preferences: {} });
+    expect(input.metadata).toMatchObject({ zhinUserLocale: false });
+    expect(userSetReplyLocale(input)).toBeUndefined();
+    const noPort = await captured({ locale: 'en', text: 'hi' });
+    expect(userSetReplyLocale(noPort)).toBeUndefined();
+  });
+
+  it('does not let adapter metadata claim a user-set locale', async () => {
+    const input = await captured({ locale: 'en', text: 'hi', metadata: { zhinUserLocale: 'en' } });
+    expect(input.metadata).toMatchObject({ zhinUserLocale: false });
+    expect(userSetReplyLocale(input)).toBeUndefined();
+  });
+
+  it('follows each sender\'s own setting: one sender\'s /language never applies to another', async () => {
+    const preferences = { alice: 'en' as const };
+    const alice = await captured({ senderId: 'alice', locale: 'en', text: '你好', preferences });
+    const bob = await captured({ senderId: 'bob', locale: 'zh-CN', text: 'hello', preferences });
+    expect(userSetReplyLocale(alice)).toBe('en');
+    expect(userSetReplyLocale(bob)).toBeUndefined();
+  });
 });
 
 it('falls back to the anonymous user floor for a merged participant without access (ADR 0038 §2)', () => {

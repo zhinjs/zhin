@@ -61,6 +61,7 @@ import {
   isCheckpointResumePrompt,
   type TurnCheckpointRecord,
 } from '../turn/turn-checkpoint-store.js';
+import { userSetReplyLocale } from '../prompt/rules/reply-language.js';
 
 export {
   collectAgentLoopTurnRun,
@@ -243,6 +244,7 @@ export async function* runAgentLoopTextTurnRun(
         signal,
         summarize: () => input.interactiveRun ? Promise.resolve(undefined) : summarizeProgress({
           locale: input.turnContext.input?.locale,
+          localeSetByUser: userSetReplyLocale(input.turnContext.input) !== undefined,
           transport: completionUsage.transport,
           model: llmModel,
           systemPrompt: proseSystemPrompt,
@@ -494,6 +496,7 @@ export async function* runAgentLoopTextTurnRun(
         || hardLimitReached()) break;
       const checkpoint = await summarizeExhaustedTurn({
         locale: input.turnContext.input?.locale,
+        localeSetByUser: userSetReplyLocale(input.turnContext.input) !== undefined,
         transport: completionUsage.transport,
         model: llmModel,
         systemPrompt: proseSystemPrompt,
