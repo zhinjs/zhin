@@ -10,7 +10,7 @@ import {
 
 /**
  * Plugin Runtime wiring:
- * - `commands/roulette` and the `轮盘` alias middleware share one action runner.
+ * - `commands/roulette` (also reached as 「轮盘 开局」 through its `match`) runs every action.
  * - `middlewares/roulette-fire` lets the player on turn just say 「开枪」.
  * - Sessions use the host database when installed, otherwise memory.
  * - `schedules/deadlines` enforces turn and lobby timeouts and posts the result.

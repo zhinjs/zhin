@@ -190,7 +190,7 @@ ai:
 ai:
   trigger:
     prefixes: ["ai:"]          # 默认 ['#', 'AI:', 'ai:']
-    ignorePrefixes: ["/"]      # 默认 ['/', '!', '！']
+    ignorePrefixes: ["/"]      # 默认 ['/', '!', '！']；适配器的 commandPrefix（非空时）总是额外算作命令前缀
     respondToAt: true          # 默认 true：群里 @ Bot 时触发
     respondToPrivate: true     # 默认 true：私聊直接触发
     keywords: []               # 私聊中包含这些词时触发

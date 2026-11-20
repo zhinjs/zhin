@@ -283,7 +283,7 @@ export async function evaluateIngressGatesAndTrigger(input: {
 
   if (!matched && liveRoom) {
     const text = message.content.trim();
-    if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
+    if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger, message.commandPrefix)) matched = { content: text };
   }
   if (!matched && input.onUnmatched && await input.onUnmatched(outboundBlocked)) {
     return { kind: 'halt', handled: true };

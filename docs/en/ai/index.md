@@ -163,7 +163,7 @@ To let external AI clients connect to your bot, use the top-level `mcp:` config 
 ai:
   trigger:
     prefixes: ["ai:"]          # default ['#', 'AI:', 'ai:']
-    ignorePrefixes: ["/"]      # default ['/', '!', '！']
+    ignorePrefixes: ["/"]      # default ['/', '!', '！']; the adapter's commandPrefix (when non-empty) always counts as a command prefix too
     respondToAt: true          # default true: trigger when mentioned in a group
     respondToPrivate: true     # default true: trigger on every DM
     keywords: []               # trigger when a DM contains one of these

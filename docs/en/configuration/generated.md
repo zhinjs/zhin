@@ -343,7 +343,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.respondToAt` | boolean \| string | no | — | 是否响应 @ 机器人（默认 true） |
 | `ai.trigger.respondToPrivate` | boolean \| string | no | — | 是否响应私聊（默认 true） |
 | `ai.trigger.keywords` | array&lt;string&gt; | no | — | 触发关键词（可选） |
-| `ai.trigger.ignorePrefixes` | array&lt;string&gt; | no | — | 忽略的前缀（命令前缀，避免与命令冲突，默认 ['/', '!', '！']） |
+| `ai.trigger.ignorePrefixes` | array&lt;string&gt; | no | — | 除适配器真实 commandPrefix 外额外视为命令的前缀（不当 AI 消息、不进合并窗口；默认 ['/', '!', '！']） |
 | `ai.trigger.timeout` | number \| string | no | — | 超时时间（毫秒，默认 60000） |
 | `ai.trigger.thinkingMessage` | string | no | — | 思考中提示语（可选，设置后会在处理前发送） |
 | `ai.trigger.errorTemplate` | string | no | — | 入口层错误提示模板，{error} 为错误信息（可选；不配置时用聊天口吻说"刚卡了一下"，主人额外看到原因） |

@@ -190,18 +190,31 @@ export function routeSpecialistAgent(
   return platformAgents[0] ? { userText, agent: platformAgents[0] } : { userText };
 }
 
-/** Messages starting with a command prefix are never AI turns, addressed or not. */
-export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig | undefined): boolean {
+/**
+ * The prefixes that mark a message as a command (#1250 第 82 批: one judgement for every AI entry):
+ * the dispatcher's real `commandPrefix` for this message's adapter / endpoint — left out when it is
+ * `''`, which would make every message a command — plus `ai.trigger.ignorePrefixes` (default `/`, `!`, `！`).
+ * A message reaches the Agent only after no command claimed it, so this only decides what an unclaimed
+ * command-looking message is: never an AI turn and never part of a merge window.
+ */
+function commandLikePrefixes(trigger: AITriggerConfig | undefined, commandPrefix: string | undefined): readonly string[] {
   const ignorePrefixes = trigger?.ignorePrefixes?.length
     ? trigger.ignorePrefixes
     : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
-  return ignorePrefixes.some(prefix => prefix && text.startsWith(prefix));
+  const prefixes = commandPrefix ? [commandPrefix, ...ignorePrefixes] : ignorePrefixes;
+  return prefixes.filter((prefix) => prefix.length > 0);
+}
+
+/** Messages starting with a command prefix ({@link commandLikePrefixes}) are never AI turns, addressed or not. */
+export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig | undefined, commandPrefix: string | undefined): boolean {
+  return commandLikePrefixes(trigger, commandPrefix).some((prefix) => text.startsWith(prefix));
 }
 
 /**
  * ADR 0038 §1: may this addressed message join a group merge window? Only
  * plain-text group / channel messages from non-master senders that are not a
- * trigger-prefix command or a stop word. Everything else keeps its own turn.
+ * trigger-prefix message, a command ({@link hasIgnoredTriggerPrefix}) or a stop word.
+ * Everything else keeps its own turn.
  */
 export function isMergeableGroupTurn(input: Readonly<{
   message: Message;
@@ -218,8 +231,9 @@ export function isMergeableGroupTurn(input: Readonly<{
   const text = input.message.content.trim();
   const prefixes = input.trigger?.prefixes?.length ? input.trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
   if (prefixes.some((prefix) => prefix && text.startsWith(prefix))) return false;
-  if (input.message.commandPrefix && text.startsWith(input.message.commandPrefix)) return false;
-  return !/^[/#]/u.test(input.content.trim());
+  // The raw message and the addressed content (`@bot /status`) both go through the one command judgement.
+  if (hasIgnoredTriggerPrefix(text, input.trigger, input.message.commandPrefix)) return false;
+  return !hasIgnoredTriggerPrefix(input.content.trim(), input.trigger, input.message.commandPrefix);
 }
 
 export function matchAiTrigger(
@@ -230,7 +244,7 @@ export function matchAiTrigger(
   const text = message.content.trim();
   if (!text) return null;
 
-  if (hasIgnoredTriggerPrefix(text, trigger)) return null;
+  if (hasIgnoredTriggerPrefix(text, trigger, message.commandPrefix)) return null;
 
   const isPrivate = message.conversation.kind === 'private';
   const prefixes = trigger?.prefixes?.length ? trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
