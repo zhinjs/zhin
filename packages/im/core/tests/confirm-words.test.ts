@@ -5,6 +5,18 @@ import { isInteractionCancelFirst, isInteractionCancelReply } from '../src/built
 
 // #1250 第 74 批：确认 / 取消词的唯一词表，中英文合并、不分语言。
 describe('isConfirmWord / isCancelWord', () => {
+  it('strips trailing punctuation and whitespace in linear time (no regex backtracking on long whitespace runs)', () => {
+    expect(isConfirmWord('确认！！ \t。')).toBe(true);
+    expect(isCancelWord('cancel ...')).toBe(true);
+    // Whitespace inside the word is kept: only the tail is stripped.
+    expect(isConfirmWord('o k')).toBe(false);
+    const hostile = `${'\t'.repeat(200_000)}x`;
+    const started = performance.now();
+    expect(isConfirmWord(hostile)).toBe(false);
+    expect(isCancelWord(`取消${'\t '.repeat(100_000)}`)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it.each(['确认', '确定', '同意', 'confirm', 'yes', 'y', 'ok', 'agree'])('takes %s as a confirm word everywhere', word => {
     expect(isConfirmWord(word)).toBe(true);
     expect(isConfirmWord(word, { yesNo: true })).toBe(true);

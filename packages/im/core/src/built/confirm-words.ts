@@ -24,8 +24,20 @@ const CANCEL_WORDS: ReadonlySet<string> = new Set(['取消', '退出', '算了',
 /** 只在是非问答里才算否定 / 取消的词。 */
 const YES_NO_CANCEL_WORDS: ReadonlySet<string> = new Set(['不', '否', '拒绝', 'no', 'n', 'reject', 'false']);
 
-/** 末尾可去掉的标点与空白（NFKC 之后，全角 `！？，` 已是半角）。 */
-const TRAILING_PUNCTUATION = /[\s!.?~,;:。、…～]+$/u;
+/** 末尾可去掉的标点（NFKC 之后，全角 `！？，` 已是半角）；空白另由 {@link isTrailingStrippable} 判断。 */
+const TRAILING_PUNCTUATION: ReadonlySet<string> = new Set(['!', '.', '?', '~', ',', ';', ':', '。', '、', '…', '～']);
+
+function isTrailingStrippable(char: string): boolean {
+  return TRAILING_PUNCTUATION.has(char) || /^\s$/u.test(char);
+}
+
+/** 去掉末尾的标点与空白。逐字符从末尾向前扫描（线性时间），不用 `[...]+$` 正则，避免长串空白回溯。 */
+function stripTrailingPunctuation(text: string): string {
+  const chars = Array.from(text);
+  let end = chars.length;
+  while (end > 0 && isTrailingStrippable(chars[end - 1]!)) end -= 1;
+  return end === chars.length ? text : chars.slice(0, end).join('');
+}
 
 export interface ReplyWordOptions {
   /**
@@ -37,7 +49,7 @@ export interface ReplyWordOptions {
 
 /** 规范化一条回复用于比对：NFKC、去首尾空白、去末尾标点、小写。 */
 export function normalizeReplyWord(text: string): string {
-  return text.normalize('NFKC').trim().replace(TRAILING_PUNCTUATION, '').trim().toLowerCase();
+  return stripTrailingPunctuation(text.normalize('NFKC').trim()).trim().toLowerCase();
 }
 
 /** `text` 是否整句就是一个确认词（中英文均可，不分语言）。 */
