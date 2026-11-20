@@ -7,10 +7,12 @@ import { tryHandleIngressCommands, type IngressCommandsContext } from '../../src
 import { OwnerApprovalRuntime } from '../../src/security/owner-approval-runtime.js';
 
 /**
- * zhinjs/zhin#1250: management, approval-card, owner `/approve` and group-rule commands from a sender
+ * zhinjs/zhin#1250: approval-card, owner `/approve` and group-rule commands from a sender
  * without the permission are silent in a group or channel and explained in a private chat. Either way
  * the message is handled here (returns true: the spine stops before any AI turn, so no model answers
- * "you are not allowed" in the bot's place) and its outcome is `permission_denied`.
+ * "you are not allowed" in the bot's place) and its outcome is `permission_denied`. The Agent
+ * management commands (`models`, `tree`, `reset` …) are Root commands since 第 83 批 (see
+ * tests/init/runtime-management-commands.test.ts) and no longer reach this stage.
  */
 describe('Agent ingress refusals of unauthorized senders (#1250)', () => {
   let tmp: string;
@@ -24,7 +26,6 @@ describe('Agent ingress refusals of unauthorized senders (#1250)', () => {
   function run(options: {
     content: string;
     kind?: 'group' | 'private' | 'channel';
-    operator?: boolean;
     globalOwner?: boolean;
     groupRuleReply?: (input: { onUnauthorized?: (reason: string) => void }) => string | null;
     toolApprovalReply?: (input: { onUnauthorized?: (reason: string) => void }) => string | null;
@@ -41,60 +42,28 @@ describe('Agent ingress refusals of unauthorized senders (#1250)', () => {
       [inboundOutcomeSink]: () => sink,
     };
     const reply = vi.fn(async () => ({ status: 'sent' }));
-    const replyFixed = vi.fn(async () => ({ status: 'sent' }));
     const archiveSession = vi.fn(async () => true);
     const input = {
       message,
-      lease: { stopSignal: new AbortController().signal },
-      operationSignal: undefined,
-      sessionKey: 'session',
-      senderRoles: (options.operator === true ? { hostRole: 'owner' } : {}),
       turnAccess: { origin: { kind: 'im', platform: 'qq', scope: kind, sceneId: '100' }, principal: { subjectId: 'u1' } },
       ownerId: 'owner-1',
       effectiveEndpoint: 'bot-1',
       agent: { service: {}, agent: { archiveSession, ownerApprovals }, semanticMemory: null },
       groupRules: { handleCommand: async (command: { onUnauthorized?: (reason: string) => void }) => options.groupRuleReply?.(command) ?? null },
       toolApprovalIm: { handleCommand: (command: { onUnauthorized?: (reason: string) => void }) => options.toolApprovalReply?.(command) ?? null },
-      withInference: async () => { throw new Error('no inference in this test'); },
       reply,
-      replyFixed,
     } as unknown as IngressCommandsContext;
-    return { input, reply, replyFixed, archiveSession, outcomes };
+    return { input, reply, archiveSession, outcomes };
   }
 
-  it('is silent to a non-operator sending management commands in a group or channel, and does not run them', async () => {
-    for (const kind of ['group', 'channel'] as const) {
-      for (const content of ['/models', '/tree', '/tree 1', '/fork 1', '/compact', '/reset', 'ai.health']) {
-        const t = run({ content, kind });
-        expect(await tryHandleIngressCommands(t.input)).toBe(true);
-        expect(t.reply).not.toHaveBeenCalled();
-        expect(t.replyFixed).not.toHaveBeenCalled();
-        expect(t.archiveSession).not.toHaveBeenCalled();
-        expect(t.outcomes).toEqual([{ outcome: 'permission_denied', reason: 'not_operator', stage: 'agent_gate', reply: 'no', command: 'agent' }]);
-      }
+  it('leaves the management commands to the command dispatch (#1250 第 83 批)', async () => {
+    for (const content of ['/models', '/tree', '/fork 1', '/compact', '/reset', '/health', 'ai.health']) {
+      const t = run({ content });
+      expect(await tryHandleIngressCommands(t.input)).toBe(false);
+      expect(t.reply).not.toHaveBeenCalled();
+      expect(t.archiveSession).not.toHaveBeenCalled();
+      expect(t.outcomes).toEqual([]);
     }
-  });
-
-  it('still tells a non-operator why in a private chat', async () => {
-    const t = run({ content: '/models', kind: 'private' });
-    expect(await tryHandleIngressCommands(t.input)).toBe(true);
-    expect(t.reply).toHaveBeenCalledWith(expect.stringContaining('此功能需要 zhin 角色'));
-    expect(t.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'not_operator', reply: 'yes' })]);
-    const reset = run({ content: '/reset', kind: 'private' });
-    expect(await tryHandleIngressCommands(reset.input)).toBe(true);
-    expect(reset.replyFixed).toHaveBeenCalledWith(expect.stringContaining('/clear'));
-    expect(reset.archiveSession).not.toHaveBeenCalled();
-  });
-
-  it('answers an operator in a group, mistakes included', async () => {
-    const usage = run({ content: '/tree 0', operator: true });
-    expect(await tryHandleIngressCommands(usage.input)).toBe(true);
-    expect(usage.reply).toHaveBeenCalledWith(expect.stringContaining('用法'));
-    expect(usage.outcomes).toEqual([]);
-    const reset = run({ content: '/reset', operator: true });
-    expect(await tryHandleIngressCommands(reset.input)).toBe(true);
-    expect(reset.archiveSession).toHaveBeenCalledWith('session');
-    expect(reset.replyFixed).toHaveBeenCalledTimes(1);
   });
 
   it('is silent to a group-rule or approval-card refusal flagged unauthorized, and replies otherwise', async () => {

@@ -499,6 +499,16 @@ async function resolveTurnFacts(
  * stored grants along the conversation's scope chain; platform standing never counts). `hostRole`
  * is `owner` only for a **global** `owner` (host-wide trust); a lower-level owner counts as `admin`.
  */
+/**
+ * `true` when the message is labelled as coming from something other than a person (`origin`, or
+ * `metadata.origin`, other than `human`, e.g. another bot). The Agent answers people only: its
+ * ingress route and its management Root commands leave such messages unanswered.
+ */
+export function isNonHumanOrigin(message: Pick<Message, 'metadata'>): boolean {
+  const origin = (message as { readonly origin?: unknown }).origin ?? message.metadata?.origin;
+  return typeof origin === 'string' && origin !== 'human';
+}
+
 export function resolveRuntimeSenderRoles(message: Pick<Message, 'sender'>): RuntimeSenderRoles {
   const role = message.sender?.id ? hostChatRole(message.sender) : undefined;
   return role ? { hostRole: role } : {};

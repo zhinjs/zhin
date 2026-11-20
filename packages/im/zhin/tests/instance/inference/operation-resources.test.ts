@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SnapshotStore, rootPluginId, createCapabilitySlot, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, rootPluginId, createCapabilitySlot, createRootPrivateToken, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { RuntimeMessage } from '@zhin.js/core/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import {
@@ -17,6 +17,7 @@ import { createHostOperationResources } from '@zhin.js/agent/runtime';
 import { openAiProvider } from '../../../../ai/src/providers/api-key.js';
 import { CommandIndex, commandFeatureId, defineCommand } from '../../../../command/src/index.js';
 import { ToolIndex, toolFeatureId, defineAgentTool } from '../../../../tool/src/index.js';
+import { dispatchLeaseToken } from '../../../../agent/src/plugin-runtime/inference/dispatch-lease.js';
 
 async function fixture(native = false) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-capability-'));
@@ -73,6 +74,30 @@ it('does no model/secret/quota work for has/use, an unconsumed stream or a close
     expect(read).not.toHaveBeenCalled(); expect(f.requests).not.toHaveBeenCalled();
     expect(f.resolveSource).not.toHaveBeenCalled(); expect(f.quota.check).not.toHaveBeenCalled(); expect(f.quota.record).not.toHaveBeenCalled();
     expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('exposes the dispatching generation to an IM command operation only, by token identity (#1250 第 83 批)', async () => {
+  const f = await fixture(), lease = f.snapshots.acquire();
+  try {
+    const im = f.ports.im.open({ lease, snapshots: f.snapshots, message: f.message, owner: f.root, signal: f.signal })!;
+    const tool = f.ports.agent.open({ lease, snapshots: f.snapshots, request: f.turn, owner: f.root, signal: f.signal })!;
+    expect(im.has(dispatchLeaseToken)).toBe(true);
+    expect(tool.has(dispatchLeaseToken)).toBe(false);
+    // A look-alike token with the same id is not the dispatch lease.
+    const lookalike = createRootPrivateToken('zhin.agent.dispatch-lease');
+    expect(im.has(lookalike)).toBe(false);
+    expect(() => im.use(lookalike)).toThrow('Resource is not available in this operation');
+    const dispatched = lease.value.generation;
+    // A newer generation is published meanwhile: the command still retains the one that dispatched it.
+    f.snapshots.commit(dispatched, { snapshot: { ...lease.value, generation: dispatched + 1 } as never, dispose() {} });
+    expect(f.snapshots.current.generation).toBe(dispatched + 1);
+    const retained = im.use(dispatchLeaseToken).retain();
+    expect(retained.value.generation).toBe(dispatched);
+    expect(f.snapshots.owns(retained)).toBe(true);
+    retained.release();
+    expect(lease.active).toBe(true);
+    await im.close(); await tool.close();
   } finally { lease.release(); await f.close(); }
 });
 

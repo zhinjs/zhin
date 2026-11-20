@@ -101,7 +101,7 @@
     "check:plugin-runtime-migration-verify": "pnpm exec vitest run basic/cli/tests/plugin-runtime/migration-verify.test.ts",
     "check:ci-preflight": "node scripts/check-ci-preflight.mjs",
     "check:all": "node scripts/check-all-harness.mjs",
-    "type-check": "tsc --noEmit -p tsconfig.typecheck.json",
+    "type-check": "node --max-old-space-size=6144 ./node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.typecheck.json",
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
     "eval:agent": "turbo run eval --filter=@zhin.js/agent",
