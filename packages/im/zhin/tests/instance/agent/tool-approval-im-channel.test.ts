@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { managementCommandText } from '@zhin.js/agent';
 import {
   ToolApprovalQueue,
   resolveToolHardGateImApproval,
@@ -27,14 +28,18 @@ const DANGEROUS_CALL: ToolApprovalEnqueueInput = {
   origin: { platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: BUSINESS_GROUP },
 };
 
-function setup(config: ToolHardGateImApprovalConfig = { enabled: true, approverIds: { icqq: ['admin-1', 'admin-2'] } }) {
+function setup(
+  config: ToolHardGateImApprovalConfig = { enabled: true, approverIds: { icqq: ['admin-1', 'admin-2'] } },
+  // #1250: the recipient Endpoint's command presentation; these fixtures model an Endpoint with prefix `/`.
+  resolvePresentation: ConstructorParameters<typeof ImToolApprovalChannel>[0]['resolvePresentation'] = () => ({ commandPrefix: '/' }),
+) {
   const queue = new ToolApprovalQueue();
   const sent: Array<{ target: ImApprovalDeliveryTarget; text: string }> = [];
   const send = vi.fn(async (target: ImApprovalDeliveryTarget, text: string) => {
     sent.push({ target, text });
   });
   let settings = resolveToolHardGateImApproval(config);
-  const channel = new ImToolApprovalChannel({ queue, settings: () => settings, send });
+  const channel = new ImToolApprovalChannel({ queue, settings: () => settings, send, ...(resolvePresentation ? { resolvePresentation } : {}) });
   const stop = channel.start();
   return {
     queue,
@@ -339,6 +344,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
       settings: () => resolveToolHardGateImApproval(config),
       send,
       resolveOwner: (platform, endpointKey) => platform === 'icqq' && endpointKey === '10001' ? 'owner-1' : undefined,
+      resolvePresentation: () => ({ commandPrefix: '/' }),
     });
     channel.start();
     return { queue, channel, sent, send };
@@ -467,5 +473,129 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
     expect(text).toContain('未看完整正文请去 Console');
     expect(text).toContain('试跑：通过');
     expect(text).not.toContain('跳过：');
+  });
+});
+
+/** The command a recipient copies from a card line such as `批准：<command>` / `Approve: <command>`. */
+function cardCommand(text: string, label: RegExp): string {
+  const line = text.split('\n').find(item => label.test(item));
+  if (!line) throw new Error(`no ${label} line in:\n${text}`);
+  return line.replace(label, '');
+}
+
+describe('IM approval cards spell commands with the recipient\'s real prefix (#1250)', () => {
+  for (const prefix of ['', '#', '/']) {
+    it(`prefix ${JSON.stringify(prefix)}: the approve command on the card is what the ingress parses and settles`, async () => {
+      const { queue, channel, sent } = setup(undefined, () => ({ commandPrefix: prefix }));
+      const card = queue.enqueue(DANGEROUS_CALL);
+      await channel.drain();
+      const text = sent[0]!.text;
+      const approve = cardCommand(text, /^批准：/u);
+      expect(approve).toBe(`${prefix}approve ${card.id}`);
+      expect(text).not.toContain('命令前缀');
+      // Ingress: strip the Endpoint's prefix (`managementCommandText`), then the channel's anchored command.
+      const reply = channel.handleCommand(command(managementCommandText(approve, prefix) as string));
+      expect(reply).toContain('已批准');
+      expect(queue.get(card.id)).toMatchObject({ status: 'approved', channel: 'im_dm' });
+    });
+
+    it(`prefix ${JSON.stringify(prefix)}: the deny command on a self-change card settles it`, async () => {
+      const queue = new ToolApprovalQueue();
+      const sent: string[] = [];
+      const channel = new ImToolApprovalChannel({
+        queue,
+        settings: () => resolveToolHardGateImApproval({ enabled: false }),
+        send: async (_target, text) => { sent.push(text); },
+        resolveOwner: () => 'owner-1',
+        resolvePresentation: () => ({ commandPrefix: prefix }),
+      });
+      channel.start();
+      const card = queue.enqueue({
+        toolName: 'self_change', category: 'self', sessionKey: 's', requesterId: 'owner-1', turnId: 't',
+        args: { changeId: 'c-2', summary: 'x', files: [], configPaths: [], impact: 'none', trial: 'passed' },
+        origin: { platform: 'icqq', endpointKey: '10001', scope: 'private', sceneId: 'owner-1' },
+      });
+      await channel.drain();
+      const deny = cardCommand(sent[0]!, /^驳回：/u);
+      expect(deny).toBe(`${prefix}deny ${card.id}`);
+      expect(channel.handleCommand(command(managementCommandText(deny, prefix) as string, { sceneId: 'owner-1', senderId: 'owner-1' })))
+        .toBe(`已驳回变更 c-2（${card.id}）。`);
+    });
+  }
+
+  it('a card command carrying another prefix is not parsed as an approval', async () => {
+    const { queue, channel, sent } = setup(undefined, () => ({ commandPrefix: '#' }));
+    const card = queue.enqueue(DANGEROUS_CALL);
+    await channel.drain();
+    expect(managementCommandText(`/approve ${card.id}`, '#')).toBeUndefined();
+    expect(cardCommand(sent[0]!.text, /^批准：/u)).toBe(`#approve ${card.id}`);
+  });
+
+  it('asks the recipient for this account\'s prefix when the presentation is unknown, never inventing `/`', async () => {
+    const { queue, channel, sent } = setup(undefined, () => undefined);
+    const card = queue.enqueue(DANGEROUS_CALL);
+    await channel.drain();
+    const text = sent[0]!.text;
+    expect(cardCommand(text, /^批准：/u)).toBe(`approve ${card.id}`);
+    expect(text).toContain('（发送时加上本账号的命令前缀）');
+    expect(text).not.toContain('/approve');
+    const thrown = setup(undefined, () => { throw new Error('no generation'); });
+    thrown.queue.enqueue(DANGEROUS_CALL);
+    await thrown.channel.drain();
+    expect(thrown.sent).toHaveLength(2);
+    expect(formatImApprovalCard(card, 'dm')).toContain(`批准：approve ${card.id}`);
+    // The earlier signature (a bare prefix string) still works.
+    expect(formatImApprovalCard(card, 'dm', '#')).toContain(`批准：#approve ${card.id}`);
+  });
+
+  it('writes each recipient\'s card in their own language, with ISO time', async () => {
+    const { queue, channel, sent } = setup(undefined, target => target.conversation.id === 'admin-2'
+      ? { locale: 'en', commandPrefix: '!' } : { locale: 'zh-CN', commandPrefix: '!' });
+    const card = queue.enqueue(DANGEROUS_CALL);
+    await channel.drain();
+    const zh = sent.find(item => item.target.conversation.id === 'admin-1')!.text;
+    const en = sent.find(item => item.target.conversation.id === 'admin-2')!.text;
+    expect(zh).toContain('【危险工具审批】group_kick（成员管理）');
+    expect(en).toContain('[Dangerous tool approval] group_kick (member management)');
+    expect(en).toContain(`Approve: !approve ${card.id}`);
+    expect(en).toContain(`Deny: !deny ${card.id}`);
+    expect(en).toMatch(/Expires: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(denied automatically on timeout\)/u);
+    expect(en).not.toMatch(/[\u4e00-\u9fff]/u);
+    expect(zh).toMatch(/过期时间：\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}（超时自动拒绝）/u);
+  });
+
+  it('formats an English self-change card without Chinese', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({
+      toolName: 'self_change', category: 'self', sessionKey: 's', requesterId: 'owner-1', turnId: 't',
+      args: {
+        changeId: 'c-3', summary: 'add ping', files: [{ path: 'commands/ping.ts', kind: 'create', added: 2, removed: 0 }],
+        configPaths: ['set ping.greeting'], impact: 'generation (estimated)', impactDetail: ['reload app'], trial: 'passed (1 skipped)',
+        skippedChecks: ['syntax a.tsx'], skippedChecksOmitted: 2, diffExcerpt: ['+x'], diffExcerptTruncated: true,
+      },
+      origin: { platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: BUSINESS_GROUP },
+    });
+    const text = formatSelfChangeCard(card, { locale: 'en', commandPrefix: '' });
+    expect(text).toContain('[Change approval] add ping');
+    expect(text).toContain('  create commands/ping.ts (+2 -0)');
+    expect(text).toContain('Impact: hot reload (estimated) (reload app)');
+    expect(text).toContain('Trial run: passed (1 skipped); skipped: syntax a.tsx, …2 more (see the Console)');
+    expect(text).toContain('… (excerpt truncated) See the Console for the full change.');
+    expect(text).toContain(`Approve: approve ${card.id}`);
+    expect(text).toContain(`Reject: deny ${card.id}`);
+    expect(text).not.toMatch(/[\u4e00-\u9fff]/u);
+  });
+
+  it('answers approve / deny in the sender\'s language', () => {
+    const { queue, channel } = setup();
+    const card = queue.enqueue(DANGEROUS_CALL);
+    expect(channel.handleCommand(command(`approve ${card.id}`, { scope: 'group', sceneId: '99', locale: 'en' })))
+      .toBe('Dangerous-tool approvals can only be answered in a private chat with the Bot; messages in a group do not settle approval cards.');
+    expect(channel.handleCommand(command(`approve ${card.id}`, { senderId: 'member-7', sceneId: 'member-7', locale: 'en' })))
+      .toContain('not on the dangerous-tool approver list');
+    expect(channel.handleCommand(command(`approve ${card.id}`, { locale: 'en' })))
+      .toBe(`Approved ${card.id} (group_kick). It applies only to this one call with these arguments.`);
+    expect(channel.handleCommand(command(`deny ${card.id}`, { locale: 'en' }))).toBe(`Approval card ${card.id} was already approved; nothing to do.`);
+    expect(channel.handleCommand(command('approve tap_missing_1', { locale: 'en' }))).toBe('Approval card tap_missing_1 was not found.');
   });
 });

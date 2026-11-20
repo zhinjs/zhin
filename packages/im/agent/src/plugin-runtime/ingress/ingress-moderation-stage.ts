@@ -10,6 +10,7 @@ import {
   resolveOutboundCapabilities,
 } from '../../index.js';
 import { resolveToolHardGateImApproval } from '../../security/index.js';
+import type { AgentCommandPresentation } from '../../init/command-presentation.js';
 import type { AgentRuntime } from '../index.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { flattenOutputElements } from './content.js';
@@ -29,7 +30,7 @@ import {
 import { capabilityLocalName, deliveryOutcomeFromReceipt } from './request.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
-import { resolveTriggerTimeoutMs, sendOutputMessages } from './unified-mailbox-spine.js';
+import { resolveTriggerTimeoutMs, sendOutputMessages, type AgentTurnIngressRouteOptions } from './unified-mailbox-spine.js';
 
 const logger = getLogger('agent');
 
@@ -40,11 +41,14 @@ export function soleOnlineEndpoint(im: ImRuntime, platform: string): string | un
   return online.length === 1 ? online[0]!.name : undefined;
 }
 
+type ConversationPresentationResolver = NonNullable<AgentTurnIngressRouteOptions['resolveConversationPresentation']>;
+
 export function createGroupRuleChannel(input: Readonly<{
   im: ImRuntime;
   agent: AgentIngressFoundationPort;
+  resolvePresentation?: ConversationPresentationResolver;
 }>): GroupRuleImChannel {
-  const { im, agent } = input;
+  const { im, agent, resolvePresentation } = input;
   return new GroupRuleImChannel({
     // 构造时就订阅；测试桩可能不带 agent。
     rules: () => agent?.agent?.getGroupRules?.(),
@@ -60,6 +64,16 @@ export function createGroupRuleChannel(input: Readonly<{
         content: text,
       });
     },
+    ...(resolvePresentation
+      ? {
+          resolvePresentation: (target) => {
+            const endpoint = target.endpoint ?? soleOnlineEndpoint(im, target.platform);
+            return endpoint
+              ? resolvePresentation({ platform: target.platform, endpoint, conversation: { kind: 'group', id: target.groupId } })
+              : undefined;
+          },
+        }
+      : {}),
   });
 }
 
@@ -86,8 +100,10 @@ export function executeGroupRule(input: Readonly<{
   violation: GroupRuleViolation;
   conversation: ConversationRef;
   source: Readonly<{ client: unknown; signal: AbortSignal }>;
+  /** #1250: how the group's notices spell commands and in which language. */
+  presentation?: AgentCommandPresentation;
 }>): Promise<GroupRuleEnforcementResult> {
-  const { im, enforcer, violation, conversation, source } = input;
+  const { im, enforcer, violation, conversation, source, presentation } = input;
   const operation = im.endpoints.captureOperation({
     target: conversation,
     client: source.client,
@@ -132,6 +148,7 @@ export function executeGroupRule(input: Readonly<{
       await management.kickGroupMember({ groupId: conversation.id, userId: violation.memberId, signal });
     },
     release: operation.release,
+    ...(presentation ? { presentation } : {}),
   });
 }
 
@@ -169,6 +186,11 @@ export function observeFloodMessage(input: Readonly<{
     enforcer,
     conversation: message.conversation,
     source: { client: session.endpoint, signal: session.signal },
+    // The message's own command environment: the prefix this group's dispatcher strips.
+    presentation: {
+      ...(message.locale ? { locale: message.locale } : {}),
+      ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
+    },
     violation: {
       platform,
       ...(endpoint ? { endpoint } : {}),

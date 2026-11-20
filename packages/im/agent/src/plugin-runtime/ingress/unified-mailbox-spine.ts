@@ -35,6 +35,7 @@ import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
+import type { AgentCommandPresentation } from '../../init/command-presentation.js';
 import { auditAmbientDecision } from './ingress-ambient-stage.js';
 import { auditStaleReply, reactionOf } from './ingress-delivery-helpers.js';
 import { tryHandleIngressCommands } from './ingress-management-stage.js';
@@ -381,6 +382,19 @@ export interface AgentTurnIngressRouteOptions {
   readonly assistantStatus?: AgentAssistantStatusPort;
   /** Hard-gate IM approval channel (G6, #1013): settles `approve <id>` / `deny <id>` for approval cards. */
   readonly toolApprovalIm?: ImApprovalChannelPort;
+  /**
+   * #1250: an out-of-turn conversation's command presentation (its Endpoint's real command prefix and the
+   * recipient's display language), for group-rule cards and notices sent without an incoming message.
+   * Absent: those texts use the default language and the bare command with a prefix reminder.
+   */
+  readonly resolveConversationPresentation?: (target: Readonly<{
+    platform: string;
+    /** Endpoint key, or the Endpoint capability id when only that is known. */
+    endpoint: string;
+    conversation: Readonly<{ kind: 'private' | 'group'; id: string }>;
+    /** The private recipient whose language preference applies; absent for a group. */
+    recipientId?: string;
+  }>) => AgentCommandPresentation | undefined | Promise<AgentCommandPresentation | undefined>;
 }
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
@@ -444,7 +458,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     });
     this.#sessionEvents = createSessionEventDispatcher({ im: options.im, agent: options.agent, onSpoke });
     this.#stopSessionEvents = this.#sessionEvents.start();
-    this.#groupRules = createGroupRuleChannel({ im: options.im, agent: options.agent });
+    this.#groupRules = createGroupRuleChannel({
+      im: options.im,
+      agent: options.agent,
+      ...(options.resolveConversationPresentation ? { resolvePresentation: options.resolveConversationPresentation } : {}),
+    });
     this.#stopGroupRules = this.#groupRules.start();
     this.#groupRuleEnforcer = createGroupRuleEnforcer({ agent: options.agent, onSpoke });
     this.#groupRuleDefaults = new GroupRuleDefaults(() => options.agent?.agent?.getGroupRules?.());
@@ -468,11 +486,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
   async reportGroupRuleViolation(report: GroupRuleViolationReport): Promise<GroupRuleViolationOutcome> {
     const { conversation } = report;
     if (conversation.kind !== 'group' || !report.memberId) return 'no_rule';
+    const presentation = await this.#conversationPresentation({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      conversation: { kind: 'group', id: conversation.id },
+    });
     const result = await executeGroupRule({
       im: this.options.im,
       enforcer: this.#groupRuleEnforcer,
       conversation,
       source: report.source,
+      ...(presentation ? { presentation } : {}),
       violation: {
         platform: conversation.endpoint.adapter,
         endpoint: conversation.endpoint.id,
@@ -493,6 +517,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
       logger.info(formatCompact({ op: 'group_rule_moderation', conv: `${conversation.endpoint.adapter}:${conversation.id}`, trigger: report.trigger, result: result.kind }));
     }
     return result.kind === 'no_rule' ? 'no_rule' : 'handled';
+  }
+
+  async #conversationPresentation(
+    target: Parameters<NonNullable<AgentTurnIngressRouteOptions['resolveConversationPresentation']>>[0],
+  ): Promise<AgentCommandPresentation | undefined> {
+    try {
+      return await this.options.resolveConversationPresentation?.(target);
+    } catch {
+      return undefined;
+    }
   }
 
   /** content-moderation 迁移：原 `groupModeration` 群按默认模板生成一条待确认规则（ADR 0039 §5）。 */

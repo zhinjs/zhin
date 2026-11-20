@@ -185,13 +185,16 @@ const messages = createMessages({
     en: 'Not saved: chat roles need a relational project database (sqlite / mysql / pg); the current database cannot persist them.',
   },
   privateConversation: { 'zh-CN': '私聊的会话级覆盖只能在 Console 修改；可指定层级（账号 / 适配器 / 全局）。', en: 'Private conversation overrides are Console-only; pass a level (endpoint / adapter / global).' },
+  // #1250: `{command}` is the command as this conversation sends it (its real prefix included).
+  featureWord: { 'zh-CN': '功能', en: 'feature' },
+  roleWord: { 'zh-CN': '角色', en: 'role' },
   usage: {
-    'zh-CN': '用法：功能 列表 [页码] | 开启 <插件> [层级] | 关闭 <插件> [层级] | 设置 <插件> <字段> <值> [层级] | 重置 <插件> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局。含空格的值可用引号包裹，如 "欢迎 新朋友"',
-    en: 'Usage: feature list [page] | enable <plugin> [level] | disable <plugin> [level] | set <plugin> <field> <value> [level] | reset <plugin> [level]. Levels: conversation (default) / endpoint / adapter / global. Quote values with spaces, e.g. "Welcome aboard"',
+    'zh-CN': '用法：{command} 列表 [页码] | 开启 <插件> [层级] | 关闭 <插件> [层级] | 设置 <插件> <字段> <值> [层级] | 重置 <插件> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局。含空格的值可用引号包裹，如 "欢迎 新朋友"',
+    en: 'Usage: {command} list [page] | enable <plugin> [level] | disable <plugin> [level] | set <plugin> <field> <value> [level] | reset <plugin> [level]. Levels: conversation (default) / endpoint / adapter / global. Quote values with spaces, e.g. "Welcome aboard"',
   },
   roleUsage: {
-    'zh-CN': '用法：角色 列表 | 授予 <用户|#人 id 前缀> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
-    en: 'Usage: role list | grant <user|#person-id-prefix> <owner|admin|trusted> [level] | revoke <user> <role> [level]. Levels: conversation (default) / endpoint / adapter / global',
+    'zh-CN': '用法：{command} 列表 | 授予 <用户|#人 id 前缀> <owner|admin|trusted> [层级] | 撤销 <用户> <角色> [层级]。层级：会话（默认）/ 账号 / 适配器 / 全局',
+    en: 'Usage: {command} list | grant <user|#person-id-prefix> <owner|admin|trusted> [level] | revoke <user> <role> [level]. Levels: conversation (default) / endpoint / adapter / global',
   },
   locked: { 'zh-CN': '{plugin} 已在{level}层停用，下级不能开启或修改开关。', en: '{plugin} is disabled at the {level} level; levels below it cannot enable or change it.' },
   saved: { 'zh-CN': '已保存（{level}层），立即生效。', en: 'Saved ({level} level), effective now.' },
@@ -208,8 +211,8 @@ const messages = createMessages({
   failed: { 'zh-CN': '操作失败：{error}', en: 'Failed: {error}' },
   value: { 'zh-CN': '值必须是数字、布尔值、字符串或数组。', en: 'The value must be a number, boolean, string or array.' },
   confirmGlobal: {
-    'zh-CN': '全局{action} {plugin} 会重启实例。确认请在 2 分钟内发送：功能 确认 {code}',
-    en: 'Globally {action} {plugin} restarts the instance. To confirm within 2 minutes send: feature confirm {code}',
+    'zh-CN': '全局{action} {plugin} 会重启实例。确认请在 2 分钟内发送：{command} 确认 {code}',
+    en: 'Globally {action} {plugin} restarts the instance. To confirm within 2 minutes send: {command} confirm {code}',
   },
   confirmMissing: { 'zh-CN': '没有待确认的操作，或确认码已过期。', en: 'Nothing to confirm, or the code expired.' },
   restarting: { 'zh-CN': '已{action} {plugin}（全局），实例正在重启。', en: '{plugin} {action} globally; the instance is restarting.' },
@@ -224,8 +227,8 @@ const messages = createMessages({
   globallyDisabled: { 'zh-CN': '（全局停用）', en: ' (disabled globally)' },
   configDisabled: { 'zh-CN': '（配置 enabled: false）', en: ' (enabled: false in its configuration)' },
   listPage: { 'zh-CN': '第 {page}/{pages} 页 · 共 {total} 项', en: 'Page {page}/{pages} · {total} items' },
-  listNext: { 'zh-CN': '下一页：功能 列表 {page}', en: 'Next page: feature list {page}' },
-  listPageOutOfRange: { 'zh-CN': '页码超出范围：共 {pages} 页。请使用「功能 列表 <页码>」。', en: 'Page out of range: {pages} pages available. Use feature list <page>.' },
+  listNext: { 'zh-CN': '下一页：{command} 列表 {page}', en: 'Next page: {command} list {page}' },
+  listPageOutOfRange: { 'zh-CN': '页码超出范围：共 {pages} 页。请使用「{command} 列表 <页码>」。', en: 'Page out of range: {pages} pages available. Use {command} list <page>.' },
   listEmpty: { 'zh-CN': '（本会话没有可管理的功能）', en: '(No features to manage in this conversation)' },
   overridden: { 'zh-CN': '（会话层有字段覆盖）', en: ' (conversation field overrides)' },
   yourRoles: { 'zh-CN': '你的角色：{roles}', en: 'Your roles: {roles}' },
@@ -423,6 +426,11 @@ export interface FeatureChatInput {
   readonly locale: Locale;
   /** The message's native client adapter: `功能 列表` hides plugins whose chat capabilities all target another one. */
   readonly clientAdapter?: string;
+  /**
+   * #1250: the invoked command as this conversation sends it (`command.formatCommand('feature' | 'role')`,
+   * the real prefix included), used in usage and follow-up hints. Absent: the bare command word.
+   */
+  readonly command?: string;
 }
 
 /** The resolved actor, or a refusal naming why there is none. */
@@ -440,6 +448,8 @@ export async function executeFeatureChat(input: FeatureChatInput, deps: FeatureS
 /** {@link executeFeatureChat}, throwing a {@link FeatureChatRefusal} for a refusal. */
 export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfServiceDeps): Promise<string> {
   const { locale } = input;
+  const command = input.command ?? messages(locale, 'featureWord');
+  const usage = () => messages(locale, 'usage', { command });
   if (!deps.config.enabled) return refuse('self-service-disabled', messages(locale, 'disabled'));
   const actor = requireActor(input.actor, locale);
   const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
@@ -450,7 +460,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
   const words = input.tokens.map(tokenText);
   // A bare `功能` lists (#1250): the list is what someone typing only the command wants.
   const sub = words.length === 0 ? 'list' : SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
-  if (!sub) return refuse('usage', messages(locale, 'usage'));
+  if (!sub) return refuse('usage', usage());
   const { mayReferenceEnvironment: _never, ...base } = deps.context;
   const context: FeatureRpcContext = {
     ...base,
@@ -466,7 +476,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
   const audit = auditor(deps, actor, 'feature.chat');
   const pickLevel = levelPicker;
   const describe = (reply: FeatureRpcReply | null, plugin: string, level: FeatureConfigLevel): string => {
-    if (!reply) return refuse('usage', messages(locale, 'usage'));
+    if (!reply) return refuse('usage', usage());
     const body = reply.body as Record<string, any>;
     if (!body.success) {
       if (body.code === 'ambient-not-configured') return refuse('ambient-not-configured', messages(locale, 'ambientNotConfigured'));
@@ -499,7 +509,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
     case 'list': {
       const pageWord = words[1];
       const page = pageWord === undefined ? 1 : /^[1-9]\d{0,5}$/u.test(pageWord) ? Number(pageWord) : NaN;
-      if (!Number.isInteger(page) || words.length > 2) return refuse('usage', messages(locale, 'usage'));
+      if (!Number.isInteger(page) || words.length > 2) return refuse('usage', usage());
       const listed = await call('feature.list', {});
       const features = ((listed?.body as Record<string, any>)?.data?.features ?? []) as FeatureListItem[];
       const view = chatListView(deps, input.clientAdapter);
@@ -536,11 +546,11 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
         }
       }
       const pages = Math.max(1, Math.ceil(lines.length / FEATURE_LIST_PAGE_SIZE));
-      if (page > pages) return refuse('usage', messages(locale, 'listPageOutOfRange', { pages }));
+      if (page > pages) return refuse('usage', messages(locale, 'listPageOutOfRange', { pages, command }));
       const out = [messages(locale, 'listHeader')];
       if (pages > 1) out.push(messages(locale, 'listPage', { page, pages, total: lines.length }));
       out.push(...(lines.length ? lines.slice((page - 1) * FEATURE_LIST_PAGE_SIZE, page * FEATURE_LIST_PAGE_SIZE) : [messages(locale, 'listEmpty')]));
-      if (page < pages) out.push(messages(locale, 'listNext', { page: page + 1 }));
+      if (page < pages) out.push(messages(locale, 'listNext', { page: page + 1, command }));
       out.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey), locale) }));
       return out.join('\n');
     }
@@ -548,7 +558,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
     case 'disable': {
       const plugin = featureTarget(words[1]);
       const level = levelAt(input.tokens, 2);
-      if (!plugin || level === null || words.length > 3) return refuse('usage', messages(locale, 'usage'));
+      if (!plugin || level === null || words.length > 3) return refuse('usage', usage());
       const enabled = sub === 'enable';
       if (plugin === AMBIENT_FEATURE_ID && level === 'global') return refuse('ambient-global', messages(locale, 'ambientGlobal'));
       const scope = target(level);
@@ -557,7 +567,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
         const code = deps.code?.() ?? String(randomInt(100000, 1000000));
         deps.pending?.set(actorName(actor), { code, conversationKey: actor.conversationKey, plugin, enabled,
           expiresAt: (deps.now?.() ?? Date.now()) + 120_000 });
-        return messages(locale, 'confirmGlobal', { action: messages(locale, enabled ? 'enableWord' : 'disableWord'), plugin, code });
+        return messages(locale, 'confirmGlobal', { action: messages(locale, enabled ? 'enableWord' : 'disableWord'), plugin, code, command });
       }
       const reply = await call('feature.set-enabled', { plugin, level, key: scope.key, enabled });
       audit(sub, level, scope.key, reply?.body.success ? 'ok' : reply?.status === 403 ? 'denied' : 'error', { plugin });
@@ -587,7 +597,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
       const levelWord = !isQuoted(input.tokens.at(-1)) && rest.length > 1 && rest.at(-1) !== undefined && LEVEL_WORDS[rest.at(-1)!.toLowerCase()] ? rest.pop() : undefined;
       const raw = rest.length && rest.every(word => word !== undefined) ? rest.join(' ') : undefined;
       const level = pickLevel(levelWord);
-      if (!plugin || !field || raw === undefined || level === null) return refuse('usage', messages(locale, 'usage'));
+      if (!plugin || !field || raw === undefined || level === null) return refuse('usage', usage());
       const parsed = parseValue(raw);
       if (!parsed) return refuse('invalid-value', messages(locale, 'value'));
       // Configuration files are environment-expanded: chat never plants `${…}` / `env://` at any level.
@@ -613,7 +623,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
     case 'reset': {
       const plugin = featureTarget(words[1]);
       const level = levelAt(input.tokens, 2);
-      if (!plugin || level === null || level === 'global' || words.length > 3) return refuse('usage', messages(locale, 'usage'));
+      if (!plugin || level === null || level === 'global' || words.length > 3) return refuse('usage', usage());
       const scope = target(level);
       if ('error' in scope) { audit('reset', level, scopeAt(actor, level), 'denied', { plugin }); return refuse(scope.reason, scope.error); }
       const reply = await call('feature.remove-override', { plugin, level, key: scope.key });
@@ -621,7 +631,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
       return describe(reply, plugin === AMBIENT_FEATURE_ID ? messages(locale, 'ambientName') : plugin, level);
     }
   }
-  return refuse('usage', messages(locale, 'usage'));
+  return refuse('usage', usage());
 }
 
 /** Global field write through the configuration store (whole-document validation and application). */
@@ -687,12 +697,13 @@ export async function executeRoleChat(input: FeatureChatInput, deps: FeatureSelf
 /** {@link executeRoleChat}, throwing a {@link FeatureChatRefusal} for a refusal. */
 export async function runRoleChat(input: FeatureChatInput, deps: FeatureSelfServiceDeps): Promise<string> {
   const { locale } = input;
+  const command = input.command ?? messages(locale, 'roleWord');
   if (!deps.config.enabled) return refuse('self-service-disabled', messages(locale, 'disabled'));
   const actor = requireActor(input.actor, locale);
   const words = input.tokens.map(tokenText);
   // A bare `角色` lists (#1250).
   const sub = words.length === 0 ? 'list' : ROLE_SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
-  if (!sub) return refuse('usage', messages(locale, 'roleUsage'));
+  if (!sub) return refuse('usage', messages(locale, 'roleUsage', { command }));
   if (sub === 'list') {
     // Who holds roles is not public: listing needs admin here, and identities granted above the
     // scopes the actor administers (e.g. global owners) are not shown.
@@ -714,7 +725,7 @@ export async function runRoleChat(input: FeatureChatInput, deps: FeatureSelfServ
   if (person && 'error' in person) return refuse(person.error === 'principalAmbiguous' ? 'person-ambiguous' : 'person-not-found', messages(locale, person.error, { prefix: person.prefix }));
   const role = ROLE_WORDS[(words[2] ?? '').toLowerCase()];
   const level = levelAt(input.tokens, 3);
-  if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return refuse('usage', messages(locale, 'roleUsage'));
+  if (!role || !isChatRole(role) || level === null || input.tokens.length > 4) return refuse('usage', messages(locale, 'roleUsage', { command }));
   const audit = auditor(deps, actor, 'chat-roles.chat');
   if (level === 'conversation' && actor.kind === 'private') return refuse('private-conversation', messages(locale, 'privateConversation'));
   const scope = scopeAt(actor, level);
@@ -840,20 +851,21 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
       return resolved.actor;
     };
     // Refusals throw (FeatureChatRefusal): the reply is the same, the outcome is `refused` with the reason.
-    const run = (command: CommandContext, execute: typeof runFeatureChat) => {
+    const run = (command: CommandContext, execute: typeof runFeatureChat, localPath: 'feature' | 'role') => {
       const clientAdapter = operationClientAdapter(command.input);
+      const invocation = command.formatCommand(localPath);
       return execute({ tokens: featureChatTokens(command), actor: actorOf(command), locale: command.locale,
-        ...(clientAdapter ? { clientAdapter } : {}) }, { ...options, pending });
+        ...(clientAdapter ? { clientAdapter } : {}), ...(invocation ? { command: invocation } : {}) }, { ...options, pending });
     };
     context.addFeature(commandFeatureId, 'feature', defineCommand({
       description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },
       alias: ['功能'], options: {},
-      execute: (command: CommandContext) => run(command, runFeatureChat),
+      execute: (command: CommandContext) => run(command, runFeatureChat, 'feature'),
     }));
     context.addFeature(commandFeatureId, 'role', defineCommand({
       description: messages('zh-CN', 'roleDescription'), descriptionI18n: { en: messages('en', 'roleDescription') },
       alias: ['角色'], options: {},
-      execute: (command: CommandContext) => run(command, runRoleChat),
+      execute: (command: CommandContext) => run(command, runRoleChat, 'role'),
     }));
   };
 }

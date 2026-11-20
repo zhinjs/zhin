@@ -104,6 +104,8 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         senderChatRole: message.sender?.chatRole,
         endpoint: effectiveEndpoint,
         commandText: managementCommandText(message.content, message.commandPrefix),
+        ...(message.locale ? { locale: message.locale } : {}),
+        ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
       })
     : null;
   if (groupRuleReply != null) {
@@ -120,6 +122,7 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         sceneId: turnAccess.origin.sceneId,
         senderId: turnAccess.principal.subjectId,
         commandText: managementCommandText(message.content, message.commandPrefix),
+        ...(message.locale ? { locale: message.locale } : {}),
       }) ?? null
     : null;
   if (toolApprovalReply != null) {

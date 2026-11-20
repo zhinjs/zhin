@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AiControlPlane, AiGroupRules, DecisionEventLog, type GroupRuleSpecInput } from '@zhin.js/agent';
+import { AiControlPlane, AiGroupRules, DecisionEventLog, groupRuleHashShort, managementCommandText, type GroupRuleSpecInput } from '@zhin.js/agent';
 import { OpsCooldown, ToolApprovalQueue } from '@zhin.js/agent/security';
 import {
   GroupRuleEnforcer,
+  GroupRuleImChannel,
   GROUP_RULE_KICK_TOOL_NAME,
+  type GroupRuleEffects,
   type GroupRuleViolation,
 } from '@zhin.js/agent/runtime';
 
@@ -31,6 +33,8 @@ function harness(options: {
   control?: AiControlPlane;
   canModerate?: boolean;
   mute?: () => Promise<void>;
+  /** #1250: the group's command presentation carried by the effects. */
+  presentation?: GroupRuleEffects['presentation'];
 } = {}) {
   let clock = 1_000_000;
   const log = new DecisionEventLog();
@@ -70,6 +74,7 @@ function harness(options: {
       mute: (duration, signal) => mute(target, violation.memberId, duration, signal),
       kick: signal => kick(target, violation.memberId, signal),
       release,
+      ...(options.presentation ? { presentation: options.presentation } : {}),
     });
   };
   const advance = (ms: number) => { clock += ms; };
@@ -193,6 +198,38 @@ describe('GroupRuleEnforcer (ADR 0039 slice C)', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect((send.mock.calls[0] as unknown as [unknown, Array<{ text?: string }>])[1][0]!.text).toContain('不是管理员');
     expect(await codes()).toEqual(expect.arrayContaining(['rule_enforcement:skip:rule_hit_bot_not_admin']));
+  });
+
+  for (const prefix of ['', '#', '/']) {
+    it(`prefix ${JSON.stringify(prefix)}: the bot-not-admin notice names a disable command the group ingress parses (#1250)`, async () => {
+      const { store, hit, send } = harness({ canModerate: false, presentation: { commandPrefix: prefix } });
+      const rule = await activate(store, { ...remindThenMute, ladder: [{ action: 'mute', durationSec: 600 }] });
+      const code = groupRuleHashShort(rule.contentHash);
+      await hit();
+      const text = (send.mock.calls[0] as unknown as [unknown, Array<{ text?: string }>])[1][0]!.text!;
+      const disable = `${prefix}rule disable ${code}`;
+      expect(text).toContain(`或发 ${disable} 停用该规则`);
+      const channel = new GroupRuleImChannel({ rules: () => store, send: async () => undefined });
+      const reply = await channel.handleCommand({
+        platform: 'icqq', scope: 'group', sceneId: '123', senderId: 'owner-1', senderChatRole: 'owner',
+        commandText: managementCommandText(disable, prefix),
+      });
+      expect(reply).toBe(`已停用群规 ${code}（发广告）。`);
+      expect(await store.getActive({ ...scene, trigger: 'advertising' })).toBeNull();
+    });
+  }
+
+  it('writes notices in the group\'s language (#1250)', async () => {
+    const { store, hit, send, advance } = harness({ canModerate: false, presentation: { locale: 'en', commandPrefix: '!' } });
+    const rule = await activate(store, { ...remindThenMute, ladder: [{ action: 'remind' }, { action: 'mute', durationSec: 600 }] });
+    const code = groupRuleHashShort(rule.contentHash);
+    await hit();
+    advance(1_000);
+    await hit();
+    const texts = send.mock.calls.map(call => (call as unknown as [unknown, Array<{ text?: string }>])[1].map(part => part.text ?? '').join(''));
+    expect(texts[0]).toBe(` Reminder: advertising is not allowed in this group (group rule ${code}).`);
+    expect(texts[1]).toContain(`send !rule disable ${code} to turn the rule off`);
+    expect(texts.join('')).not.toMatch(/[\u4e00-\u9fff]/u);
   });
 
   it('suggest_kick raises one fresh human card, kicks only after approval, dedups via ops_cooldown (acceptance 4)', async () => {

@@ -64,7 +64,10 @@ import {
   type ToolHardGateResult,
 } from '../../security/index.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { managementCommandReference, type AgentCommandPresentation } from '../../init/command-presentation.js';
 import { checkControlAtIngress } from './control-gate.js';
+import { groupRuleMessages as t } from './group-rule-messages.js';
 import { auditOutbound, createDecisionAudit, type DecisionAudit } from './decision-audit.js';
 
 const logger = getLogger('agent');
@@ -74,6 +77,24 @@ export const GROUP_RULE_TRIGGER_LABELS: Readonly<Record<GroupRuleTrigger, string
   abuse: '辱骂 / 人身攻击',
   flood: '刷屏复读',
 });
+
+const TRIGGER_KEYS = Object.freeze({
+  advertising: 'triggerAdvertising',
+  abuse: 'triggerAbuse',
+  flood: 'triggerFlood',
+} as const satisfies Record<GroupRuleTrigger, Parameters<typeof t>[1]>);
+
+function triggerLabel(trigger: GroupRuleTrigger, locale: Locale | undefined): string {
+  return t(locale, TRIGGER_KEYS[trigger]);
+}
+
+/**
+ * A group-rule command as the group sends it (#1250): the group Endpoint's real prefix, the same one the
+ * ingress strips before matching `rule …`. Unknown prefix: the bare command plus a reminder.
+ */
+function ruleCommand(command: string, presentation: AgentCommandPresentation): string {
+  return managementCommandReference(command, presentation.commandPrefix) ?? command;
+}
 
 /** 自动禁言交给硬闸评估的工具名：核心名单里的 `member` 类（ADR 0036 §3）。 */
 export const GROUP_RULE_MUTE_TOOL_NAME = 'mute_member';
@@ -148,6 +169,11 @@ export interface GroupRuleEffects {
   mute(durationSec: number, signal: AbortSignal): Promise<void>;
   kick(signal: AbortSignal): Promise<void>;
   release(): void;
+  /**
+   * #1250: how the group's notices spell commands (the group Endpoint's real prefix) and in which
+   * language. Absent: the default language and the bare command.
+   */
+  readonly presentation?: AgentCommandPresentation;
 }
 interface RuleExecution {
   readonly effects: GroupRuleEffects;
@@ -185,10 +211,10 @@ const QUEUE_ONLY_APPROVAL: ApprovalPort = Object.freeze({
   }),
 });
 
-function formatDuration(sec: number): string {
-  if (sec % 3600 === 0) return `${sec / 3600} 小时`;
-  if (sec % 60 === 0) return `${sec / 60} 分钟`;
-  return `${sec} 秒`;
+function formatDuration(sec: number, locale?: Locale): string {
+  if (sec % 3600 === 0) return t(locale, 'hours', { count: sec / 3600 });
+  if (sec % 60 === 0) return t(locale, 'minutes', { count: sec / 60 });
+  return t(locale, 'seconds', { count: sec });
 }
 
 function hitCode(action: GroupRuleAction): DecisionReasonCode {
@@ -215,24 +241,25 @@ export function formatGroupRuleNotice(
   action: GroupRuleAction,
   memberId: string,
   memberName?: string,
+  locale?: Locale,
 ): readonly GroupRuleNoticePart[] {
-  const label = GROUP_RULE_TRIGGER_LABELS[rule.trigger];
+  const label = triggerLabel(rule.trigger, locale);
   const code = groupRuleHashShort(rule.contentHash);
   let text: string;
   switch (action) {
     case 'remind':
-      text = ` 提醒：本群不允许${label}，请注意（群规 ${code}）。`;
+      text = t(locale, 'noticeRemind', { label, code });
       break;
     case 'warn':
-      text = ` 警告：再次${label}将按群规处理（群规 ${code}）。`;
+      text = t(locale, 'noticeWarn', { label, code });
       break;
     case 'mute': {
       const stage = rule.ladder.find((item) => item.action === 'mute');
-      text = ` 因${label}已被禁言 ${formatDuration(stage?.durationSec ?? 0)}（群规 ${code}）。`;
+      text = t(locale, 'noticeMute', { label, code, duration: formatDuration(stage?.durationSec ?? 0, locale) });
       break;
     }
     default:
-      text = ` 多次${label}，已提请群主 / 管理员审批是否移出本群（群规 ${code}）。`;
+      text = t(locale, 'noticeKick', { label, code });
   }
   return [{ type: 'mention', id: memberId, ...(memberName ? { name: memberName } : {}) }, { type: 'text', text }];
 }
@@ -396,7 +423,7 @@ export class GroupRuleEnforcer {
   async #notify(ctx: StageContext, action: 'remind' | 'warn', advance: (notified: boolean) => void): Promise<GroupRuleEnforcementResult> {
     const blocked = await this.#speakBlocked(ctx);
     if (blocked) return { kind: 'skipped', reasonCode: blocked, ruleId: ctx.rule.id };
-    const delivered = await this.#send(ctx, formatGroupRuleNotice(ctx.rule, action, ctx.violation.memberId, ctx.violation.memberName));
+    const delivered = await this.#send(ctx, formatGroupRuleNotice(ctx.rule, action, ctx.violation.memberId, ctx.violation.memberName, ctx.effects.presentation?.locale));
     auditOutbound(ctx.audit, delivered, ctx.payload);
     if (delivered.status !== 'sent') {
       const reason = delivered.status === 'suppressed' ? 'suppressed' : `${delivered.status}:${delivered.code}`;
@@ -464,7 +491,7 @@ export class GroupRuleEnforcer {
     // 禁言说明是附带的：过发言闸，被拦或失败不影响禁言已执行。
     let notified = false;
     if (!(await this.#speakBlocked(ctx, false))) {
-      const delivered = await this.#send(ctx, formatGroupRuleNotice(ctx.rule, 'mute', ctx.violation.memberId, ctx.violation.memberName));
+      const delivered = await this.#send(ctx, formatGroupRuleNotice(ctx.rule, 'mute', ctx.violation.memberId, ctx.violation.memberName, ctx.effects.presentation?.locale));
       auditOutbound(ctx.audit, delivered, ctx.payload);
       notified = delivered.status === 'sent';
       if (notified) this.#spoke(ctx.target);
@@ -604,9 +631,10 @@ export class GroupRuleEnforcer {
     }
     if (await this.#speakBlocked(ctx, false)) return;
     const code = groupRuleHashShort(ctx.rule.contentHash);
+    const presentation = ctx.effects.presentation ?? {};
     const delivered = await this.#send(ctx, [{
       type: 'text',
-      text: `我在本群不是管理员（或无权管理该成员），群规 ${code} 的禁言 / 踢人档暂时无法执行。请群主把我设为管理员，或发 /rule disable ${code} 停用该规则。`,
+      text: t(presentation.locale, 'botNotAdmin', { code, command: ruleCommand(`rule disable ${code}`, presentation) }),
     }]);
     auditOutbound(ctx.audit, delivered, { ...ctx.payload, notice: 'bot_not_admin' });
     if (delivered.status === 'sent') this.#spoke(ctx.target);
@@ -777,6 +805,14 @@ export interface GroupRuleImDeps {
   /** 读最新配置：审批人名单与 G6 共用 `toolHardGate.imApproval.approverIds`。 */
   readonly imApproval?: () => ToolHardGateImApprovalSettings | undefined;
   readonly send: (target: GroupRuleCardTarget, text: string) => Promise<void>;
+  /**
+   * #1250: the group's command presentation (the group Endpoint's real command prefix and language), so
+   * the card spells `rule approve <code>` the way the ingress parses it. Absent or unresolved: the bare
+   * command and a reminder to add this account's prefix.
+   */
+  readonly resolvePresentation?: (
+    target: GroupRuleCardTarget,
+  ) => AgentCommandPresentation | undefined | Promise<AgentCommandPresentation | undefined>;
 }
 
 export interface GroupRuleCommandInput {
@@ -790,55 +826,69 @@ export interface GroupRuleCommandInput {
   readonly endpoint?: string;
   /** 已去掉命令前缀的文本；不是命令时为 undefined。 */
   readonly commandText: string | undefined;
+  /** 发送者的显示语言与本会话的真实命令前缀（#1250），回复里提到的命令按它拼写。 */
+  readonly locale?: Locale;
+  readonly commandPrefix?: string;
 }
 
 const RULE_COMMAND = /^rules?(?:\s+(approve|reject|disable)\s+(\S+))?\s*$/iu;
 
-function formatRuleDuration(sec: number): string {
-  if (sec % 3600 === 0) return `${sec / 3600} 小时`;
-  if (sec % 60 === 0) return `${sec / 60} 分钟`;
-  return `${sec} 秒`;
-}
-
-export function formatGroupRuleStage(stage: GroupRuleStage): string {
+export function formatGroupRuleStage(stage: GroupRuleStage, locale?: Locale): string {
   switch (stage.action) {
     case 'remind':
-      return '提醒';
+      return t(locale, 'stageRemind');
     case 'warn':
-      return '警告';
+      return t(locale, 'stageWarn');
     case 'mute':
-      return `禁言 ${formatRuleDuration(stage.durationSec ?? 0)}（自动执行）`;
+      return t(locale, 'stageMute', { duration: formatDuration(stage.durationSec ?? 0, locale) });
     case 'suggest_kick':
-      return '建议踢出（每次出审批卡，人批才踢）';
+      return t(locale, 'stageKick');
     default:
       return String((stage as { action: unknown }).action);
   }
 }
 
-/** 预览卡：人读版本 + 摘要短码 + 两条命令。 */
-export function formatGroupRuleCard(rule: GroupRuleRecord, approvalTtlMs: number, commandPrefix = '/'): string {
+function formatLadder(rule: GroupRuleRecord, locale: Locale | undefined): string {
+  return rule.ladder.map(stage => formatGroupRuleStage(stage, locale)).join(t(locale, 'stageSeparator'));
+}
+
+/**
+ * 预览卡：人读版本 + 摘要短码 + 两条命令（#1250：按本群 Endpoint 的真实命令前缀拼写、按显示语言输出；
+ * 前缀未知时给裸命令并提示加上本账号的前缀）。
+ */
+export function formatGroupRuleCard(
+  rule: GroupRuleRecord,
+  approvalTtlMs: number,
+  presentationOrPrefix: AgentCommandPresentation | string = {},
+): string {
+  // A bare string is the command prefix (the earlier signature).
+  const presentation = typeof presentationOrPrefix === 'string' ? { commandPrefix: presentationOrPrefix } : presentationOrPrefix;
+  const locale = presentation.locale;
   const code = groupRuleHashShort(rule.contentHash);
   const extraExempt = rule.exempt.userIds.length;
   const exempt = [
-    rule.exempt.ownerAndAdmins ? '平台群主 / 管理员与 zhin owner' : undefined,
-    extraExempt ? `另加 ${extraExempt} 人` : undefined,
-  ].filter(Boolean).join('，') || '无';
+    rule.exempt.ownerAndAdmins ? t(locale, 'exemptOwners') : undefined,
+    extraExempt ? t(locale, 'exemptExtra', { count: extraExempt }) : undefined,
+  ].filter(Boolean).join(t(locale, 'listSeparator')) || t(locale, 'exemptNone');
   return [
-    `【群规草案 · 待审批】摘要 ${code}`,
-    `触发：${GROUP_RULE_TRIGGER_LABELS[rule.trigger]}`,
-    ...rule.ladder.map((stage, index) => `第 ${index + 1} 次：${formatGroupRuleStage(stage)}`),
-    `冷静期：${formatRuleDuration(Math.round(rule.windowMs / 1000))}内无再犯则重新计数`,
-    `豁免：${exempt}`,
-    rule.content ? `说明：${rule.content}` : undefined,
-    `批准：${commandPrefix}rule approve ${code}`,
-    `驳回：${commandPrefix}rule reject ${code}`,
-    `仅本群群主 / 管理员可审批；${formatRuleDuration(Math.round(approvalTtlMs / 1000))}内未批自动作废。批准后禁言档自动执行，踢人仍每次审批。`,
+    t(locale, 'cardTitle', { code }),
+    t(locale, 'cardTrigger', { label: triggerLabel(rule.trigger, locale) }),
+    ...rule.ladder.map((stage, index) => t(locale, 'cardStage', { index: index + 1, stage: formatGroupRuleStage(stage, locale) })),
+    t(locale, 'cardWindow', { duration: formatDuration(Math.round(rule.windowMs / 1000), locale) }),
+    t(locale, 'cardExempt', { exempt }),
+    rule.content ? t(locale, 'cardContent', { content: rule.content }) : undefined,
+    t(locale, 'cardApprove', { command: ruleCommand(`rule approve ${code}`, presentation) }),
+    t(locale, 'cardReject', { command: ruleCommand(`rule reject ${code}`, presentation) }),
+    presentation.commandPrefix === undefined ? t(locale, 'cardPrefixUnknown') : undefined,
+    t(locale, 'cardFooter', { duration: formatDuration(Math.round(approvalTtlMs / 1000), locale) }),
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
-function summaryLine(rule: GroupRuleRecord): string {
-  const status = rule.status === 'active' ? '生效中' : '待审批';
-  return `${groupRuleHashShort(rule.contentHash)} ${status} · ${GROUP_RULE_TRIGGER_LABELS[rule.trigger]}：${rule.ladder.map(formatGroupRuleStage).join(' → ')}`;
+function summaryLine(rule: GroupRuleRecord, locale: Locale | undefined): string {
+  const status = t(locale, rule.status === 'active' ? 'statusActive' : 'statusPending');
+  return t(locale, 'summary', {
+    code: groupRuleHashShort(rule.contentHash), status, label: triggerLabel(rule.trigger, locale), ladder: formatLadder(rule, locale),
+  });
 }
 
 function parseGroupScene(sceneId: string): string | undefined {
@@ -876,16 +926,24 @@ export class GroupRuleImChannel {
 
   #onTransition(transition: GroupRuleTransition, approvalTtlMs: number): Promise<void> | undefined {
     const rule = transition.record;
-    let text: string | undefined;
-    if (transition.reasonCode === 'rule_submitted') text = formatGroupRuleCard(rule, approvalTtlMs);
+    let format: ((presentation: AgentCommandPresentation) => string) | undefined;
+    if (transition.reasonCode === 'rule_submitted') format = presentation => formatGroupRuleCard(rule, approvalTtlMs, presentation);
     else if (transition.reasonCode === 'rule_approved' && rule.approvedVia === 'console') {
-      text = `【群规已生效】${summaryLine(rule)}（Console 批准）`;
+      format = presentation => t(presentation.locale, 'consoleApproved', { summary: summaryLine(rule, presentation.locale) });
     }
-    if (!text) return undefined;
-    return this.#sendToGroup(rule, transition.endpoint ?? null, text);
+    if (!format) return undefined;
+    return this.#sendToGroup(rule, transition.endpoint ?? null, format);
   }
 
-  async #sendToGroup(rule: GroupRuleRecord, endpoint: string | null, text: string): Promise<void> {
+  async #presentation(target: GroupRuleCardTarget): Promise<AgentCommandPresentation> {
+    try {
+      return (await this.#deps.resolvePresentation?.(target)) ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  async #sendToGroup(rule: GroupRuleRecord, endpoint: string | null, format: (presentation: AgentCommandPresentation) => string): Promise<void> {
     const groupId = parseGroupScene(rule.sceneId);
     if (!groupId) return;
     const verdict = checkControlAtIngress(this.#deps.controlPlane?.(), { platform: rule.platform, scope: 'group', sceneId: groupId }, true);
@@ -894,7 +952,8 @@ export class GroupRuleImChannel {
       return;
     }
     try {
-      await this.#deps.send({ platform: rule.platform, endpoint, groupId }, text);
+      const target = { platform: rule.platform, endpoint, groupId };
+      await this.#deps.send(target, format(await this.#presentation(target)));
     } catch (error) {
       logger.warn(formatCompact({ op: 'group_rule_card_failed', ruleId: rule.id, error: error instanceof Error ? error.message : String(error) }));
     }
@@ -910,17 +969,20 @@ export class GroupRuleImChannel {
   async handleCommand(input: GroupRuleCommandInput): Promise<string | null> {
     const match = input.commandText ? RULE_COMMAND.exec(input.commandText) : null;
     if (!match) return null;
-    if (input.scope !== 'group') return '群规命令只能在对应的群里使用。';
+    const locale = input.locale;
+    if (input.scope !== 'group') return t(locale, 'groupOnly');
     const store = this.#deps.rules();
-    if (!store) return '群规功能暂不可用。';
+    if (!store) return t(locale, 'unavailable');
     const scene = { platform: input.platform, sceneId: `group:${input.sceneId}` };
     try {
       const open = (await store.list(scene)).filter((rule) => rule.status === 'active' || rule.status === 'pending');
       const verb = match[1]?.toLowerCase();
       if (!verb) {
-        return open.length ? ['本群群规：', ...open.map(summaryLine)].join('\n') : '本群还没有生效或待审批的群规。';
+        return open.length
+          ? [t(locale, 'listHeader'), ...open.map(rule => summaryLine(rule, locale))].join('\n')
+          : t(locale, 'listEmpty');
       }
-      if (!this.#isApprover(input)) return '只有本群群主或管理员可以审批 / 停用群规。';
+      if (!this.#isApprover(input)) return t(locale, 'approverOnly');
       const key = match[2]!.toLowerCase();
       const actorId = input.senderId;
       const common = { actorId, ...(input.endpoint ? { endpoint: input.endpoint } : {}) };
@@ -928,15 +990,15 @@ export class GroupRuleImChannel {
         const target = isRuleTrigger(key)
           ? open.find((rule) => rule.status === 'active' && rule.trigger === key)
           : open.find((rule) => groupRuleHashShort(rule.contentHash) === key);
-        if (!target) return `本群没有匹配 ${key} 的生效或待审批群规。`;
+        if (!target) return t(locale, 'disableMissing', { key });
         await store.disable({ id: target.id, expectedRevision: target.revision, ...common, reason: 'disabled in group' });
-        return `已停用群规 ${groupRuleHashShort(target.contentHash)}（${GROUP_RULE_TRIGGER_LABELS[target.trigger]}）。`;
+        return t(locale, 'disabled', { code: groupRuleHashShort(target.contentHash), label: triggerLabel(target.trigger, locale) });
       }
       const target = open.find((rule) => rule.status === 'pending' && groupRuleHashShort(rule.contentHash) === key);
-      if (!target) return `本群没有摘要为 ${key} 的待审批群规（可能已处理、已过期或内容被改过）。`;
+      if (!target) return t(locale, 'pendingMissing', { key });
       if (verb === 'reject') {
         await store.reject({ id: target.id, expectedRevision: target.revision, ...common, reason: 'rejected in group' });
-        return `已驳回群规 ${key}。`;
+        return t(locale, 'rejected', { key });
       }
       const approved = await store.approve({
         id: target.id,
@@ -945,15 +1007,16 @@ export class GroupRuleImChannel {
         approvedVia: 'im',
         contentHash: target.contentHash,
       });
-      const replaced = approved.superseded?.length ? `，原同类规则已停用` : '';
-      return `群规 ${key} 已生效：${GROUP_RULE_TRIGGER_LABELS[target.trigger]}，${target.ladder.map(formatGroupRuleStage).join(' → ')}${replaced}。`;
+      const replaced = approved.superseded?.length ? t(locale, 'replaced') : '';
+      return t(locale, 'approved', { key, label: triggerLabel(target.trigger, locale), ladder: formatLadder(target, locale), replaced });
     } catch (error) {
       const name = error instanceof Error ? error.name : '';
       if (name === 'GroupRuleRevisionConflictError' || name === 'GroupRuleStateError' || name === 'GroupRuleHashMismatchError') {
-        return '这条群规刚被别人处理过或已过期，请发 /rules 查看最新状态。';
+        // The sender's own prefix: this reply answers a command that just arrived with it.
+        return t(locale, 'conflict', { command: managementCommandReference('rules', input.commandPrefix) ?? 'rules' });
       }
       logger.warn(formatCompact({ op: 'group_rule_command_failed', error: error instanceof Error ? error.message : String(error) }));
-      return '群规操作失败，未生效，请稍后再试。';
+      return t(locale, 'failed');
     }
   }
 }

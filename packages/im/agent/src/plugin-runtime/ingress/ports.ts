@@ -1,5 +1,5 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
-import type { SnapshotLease, SnapshotReader } from '@zhin.js/plugin-runtime';
+import type { Locale, SnapshotLease, SnapshotReader } from '@zhin.js/plugin-runtime';
 import type {
   AIService,
   AiControlPlane,
@@ -47,6 +47,8 @@ export interface ImApprovalCommandInput {
   readonly sceneId: string;
   readonly senderId: string;
   readonly commandText: string | undefined;
+  /** The sender's display language for the reply (#1250); absent: the default language. */
+  readonly locale?: Locale;
 }
 
 export interface ImApprovalChannelPort {

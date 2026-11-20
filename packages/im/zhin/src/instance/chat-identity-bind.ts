@@ -190,7 +190,9 @@ export class ChatIdentityBindCodes {
 
 const messages = createMessages({
   description: { 'zh-CN': '私聊发送 Console 给出的绑定码，把你的聊天身份绑定到 Console 账号', en: 'Bind your chat identity to a Console account with the code the Console shows (private chat)' },
-  usage: { 'zh-CN': '用法：绑定 <绑定码>（在 Console「把聊天身份绑定到我」获取，只接受私聊）', en: 'Usage: bind <code> (get it from the Console, "Bind my chat identity"; private chat only)' },
+  // #1250: `{command}` is the command as this conversation sends it (its real prefix included).
+  usage: { 'zh-CN': '用法：{command} <绑定码>（在 Console「把聊天身份绑定到我」获取，只接受私聊）', en: 'Usage: {command} <code> (get it from the Console, "Bind my chat identity"; private chat only)' },
+  commandWord: { 'zh-CN': '绑定', en: 'bind' },
   notPrivate: { 'zh-CN': '绑定只接受私聊。若刚才发送的是有效绑定码，它已作废，请在 Console 重新获取并私聊机器人发送。', en: 'Binding is accepted in private chats only. If that was a valid code it has been revoked; get a new one in the Console and send it privately.' },
   simulated: { 'zh-CN': '这个适配器上不接受绑定（模拟适配器的发言者 id 可由客户端自选）。', en: 'Binding is not accepted on this adapter (a simulation lets clients choose the sender id).' },
   invalid: { 'zh-CN': '绑定码不正确或已过期。', en: 'The code is wrong or has expired.' },
@@ -220,12 +222,16 @@ function consoleAccountText(account: ChatBindRedemption['consoleAccount'], local
 
 /** Runs one `绑定` / `bind` invocation and returns the reply text (normal send chain). */
 export async function executeIdentityBind(
-  input: Readonly<{ code: string | undefined; actor: FeatureChatActor | FeatureChatActorFailure | undefined; adapterKind: ChatRoleMigrationAdapterKind; locale: Locale }>,
+  input: Readonly<{
+    code: string | undefined; actor: FeatureChatActor | FeatureChatActorFailure | undefined; adapterKind: ChatRoleMigrationAdapterKind; locale: Locale;
+    /** #1250: the bind command as this conversation sends it (`command.formatCommand('bind')`); absent: the bare word. */
+    command?: string;
+  }>,
   codes: ChatIdentityBindCodes,
 ): Promise<string> {
   const { locale, actor } = input;
   if (!actor || typeof actor !== 'object') return identityBindActorFailureText(actor ?? 'no-conversation', locale);
-  if (!input.code) return messages(locale, 'usage');
+  if (!input.code) return messages(locale, 'usage', { command: input.command ?? messages(locale, 'commandWord') });
   let redemption: ChatBindRedemption;
   try {
     redemption = await codes.redeem({ code: input.code, identity: actor.identity, kind: actor.kind, adapterKind: input.adapterKind });
@@ -269,7 +275,9 @@ export function installChatIdentityBind(options: Readonly<{ codes: ChatIdentityB
         // #1250: a sender that cannot be named is a refusal with its reason, not `command_replied`.
         if (!resolved.ok) throw new FeatureChatRefusal(identityBindActorFailureText(resolved.reason, command.locale), resolved.reason);
         const first = featureChatTokens(command).find((token): token is string => typeof token === 'string');
-        return executeIdentityBind({ code: first, actor: resolved.actor, adapterKind, locale: command.locale }, options.codes);
+        const usage = command.formatCommand('bind');
+        return executeIdentityBind({ code: first, actor: resolved.actor, adapterKind, locale: command.locale,
+          ...(usage ? { command: usage } : {}) }, options.codes);
       },
     }));
   };

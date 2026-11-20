@@ -48,6 +48,29 @@ describe('reply fallback (#1250 b33)', () => {
     expect(describeToolCallsForUser([{ tool: 'weather', result: '上海 晴 25°C', status: 'completed' }]).fallback).toBeUndefined();
   });
 
+  it('writes every fallback in English for an English recipient, keeping `/clear` literal (#1250)', () => {
+    const cjk = /[\u4e00-\u9fff]/u;
+    const empty = formatToolCallsForUser([], { locale: 'en' });
+    expect(empty).toBe('The model returned no visible content (a reasoning model may have replied empty, or the context is too long). '
+      + 'Send /clear to clear this conversation\'s context and try again, or switch to a non-reasoning model.');
+    const denied = describeToolCallsForUser([{ tool: WEATHER, result: 'x', status: 'denied' }], { locale: 'en' }).text;
+    expect(denied).toBe(`The required tools \`${WEATHER}\` were denied and did not run, so the request could not be completed. `
+      + 'Try again after someone with permission approves it.');
+    expect(formatReplyFallback({ cause: 'no_tools' }, { locale: 'en' })).toContain('No tools were available');
+    const scheduled = formatReplyFallback({ cause: 'no_tools' },
+      { locale: 'en', schedule: { jobId: 'sched_1', label: 'Weather', turnId: 'turn-9' } });
+    expect(scheduled).toBe('Scheduled job "Weather" (sched_1) did not finish: No tools were available this round and the model gave no reply. '
+      + 'Check the job\'s plan and available tools, or rehearse it first with schedule_preview. Investigate: zhin trace turn-9');
+    expect(scheduled).not.toContain('/clear');
+    expect(describeToolCallsForUser([{ tool: 'read_file', result: 'x', status: 'completed' }], { locale: 'en' }).text)
+      .toContain('Reply "continue"');
+    expect(describeToolCallsForUser([{ tool: 'load_skill', result: 'x' }], { locale: 'en' }).text)
+      .toContain('No useful information');
+    for (const text of [empty, denied, scheduled]) expect(text).not.toMatch(cjk);
+    // The default language is unchanged.
+    expect(formatToolCallsForUser([], { locale: 'zh-CN' })).toBe(formatToolCallsForUser([]));
+  });
+
   it('tells model text from the summary fallback', () => {
     expect(sanitizeAssistantReplyDetailed('上海晴', { toolSummary: 'x' }).source).toBe('model');
     expect(sanitizeAssistantReplyDetailed('', { toolSummary: 'x' }).source).toBe('summary');

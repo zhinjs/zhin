@@ -216,7 +216,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     // #1250 b33: the framework's fallback is re-worded with the job's name; the rest of the reply stays.
     const scheduleContext = { jobId: job.id, ...(job.label ? { label: job.label } : {}), turnId: executionId };
     const degradedRaw = fallback && outcome?.status === 'completed'
-      ? formatReplyFallback(fallback, { schedule: scheduleContext }) : raw;
+      ? formatReplyFallback(fallback, { schedule: scheduleContext, locale: resolveLocale(job.locale) }) : raw;
     const validation = validateScheduleOutput(degradedRaw);
     const suffix = guarded.terminatedBy ? `\n\n[任务因${terminationLabel(guarded.terminatedBy)}被终止]` : '';
     const output = validation.valid ? `${validation.cleaned}${suffix}` : '';

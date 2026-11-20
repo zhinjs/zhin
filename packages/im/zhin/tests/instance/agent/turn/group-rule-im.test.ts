@@ -1,20 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AiControlPlane, AiGroupRules, DecisionEventLog, groupRuleHashShort } from '@zhin.js/agent';
+import { AiControlPlane, AiGroupRules, DecisionEventLog, groupRuleHashShort, managementCommandText } from '@zhin.js/agent';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { GroupRuleImChannel, formatGroupRuleCard, type GroupRuleCommandInput } from '@zhin.js/agent/runtime';
 
 const scene = { platform: 'icqq', sceneId: 'group:123' };
 const spec = { trigger: 'advertising', ladder: [{ action: 'remind' }, { action: 'mute', durationSec: 600 }], content: '发广告先提醒再禁言' };
 
-function harness(options: { approvers?: string[]; control?: AiControlPlane } = {}) {
+type Presentation = NonNullable<ConstructorParameters<typeof GroupRuleImChannel>[0]['resolvePresentation']>;
+
+function harness(options: { approvers?: string[]; control?: AiControlPlane; presentation?: Presentation | null } = {}) {
   const log = new DecisionEventLog();
   const store = new AiGroupRules({ audit: () => log });
   const send = vi.fn(async () => undefined);
+  // #1250: the group Endpoint's command presentation; these fixtures model an Endpoint with prefix `/`.
+  const presentation = options.presentation === undefined ? () => ({ commandPrefix: '/' }) : options.presentation;
   const channel = new GroupRuleImChannel({
     rules: () => store,
     controlPlane: () => options.control,
     imApproval: () => resolveToolHardGateImApproval(options.approvers ? { approverIds: options.approvers } : undefined),
     send,
+    ...(presentation ? { resolvePresentation: presentation } : {}),
   });
   const stop = channel.start();
   const command = (text: string, overrides: Partial<GroupRuleCommandInput> = {}) => channel.handleCommand({
@@ -42,7 +47,7 @@ describe('group rule IM channel', () => {
     expect(target).toEqual({ platform: 'icqq', endpoint: '10086', groupId: '123' });
     expect(text).toContain(`摘要 ${groupRuleHashShort(rule.contentHash)}`);
     expect(text).toContain('第 2 次：禁言 10 分钟');
-    expect(text).toContain(`/rule approve ${groupRuleHashShort(rule.contentHash)}`);
+    expect(text).toContain(`批准：/rule approve ${groupRuleHashShort(rule.contentHash)}`);
   });
 
   it('lets an admin approve with the card code; audit drafted → submitted → approved', async () => {
@@ -130,16 +135,64 @@ describe('group rule IM channel', () => {
   });
 
   it('card lists suggest_kick as human-approved and extra exemptions', () => {
-    const text = formatGroupRuleCard({
+    const rule = {
       id: 'r', platform: 'icqq', sceneId: 'group:1', trigger: 'flood', ladder: [{ action: 'suggest_kick' }], windowMs: 3_600_000,
       exempt: { ownerAndAdmins: true, userIds: ['a', 'b'] }, content: '', contentHash: 'abcdef1234', status: 'pending',
       createdBy: 'u', createdVia: 'console', approvedBy: null, approvedAt: null, approvedVia: null, submittedAt: 1,
       revision: 2, reason: null, createdAt: 1, updatedAt: 1, updatedBy: 'u',
-    }, 86_400_000);
+    } as const;
+    const code = groupRuleHashShort(rule.contentHash);
+    const text = formatGroupRuleCard(rule, 86_400_000);
     expect(text).toContain('刷屏复读');
     expect(text).toContain('人批才踢');
     expect(text).toContain('另加 2 人');
     expect(text).toContain('1 小时内无再犯');
     expect(text).toContain('24 小时内未批');
+    expect(text).toContain(`批准：rule approve ${code}`);
+    // The earlier signature (a bare prefix string) still works.
+    expect(formatGroupRuleCard(rule, 86_400_000, '#')).toContain(`批准：#rule approve ${code}`);
+  });
+
+  for (const prefix of ['', '#', '/']) {
+    it(`prefix ${JSON.stringify(prefix)}: the card's approve command is what the group ingress parses and settles (#1250)`, async () => {
+      const { store, send, command, submitted } = harness({ presentation: () => ({ commandPrefix: prefix }) });
+      const rule = await submitted();
+      const code = groupRuleHashShort(rule.contentHash);
+      const text = (send.mock.calls[0] as unknown as [unknown, string])[1];
+      const line = text.split('\n').find(item => item.startsWith('批准：'))!;
+      const approve = line.slice('批准：'.length);
+      expect(approve).toBe(`${prefix}rule approve ${code}`);
+      expect(text).toContain(`驳回：${prefix}rule reject ${code}`);
+      expect(text).not.toContain('命令前缀');
+      expect(await command(managementCommandText(approve, prefix) as string)).toContain('已生效');
+      expect((await store.get(rule.id))!.status).toBe('active');
+    });
+  }
+
+  it('shows the bare command and asks for the prefix when the presentation is unknown (#1250)', async () => {
+    const { send, submitted } = harness({ presentation: null });
+    const rule = await submitted();
+    const text = (send.mock.calls[0] as unknown as [unknown, string])[1];
+    expect(text).toContain(`批准：rule approve ${groupRuleHashShort(rule.contentHash)}`);
+    expect(text).toContain('（发送时加上本账号的命令前缀）');
+    expect(text).not.toContain('/rule');
+  });
+
+  it('writes the card in the group\'s language and answers commands in the sender\'s (#1250)', async () => {
+    const { send, command, submitted } = harness({ presentation: () => ({ locale: 'en', commandPrefix: '!' }) });
+    const rule = await submitted();
+    const code = groupRuleHashShort(rule.contentHash);
+    const text = (send.mock.calls[0] as unknown as [unknown, string])[1];
+    expect(text).toContain(`[Group rule draft · pending approval] Code ${code}`);
+    expect(text).toContain('Trigger: advertising');
+    expect(text).toContain('Offense 2: mute for 10 min (automatic)');
+    expect(text).toContain(`Approve: !rule approve ${code}`);
+    expect(text).toContain(`Reject: !rule reject ${code}`);
+    expect(text).toContain('within 24 h');
+    // Only the rule's own notes (written in Chinese) stay as written.
+    expect(text.replace(spec.content, '')).not.toMatch(/[\u4e00-\u9fff]/u);
+    expect(await command('rules', { locale: 'en' })).toContain(`${code} pending · advertising: reminder → mute for 10 min (automatic)`);
+    expect(await command(`rule approve ${code}`, { locale: 'en' })).toBe(`Group rule ${code} is active: advertising, reminder → mute for 10 min (automatic).`);
+    expect(await command('rules', { scope: 'private', locale: 'en' })).toBe('Group rule commands only work in the rule\'s own group.');
   });
 });

@@ -58,7 +58,12 @@ describe('OwnerApprovalRuntime commands', () => {
   });
 
   it('rejects non-owner private chat', () => {
-    expect(runtime.handleCommand(ownerContext('other'), '/approve always bash')).toMatch(/仅 Endpoint Owner/);
+    const denied = runtime.handleCommand(ownerContext('other'), '/approve always bash');
+    expect(denied).toMatch(/仅本账号的聊天主人（owner）/);
+    // #1250: the chat-role model (ADR 0056 / 0060), not a plugin config field.
+    expect(denied).toContain('Console「聊天角色」里给自己授予全局 owner');
+    expect(denied).toContain('「认领 <码>」');
+    expect(denied).not.toMatch(/master|插件配置/);
   });
 
   it('sets bash always and persists', () => {
@@ -112,8 +117,12 @@ it('uses the operation prefix and language without changing owner-only private a
     expect(runtime.handleCommand(context, '!approve')).toContain('!approve always bash');
     expect(runtime.handleCommand(context, '/approve always bash')).toBeNull();
     expect(runtime.handleCommand({ ...context, commandPrefix: undefined }, '/approve always bash')).toBeNull();
-    expect(runtime.handleCommand({ ...context, scope: 'group' }, '!approve always bash')).toContain('Only the Endpoint Owner');
-    expect(runtime.handleCommand({ ...context, subjectId: 'other' }, '!approve always bash')).toContain('Only the Endpoint Owner');
+    expect(runtime.handleCommand({ ...context, scope: 'group' }, '!approve always bash')).toContain('Only this account\'s chat owner');
+    const denied = runtime.handleCommand({ ...context, subjectId: 'other' }, '!approve always bash');
+    expect(denied).toContain('Only this account\'s chat owner');
+    expect(denied).toContain('Grant yourself global owner under Chat roles in the Console');
+    expect(denied).toContain('「claim <code>」');
+    expect(denied).not.toMatch(/master|plugin configuration/);
     expect(runtime.handleCommand(context, '!approve rule [')).toContain('Invalid regular expression');
     expect(runtime.handleCommand(context, '!approve revoke rule missing')).toContain('no custom rules');
     expect(runtime.handleCommand(context, '!approve rule ^中文命令')).toContain('Added rule');
