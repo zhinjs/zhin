@@ -66,7 +66,7 @@ export type ComponentName =
   | "Button"
   | "List"
   | "ListItem"
-  | "Markdown"
+  | "MarkdownView"
   | "CodeBlock"
   | "DonutChart"
   | "Callout"

@@ -7,7 +7,7 @@ import { List, ListItem } from "./list.js";
 import { Table, TableCell, TableRow } from "./table.js";
 import { themeOf, type ComponentTheme } from "./theme.js";
 import { cssLength, customizeRoot, themedDiv } from "./styles.js";
-import type { MarkdownProps } from "./markdown-props.js";
+import type { MarkdownViewProps } from "./markdown-props.js";
 
 const MAX_SOURCE_LENGTH = 100_000;
 const MAX_TOKEN_DEPTH = 24;
@@ -298,11 +298,14 @@ class MarkdownTree {
   }
 }
 
-/** Parse GFM into escaped JSX. HTML is literal text and images show only alt text. */
-export function Markdown(props: MarkdownProps): JSXElement {
+/**
+ * Parse GFM into escaped JSX display components. HTML is literal text and images show only alt
+ * text. Not the `<markdown>` / `Markdown` message tag of `zhin.js/jsx`, which emits a Markdown segment.
+ */
+export function MarkdownView(props: MarkdownViewProps): JSXElement {
   const source = props.source ?? props.children;
   if (typeof source !== "string")
-    throw new TypeError("Markdown requires a string source or string children");
+    throw new TypeError("MarkdownView requires a string source or string children");
   if (source.length > MAX_SOURCE_LENGTH)
     throw new RangeError(
       `Markdown exceeds maximum source length ${MAX_SOURCE_LENGTH}`
@@ -318,6 +321,6 @@ export function Markdown(props: MarkdownProps): JSXElement {
     ),
     props,
     theme,
-    "Markdown"
+    "MarkdownView"
   );
 }

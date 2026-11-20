@@ -62,6 +62,8 @@ export * from './data-migration.js';
 
 export * from './relational-target-migration.js';
 export * from './environment-expansion.js';
+export * from './escape-html.js';
+export * from './retry.js';
 export * from './host-installer.js';
 export * from './host-credential-storage.js';
 /** @public ADR 0050 layered feature configuration: resolution keys, resolver and dispatch gate. */

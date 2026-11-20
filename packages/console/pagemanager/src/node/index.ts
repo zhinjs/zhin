@@ -36,7 +36,6 @@ export {
   type PageShellDescriptor,
 } from "../shell/page-renderer.js";
 export {
-  escapeHtml,
   inferPageCategory,
   pageModuleScript,
   sandboxFallbackScript,

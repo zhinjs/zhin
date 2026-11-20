@@ -9,7 +9,11 @@
  *   `retryAfterMs` so the caller can cool the source down instead of waiting.
  * - Other 4xx responses fail immediately: retrying will not fix them.
  * - Conditional requests (ETag / Last-Modified) avoid re-downloading unchanged feeds.
+ *
+ * Backoff ("equal jitter": half of the step fixed, half random), `Retry-After` parsing and the
+ * wait itself are the shared `zhin.js` primitives.
  */
+import { computeBackoffDelay, parseRetryAfterMs, sleep } from 'zhin.js';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 export type SleepLike = (ms: number) => Promise<void>;
@@ -60,33 +64,7 @@ export function isRetryableStatus(status: number): boolean {
   return RETRYABLE_STATUS.has(status);
 }
 
-/** Parses `Retry-After` as delta-seconds or an HTTP date. Returns undefined when absent or invalid. */
-export function parseRetryAfter(value: string | null, now: number): number | undefined {
-  if (value === null) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (/^\d+$/u.test(trimmed)) {
-    return Number(trimmed) * 1_000;
-  }
-  const date = Date.parse(trimmed);
-  if (Number.isNaN(date)) return undefined;
-  return Math.max(0, date - now);
-}
-
-/**
- * Exponential backoff with "equal jitter": half of the step is fixed, half is random.
- * This keeps a minimum spacing between retries while still spreading clients apart.
- */
-export function computeBackoffDelay(retryIndex: number, policy: RetryPolicy, random: () => number): number {
-  const exponential = policy.baseDelayMs * 2 ** retryIndex;
-  const step = Math.min(policy.maxDelayMs, exponential);
-  const half = step / 2;
-  return Math.round(half + random() * half);
-}
-
-const defaultSleep: SleepLike = (ms) => new Promise((resolve) => {
-  setTimeout(resolve, ms);
-});
+const defaultSleep: SleepLike = (ms) => sleep(ms);
 
 function describeFailure(error: unknown, timeoutMs: number): string {
   if (error instanceof Error) {
@@ -178,7 +156,7 @@ export async function getTextWithRetry(
     }
 
     const retryable = isRetryableStatus(response.status);
-    const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'), now());
+    const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'), now());
     // Release the connection; the error body is not needed.
     await response.body?.cancel().catch(() => undefined);
     const message = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;

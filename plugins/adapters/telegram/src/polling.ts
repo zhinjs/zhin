@@ -2,6 +2,7 @@
  * Telegram long-polling loop for getUpdates.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { sleep } from 'zhin.js';
 import type { TelegramUpdate } from './protocol.js';
 
 const logger = getLogger('telegram');
@@ -56,26 +57,12 @@ export async function runTelegramPollLoop(
       }));
       // 不在退避后清零：对端持续挂时清零会让重试固定打满 RETRY_DELAY_MS，
       // 保持计数才能让 BACKOFF_DELAY_MS 持续生效（成功时上面才清零）。
+      // An abort ends the wait early; the loop condition then stops polling.
       await sleep(
         consecutiveFailures >= MAX_CONSECUTIVE_FAILURES ? BACKOFF_DELAY_MS : RETRY_DELAY_MS,
         abortSignal,
-      );
+      ).catch(() => undefined);
     }
   }
 }
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) {
-      resolve();
-      return;
-    }
-    const finish = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, ms);
-    signal?.addEventListener('abort', finish, { once: true });
-  });
-}

@@ -853,6 +853,7 @@ export * from './permissions.js';
 export * from './plugin-permissions.js';
 export * from './navigation.js';
 export * from './feature.js';
+export * from './session-key.js';
 export * from './chat-roles.js';
 export * from './chat-principals.js';
 export * from './attention.js';

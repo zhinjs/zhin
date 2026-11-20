@@ -224,7 +224,7 @@ export default defineCommand({
 ### 表格、Markdown 与代码块
 
 ```tsx
-import { Table, Checkbox, Switch, Button, Markdown, CodeBlock } from '@zhin.js/components';
+import { Table, Checkbox, Switch, Button, MarkdownView, CodeBlock } from '@zhin.js/components';
 
 const report = <Table
   headers={['任务', '完成', '通知', '操作状态']}
@@ -234,13 +234,13 @@ const report = <Table
   ]}
 />;
 
-const article = <Markdown source={'## 验收记录\n\n- [x] 冒烟通过\n- [ ] 等待上线'} />;
+const article = <MarkdownView source={'## 验收记录\n\n- [x] 冒烟通过\n- [ ] 等待上线'} />;
 const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</strong>}
   source={'const ready = true;\nconsole.log(ready);'} />;
 ```
 
 - `Checkbox`、`Radio`、`Switch`、`Button` 只用于**展示**状态，没有点击事件。需要交互请用上面的 `<button onClick>`。
-- `Markdown` 把字符串渲染成带主题的标题、列表、引用和表格；代码块交给 `CodeBlock`（语言标签、高亮、可选行号）。
+- `MarkdownView` 把字符串渲染成带主题的标题、列表、引用和表格；代码块交给 `CodeBlock`（语言标签、高亮、可选行号）。
 - 也可以用 `TableRow`、`TableCell` 自由组合表格，`List` 支持有序 / 无序和嵌套列表。
 
 ### Tailwind 工具类
@@ -379,7 +379,7 @@ return segment.html({ html: await renderToHtml(node), width: 640, text: '服务�
 
 - `<image src={...}>` 接受 URL、路径、base64 或 `MediaRef`，也可以直接传 `<image media={...} />`。
 - `<card {...payload} />` 是平台原生卡片，交给适配器处理；它**不是**组件库里的 `Card`。
-- `<markdown>` 输出 Markdown 消息段；它**不是**组件库里的 `Markdown`。
+- `<markdown>` 输出 Markdown 消息段；它**不是**组件库里的 `MarkdownView`。
 
 ### 中间件上下文
 

@@ -1,3 +1,4 @@
+import { sleep } from 'zhin.js';
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 /**
@@ -32,21 +33,11 @@ export interface QqBindFlowOptions {
   source?: string;
 }
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'));
-      return;
-    }
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(new DOMException('Aborted', 'AbortError'));
-      },
-      { once: true },
-    );
+
+/** The shared abortable sleep; an abort always surfaces as this flow's own `AbortError`. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return sleep(ms, signal).catch(() => {
+    throw new DOMException('Aborted', 'AbortError');
   });
 }
 
@@ -60,7 +51,7 @@ async function pollUntilResult(
     try {
       result = await pollBindResult(taskId);
     } catch {
-      await sleep(POLL_INTERVAL_MS, signal);
+      await pause(POLL_INTERVAL_MS, signal);
       continue;
     }
     if (result.status === BindStatus.COMPLETED) {
@@ -75,7 +66,7 @@ async function pollUntilResult(
     if (result.status === BindStatus.EXPIRED) {
       return { outcome: 'expired' };
     }
-    await sleep(POLL_INTERVAL_MS, signal);
+    await pause(POLL_INTERVAL_MS, signal);
   }
   throw new DOMException('Aborted', 'AbortError');
 }

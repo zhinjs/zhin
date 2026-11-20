@@ -50,6 +50,7 @@
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
