@@ -10,10 +10,11 @@ describe('isConfirmWord / isCancelWord', () => {
     expect(isCancelWord('cancel ...')).toBe(true);
     // Whitespace inside the word is kept: only the tail is stripped.
     expect(isConfirmWord('o k')).toBe(false);
-    const hostile = `${'\t'.repeat(200_000)}x`;
+    // A long strippable run between non-strippable characters: `trim()` cannot remove it, and a `[...]+$`
+    // regex retries it from every start position (quadratic: ~5 s for these inputs).
     const started = performance.now();
-    expect(isConfirmWord(hostile)).toBe(false);
-    expect(isCancelWord(`取消${'\t '.repeat(100_000)}`)).toBe(true);
+    expect(isConfirmWord(`a${'\t'.repeat(100_000)}x`)).toBe(false);
+    expect(isCancelWord(`ok${' .'.repeat(50_000)}x`)).toBe(false);
     expect(performance.now() - started).toBeLessThan(1_000);
   });
 
