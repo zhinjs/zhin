@@ -144,6 +144,7 @@ describe('structured Agent final replies', () => {
     expect(result.reply).toContain('没有可用的工具');
     expect(result.reply).toContain('zhin trace exec-1');
     expect(result.reply).not.toContain('/reset');
+    expect(result.reply).not.toContain('/clear');
   });
 
   it('does not mark a model reply as a fallback (#1250 b33)', async () => {

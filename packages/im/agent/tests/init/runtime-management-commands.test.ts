@@ -28,6 +28,27 @@ describe('handleRuntimeManagementCommand', () => {
     expect(reply).toContain('owner / admin / trusted');
   });
 
+  it('keeps reset operator-only and points everyone else at /clear (#1250)', async () => {
+    const archiveSession = vi.fn();
+    const reply = await handleRuntimeManagementCommand({
+      service: {} as never,
+      zhinAgent: { archiveSession } as never,
+      sessionKey: 'test:session',
+      commandPrefix: '/',
+      content: '/reset',
+      senderRoles: { isMaster: false, isTrusted: false },
+    });
+    expect(reply).toBe('⚠️ /reset 是管理指令，仅聊天角色 owner / admin / trusted 可用。要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。');
+    expect(archiveSession).not.toHaveBeenCalled();
+    const archive = vi.fn().mockResolvedValue(true);
+    const operator = await handleRuntimeManagementCommand({
+      service: {} as never, zhinAgent: { archiveSession: archive } as never, sessionKey: 'test:session',
+      commandPrefix: '/', content: '/reset', senderRoles: { isMaster: false, isTrusted: true }, locale: 'en',
+    });
+    expect(archive).toHaveBeenCalledWith('test:session');
+    expect(operator).toContain('archived');
+  });
+
   it('lists models for operators', async () => {
     const list = vi.fn().mockResolvedValue(['gpt-4o', 'o1', 'o3', 'a', 'b', 'c'].map(model => ({ label: `openai/${model}`, model })));
     const reply = await handleRuntimeManagementCommand({

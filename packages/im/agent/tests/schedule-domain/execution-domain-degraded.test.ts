@@ -44,6 +44,7 @@ describe('ScheduleExecutionDomain degraded runs (#1250 b33)', () => {
     expect(result.output).toContain('「天气早报」（sched_weather）');
     expect(result.output).toContain(`zhin trace ${result.audit.executionId}`);
     expect(result.output).not.toContain('/reset');
+    expect(result.output).not.toContain('/clear');
     expect(result.audit).toMatchObject({ warnings: ['no_tools'], degraded: { cause: 'no_tools' } });
   });
 
