@@ -1,6 +1,8 @@
 import { childPluginId, createCapabilitySlot, rootPluginId, type CapabilitySlot, type RuntimeSnapshot } from 'zhin.js';
 import { gameActionWords, gameCommandAction } from '@zhin.js/game-kit';
 import { CommandIndex, commandFeatureId, type CommandDefinition } from '@zhin.js/command';
+// The real dispatcher (hub has no @zhin.js/core dependency of its own).
+import { MessageDispatcher } from '../../../../packages/im/core/src/plugin-runtime/im/message-dispatcher.js';
 import bj from '../../blackjack/commands/bj/[[action]]/index.ts';
 import dice from '../../dice-duel/commands/dice/[[action]]/index.ts';
 import dungeon from '../../dungeon-expedition/commands/dungeon/[[action]]/index.ts';
@@ -42,20 +44,35 @@ function snapshot(slots: readonly CapabilitySlot<CommandDefinition>[]): RuntimeS
   } as RuntimeSnapshot;
 }
 
-const slots = Object.entries(commands).map(([name, definition]) => slot(name, definition));
-const index = new CommandIndex(slots, snapshot(slots));
+/**
+ * The same commands, each answering with what it was sent: the command the index actually selected
+ * and the action text it received (route parameter or `match` group). Nothing in the test re-derives
+ * the route; the CommandIndex reports it.
+ */
+const reporting = Object.fromEntries(Object.entries(commands).map(([name, definition]) => [name, {
+  ...(definition as CommandDefinition),
+  execute: (context: Parameters<typeof gameCommandAction>[0]) => ({ command: name, action: gameCommandAction(context) }),
+}]));
+const slots = Object.entries(reporting).map(([name, definition]) => slot(name, definition));
+const games = snapshot(slots);
+const index = new CommandIndex(slots, games);
+(games.projections as Map<unknown, unknown>).set(commandFeatureId, index);
 
-/** Which game command `text` reaches, and with which action text. */
-function reach(text: string): { readonly command: string; readonly action: string } | undefined {
-  if (!index.routes(text)) return undefined;
-  for (const [name, definition] of Object.entries(commands)) {
-    const route = text.split(/\s+/u);
-    const words = [name, ...((definition as CommandDefinition).alias ?? [])];
-    if (words.includes(route[0]!)) return { command: name, action: route.slice(1).join(' ') };
-    const match = (definition as CommandDefinition).match?.exec(text);
-    if (match) return { command: name, action: gameCommandAction({ params: { action: '' }, match }) };
-  }
-  throw new Error(`routed to no game command: ${text}`);
+const conversation = { kind: 'group', id: 'g1', endpoint: { id: 'test-endpoint', adapter: 'test' } } as const;
+const message = (content: string) => ({ content, conversation, sender: { id: 'alice' } }) as never;
+
+/** Which game command `text` reaches, and with which action text, as the CommandIndex dispatches it. */
+async function reach(text: string): Promise<{ readonly command: string; readonly action: string } | undefined> {
+  const result = await index.dispatch({ input: text, source: message(text), commandPrefix: '', snapshot: games });
+  if (!result.matched) return undefined;
+  expect(result.status, text).toBe('executed');
+  return result.value as { command: string; action: string };
+}
+
+/** The same through the real MessageDispatcher, with `prefix` as the adapter's command prefix. */
+async function dispatched(text: string, prefix: string) {
+  const result = await new MessageDispatcher(() => prefix).dispatch(message(text), games);
+  return result.matched ? result.value as { command: string; action: string } : undefined;
 }
 
 // What each old alias middleware took over: its words, bare or with one word its action table knows.
@@ -78,29 +95,46 @@ describe('game short entries go through the command system (#1250 第 82 批)', 
   });
 
   describe.each(migrated)('%s', (command, words, actions) => {
-    it('takes every word bare and with every known action', () => {
+    it('takes every word bare and with every known action', async () => {
       for (const word of words) {
-        expect(reach(word)).toEqual({ command, action: '' });
-        for (const action of actions) expect(reach(`${word} ${action}`), `${word} ${action}`).toEqual({ command, action });
+        expect(await reach(word)).toEqual({ command, action: '' });
+        for (const action of actions) expect(await reach(`${word} ${action}`), `${word} ${action}`).toEqual({ command, action });
       }
     });
   });
 
-  it('leaves chat that starts with a short word alone (the middlewares let it through)', () => {
+  it('leaves chat that starts with a short word alone (the middlewares let it through)', async () => {
     for (const text of ['二十一点 开会', '21点 开会', '二十一点 开始 吧', '骰子 是谁的', '猜数 好难', '接龙 今天天气不错',
       '轮盘 好刺激', '猜拳 谁输谁请客', '猜拳 s', '冒险 精神', '秘境 探险记', '猜谜 真有意思', '21点开始']) {
-      expect(reach(text), text).toBeUndefined();
+      expect(await reach(text), text).toBeUndefined();
     }
   });
 
-  it('blackjack: `二十一点 开会` is chat, `二十一点 要牌` and the other actions are the game', () => {
-    expect(reach('二十一点 开会')).toBeUndefined();
-    expect(reach('二十一点')).toEqual({ command: 'bj', action: '' });
+  it('blackjack: `二十一点 开会` is chat, `二十一点 要牌` and the other actions are the game', async () => {
+    expect(await reach('二十一点 开会')).toBeUndefined();
+    expect(await reach('二十一点')).toEqual({ command: 'bj', action: '' });
     for (const action of ['要牌', '停牌', '开始', '继续', '退出', '放弃', '帮助']) {
-      expect(reach(`二十一点 ${action}`)).toEqual({ command: 'bj', action });
+      expect(await reach(`二十一点 ${action}`)).toEqual({ command: 'bj', action });
     }
     // The explicit spellings keep taking any action (and answer an unknown one with help).
-    expect(reach('玩二十一点 开会')).toEqual({ command: 'bj', action: '开会' });
-    expect(reach('bj 开会')).toEqual({ command: 'bj', action: '开会' });
+    expect(await reach('玩二十一点 开会')).toEqual({ command: 'bj', action: '开会' });
+    expect(await reach('bj 开会')).toEqual({ command: 'bj', action: '开会' });
+  });
+
+  // End to end through the real MessageDispatcher: the short entry follows the adapter's prefix
+  // like every other command (no special `/` stripping any more).
+  it('with prefix `/`: `/21点 开始` is the command, `21点 开始` is chat', async () => {
+    expect(await dispatched('/21点 开始', '/')).toEqual({ command: 'bj', action: '开始' });
+    expect(await dispatched('/接龙', '/')).toEqual({ command: 'chain', action: '' });
+    expect(await dispatched('21点 开始', '/')).toBeUndefined();
+    expect(await dispatched('接龙', '/')).toBeUndefined();
+  });
+
+  it("with prefix '': `21点 开始` is the command, `/21点` is not", async () => {
+    expect(await dispatched('21点 开始', '')).toEqual({ command: 'bj', action: '开始' });
+    expect(await dispatched('猜拳 石头', '')).toEqual({ command: 'rps', action: '石头' });
+    expect(await dispatched('/21点', '')).toBeUndefined();
+    expect(await dispatched('/21点 开始', '')).toBeUndefined();
+    expect(await dispatched('二十一点 开会', '')).toBeUndefined();
   });
 });

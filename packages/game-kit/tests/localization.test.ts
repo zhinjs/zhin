@@ -39,7 +39,7 @@ it('uses the stored game locale for timeout notifications and keeps rows without
     [outboundHostToken.id, { send: vi.fn(), sendTarget: async (_target: unknown, content: unknown, options?: { locale?: string }) => { sent.push({ content, locale: options?.locale }); return 'sent'; } }],
     [scheduleHostToken.id, { register: (job: { execute: () => Promise<void> }) => { execute = job.execute; return () => {}; } }],
   ]);
-  const plugin = defineGamePlugin({ name: 'test', game: { id: 'test', title: '测试', titleI18n: { en: 'Test' }, icon: '🎮', description: 'test', commandPrefix: '/unused', commandPath: 'test' },
+  const plugin = defineGamePlugin({ name: 'test', game: { id: 'test', title: '测试', titleI18n: { en: 'Test' }, icon: '🎮', description: 'test', commandPath: 'test' },
     tables: [], servicesToken: createToken<typeof services>('localization-test-services'), defineHostTables() {},
     createServices: () => services, session: service => service });
   const lifecycle = new DisposeStack();

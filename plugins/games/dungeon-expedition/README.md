@@ -9,7 +9,7 @@
 pnpm add @zhin.js/plugin-dungeon-expedition
 ```
 
-将插件加入 Zhin 配置后，可通过 `/地牢`、`地牢` 或 `/dungeon` 进入。
+将插件加入 Zhin 配置后，可通过 `地牢`、`地牢远征` 或 `dungeon` 进入（不带指令前缀的写法；适配器配置了 `commandPrefix`，如 `/`，时要带上：`/地牢`）。
 
 ## 游戏流程
 

@@ -228,9 +228,17 @@ export function isMergeableGroupTurn(input: Readonly<{
   const prefixes = input.trigger?.prefixes?.length ? input.trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
   if (prefixes.some((prefix) => prefix && text.startsWith(prefix))) return false;
   // The raw message and the addressed content (`@bot /status`) both go through the one command judgement.
+  const content = input.content.trim();
   if (hasIgnoredTriggerPrefix(text, input.trigger, input.message.commandPrefix)) return false;
-  return !hasIgnoredTriggerPrefix(input.content.trim(), input.trigger, input.message.commandPrefix);
+  if (hasIgnoredTriggerPrefix(content, input.trigger, input.message.commandPrefix)) return false;
+  // `/` is the slash-command mark users carry over from every chat platform, whatever this adapter's
+  // prefix and `ignorePrefixes` say. Such a message keeps its own turn instead of being folded into
+  // the neighbours' merged text, so `ignorePrefixes: ['~']` never merges `@bot /status`.
+  return !text.startsWith(MERGE_WINDOW_COMMAND_MARK) && !content.startsWith(MERGE_WINDOW_COMMAND_MARK);
 }
+
+/** Always command-like for the merge window only (not for AI triggering): see {@link isMergeableGroupTurn}. */
+const MERGE_WINDOW_COMMAND_MARK = '/';
 
 export function matchAiTrigger(
   message: Message,

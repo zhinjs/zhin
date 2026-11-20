@@ -5,10 +5,12 @@ import {
   gamePlayerFromInput,
   parseChoicePayload,
   resolveGameTextPayload,
+  routesToGameCommand,
 } from '@zhin.js/game-kit';
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { resolveGameServices } from '../../src/runtime-store.js';
+import { RIDDLE_COMMAND_TEXT } from '../../src/command-entry.js';
 import { handleChoice, processAnswerText, RIDDLE_PREFIX } from '../../src/game-flow.js';
 
 /**
@@ -20,7 +22,9 @@ export default defineMiddleware<Message>({
   async handle(context, next) {
     if (!context.input.sender?.id) { await next(); return; }
     const raw = context.input.content?.trim() ?? '';
-    if (!raw) {
+    // This game's own command text (`猜谜`, with this conversation's prefix) is the command, not an
+    // answer: before command dispatch, leave it to the command (#1250 第 82 批).
+    if (!raw || routesToGameCommand(context.input, RIDDLE_COMMAND_TEXT)) {
       await next();
       return;
     }

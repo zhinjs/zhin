@@ -61,4 +61,16 @@ describe('command-like prefixes (#1250 第 82 批)', () => {
     expect(mergeable('@bot #签到', '#', undefined, '#签到')).toBe(false);
     expect(mergeable('#帮助', '', undefined, '帮助')).toBe(false);
   });
+
+  it('keeps `/` out of the merge window even when ignorePrefixes leave it out', () => {
+    const custom: AITriggerConfig = { ignorePrefixes: ['~'] };
+    // `/` is no command-like prefix for AI triggering here ...
+    expect(hasIgnoredTriggerPrefix('/status', custom, '#')).toBe(false);
+    // ... but a slash command never merges with its neighbours, raw or addressed.
+    expect(mergeable('/status', '#', custom)).toBe(false);
+    expect(mergeable('@bot /status', '#', custom, '/status')).toBe(false);
+    expect(mergeable('@bot /status', '', custom, '/status')).toBe(false);
+    // Plain chat with this configuration still merges.
+    expect(mergeable('@bot 今晚吃什么', '#', custom, '今晚吃什么')).toBe(true);
+  });
 });

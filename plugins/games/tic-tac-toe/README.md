@@ -24,6 +24,8 @@ database:
 | `ttt quit` | 认输 |
 | `ttt spectate` | 观战订阅 |
 
+表中命令不带指令前缀，适配器配置了 `commandPrefix`（如 `/`）时要带上：`/ttt bot`。中文名 `井字棋` 同样可用（`井字棋 人机`）。
+
 ## 交互
 
 - **Native 按钮**：Sandbox、Telegram、Discord、KOOK、Lark、QQ 系等（见 `interactivePolicy: native`）

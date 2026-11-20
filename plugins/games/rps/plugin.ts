@@ -24,9 +24,8 @@ export default defineGamePlugin<SessionService>({
     title: '猜拳对决',
     icon: '✊',
     description: '石头剪刀布，三局两胜',
-    commandPrefix: '/猜拳',
     quickStart: '开始',
-    aliases: ['rps'],
+    aliases: ['rps', '猜拳'],
     menus: [
       { id: 'start', label: '🎮 开始对局' },
       { id: 'continue', label: '🔄 继续' },

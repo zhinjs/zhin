@@ -13,6 +13,7 @@
 "@zhin.js/plugin-text-adventure": patch
 "@zhin.js/plugin-tic-tac-toe": patch
 "@zhin.js/plugin-word-riddle": patch
+"@zhin.js/plugin-game-hub": patch
 ---
 
 「这条消息是不是命令」只有一套判断，游戏短口令改走命令系统（#1250 第 82 批）。
@@ -25,3 +26,8 @@
 - 行为变化（更一致）：短口令现在照常经过指令前缀、permit、冷却与结局记录；不再无条件剥掉开头的 `/`——适配器配置了 `commandPrefix` 时要带该前缀，未配置时 `/21点` 不再是命令。
 - 新增 `二十一点` 短口令；`二十一点 开会`、`21点 开会`、`接龙 今天天气不错` 这类聊天不是命令（旧中间件对 `21点 <任意词>` 会接管）。21 点新增动作 `要牌` / `停牌`（`hit` / `stand`）。
 - `@zhin.js/game-kit`：新增 `gameCommandMatch()`、`gameCommandAction()`、`normalizeBjAction()`、`gameActionWords()` 与类型 `GameActionTableId`；删除 `isTttAction()`、`isAdvAction()`、`isRpsAction()`、`isGuessAction()`、`isDiceAction()`、`isChainAction()`、`isRiddleAction()`（只供已删除的别名中间件使用）。21 点不再各写两份动作归一化，统一用动作表。
+- 合并窗口：`/` 开头（原始消息或被 @ 后的内容）始终不进合并窗口，即使 `ignorePrefixes` 改成了别的（如 `['~']`）、适配器前缀也不是 `/`——`/` 是各平台通用的斜杠命令记号，这样的消息单独成一轮，不与相邻消息拼成一句。只影响合并窗口，不影响 AI 触发判断。
+- 游戏进行中发本游戏的命令口令不再被当成作答：猜谜进行中发 `猜谜` / `猜谜语`、接龙进行中发 `接龙` / `成语接龙`（及口令加已知动作）会交给命令（回帮助），不当谜底 / 成语，不扣失误、不判负。判断按该会话真实的指令前缀：配置了 `/` 时 `/猜谜` 是命令、裸 `猜谜` 仍是作答。`@zhin.js/game-kit` 新增 `routesToGameCommand(input, pattern)` 供自由文本作答的中间件使用。
+- （不兼容）`@zhin.js/game-kit` 的游戏定义（`RuntimeRegisteredGame` / `defineGame()`）删除 `commandPrefix` 字段：各游戏写死的 `'/21点'` 一类值不再存在，入口只由 `commandPath` 与命令系统决定。原值去掉 `/` 后并入各游戏的 `aliases`（`骰子`、`地牢`、`猜数`、`接龙`、`轮盘`、`猜拳`、`冒险`、`井字棋`、`猜谜`），`排行 骰子`、`游戏大厅 骰子` 照旧能找到游戏。
+- 游戏大厅 AI 工具 `game_catalog` 的 `startCommand` 不再是写死 `/` 的 `/猜数 开始`：改用与 `games` 命令同源的命令索引渲染（`GameIndex.formatCommand`），工具调用没有会话前缀，因此不带前缀（如 `猜数字 开始`），工具说明提示模型在配置了指令前缀的会话里加上前缀；拿不到命令索引时退回 `commandPath`（如 `guess 开始`）。`toGameCatalogEntry()` 新增可选第二参数。
+- 各游戏 README 的命令示例注明 `/` 只是示例前缀、按适配器 `commandPrefix` 书写，并把已不存在的 `/游戏` 改为 `游戏大厅`；`docs/ai` 注明与 `commandPrefix` 相同的触发前缀（如 `#`）不再生效。

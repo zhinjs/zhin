@@ -189,7 +189,7 @@ ai:
 ```yaml
 ai:
   trigger:
-    prefixes: ["ai:"]          # 默认 ['#', 'AI:', 'ai:']
+    prefixes: ["ai:"]          # 默认 ['#', 'AI:', 'ai:']；与适配器 commandPrefix 相同的触发前缀不再生效（见下）
     ignorePrefixes: ["/"]      # 默认 ['/', '!', '！']；适配器的 commandPrefix（非空时）总是额外算作命令前缀
     respondToAt: true          # 默认 true：群里 @ Bot 时触发
     respondToPrivate: true     # 默认 true：私聊直接触发
@@ -198,6 +198,8 @@ ai:
     thinkingMessage: 思考中…    # 可选：开始处理前的占位回复
     # errorTemplate: "出错了：{error}"   # 可选；不配置时用聊天口吻说"刚卡了一下"，主人会额外看到原因
 ```
+
+`prefixes` 里与适配器 `commandPrefix` 相同的触发前缀不再生效：例如适配器 `commandPrefix: '#'` 时，`#xxx` 先按命令匹配，没有命令认领也只算命令样消息，不会再被默认的 `#` 触发前缀交给 AI。要在这类适配器上用前缀唤起 AI，请换一个不同的触发前缀（如 `ai:`）。
 
 @ 触发依赖适配器标记消息为"提到了 Bot"（例如 CQ 码、Slack 的 app_mention）。
 
