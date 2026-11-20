@@ -78,7 +78,7 @@ describe('Agent ingress refusals of unauthorized senders (#1250)', () => {
   it('still tells a non-operator why in a private chat', async () => {
     const t = run({ content: '/models', kind: 'private' });
     expect(await tryHandleIngressCommands(t.input)).toBe(true);
-    expect(t.reply).toHaveBeenCalledWith(expect.stringContaining('它需要 zhin 角色'));
+    expect(t.reply).toHaveBeenCalledWith(expect.stringContaining('此功能需要 zhin 角色'));
     expect(t.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'not_operator', reply: 'yes' })]);
     const reset = run({ content: '/reset', kind: 'private' });
     expect(await tryHandleIngressCommands(reset.input)).toBe(true);

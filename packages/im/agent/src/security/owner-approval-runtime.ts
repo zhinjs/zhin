@@ -90,7 +90,8 @@ export class OwnerApprovalRuntime {
     const address = ownerCommandAddress(context);
     if (context.scope !== 'private' || !address || !context.senderIsGlobalOwner) {
       if (!context.senderIsGlobalOwner) context.onUnauthorized?.('not_global_owner');
-      return describeGlobalOwnerRequired(locale, { privateChat: true });
+      return describeGlobalOwnerRequired(locale, { privateChat: true,
+        ...(context.commandPrefix !== undefined ? { commandPrefix: context.commandPrefix } : {}) });
     }
 
     if (/^approve\s+always\s+bash\s*$/iu.test(text)) {

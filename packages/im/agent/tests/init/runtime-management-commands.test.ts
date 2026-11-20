@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { describeCommandDenial } from '@zhin.js/permission';
 import { handleRuntimeManagementCommand } from '../../src/init/runtime-management-commands.js';
 
 describe('handleRuntimeManagementCommand', () => {
@@ -27,12 +28,14 @@ describe('handleRuntimeManagementCommand', () => {
       senderRoles: {},
       onUnauthorized,
     });
-    expect(reply).toContain('它需要 zhin 角色');
+    expect(reply).toBe(describeCommandDenial('trusted', 'zh-CN'));
     // #1250: the refusal is flagged so the ingress can stay silent in a group.
     expect(onUnauthorized).toHaveBeenCalledWith('not_operator');
   });
 
   it('flags every operator-only refusal and nothing an operator sends (#1250)', async () => {
+    const denial = describeCommandDenial('trusted', 'zh-CN');
+    const resetDenial = `${denial}要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。`;
     for (const content of ['/models', '/tree', '/tree 2', '/fork 2', '/compact', '/reset', 'ai.health']) {
       const onUnauthorized = vi.fn();
       const archiveSession = vi.fn();
@@ -40,7 +43,7 @@ describe('handleRuntimeManagementCommand', () => {
       expect(await handleRuntimeManagementCommand({
         service: {} as never, zhinAgent: { archiveSession, compactSession } as never, sessionKey: 'test:session',
         commandPrefix: '/', content, senderRoles: {}, onUnauthorized,
-      })).toMatch(/它需要 zhin 角色|仅聊天角色 owner \/ admin \/ trusted 可用/u);
+      })).toBe(content === '/reset' ? resetDenial : denial);
       expect(onUnauthorized).toHaveBeenCalledWith('not_operator');
       expect(archiveSession).not.toHaveBeenCalled();
       expect(compactSession).not.toHaveBeenCalled();
@@ -67,7 +70,11 @@ describe('handleRuntimeManagementCommand', () => {
       content: '/reset',
       senderRoles: {},
     });
-    expect(reply).toBe('⚠️ /reset 是管理指令，仅聊天角色 owner / admin / trusted 可用。要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。');
+    expect(reply).toBe('没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。');
+    expect(await handleRuntimeManagementCommand({
+      service: {} as never, zhinAgent: { archiveSession } as never, sessionKey: 'test:session',
+      commandPrefix: '/', content: '/reset', senderRoles: {}, locale: 'en',
+    })).toBe(`${describeCommandDenial('trusted', 'en')} To clear your own AI conversation context, send /clear or 清空 (mention the bot first in a group).`);
     expect(archiveSession).not.toHaveBeenCalled();
     const archive = vi.fn().mockResolvedValue(true);
     const operator = await handleRuntimeManagementCommand({
@@ -117,7 +124,7 @@ it.each(['!', '', '/'])('uses the actual %j prefix and keeps plugin namespaces d
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('中文模型名');
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}plugin/models` })).toBeNull();
   expect(await handleRuntimeManagementCommand({ ...base, commandPrefix: undefined, content: '/models' })).toBeNull();
-  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: {} })).toContain('it needs a zhin role');
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: {} })).toBe(describeCommandDenial('trusted', 'en'));
 });
 
 it('uses immutable per-invocation presentation for concurrent locales', async () => {

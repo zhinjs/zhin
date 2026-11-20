@@ -7,6 +7,7 @@ import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ConfigChatAccessError, ConfigChatRequestRejectedError, parseConfigurationPath, formatConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
 import type { ConfigurationChatAuthorizer } from '@zhin.js/core/runtime';
+import { unauthorizedCommandReply } from './unauthorized-command-reply.js';
 
 const messages = createMessages({
   description: { 'zh-CN': '管理可在聊天中安全访问的项目配置', en: 'Manage project configuration that is safe to access in chat' },
@@ -107,9 +108,16 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
         alias: [action ? `配置 ${action}` : '配置'],
         permit: ['owner@global', 'private()'], params, options: {},
         execute: async command => {
-          const denied = () => describeGlobalOwnerRequired(command.locale, { privateChat: true });
-          try { if (!allowed(command)) return denied(); }
-          catch { return denied(); }
+          // The same refusal as the declarative permit `owner@global` (one variant). An authorizer
+          // refusal is the message's `permission_denied` outcome and, like `restart`, stays silent
+          // outside a private chat (zhinjs/zhin#1250).
+          const denied = () => unauthorizedCommandReply({
+            input: command.input, kind: readOperationSession(command.input)?.scene.kind,
+            text: describeGlobalOwnerRequired(command.locale, { bindCommand: command.formatCommand('bind') }),
+            reason: 'not-global-owner', command: 'config' });
+          let authorized: boolean;
+          try { authorized = allowed(command); } catch { authorized = false; }
+          if (!authorized) return denied();
           try {
             command.signal.throwIfAborted();
             return await execute(command);

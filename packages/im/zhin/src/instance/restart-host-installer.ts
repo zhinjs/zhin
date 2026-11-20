@@ -217,7 +217,7 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
             input: command.input, kind: scene?.kind, text, reason, command: 'restart', authorized });
           if (!allowed || !session || !scene) {
             audit('restart', 'denied', 'not-global-owner');
-            return unauthorized(describeGlobalOwnerRequired(locale), 'not-global-owner');
+            return unauthorized(describeGlobalOwnerRequired(locale, { bindCommand: command.formatCommand('bind') }), 'not-global-owner');
           }
           if (!options.restartSupported()) {
             audit('restart', 'denied', 'unsupported');

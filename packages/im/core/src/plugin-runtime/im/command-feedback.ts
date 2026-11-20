@@ -62,14 +62,15 @@ const feedbackMessages = createMessages({
   identity: { 'zh-CN': '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。', en: 'This command was not accepted because a trusted identity or valid execution context is missing. Ask an administrator to check the adapter and runtime.' },
 });
 
-function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: string): string {
+function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: string, bindCommand?: string): string {
   if (feedback.status === 'invalid') {
     return [...feedback.issues.map(issue => issue.message), feedback.help].filter(Boolean).join('\n');
   }
   // Platform / Bot conditions say what is missing (e.g. 「机器人不是本群管理员」), zhin role conditions
   // where roles come from, `private()` asks for a private chat; the rest keep the generic sentence.
   if (feedback.status === 'denied') return describeCommandDenial(feedback.permit, locale, {
-    ...(standing ? { standing } : {}), ...(feedback.reason ? { reason: feedback.reason } : {}) });
+    ...(standing ? { standing } : {}), ...(feedback.reason ? { reason: feedback.reason } : {}),
+    ...(bindCommand ? { bindCommand } : {}) });
   const reason = feedback.limit?.reason;
   const waitMs = feedback.limit?.retryAfterMs;
   return reason === 'cooldown'
@@ -88,6 +89,8 @@ export async function renderCommandFeedback(
   result: CommandDispatchResult,
   message: Message,
   snapshot: RuntimeSnapshot,
+  /** The chat invocation of the Root `bind` command here (prefix included), for the global owner text. */
+  bindCommand?: string,
 ): Promise<{ readonly content: SendContent; readonly owner?: PluginId } | undefined> {
   const feedback = feedbackFrom(result);
   if (!feedback) return undefined;
@@ -122,7 +125,7 @@ export async function renderCommandFeedback(
       logger.warn(formatCompact({ op: 'command_feedback_error', generation: snapshot.generation, status: feedback.status }));
     }
   }
-  return { content: defaultFeedback(feedback, resolveLocale(message.locale), message.sender?.platform?.standing), owner: result.owner };
+  return { content: defaultFeedback(feedback, resolveLocale(message.locale), message.sender?.platform?.standing, bindCommand), owner: result.owner };
 }
 
 export interface CommandMenuPresentationInput {

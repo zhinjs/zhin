@@ -74,7 +74,7 @@ try {
   } finally { lease.release(); }
   assert.equal((await receive('restricted')).status, 'denied');
   // ADR 0060 §5.3: zhin role denials say where roles come from.
-  assert.equal(kit.deliveries.at(-1).payload, selected ? '此指令需要管理员权限，请联系管理员。' : '没有权限执行此指令：它需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。');
+  assert.equal(kit.deliveries.at(-1).payload, selected ? '此指令需要管理员权限，请联系管理员。' : '没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。');
   // #1250: in a group the sender without the role gets no reply (neither renderer is asked).
   const deliveredBefore = kit.deliveries.length;
   assert.equal((await receive('restricted', 'group')).status, 'denied');

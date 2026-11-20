@@ -121,7 +121,7 @@ export async function handleRuntimeManagementCommand(
   if (/^reset\s*$/iu.test(text ?? '')) {
     // #1250: reset stays operator-only; everyone else is pointed at the clear command, which clears
     // the same (their own) session context.
-    if (!isOperator) return denied(t(locale, 'resetDenied', { command: command('reset') }));
+    if (!isOperator) return denied(t(locale, 'resetDenied', { denial: describeCommandDenial(CHAT_ROLE_PERMIT, locale) }));
     const ok = await deps.zhinAgent.archiveSession(deps.sessionKey);
     return t(locale, ok ? 'archived' : 'noSession');
   }
