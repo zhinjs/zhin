@@ -234,7 +234,7 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
     }
   });
 
-  it('lets a global owner restart from a group; others there are silently refused and cannot confirm', async () => {
+  it('lets a global owner restart from a group; non-owners there are silently refused, another owner is told it is not theirs', async () => {
     const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
     const latestOutcome = () => f.im.messageOutcomes.list({ limit: 1 })[0];
     try {
@@ -248,15 +248,20 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
       await f.receive('!!重启', { sender: 'alice', kind: 'group', conversationId: 'group-777' });
       expect(lastReplyText(f.client)).toContain('60 秒内回复 !!restart confirm');
       const sent = f.client.sendNative.mock.calls.length;
-      // Another member (even another global owner) cannot confirm alice's request in the same group,
-      // and neither is answered there.
+      // Another member cannot confirm alice's request in the same group: a non-owner is not answered.
       await f.receive('!!restart confirm', { sender: 'stranger', kind: 'group', conversationId: 'group-777' });
       expect(latestOutcome()).toMatchObject({ outcome: 'permission_denied', reason: 'not-global-owner', reply: 'no' });
+      expect(f.client.sendNative).toHaveBeenCalledTimes(sent);
+      // Another global owner cannot confirm it either; the reason stays `confirmation-not-own`, but bob
+      // holds the permission, so his mistake gets the usual hint in the group too.
       await f.receive('!!restart confirm', { sender: 'bob', kind: 'group', conversationId: 'group-777' });
-      expect(latestOutcome()).toMatchObject({ outcome: 'permission_denied', reason: 'confirmation-not-own', reply: 'no' });
+      expect(latestOutcome()).toMatchObject({ outcome: 'permission_denied', reason: 'confirmation-not-own', reply: 'yes' });
       expect(f.audit).toHaveBeenLastCalledWith(expect.objectContaining({
         actor: 'chat:platform:bob', outcome: 'denied', detail: { reason: 'confirmation-not-own' } }));
-      expect(f.client.sendNative).toHaveBeenCalledTimes(sent);
+      expect(f.client.sendNative).toHaveBeenCalledTimes(sent + 1);
+      expect(lastReplyText(f.client)).toContain('没有待确认的重启');
+      await waitForRestartTimer();
+      expect(f.requestRestart).not.toHaveBeenCalled();
       // Alice confirming from her private chat is another conversation.
       await f.receive('!!restart confirm', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
       expect(lastReplyText(f.client)).toContain('没有待确认的重启');

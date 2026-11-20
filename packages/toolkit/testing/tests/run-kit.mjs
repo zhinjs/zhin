@@ -88,7 +88,15 @@ try {
     await assert.rejects(kit.start());await kit.close();
     console.log('KIT_ACCEPTANCE_OK');
   } else {
-    assert.equal((await incoming('alpha keyword-add hi secret'))?.status,'denied');
+    // #1250: in a group a sender without the command's role (`trusted`) is refused silently.
+    kit.clearDeliveries();
+    for (const text of ['alpha keyword-add hi secret','alpha teach q|a','alpha forget q']) assert.equal((await incoming(text))?.status,'denied');
+    assert.equal(kit.deliveries.length,0);
+    // A private chat still says why: the role first when it is missing too, else the place (`group()`).
+    const dm=(content,chatRole)=>kit.receive({content,conversation:{kind:'private',id:'u1'},sender:{id:'u1',name:'Alice',...(chatRole?{chatRole}:{})}});
+    assert.equal((await dm('alpha teach q|a'))?.status,'denied');assert.match(deliveredText(kit.deliveries.at(-1).payload),/zhin 角色/);
+    assert.equal((await dm('alpha forget q','admin'))?.status,'denied');assert.equal(deliveredText(kit.deliveries.at(-1).payload),'没有权限执行此指令。');
+    assert.equal(kit.deliveries.length,2);
     assert.equal((await incoming('alpha keyword-add hi hello',['admin']))?.status,'executed');
     kit.clearDeliveries();await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     kit.clearDeliveries();await incoming('hi',[],'g2');assert.equal(kit.deliveries.length,0);

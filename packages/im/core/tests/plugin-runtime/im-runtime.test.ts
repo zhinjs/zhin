@@ -1,3 +1,4 @@
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/message-dispatcher.js';
 import { commandFeedbackToken, commandMenuPresentationToken, type CommandFeedbackRenderer, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
@@ -5521,11 +5522,26 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
       await receive(validating.im, fixtureInput(validating, '/gh issue list zero'));
       expect(latest(validating)).toMatchObject({ outcome: 'invalid_input', reason: 'invalid' });
     } finally { await validating.adapters.stop(); await validating.store.close(); }
-    const restricted = await createFixture([], [], undefined, undefined, undefined, { middleware: false, restrictCommand: true });
+    const sent: unknown[] = [];
+    const restricted = await createFixture([], sent, undefined, undefined, undefined, { middleware: false, restrictCommand: true });
     try {
       await receive(restricted.im, fixtureInput(restricted, '/gh issue list open'));
-      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', stage: 'command' });
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', stage: 'command', reply: 'yes' });
       expect(latest(restricted)!.reason).toMatch(/^denied/u);
+      expect(sent).toHaveLength(1);
+      // #1250: with the permission host naming the unmet permit, a group sender without the role
+      // (`owner`) is not answered; the outcome says so. A private chat still is.
+      const current = restricted.store.current;
+      const resources = new Map(current.resources);
+      resources.set(current.root, new Map([...resources.get(current.root)!, [permissionHostToken.id, new PermissionHost()]]));
+      restricted.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+      await receive(restricted.im, fixtureInput(restricted, '/gh issue list open'));
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', reason: 'denied:owner', reply: 'yes' });
+      expect(sent).toHaveLength(2);
+      const input = fixtureInput(restricted, '/gh issue list open');
+      await receive(restricted.im, { ...input, conversation: { ...input.conversation, kind: 'group' as const, id: 'busy-group' } });
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', reason: 'denied:owner', stage: 'command', reply: 'no' });
+      expect(sent).toHaveLength(2);
     } finally { await restricted.adapters.stop(); await restricted.store.close(); }
   });
 

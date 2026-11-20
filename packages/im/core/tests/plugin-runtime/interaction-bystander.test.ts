@@ -70,9 +70,76 @@ describe('a prompt answered by someone it was not asked of (#1250)', () => {
     expect(await coordinator.dispatch(again.msg)).toBe(true);
     expect(again.reply).toHaveBeenCalledTimes(1);
     expect(String(again.reply.mock.calls[0]![0])).toContain('过期');
-    // Once nobody is asked any more, a bystander's stale press is just expired as before.
-    const bob = message('bob', '', [{ type: 'action', data: { payload: token } }]);
-    expect(await coordinator.dispatch(bob.msg)).toBe(true);
-    expect(bob.reply).toHaveBeenCalledTimes(1);
+    // Changed in #1250 (batch 75 review): the ended prompt's buttons are still remembered as alice's
+    // for a while, so a bystander pressing them in a group gets no "expired" reply (it could be
+    // pressed again and again to flood the group). Before, this press was answered as expired.
+    for (let press = 0; press < 3; press += 1) {
+      const bob = message('bob', '', [{ type: 'action', data: { payload: token } }]);
+      expect(await coordinator.dispatch(bob.msg)).toBe(true);
+      expect(bob.reply).not.toHaveBeenCalled();
+      expect(bob.outcomes).toEqual([{ outcome: 'permission_denied', reason: 'interaction_not_own', stage: 'interaction', reply: 'no' }]);
+    }
+  });
+
+  it('remembers who an ended prompt was asked of for a limited time only', async () => {
+    vi.useFakeTimers();
+    try {
+      const { coordinator, answer, token } = await askAlice();
+      expect(coordinator.resolveClaim(message('alice', '', [{ type: 'action', data: { payload: token } }]).msg)).toBe(true);
+      await answer;
+      vi.advanceTimersByTime(9 * 60_000);
+      const early = message('bob', '', [{ type: 'action', data: { payload: token } }]);
+      expect(await coordinator.dispatch(early.msg)).toBe(true);
+      expect(early.reply).not.toHaveBeenCalled();
+      // After the record ends, the owner is unknown again: a stale press is just expired, as before.
+      vi.advanceTimersByTime(2 * 60_000);
+      const late = message('bob', '', [{ type: 'action', data: { payload: token } }]);
+      expect(await coordinator.dispatch(late.msg)).toBe(true);
+      expect(late.reply).toHaveBeenCalledTimes(1);
+      expect(String(late.reply.mock.calls[0]![0])).toContain('过期');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('keeps a bounded number of ended prompt records (oldest dropped first)', async () => {
+    const coordinator = new RuntimeInteractionCoordinator();
+    const tokens: string[] = [];
+    const source = (sender: string) => ({ conversation: group, generation: 1, sender: { id: sender }, $reply: async (content: SendContent) => {
+      tokens.push(actionToken(content));
+      return { status: 'sent' as const };
+    } });
+    // Each confirm prompt has two actions: 300 ended prompts are 600 records, over the bound.
+    for (let index = 0; index < 300; index += 1) {
+      const asked = coordinator.create(source(`u${index}`)).ask({ type: 'confirm', title: '确认？' });
+      await Promise.resolve();
+      expect(coordinator.resolveClaim(message(`u${index}`, '', [{ type: 'action', data: { payload: tokens.at(-1)! } }]).msg)).toBe(true);
+      await asked;
+    }
+    const oldest = message('bob', '', [{ type: 'action', data: { payload: tokens[0]! } }]);
+    expect(await coordinator.dispatch(oldest.msg)).toBe(true);
+    expect(oldest.reply).toHaveBeenCalledTimes(1);
+    const newest = message('bob', '', [{ type: 'action', data: { payload: tokens.at(-1)! } }]);
+    expect(await coordinator.dispatch(newest.msg)).toBe(true);
+    expect(newest.reply).not.toHaveBeenCalled();
+  });
+
+  it('still answers a stale press in a private chat', async () => {
+    const coordinator = new RuntimeInteractionCoordinator();
+    const dm = { ...group, kind: 'private' as const, id: 'alice' };
+    const prompts: SendContent[] = [];
+    const asked = coordinator.create({ conversation: dm, generation: 1, sender: { id: 'alice' }, $reply: async content => {
+      prompts.push(content); return { status: 'sent' };
+    } }).ask({ type: 'confirm', title: '确认删除？' });
+    await Promise.resolve();
+    const token = actionToken(prompts[0]!);
+    const press = (sender: string) => {
+      const reply = vi.fn(async (_content: SendContent) => ({ status: 'sent' as const }));
+      return { reply, msg: new RuntimeMessage({ conversation: dm, content: '', sender: { id: sender }, metadata: {},
+        segments: [{ type: 'action', data: { payload: token } }] }, { generation: 1, reply }) };
+    };
+    expect(coordinator.resolveClaim(press('alice').msg)).toBe(true);
+    await asked;
+    const stale = press('mallory');
+    expect(await coordinator.dispatch(stale.msg)).toBe(true);
+    expect(stale.reply).toHaveBeenCalledTimes(1);
   });
 });

@@ -20,11 +20,20 @@ export interface UnauthorizedCommandReplyInput {
   /** Closed refusal code (for example `not-global-owner`). */
   readonly reason: string;
   readonly command: string;
+  /**
+   * The sender holds the permission the command needs (for example a global owner confirming a
+   * restart another owner asked for): the refusal keeps its reason but is a mistake of someone
+   * authorized, so it is replied to in a group or channel as well.
+   */
+  readonly authorized?: boolean;
 }
 
-/** The command's reply: `text` in a private chat, `undefined` (nothing sent) in a group or channel. */
+/**
+ * The command's reply: `text` in a private chat (or for an `authorized` sender anywhere), `undefined`
+ * (nothing sent) in a group or channel.
+ */
 export function unauthorizedCommandReply(input: UnauthorizedCommandReplyInput): string | undefined {
-  const quiet = input.kind !== undefined && input.kind !== 'private';
+  const quiet = input.authorized !== true && input.kind !== undefined && input.kind !== 'private';
   reportInboundOutcome(input.input, {
     outcome: 'permission_denied',
     reason: input.reason,

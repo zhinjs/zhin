@@ -994,21 +994,24 @@ export class GroupRuleImChannel {
     const match = input.commandText ? RULE_COMMAND.exec(input.commandText) : null;
     if (!match) return null;
     const locale = input.locale;
+    const verb = match[1]?.toLowerCase();
+    // #1250: `rule approve|reject|disable` from someone who may not decide is refused for the permission
+    // before anything else (silent in a group or channel): only approvers hear that the command is for
+    // groups only or that rules are unavailable.
+    if (verb && !this.#isApprover(input)) {
+      input.onUnauthorized?.('not_rule_approver');
+      return t(locale, 'approverOnly');
+    }
     if (input.scope !== 'group') return t(locale, 'groupOnly');
     const store = this.#deps.rules();
     if (!store) return t(locale, 'unavailable');
     const scene = { platform: input.platform, sceneId: `group:${input.sceneId}` };
     try {
       const open = (await store.list(scene)).filter((rule) => rule.status === 'active' || rule.status === 'pending');
-      const verb = match[1]?.toLowerCase();
       if (!verb) {
         return open.length
           ? [t(locale, 'listHeader'), ...open.map(rule => summaryLine(rule, locale))].join('\n')
           : t(locale, 'listEmpty');
-      }
-      if (!this.#isApprover(input)) {
-        input.onUnauthorized?.('not_rule_approver');
-        return t(locale, 'approverOnly');
       }
       const key = match[2]!.toLowerCase();
       const actorId = input.senderId;

@@ -64,7 +64,7 @@ describe('Agent ingress refusals of unauthorized senders (#1250)', () => {
 
   it('is silent to a non-operator sending management commands in a group or channel, and does not run them', async () => {
     for (const kind of ['group', 'channel'] as const) {
-      for (const content of ['/models', '/tree', '/compact', '/reset', 'ai.health']) {
+      for (const content of ['/models', '/tree', '/tree 1', '/fork 1', '/compact', '/reset', 'ai.health']) {
         const t = run({ content, kind });
         expect(await tryHandleIngressCommands(t.input)).toBe(true);
         expect(t.reply).not.toHaveBeenCalled();

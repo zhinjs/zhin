@@ -309,6 +309,22 @@ it('does not accept account owners on the same Adapter: chat configuration is ho
   } finally { await f.close(); }
 });
 
+it('in a group, its private() permit is a place condition: everyone is told it cannot run here (#1250)', async () => {
+  const f = await fixture();
+  const read = vi.spyOn(f.realStore, 'readChat');
+  try {
+    // `private()` is a condition on the place, not on the sender: the zhinjs/zhin#1250 silence for
+    // senders without a permission does not apply (the owner check is the authorizer, not a permit).
+    for (const sender of ['stranger', 'alice']) {
+      const before = f.client.sendNative.mock.calls.length;
+      await f.receive('!!config get bot.nickname', { sender, kind: 'group' });
+      expect(f.client.sendNative.mock.calls.length).toBe(before + 1);
+      expect(lastReply(f.client)).toBe('You do not have permission to run this command.');
+    }
+    expect(read).not.toHaveBeenCalled();
+  } finally { await f.close(); }
+});
+
 it('denies owners of a different Adapter even with several endpoints (C2 widen)', async () => {
   const f = await fixture({ secondEndpoint: true, globalMasters: ['global'] });
   const read = vi.spyOn(f.realStore, 'readChat');

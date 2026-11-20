@@ -6,6 +6,7 @@ import { parsePermitName } from '@zhin.js/permission';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createToken, createMessages, resolveLocale, type CapabilityId, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageSenderRef, SendContent } from './contracts.js';
+import { silencesCommandDenial } from './interaction-refusal.js';
 import { resolveOutboundInteractivePolicy, resolveOutboundMarkdownPolicy, resolveOutboundSupportedSegments } from './outbound-segments.js';
 
 interface CommandFeedbackIdentity {
@@ -100,7 +101,10 @@ function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: s
     : feedbackMessages(locale, 'identity');
 }
 
-/** @internal Resolve once from the operation snapshot; never redispatch or send from here. */
+/**
+ * @internal Resolve once from the operation snapshot; never redispatch or send from here. Undefined
+ * for a result without feedback, and for a permit denial that stays silent (#1250).
+ */
 export async function renderCommandFeedback(
   result: CommandDispatchResult,
   message: Message,
@@ -108,6 +112,9 @@ export async function renderCommandFeedback(
 ): Promise<{ readonly content: SendContent; readonly owner?: PluginId } | undefined> {
   const feedback = feedbackFrom(result);
   if (!feedback) return undefined;
+  // zhinjs/zhin#1250: a sender without the command's permission gets no reply in a group or channel
+  // (the outcome is still `permission_denied`, `reply: no`); nothing is rendered, not even by a Root renderer.
+  if (feedback.status === 'denied' && silencesCommandDenial(message.conversation, feedback.permit)) return undefined;
   const renderer = snapshot.resources.get(snapshot.root)?.get(commandFeedbackToken.id);
   if (typeof renderer === 'function') {
     const conversation = Object.freeze({

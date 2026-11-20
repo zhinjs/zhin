@@ -359,6 +359,16 @@ function auditor(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, prefix: 
 }
 
 /** ADR 0060 §5.3: the denial says where roles come from, and tells platform group owners / admins their standing is not a zhin role. */
+/**
+ * Whether the sender holds the admin role at any scope (here or anywhere else). `功能` and `角色`
+ * check it before reading their arguments: a sender without it is refused for lack of permission
+ * (`not-admin`, silent in a group, #1250), never told about a usage mistake.
+ */
+function holdsAdminAnywhere(deps: FeatureSelfServiceDeps, actor: FeatureChatActor): boolean {
+  return deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
+    || deps.roles.heldBy(actor.identity).some(entry => chatRoleIncludes(entry.role, 'admin'));
+}
+
 function deniedReply(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, locale: Locale): string {
   const standing = actor.context.platform?.standing;
   const reply = messages(locale, standing === 'owner' || standing === 'admin' ? 'deniedStanding' : 'denied');
@@ -454,10 +464,7 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
   if (!deps.config.enabled) return refuse('self-service-disabled', messages(locale, 'disabled'));
   const actor = requireActor(input.actor, locale);
   const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
-  if (!deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
-    && !deps.roles.heldBy(actor.identity).some(entry => chatRoleIncludes(entry.role, 'admin'))) {
-    return deniedReply(deps, actor, locale);
-  }
+  if (!holdsAdminAnywhere(deps, actor)) return deniedReply(deps, actor, locale);
   const words = input.tokens.map(tokenText);
   // A bare `功能` lists (#1250): the list is what someone typing only the command wants.
   // #1250 第 74 批：确认子命令认所有确认词（`确认` / `确定` / `confirm` / `ok` …，见 `@zhin.js/core`）。
@@ -710,6 +717,11 @@ export async function runRoleChat(input: FeatureChatInput, deps: FeatureSelfServ
   const words = input.tokens.map(tokenText);
   // A bare `角色` lists (#1250).
   const sub = words.length === 0 ? 'list' : ROLE_SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
+  // zhinjs/zhin#1250: like `功能`, a sender holding admin nowhere is refused for lack of permission
+  // before the arguments are read (usage, unknown person, …), so a group never hears about their typos.
+  if (!holdsAdminAnywhere(deps, actor)) {
+    return sub === 'list' ? refuse('not-admin', messages(locale, 'listDenied')) : deniedReply(deps, actor, locale);
+  }
   if (!sub) return refuse('usage', messages(locale, 'roleUsage', { command }));
   if (sub === 'list') {
     // Who holds roles is not public: listing needs admin here, and identities granted above the
@@ -876,8 +888,12 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
           ...(clientAdapter ? { clientAdapter } : {}), ...(invocation ? { command: invocation } : {}) }, { ...options, pending });
       } catch (error) {
         if (!(error instanceof FeatureChatRefusal) || !UNAUTHORIZED_REFUSALS.has(error.reason ?? '')) throw error;
+        // Confirming another sender's global change: a sender who could make that change (global
+        // admin) made a mistake and is told so in a group too; the reason stays `confirm-not-own`.
+        const authorized = error.reason === 'confirm-not-own' && typeof actor === 'object'
+          && options.roles.hasRole(actor.identity, '', 'admin');
         return unauthorizedCommandReply({ input: command.input, kind: typeof actor === 'object' ? actor.kind : undefined,
-          text: error.message, reason: error.reason!, command: localPath });
+          text: error.message, reason: error.reason!, command: localPath, authorized });
       }
     };
     context.addFeature(commandFeatureId, 'feature', defineCommand({
