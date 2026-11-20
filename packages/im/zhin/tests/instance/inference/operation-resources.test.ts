@@ -19,7 +19,7 @@ import { CommandIndex, commandFeatureId, defineCommand } from '../../../../comma
 import { ToolIndex, toolFeatureId, defineAgentTool } from '../../../../tool/src/index.js';
 import { dispatchLeaseToken } from '../../../../agent/src/plugin-runtime/inference/dispatch-lease.js';
 
-async function fixture(native = false) {
+async function fixture(native = false, plugins: readonly string[] = []) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-capability-'));
   const db = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
   const root = rootPluginId(), requests = vi.fn(async () => native ? Response.json({ id: 'synthetic', object: 'chat.completion', created: 1,
@@ -36,8 +36,11 @@ async function fixture(native = false) {
       return { model: 'image', mimeType: 'image/png', base64: context.ownerId };
     } } }; },
   };
-  const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: directory, children: [] }]]),
-    config: new Map(), resources: new Map([[root, new Map([[aiProviderDefinitionsToken.id, [{ owner: root, definition }]]])]]), capabilities: new Map(), projections: new Map() };
+  const children = plugins.map(name => childPluginId(root, name));
+  const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: directory, children }],
+    ...children.map((id, index) => [id, { id, parent: root, instanceKey: plugins[index]!, packageName: plugins[index]!, packageRoot: join(directory, plugins[index]!), children: [] }] as const)]),
+    config: new Map(), resources: new Map([[root, new Map([[aiProviderDefinitionsToken.id, [{ owner: root, definition }]]])], ...children.map(id => [id, new Map()] as const)]),
+    capabilities: new Map(), projections: new Map() };
   const snapshots = new SnapshotStore(state), resolveSource = vi.fn();
   const host = new HostInference({ projectRoot: directory, database: db, snapshots: () => snapshots, resolveSource, personalOwners: [] });
   const graph: ProviderGraph = { rootId: host.rootId, revision: 1, services: { service: { id: 'service', rootId: host.rootId, ownerId: host.hostOwnerId, revision: 1,
@@ -111,6 +114,49 @@ it('offers the dispatch lease only to a Root-owned IM operation, never a plugin 
     // The plugin still gets its inference client.
     expect(view.has(aiInferenceClientToken)).toBe(true);
     await view.close();
+    expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('a plugin command that names the Root as owner still gets no dispatch lease (#1250 第 84 批)', async () => {
+  const f = await fixture(false, ['some-plugin']), lease = f.snapshots.acquire();
+  const plugin = childPluginId(f.root, 'some-plugin');
+  const opened: string[] = [];
+  const message = new RuntimeMessage({ conversation: f.message.conversation, content: 'grab', endpointId: 'account', sender: { id: 'alice', roles: ['user'] } }, {
+    generation: lease.value.generation, snapshot: lease.value, clientAdapter: 'qq', signal: f.signal, reply: vi.fn(),
+    createOperationResources: input => { opened.push(input.owner); return f.ports.im.open({ ...input, lease, snapshots: f.snapshots }); },
+  });
+  // The global symbols a plugin can reach; the command executor binds the view to the command's owner.
+  const snapshotHook = Symbol.for('zhin.operation-input-snapshot/1');
+  const resourcesHook = Symbol.for('zhin.operation-input-resources/1');
+  const bindingHook = Symbol.for('zhin.operation-input-binding/1');
+  type Hooked = Record<symbol, (...args: unknown[]) => unknown>;
+  const attempts: string[] = [];
+  const command = createCapabilitySlot({ owner: plugin, feature: commandFeatureId, localName: 'grab', source: '/commands/grab/index.ts',
+    definition: defineCommand({ execute: context => {
+      const input = context.input as unknown as Hooked;
+      const snapshot = input[snapshotHook]!() as typeof lease.value;
+      // Its own operation (created by the executor for the plugin) has no dispatch lease.
+      expect(() => context.use(dispatchLeaseToken)).toThrow();
+      const factory = input[resourcesHook]!(snapshot) as { signal: AbortSignal; create(i: { owner: string; signal: AbortSignal }): unknown };
+      try { factory.create({ owner: snapshot.root, signal: factory.signal }); attempts.push('own view: created'); }
+      catch (error) { attempts.push(`own view: ${(error as Error).message}`); }
+      // Rebinding its message to the Root does not launder the claim either.
+      const rebound = input[bindingHook]!(snapshot.root, snapshot) as Hooked;
+      const reboundFactory = rebound[resourcesHook]!(snapshot) as typeof factory;
+      try { reboundFactory.create({ owner: snapshot.root, signal: factory.signal }); attempts.push('rebound: created'); }
+      catch (error) { attempts.push(`rebound: ${(error as Error).message}`); }
+      return 'done';
+    } }) });
+  try {
+    const result = await new CommandIndex([command], lease.value).dispatch({ input: 'grab', source: message });
+    expect(result).toMatchObject({ status: 'executed', value: 'done' });
+    expect(attempts).toEqual([
+      `own view: Operation owner ${f.root} is not this message view's author ${plugin}`,
+      `rebound: Root operation refused: this message view was bound from plugin ${plugin}`,
+    ]);
+    // Only the executor's own operation for the plugin was ever opened; never one owned by the Root.
+    expect(opened).toEqual([plugin]);
     expect(lease.active).toBe(true);
   } finally { lease.release(); await f.close(); }
 });

@@ -167,7 +167,7 @@ sidebar: false
 | outcome | reason | 管理员人话（zh / en） |
 | --- | --- | --- |
 | `ignored_self` | `self_echo` | 机器人自己发出的消息回显。 / Echo of the bot's own message. |
-| `ignored_bot` | `member` / `peer_bot` / `non_human_origin`（消息的可信来源，或无可信来源时适配器自报的 `metadata.origin`，不是 `human`：Agent 入站不回复；#1250 第 84 批起命令分发也不进任何指令——不执行、不回复无权限、不给近似指令提示，阶段 `command`） | 来自其他机器人（`{reason}`），只记录。 / From another bot (`{reason}`); recorded only. |
+| `ignored_bot` | `member` / `peer_bot` / `non_human_origin`（消息的可信来源，或无可信来源时适配器自报的 `metadata.origin`，不是 `human`：Agent 入站不回复；#1250 第 84 批起命令分发也不进任何指令——不执行、不回复无权限、不给近似指令提示，阶段 `command`。可信来源 `member` / `peer_bot` 在入站阶段已丢弃，阶段 `ingress`，中间件与事件处理器都收不到；命令分发层的 `non_human_origin` 是兜底，只对无可信来源、靠 `metadata.origin` 自报的消息生效。不在 PeerRegistry 里的第三方机器人被分类器判成 `human`，命令照常响应） | 来自其他机器人（`{reason}`），只记录。 / From another bot (`{reason}`); recorded only. |
 | `dropped_duplicate` | `duplicate` | 同一条消息已由另一个端点处理。 / Already handled by another endpoint. |
 | `dropped_unready` | `venue_unready` | 场地成员尚未上报自身 ID，消息未处理：`{detail}`。 / Venue members not ready: `{detail}`. |
 | `dropped_dedup_error` | `dedup_error` | 去重存储出错，按失败关闭丢弃：{detail}。 / Dedup store failed closed: {detail}. |

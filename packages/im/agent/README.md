@@ -327,7 +327,7 @@ ai:
 | `/reset` | 所有人 | 有聊天角色：归档当前会话；其他人：等同 `/clear`（同一条清空路径、触发与 @ 要求、冷却与闸门） |
 | `/memory` · `/memory forget <key\|id\|all>` | 所有人 | 查看 / 遗忘关于自己的记忆（仅启用语义记忆时注册；群里 `/memory` 只提示私聊查看，`forget` 只回复条数） |
 
-命令只回应人：来源不是 `human` 的消息（其他机器人）由命令分发统一过滤（第 84 批，所有命令），不回复、不执行，结局 `ignored_bot` / `non_human_origin`。命令在分发它的那一代上运行（Host 操作资源里的分发租约），不取最新一代。
+命令只回应人：来源不是 `human` 的消息（其他机器人）不进任何命令（第 84 批，所有命令；可信来源在入站阶段就丢弃，命令分发对自报 `metadata.origin` 的消息兜底），不回复、不执行，结局 `ignored_bot` / `non_human_origin`。命令在分发它的那一代上运行（Host 操作资源里的分发租约），不取最新一代。
 
 带短码的 `rule …`、`approve …` / `deny …` 仍在 ingress 管理阶段（`ingress-management-stage.ts`）处理。
 

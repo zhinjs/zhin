@@ -617,22 +617,27 @@ export class CommandIndex {
   }
 
   async dispatch(request: CommandDispatchRequest): Promise<CommandDispatchResult> {
-    const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
-    const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(source) : undefined;
+    const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(request.source) : undefined;
     if (sourceSnapshot) {
       // ADR 0050: a Plugin switched off for this message's endpoint has no commands there, also when a
       // middleware/handler dispatches through the raw projection (Core's dispatcher passes a gated index).
-      const gated = this.#gatedForEndpoint(source, sourceSnapshot);
+      const gated = this.#gatedForEndpoint(request.source, sourceSnapshot);
       if (gated !== this) {
-        return gated.dispatch({ ...request, snapshot: sourceSnapshot,
-          operation: request.operation ?? readOperationInputResources(source, sourceSnapshot) });
+        return gated.#dispatch({ ...request, snapshot: sourceSnapshot }, request.operation ? undefined : sourceSnapshot);
       }
     }
-    const operationSnapshot = request.snapshot ?? sourceSnapshot ?? this.snapshot;
-    // A source that carries its own operation (a framework Message) also brings that operation's
-    // resources; an explicit snapshot or factory from the caller is used exactly as given.
-    const operationFactory = request.operation
-      ?? (sourceSnapshot ? readOperationInputResources(source, sourceSnapshot) : undefined);
+    return this.#dispatch(sourceSnapshot ? { ...request, snapshot: sourceSnapshot } : request,
+      request.operation ? undefined : sourceSnapshot);
+  }
+
+  /**
+   * `sourceResources`: the snapshot of the source's own operation when its resources are read from the
+   * source (no explicit factory). They are read from the author-bound view of the source (#1250 第 84
+   * 批), whose factory only creates operations for that very author.
+   */
+  async #dispatch(request: CommandDispatchRequest, sourceResources: RuntimeSnapshot | undefined): Promise<CommandDispatchResult> {
+    const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
+    const operationSnapshot = request.snapshot ?? this.snapshot;
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
@@ -684,6 +689,10 @@ export class CommandIndex {
       owner: match.command.slot.owner, issues: parsed.issues, help });
     const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
     if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
+    // A source that carries its own operation (a framework Message) also brings that operation's
+    // resources, read from the command author's view; an explicit factory from the caller is used as given.
+    const operationFactory = request.operation
+      ?? (sourceResources ? readOperationInputResources(authorSource, sourceResources) : undefined);
     const operation = operationFactory?.create({ owner: match.command.slot.owner, signal: operationFactory.signal });
     try {
       const value = await definition.execute(createCommandContext({

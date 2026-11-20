@@ -409,6 +409,12 @@ export interface RuntimeMessageOperation {
   readonly session?: RuntimeMessageSessionBinding;
   readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>) => OperationResourceView | undefined;
   readonly registerOperationView?: (view: object, owner: PluginId) => void;
+  /**
+   * @internal #1250 第 84 批: the first non-Root author this view was (re)bound from. A Root-owned
+   * operation is created only from a view whose binding chain never passed through a plugin author,
+   * so a plugin cannot rebind its message to the Root to obtain Root-only operation resources.
+   */
+  readonly delegatedFrom?: PluginId;
   readonly presentation?: RuntimeMessagePresentation;
   /**
    * ADR 0061: report port of this message's outcome ledger, shared by every author view. Only
@@ -535,9 +541,13 @@ export class RuntimeMessage implements MessageBase {
     }
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Message author: ${owner}`);
     if (this.#operation.requester === owner && this.#operation.snapshot === snapshot) return this;
+    const current = this.#operation.requester;
+    const delegatedFrom = this.#operation.delegatedFrom
+      ?? (current !== undefined && current !== snapshot.root ? current : undefined);
     return new RuntimeMessage(this.#facts, {
       ...this.#operation,
       requester: owner,
+      ...(delegatedFrom !== undefined ? { delegatedFrom } : {}),
       snapshot,
       presentation: {
         locale: this.locale,
@@ -554,7 +564,15 @@ export class RuntimeMessage implements MessageBase {
     return this.#operation.snapshot;
   }
 
-  /** @internal Metadata fields cannot replace this actual leased operation factory. */
+  /**
+   * @internal Metadata fields cannot replace this actual leased operation factory.
+   *
+   * #1250 第 84 批: the operation owner is the author the framework bound this view to, never one the
+   * caller names. An author-bound view creates operations only for its own author (the command /
+   * middleware / handler executor binds the view before handing it out); a Root-owned operation also
+   * requires that the view was never bound to a plugin author first. Only the framework's unbound view
+   * (held by Core's dispatcher, which picks the matched command's owner) creates for any owner.
+   */
   [operationInputResources](snapshot: RuntimeSnapshot): CapabilityOperationFactory | undefined {
     this.#operation.assertActive?.();
     if (snapshot !== this.#operation.snapshot || snapshot.generation !== this.generation) {
@@ -565,6 +583,13 @@ export class RuntimeMessage implements MessageBase {
     return Object.freeze({ signal, create: (input: Parameters<CapabilityOperationFactory['create']>[0]) => {
       this.#operation.assertActive?.();
       if (!snapshot.tree.has(input.owner)) throw new Error(`Unknown operation owner: ${input.owner}`);
+      const author = this.#operation.requester;
+      if (author !== undefined && input.owner !== author) {
+        throw new Error(`Operation owner ${input.owner} is not this message view's author ${author}`);
+      }
+      if (input.owner === snapshot.root && this.#operation.delegatedFrom !== undefined) {
+        throw new Error(`Root operation refused: this message view was bound from plugin ${this.#operation.delegatedFrom}`);
+      }
       const actualSignal = input.signal === signal ? signal : AbortSignal.any([signal, input.signal]);
       return Object.freeze({ signal: actualSignal, resources: this.#operation.createOperationResources?.({
         message: this, owner: input.owner, signal: actualSignal,

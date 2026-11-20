@@ -66,7 +66,7 @@ import {
   handlerFeatureId,
 } from '@zhin.js/handler';
 import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
-import type { ConversationAddress } from '../../src/plugin-runtime/im/contracts.js';
+import { imOperationResourcesToken, type ConversationAddress, type ImOperationResourcesInput } from '../../src/plugin-runtime/im/contracts.js';
 import type { IngressRoute } from '../../src/plugin-runtime/im/inbound-spine.js';
 import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
@@ -1569,6 +1569,36 @@ describe('IM Runtime', () => {
     expect(receivedSequence).toBeUndefined();
     await fixture.adapters.stop();
     await fixture.store.close();
+  });
+
+  it('hands a command the conversation sequence recordIncoming assigned to its own message (#1250 第 84 批)', async () => {
+    const executed = vi.fn(() => 'ok');
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false, commandResult: executed });
+    const opened: { owner: PluginId; conversationSequence?: number }[] = [];
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([...resources.get(current.root) ?? [], [imOperationResourcesToken.id, Object.freeze({
+      open: (input: ImOperationResourcesInput) => {
+        opened.push({ owner: input.owner, ...(input.conversationSequence !== undefined ? { conversationSequence: input.conversationSequence } : {}) });
+        return { has: () => false, use: () => { throw new Error('Missing'); }, close: async () => undefined };
+      },
+    })]]));
+    fixture.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+    const append = vi.spyOn(fixture.conversationEvents, 'append');
+    const conversation = { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'private' as const, id: 'sequence-room' };
+    try {
+      // An earlier message advances the sequence, so the command's value is not a coincidental 1.
+      await receive(fixture.im, { conversation, content: 'ordinary chat', sender: { id: 'alice' },
+        message: { id: 'earlier', conversation } });
+      await expect(receive(fixture.im, { conversation, content: '/gh issue list open', sender: { id: 'alice' },
+        message: { id: 'command-message', conversation } })).resolves.toMatchObject({ matched: true, status: 'executed' });
+      expect(executed).toHaveBeenCalledOnce();
+      const index = append.mock.calls.findIndex(([event]) => event.type === 'message.created' && event.message.ref.id === 'command-message');
+      expect(index).toBeGreaterThan(0);
+      const own = await (append.mock.results[index]!.value as Promise<{ sequence: number }>);
+      expect(own.sequence).toBeGreaterThan(1);
+      expect(opened).toEqual([{ owner: current.root, conversationSequence: own.sequence }]);
+    } finally { append.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
   it('returns the matched child Command owner without sending before middleware unwind', async () => {
