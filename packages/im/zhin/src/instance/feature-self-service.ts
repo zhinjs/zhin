@@ -21,7 +21,7 @@ import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceI
 import { containsEnvironmentReference, dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
 import { AMBIENT_FEATURE_ID, AMBIENT_FEATURE_WORDS } from '@zhin.js/core/runtime';
 import {
-  chatRoleIncludes, chatScopeChain, isChatIdentity, isChatRole, resolveChatRoleMessageContext,
+  chatRoleIncludes, chatScopeChain, isChatIdentity, isChatRole, isConfirmWord, resolveChatRoleMessageContext,
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleSubjectFailure,
 } from '@zhin.js/core';
 import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
@@ -156,7 +156,7 @@ const LEVEL_WORDS: Readonly<Record<string, FeatureConfigLevel>> = Object.freeze(
 });
 const SUBCOMMANDS: Readonly<Record<string, string>> = Object.freeze({
   列表: 'list', list: 'list', 开启: 'enable', enable: 'enable', 关闭: 'disable', disable: 'disable',
-  设置: 'set', set: 'set', 重置: 'reset', reset: 'reset', 确认: 'confirm', confirm: 'confirm',
+  设置: 'set', set: 'set', 重置: 'reset', reset: 'reset',
 });
 const ROLE_SUBCOMMANDS: Readonly<Record<string, string>> = Object.freeze({
   列表: 'list', list: 'list', 授予: 'grant', grant: 'grant', 撤销: 'revoke', revoke: 'revoke',
@@ -460,7 +460,9 @@ export async function runFeatureChat(input: FeatureChatInput, deps: FeatureSelfS
   }
   const words = input.tokens.map(tokenText);
   // A bare `功能` lists (#1250): the list is what someone typing only the command wants.
-  const sub = words.length === 0 ? 'list' : SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
+  // #1250 第 74 批：确认子命令认所有确认词（`确认` / `确定` / `confirm` / `ok` …，见 `@zhin.js/core`）。
+  const sub = words.length === 0 ? 'list'
+    : isConfirmWord(words[0] ?? '') ? 'confirm' : SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
   if (!sub) return refuse('usage', usage());
   const { mayReferenceEnvironment: _never, ...base } = deps.context;
   const context: FeatureRpcContext = {

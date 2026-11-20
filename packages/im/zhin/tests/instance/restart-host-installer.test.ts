@@ -313,6 +313,32 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
     }
   });
 
+  // #1250 第 74 批: the confirm argument takes every confirm word, Chinese or English alike.
+  it.each(['确定', 'OK', 'yes', 'Ｃｏｎｆｉｒｍ', '确认！', 'y'])('confirms a pending restart with %s', async word => {
+    const f = await createRestartFixture({ locale: 'en', restartSupported: true });
+    try {
+      await f.receive('!!restart', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      await f.receive(`!!restart ${word}`, { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      await waitForRestartTimer();
+      expect(f.requestRestart).toHaveBeenCalledOnce();
+    } finally {
+      await f.close();
+    }
+  });
+
+  it.each(['是', '好', 'no', '取消', 'now'])('does not take %s for a restart confirmation', async word => {
+    const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
+    try {
+      await f.receive('!!restart', { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      await f.receive(`!!restart ${word}`, { sender: 'alice', kind: 'private', conversationId: 'alice-dm' });
+      expect(lastReplyText(f.client)).toContain('用法');
+      await waitForRestartTimer();
+      expect(f.requestRestart).not.toHaveBeenCalled();
+    } finally {
+      await f.close();
+    }
+  });
+
   it('refuses an expired confirmation', async () => {
     const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
     try {

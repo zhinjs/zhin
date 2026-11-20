@@ -450,6 +450,23 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(audits.at(-1)).toMatchObject({ action: 'feature.chat:disable', target: 'global:', outcome: 'ok' });
     expect(await run(admin, '确认 123456')).toBe('没有待确认的操作，或确认码已过期。');
   });
+
+  // #1250 第 74 批: the confirm subcommand takes every confirm word, Chinese or English alike.
+  it.each(['confirm', '确定', 'OK', 'Yes!', 'Ｃｏｎｆｉｒｍ'])('confirms a global switch with %s', async word => {
+    const { run, setGlobalEnabled } = await harness(on, {}, ['root']);
+    const admin = actor({ user: 'root' });
+    expect(await run(admin, '关闭 rss 全局')).toContain('功能 确认 123456');
+    expect(await run(admin, `${word} 123456`)).toBe('已停用 rss（全局），实例正在重启。');
+    expect(setGlobalEnabled).toHaveBeenCalledWith('rss', false);
+  });
+
+  it.each(['是', 'no', '取消'])('does not take %s for the confirm subcommand', async word => {
+    const { run, setGlobalEnabled } = await harness(on, {}, ['root']);
+    const admin = actor({ user: 'root' });
+    await run(admin, '关闭 rss 全局');
+    expect(await run(admin, `${word} 123456`)).toContain('用法');
+    expect(setGlobalEnabled).not.toHaveBeenCalled();
+  });
 });
 
 describe('in-chat role management (ADR 0056 §3)', () => {

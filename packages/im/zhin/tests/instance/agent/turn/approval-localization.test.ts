@@ -58,17 +58,21 @@ it('pins approval language across replies and isolates concurrent senders and en
   const answer = (source: typeof en.source, content: string) => ({ ...source, content, segments: [] }) as never;
   expect(coordinator.resolveClaim(answer({ ...en.source, conversation: { ...en.source.conversation, endpoint: { adapter: 'fixture', id: 'other' } } }, 'yes'))).toBe(false);
   expect(coordinator.resolveClaim(answer({ ...en.source, conversation: { ...en.source.conversation, threadId: 'other' } }, 'yes'))).toBe(false);
-  expect(coordinator.resolveClaim(answer(en.source, '同意'))).toBe(true);
-  expect(coordinator.resolveClaim(answer(zh.source, 'yes'))).toBe(true);
+  expect(coordinator.resolveClaim(answer(en.source, '也许'))).toBe(true);
+  expect(coordinator.resolveClaim(answer(zh.source, 'maybe'))).toBe(true);
   await vi.waitFor(() => {
     expect(en.prompts).toHaveLength(2);
     expect(zh.prompts).toHaveLength(2);
   });
+  // The re-sent prompt keeps the flow's language.
+  expect(JSON.stringify(en.prompts[1])).toContain('Confirm operation');
+  expect(JSON.stringify(zh.prompts[1])).toContain('操作确认');
   expect(en.settled()).toBe(false);
   expect(zh.settled()).toBe(false);
-  // A later message's preference cannot change a pending flow's accepted input.
-  expect(coordinator.resolveClaim(answer({ ...en.source, locale: 'zh-CN' }, 'yes'))).toBe(true);
-  expect(coordinator.resolveClaim(answer({ ...zh.source, locale: 'en' }, '拒绝'))).toBe(true);
+  // #1250 第 74 批: answers are not tied to the prompt's language — a Chinese 同意 approves the
+  // English flow and an English `no` rejects the Chinese one, whatever the later message's preference.
+  expect(coordinator.resolveClaim(answer({ ...en.source, locale: 'zh-CN' }, '同意'))).toBe(true);
+  expect(coordinator.resolveClaim(answer({ ...zh.source, locale: 'en' }, 'no'))).toBe(true);
   await expect(en.outcome).resolves.toMatchObject({ status: 'approved' });
   await expect(zh.outcome).resolves.toMatchObject({ status: 'denied', by: 'user' });
   expect(coordinator.resolveClaim(answer(en.source, 'yes'))).toBe(false);

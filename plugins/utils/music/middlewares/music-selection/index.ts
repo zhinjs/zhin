@@ -1,3 +1,4 @@
+import { isCancelWord } from 'zhin.js';
 import { resolveLocale } from 'zhin.js/i18n';
 import { messages as t, sourceName as displayName } from '../../src/i18n.js';
 import { defineMiddleware } from 'zhin.js/middleware';
@@ -30,7 +31,8 @@ export default defineMiddleware<Message>({
     }
 
     const locale = resolveLocale(pending.locale);
-    if (raw === (locale === 'en' ? 'cancel' : '取消')) {
+    // #1250 第 74 批：取消词中英文都认，不分会话语言（`取消` / `cancel` / `退出` / `算了` …）。
+    if (isCancelWord(raw)) {
       runtime.sessions.delete(key);
       await context.input.$reply(t(locale, 'cancelSelection'));
       return;
