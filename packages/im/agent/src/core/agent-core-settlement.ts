@@ -29,6 +29,7 @@ import { buildAgentPromptCacheStreamOptions } from '../config/index.js';
 import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { traceTurnId, type AgentLoopTurnInput, type AgentLoopTurnResult } from './agent-core-ports.js';
+import { userSetReplyLocale } from '../prompt/rules/reply-language.js';
 
 type TurnLlmModel = ReturnType<ZhinAgentPrivate['getTurnExecution']>['model'];
 
@@ -369,6 +370,7 @@ export async function finalizeTurnReplyAndOutput(params: {
   if (needsReplyRecovery) {
     const summary = await summarizeExhaustedTurn({
       locale: input.turnContext.input?.locale,
+      localeSetByUser: userSetReplyLocale(input.turnContext.input) !== undefined,
       transport,
       model: llmModel,
       systemPrompt,

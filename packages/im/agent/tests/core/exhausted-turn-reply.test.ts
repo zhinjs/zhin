@@ -123,3 +123,13 @@ describe('#1250 batch 29 review: exhausted-turn summary input', () => {
     expect(sent).not.toContain(payload.slice(0, 64));
   });
 });
+
+it('names the /language setting instead of the fallback when the user set it (#1250 b69)', async () => {
+  const complete = vi.fn(async (_model: Model, _context: Context) => textReply('Here is where we are.'));
+  await summarizeExhaustedTurn({ locale: 'en', localeSetByUser: true, transport: transportReturning(complete), model,
+    systemPrompt: 'unchanged cached prefix', messages: [], maxIterations: 3 });
+  const instruction = JSON.stringify(complete.mock.calls[0][1].messages.at(-1));
+  expect(instruction).toContain('Reply language (set by the user with the language command): en.');
+  expect(instruction).not.toContain('Reply language fallback:');
+  expect(complete.mock.calls[0][1].systemPrompt).toBe('unchanged cached prefix');
+});
