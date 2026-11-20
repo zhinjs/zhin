@@ -1,6 +1,6 @@
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from './interaction-messages.js';
-import { isCancelWord, isConfirmWord, isNegativeAnswerWord, normalizeReplyWord } from './confirm-words.js';
+import { isApprovalApproveWord, isApprovalDenyWord, isCancelWord, isConfirmWord, normalizeReplyWord } from './confirm-words.js';
 import type {
   UserInteractionContent,
   UserInteractionOption,
@@ -178,7 +178,7 @@ export function parseUserInteractionAnswer(
       return invalid(t(locale, 'confirmOrCancel'));
     }
     case 'select': {
-      const option = resolveOption(request.options, raw);
+      const option = resolveOption(request.options, raw, request.purpose === 'approval');
       return option ? valid(option.value) : invalid(t(locale, 'select'));
     }
     case 'multiselect': {
@@ -246,24 +246,29 @@ function renderOptions(options: readonly UserInteractionOption[]): string {
   }).join('\n');
 }
 
-function resolveOption<V>(options: readonly UserInteractionOption<V>[], raw: string): UserInteractionOption<V> | undefined {
+function resolveOption<V>(
+  options: readonly UserInteractionOption<V>[],
+  raw: string,
+  approval = false,
+): UserInteractionOption<V> | undefined {
   const index = Number(raw);
   if (Number.isInteger(index) && index >= 1 && index <= options.length) return options[index - 1];
   const normalized = normalizeReplyWord(raw);
   const matches = (candidate: string) => normalizeReplyWord(candidate) === normalized;
   return options.find((option) => matches(option.label))
     ?? options.find((option) => option.aliases?.some(matches))
-    ?? answerWordOption(options, raw);
+    ?? (approval ? approvalWordOption(options, raw) : undefined);
 }
 
 /**
- * #1250 第 74 批：一个以确认词（或"否"类答语）为名称 / 别名的选项接受同类的所有词，
- * 中英文都算——审批里"同意（确认 / yes）"也认 `ok`、`确定`、`y`，"拒绝（否 / no）"也认 `n`、`不`。
- * 只有恰好一个选项属于该类时才匹配；`取消` / `退出` 不在"否"类里，仍按取消离开提问。
+ * #1250 第 74 批（审查 M1/M2）：只在审批（`purpose: 'approval'`）里，一个以明确批准词为名称 / 别名的
+ * 选项接受所有明确批准词（`确认` / `同意` / `批准` / `confirm` / `approve` / `yes`），以明确拒绝词为
+ * 名称 / 别名的选项接受所有明确拒绝词（`拒绝` / `否` / `no` / `deny` / `reject`），中英文都算；
+ * `好` / `是` / `ok` / `y` / `确定` 这类随口应答不算批准。只有恰好一个选项属于该类时才匹配。
+ * 普通 select / multiselect 只按名称、别名与序号匹配，不做同类词扩展。
  */
-function answerWordOption<V>(options: readonly UserInteractionOption<V>[], raw: string): UserInteractionOption<V> | undefined {
-  const test = isConfirmWord(raw, YES_NO) ? (word: string) => isConfirmWord(word, YES_NO)
-    : isNegativeAnswerWord(raw) ? isNegativeAnswerWord : undefined;
+function approvalWordOption<V>(options: readonly UserInteractionOption<V>[], raw: string): UserInteractionOption<V> | undefined {
+  const test = isApprovalApproveWord(raw) ? isApprovalApproveWord : isApprovalDenyWord(raw) ? isApprovalDenyWord : undefined;
   if (!test) return undefined;
   const candidates = options.filter((option) => test(option.label) || option.aliases?.some(test));
   return candidates.length === 1 ? candidates[0] : undefined;

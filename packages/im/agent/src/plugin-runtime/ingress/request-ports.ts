@@ -429,10 +429,12 @@ export const MASTER_NOT_PRESENT_REASON = 'the bot owner did not address the bot 
 
 /**
  * Displayed aliases of the reject / allow-once options, the same in every language (#1250 第 74 批).
- * They only name the word class: Core's select matching gives an option aliased with a confirm word
- * every confirm word (`确认` / `确定` / `同意` / `ok` / `yes` / `y` / `confirm` …) and one aliased with
- * a no-answer every no-answer (`否` / `不` / `拒绝` / `no` / `n` …), whatever the prompt's language.
- * A cancel word (`取消` / `cancel` / `退出` …) leaves the prompt, which counts as a rejection.
+ * They name the word class of an approval prompt (`purpose: 'approval'`): Core's select matching
+ * gives the option aliased with an explicit approval word every explicit approval word (`确认` /
+ * `同意` / `批准` / `confirm` / `approve` / `yes`) and the one aliased with an explicit denial every
+ * explicit denial (`拒绝` / `否` / `no` / `deny` / `reject`), whatever the prompt's language. Casual
+ * answers (`好` / `是` / `ok` / `y` / `确定` …) approve nothing: they are invalid answers. A cancel word
+ * (`取消` / `cancel` / `退出` …) leaves the prompt, which counts as a rejection.
  */
 const REJECT_ALIASES = Object.freeze(['否', 'no']);
 const APPROVE_ALIASES = Object.freeze(['确认', 'yes']);

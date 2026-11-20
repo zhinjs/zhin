@@ -399,7 +399,7 @@ ai:
 
 其余都需要主人，管理员本人不能批：敏感文件与受保护路径（如读取 `.git/config`、`.env`，文件策略的「需 Owner 确认」）、Shell 命令（exec 策略）、写 `global` / `platform` 记忆（ADR 0056 §2）、未声明 `admin_approvable` 的插件工具（`always` / `once` / `on-risk`）、自动审核 Agent 升级给人的审批、`requiresApproval: 'human'` 与危险工具硬闸。这些请求带 `requiresOwner`，或缺少 `adminMayApprove`，管理员的确认渠道直接返回「需要主人」，不弹提示。会话层 `admin`、被降级的会话层 owner 不算管理员审批人；读过外部内容后，若调用本身需要主人批准，管理员对意图的确认也不会代替主人。
 
-只认同一平台用户 ID、同一会话（同一端点、会话、话题）里的回复：「确认 / 同意 / yes」或「取消 / 拒绝 / no」，或按钮回调；别人回复、别的会话、过期按钮都不算，超时按拒绝处理。合流、旁听、直播间与弹幕回合不请发起人确认。每次确认写决策审计 `tool_approval`（`payload.channel: turn_prompt`，`purpose: intent | authorization`；无人可问记 `tool_approval_unavailable`）。
+只认同一平台用户 ID、同一会话（同一端点、会话、话题）里的回复或按钮回调。审批只认明确的答语（中英文均可）：批准是「确认 / 同意 / 批准 / confirm / approve / yes」，拒绝是「拒绝 / 否 / no / deny / reject」，以及选项名与序号；回复取消词（「取消 / 退出 / cancel」等）离开提问，同样按拒绝处理。「好」「是」「ok」「y」「确定」这类随口应答不算批准，按无效回答重问；别人回复、别的会话、过期按钮都不算，超时按拒绝处理。合流、旁听、直播间与弹幕回合不请发起人确认。每次确认写决策审计 `tool_approval`（`payload.channel: turn_prompt`，`purpose: intent | authorization`；无人可问记 `tool_approval_unavailable`）。
 
 给模型的拒绝原因区分三种情况：无人值守、此会话没有确认渠道、确认被拒或超时；并提示可在 Console 操作（定时任务：「运维 → 定时任务」页），不要把工具名当作聊天命令推荐给用户。`execApprovalMode: ask`，或 `confirmHighRisk` 未关闭且启用了定时任务 / 助理提醒时，启动日志会提示一次（`approval_channel_conflict`），`zhin doctor` 的「审批渠道」项也会提示。
 

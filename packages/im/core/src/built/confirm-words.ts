@@ -7,7 +7,9 @@
  * 词分两档：
  * - **基础词**：在任何"等待确认 / 可取消"的场景都认，比如 `确认`、`ok`、`取消`、`退出`。
  * - **是非答语**（`yesNo: true`）：`是`、`好`、`不`、`否`、`no`、`n`、`拒绝` 等，只在明确的是非问答
- *   （confirm 提问、审批选项）里才算；普通对话里一句"不"或"no"不会被当成取消。
+ *   （confirm 提问、布尔列表）里才算；普通对话里一句"不"或"no"不会被当成取消。
+ * - **审批**（`purpose: 'approval'` 的选项题）更严：只认明确的批准 / 拒绝词（见文件末尾），
+ *   `好` / `是` / `ok` / `y` / `确定` 都不算批准。
  *
  * 匹配先做 NFKC（全角转半角）、去首尾空白、去掉末尾标点（`！!。.？?` 等）、不区分大小写，
  * 然后整句比对：`我不确定`、`取消了吗` 都不是取消词。数字 `1` / `2` 只是选项题的序号，不在此表。
@@ -27,7 +29,7 @@ const TRAILING_PUNCTUATION = /[\s!.?~,;:。、…～]+$/u;
 
 export interface ReplyWordOptions {
   /**
-   * 是否处在明确的是非问答里（confirm 提问、审批选项）。为 `true` 时 `是` / `好` / `不` / `否` /
+   * 是否处在明确的是非问答里（confirm 提问、布尔列表）。为 `true` 时 `是` / `好` / `不` / `否` /
    * `no` / `n` / `拒绝` 等是非答语也算；默认只认基础词。
    */
   readonly yesNo?: boolean;
@@ -51,9 +53,19 @@ export function isCancelWord(text: string, options: ReplyWordOptions = {}): bool
 }
 
 /**
- * 是非答语里的"否"（`不` / `否` / `no` / `n` / `拒绝` …），不含基础取消词：选项题里一个带"否"别名的
- * 选项接受所有否定答语，而 `取消` / `退出` 仍是离开提问（内部使用，不进公共 API）。
+ * 审批（`purpose: 'approval'`）只认的明确批准词：`好`、`是`、`ok`、`y`、`true`、`确定`、`agree`
+ * 这类随口的应答都不算批准（视为无效回答，按无效回答流程重问）。内部使用，不进公共 API。
  */
-export function isNegativeAnswerWord(text: string): boolean {
-  return YES_NO_CANCEL_WORDS.has(normalizeReplyWord(text));
+const APPROVAL_APPROVE_WORDS: ReadonlySet<string> = new Set(['确认', '同意', '批准', 'confirm', 'approve', 'yes']);
+/** 审批只认的明确拒绝词；取消词（`取消` / `cancel` …）不在此表，按取消离开提问（同样算拒绝）。 */
+const APPROVAL_DENY_WORDS: ReadonlySet<string> = new Set(['拒绝', '否', 'no', 'deny', 'reject']);
+
+/** `text` 是否整句就是一个审批批准词（见 {@link APPROVAL_APPROVE_WORDS}）。 */
+export function isApprovalApproveWord(text: string): boolean {
+  return APPROVAL_APPROVE_WORDS.has(normalizeReplyWord(text));
+}
+
+/** `text` 是否整句就是一个审批拒绝词（见 {@link APPROVAL_DENY_WORDS}）。 */
+export function isApprovalDenyWord(text: string): boolean {
+  return APPROVAL_DENY_WORDS.has(normalizeReplyWord(text));
 }

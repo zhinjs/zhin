@@ -81,9 +81,10 @@ describe('confirm prompt answers are not tied to the prompt language', () => {
   });
 });
 
-describe('select options aliased with a confirm or no word', () => {
+describe('approval prompts accept explicit approval and denial words only (M1)', () => {
   const approval = {
     type: 'select' as const,
+    purpose: 'approval' as const,
     title: '操作确认',
     options: [
       { label: 'Reject', value: 'reject', aliases: ['否', 'no'] },
@@ -92,12 +93,24 @@ describe('select options aliased with a confirm or no word', () => {
     ],
   };
 
-  it('accepts every confirm word and every no-answer for the matching option', () => {
-    for (const answer of ['确认', '确定', '同意', 'ok', 'Y', 'confirm', '是', '好', 'YES!']) {
-      expect(parseUserInteractionAnswer(approval, answer, 'en')).toEqual({ ok: true, value: 'approve-once' });
+  it('approves on 确认 / 同意 / 批准 / confirm / approve / yes in either language', () => {
+    for (const answer of ['确认', '同意', '批准', 'confirm', 'Approve', 'YES!', '同意。', '2', 'Allow once']) {
+      for (const locale of ['zh-CN', 'en'] as const) {
+        expect(parseUserInteractionAnswer(approval, answer, locale)).toEqual({ ok: true, value: 'approve-once' });
+      }
     }
-    for (const answer of ['否', '不', '拒绝', 'no', 'n', 'reject', 'No.']) {
+  });
+
+  it('denies on 拒绝 / 否 / no / deny / reject, the label or the number', () => {
+    for (const answer of ['拒绝', '否', 'no', 'Deny', 'reject', 'No.', '1', 'reject']) {
       expect(parseUserInteractionAnswer(approval, answer, 'zh-CN')).toEqual({ ok: true, value: 'reject' });
+    }
+  });
+
+  it('does not take casual answers for an approval or a denial', () => {
+    for (const answer of ['好', 'ok', '是', 'y', 'true', '确定', 'agree', 'OK!', '好的', '不', 'n', 'false']) {
+      expect(parseUserInteractionAnswer(approval, answer, 'zh-CN')).toMatchObject({ ok: false });
+      expect(isInteractionCancelReply(approval, answer)).toBe(false);
     }
   });
 
@@ -109,13 +122,30 @@ describe('select options aliased with a confirm or no word', () => {
     expect(parseUserInteractionAnswer(approval, '3', 'zh-CN')).toEqual({ ok: true, value: 'approve-always' });
   });
 
-  it('does not guess when several options carry a confirm word, or none does', () => {
-    const ambiguous = {
-      type: 'select' as const,
-      title: '选择',
-      options: [{ label: '是', value: 'a' }, { label: 'yes', value: 'b' }],
-    };
-    expect(parseUserInteractionAnswer(ambiguous, 'ok', 'zh-CN')).toMatchObject({ ok: false });
+  it('does not guess when several options carry an approval word', () => {
+    const ambiguous = { ...approval, options: [{ label: '同意', value: 'a' }, { label: 'yes', value: 'b' }] };
+    expect(parseUserInteractionAnswer(ambiguous, 'approve', 'zh-CN')).toMatchObject({ ok: false });
+  });
+});
+
+describe('plain select prompts match names, aliases and numbers only (M2)', () => {
+  it('does not extend an option to words of the same class', () => {
+    const quality = { type: 'select' as const, title: '评价', options: [{ label: '好', value: 'good' }, { label: '差', value: 'bad' }] };
+    expect(parseUserInteractionAnswer(quality, 'ok', 'zh-CN')).toMatchObject({ ok: false });
+    expect(parseUserInteractionAnswer(quality, '是', 'zh-CN')).toMatchObject({ ok: false });
+    expect(parseUserInteractionAnswer(quality, '好', 'zh-CN')).toEqual({ ok: true, value: 'good' });
+    const compass = { type: 'select' as const, title: '方向', options: [{ label: 'N', value: 'north' }, { label: 'S', value: 'south' }] };
+    expect(parseUserInteractionAnswer(compass, 'no', 'en')).toMatchObject({ ok: false });
+    expect(parseUserInteractionAnswer(compass, 'n', 'en')).toEqual({ ok: true, value: 'north' });
+    const aliased = { type: 'select' as const, title: '继续', options: [{ label: '继续', value: 'go', aliases: ['y'] }, { label: '停止', value: 'stop' }] };
+    expect(parseUserInteractionAnswer(aliased, '好', 'zh-CN')).toMatchObject({ ok: false });
+    expect(parseUserInteractionAnswer(aliased, 'yes', 'en')).toMatchObject({ ok: false });
+    expect(parseUserInteractionAnswer(aliased, 'Y', 'en')).toEqual({ ok: true, value: 'go' });
+    const multi = { type: 'multiselect' as const, title: '评价', options: quality.options };
+    expect(parseUserInteractionAnswer(multi, 'ok', 'zh-CN')).toMatchObject({ ok: false });
+  });
+
+  it('normalizes names and aliases the same way as the vocabulary', () => {
     const plain = { type: 'select' as const, title: '环境', options: [{ label: '开发', value: 'dev' }, { label: '生产', value: 'prod' }] };
     expect(parseUserInteractionAnswer(plain, 'yes', 'en')).toMatchObject({ ok: false });
     expect(parseUserInteractionAnswer(plain, '生产。', 'zh-CN')).toEqual({ ok: true, value: 'prod' });

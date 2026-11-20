@@ -61,8 +61,9 @@ export async function createPersonalReminder(
       })).trim();
       checkDeadline(); checkCancel(reply); return reply;
     };
+    // #1250 第 74 批审查 L2: command arguments are data — only answers to a waiting question cancel,
+    // so `/remind create 明天9点 退出` creates a reminder whose text is 退出.
     let expression = parameters.when?.trim();
-    if (expression) checkCancel(expression);
     let parsed: ReturnType<typeof parseNaturalReminderTime> | undefined;
     let timeError = '';
     while (!parsed) {
@@ -77,7 +78,6 @@ export async function createPersonalReminder(
       }
     }
     let text = parameters.text?.trim();
-    if (text) checkCancel(text);
     let textError = '';
     while (!text || text.length > 500 || isCommand(text)) {
       if (text) textError = isCommand(text) ? t(locale, 'bodyCommand') : t(locale, 'bodyLimit');

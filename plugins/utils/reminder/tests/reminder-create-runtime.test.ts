@@ -183,6 +183,20 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
+  // #1250 第 74 批审查 L2: a cancel word given as a command argument is data, not a cancellation.
+  it('creates a reminder whose text is a cancel word given as a command argument', async () => {
+    const f = await fixture();
+    try {
+      const pending = f.receive('/remind create 明天9点 退出');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      expect(rendered(f.sent)).toContain('退出');
+      await f.receive('确认'); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+      const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
+      expect(tasks[0]).toMatchObject({ text: '退出' });
+    } finally { await f.close(); }
+  });
+
   it('re-sends the confirmation prompt at most once while the sender keeps chatting (reminder-confirm-captures-chat)', async () => {
     const f = await fixture();
     try {
