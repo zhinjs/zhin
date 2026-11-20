@@ -21,6 +21,7 @@ import {
   upgradeBootstrapFiles,
   upgradePackageJson,
   isPinnedSpecifier,
+  isLocalDependencySpecifier,
   isNewerThanRelease,
   syncWorkspaceYamlOverrides,
   upgradeProjectDependencies,
@@ -351,6 +352,34 @@ describe('migrate', () => {
     expect(JSON.stringify(pkg)).not.toContain('latest');
   });
 
+  it('--include-pinned keeps npm: aliases and local sources instead of writing ^x.y.z (#1250 review)', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    const dependencies = {
+      'zhin.js': '1.1.0',
+      '@zhin.js/core': 'npm:@zhin.js/core@1.1.0',
+      '@zhin.js/agent': 'npm:my-fork-agent@^1.0.0',
+      '@zhin.js/calendar': 'link:../calendar',
+      '@zhin.js/local': 'file:./vendor/local.tgz',
+    };
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies,
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true, includePinned: true });
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('@zhin.js/core: npm:@zhin.js/core@1.1.0 是别名或本地/非 registry 来源，--include-pinned 不改写，保留');
+    expect(preview).not.toMatch(/@zhin\.js\/(core|agent|calendar|local): \S+ → /u);
+
+    const kept = new Set<string>();
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true, kept });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toMatchObject({ ...dependencies, 'zhin.js': '9.4.2' });
+    expect([...kept].sort()).toEqual(['@zhin.js/agent', '@zhin.js/calendar', '@zhin.js/core', '@zhin.js/local']);
+  });
+
   it('keeps a dependency and says so when the registry cannot be reached', () => {
     registry.offline = true;
     const pkgPath = path.join(tmp, 'package.json');
@@ -604,6 +633,15 @@ describe('migrate', () => {
     }
     for (const floating of ['^1.1.0', '~1.1.0', '>=1.0.0', '*', 'latest', 'next', '1.x']) {
       expect(isPinnedSpecifier(floating), floating).toBe(false);
+    }
+  });
+
+  it('isLocalDependencySpecifier / isPinnedSpecifier 识别 gitlab:、bitbucket:、gist:、jsr: 与 user/repo#ref 简写，不误伤范围与 dist-tag (#1250 B-7)', () => {
+    const sources = ['gitlab:me/repo', 'bitbucket:me/repo#v1', 'gist:11081aaa', 'jsr:@std/path@^1.0.0', 'zhinjs/zhin', 'zhinjs/zhin#main', 'zhinjs/zhin#semver:^1.0.0', ' user/repo.js#v1.2.3 ', 'workspace:*', 'catalog:', 'npm:zhin.js@1.0.0', 'git+ssh://git@github.com/a/b.git', '../x', '/abs/x'];
+    for (const source of sources) expect(isLocalDependencySpecifier(source), source).toBe(true);
+    for (const source of sources.filter(value => !value.startsWith('workspace:'))) expect(isPinnedSpecifier(source), source).toBe(true);
+    for (const range of ['^1.1.0', '~1.1.0', '>=1.0.0 <2.0.0', '1.x || 2.x', '*', 'latest', 'next', '1.2.3', '@scope/name', 'beta']) {
+      expect(isLocalDependencySpecifier(range), range).toBe(false);
     }
   });
 

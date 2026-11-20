@@ -1,113 +1,35 @@
 #!/usr/bin/env node
+/**
+ * `zhin` executable entry.
+ *
+ * The gateway supervises the Zhin instance by spawning this executable again as
+ * `zhin runtime start …` with the instance-child environment (ADR 0054 §3). That process only
+ * launches the project's `zhin.js/instance`; it must not load the CLI's command tree (scaffold
+ * wizard, plugin tooling, preview, …) and keep it resident for the instance's lifetime (#1250).
+ */
+import { INSTANCE_CHILD_ENV } from '@zhin.js/host-http/bridge';
 
-import { readFileSync } from 'node:fs';
-import { Command } from 'commander';
-import { logsCommand, restartCommand, startCommand, statusCommand, stopCommand, updateCommand } from './commands/lifecycle.js';
-import { buildCommand } from './commands/build.js';
-import { newCommand } from './commands/new.js';
-import { createCommand } from './commands/create.js';
-import { pubCommand } from './commands/pub.js';
-import { installCommand, addAliasCommand } from './commands/install.js';
-import { uninstallCommand } from './commands/uninstall.js';
-import { disableCommand, enableCommand } from './commands/enable.js';
-import { searchCommand, infoCommand } from './commands/search.js';
-import { serviceCommand } from './commands/install-service.js';
-import { doctorCommand } from './commands/doctor.js';
-import { setupCommand } from './commands/setup.js';
-import { configCommand } from './commands/config.js';
-import { onboardCommand } from './commands/onboard.js';
-import { scheduleCommand } from './commands/schedule.js';
-import { chatRolesCommand } from './commands/chat-roles.js';
-import { migrateCommand } from './commands/migrate.js';
-import { sendCommand } from './commands/send.js';
-import { watchCommand } from './commands/watch.js';
-import { packagesCommand } from './commands/packages.js';
-import { runtimeCommand } from './commands/runtime.js';
-import { traceCommand } from './commands/trace.js';
-import { aiCommand } from './commands/ai.js';
-import { usageCommand } from './commands/usage.js';
-import { devCommand } from './commands/dev.js';
-import { useCasesCommand } from './commands/use-cases.js';
-import { pluginCommand } from './commands/plugin.js';
-import { previewCommand } from './commands/preview.js';
-import { consoleCommand } from './commands/console.js';
-import { dbCommand } from './commands/db.js';
-import { setCliFlags } from './utils/cli-flags.js';
-import { findUnknownCommand, formatUnknownCommand } from './utils/unknown-command.js';
+const args = process.argv.slice(2);
 
-// src/cli.ts 与 lib/cli.js 都在包根下一层，../package.json 就是 @zhin.js/cli 自己的清单。
-const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+/**
+ * Options the instance launcher does not parse itself: help and the program-wide logging flags
+ * are handled by the full command tree, so such invocations take the `program.js` path.
+ */
+const PROGRAM_OPTIONS = new Set(['--help', '-h', '--verbose', '--debug']);
 
-const program = new Command();
-
-program
-  .name('zhin')
-  .description('Zhin机器人框架CLI工具')
-  .version(version)
-  .option('--verbose', '诊断日志带时间、级别和来源前缀（写到 stderr）')
-  .option('--debug', '实例返回内部错误时显示日志关联 id，并从实例日志中找出对应行')
-  .hook('preAction', (root) => {
-    const { verbose, debug } = root.opts<{ verbose?: boolean; debug?: boolean }>();
-    setCliFlags({ verbose: !!verbose, debug: !!debug });
-  });
-
-// 注册命令
-program.addCommand(startCommand);
-program.addCommand(aiCommand);
-program.addCommand(stopCommand);
-program.addCommand(restartCommand);
-program.addCommand(statusCommand);
-program.addCommand(logsCommand);
-program.addCommand(updateCommand);
-program.addCommand(buildCommand);
-program.addCommand(newCommand);
-program.addCommand(createCommand);
-program.addCommand(pubCommand);
-program.addCommand(pluginCommand);
-program.addCommand(installCommand);
-program.addCommand(addAliasCommand, { hidden: true });
-program.addCommand(uninstallCommand);
-program.addCommand(enableCommand);
-program.addCommand(disableCommand);
-program.addCommand(searchCommand);
-program.addCommand(infoCommand);
-program.addCommand(serviceCommand);
-program.addCommand(doctorCommand);
-program.addCommand(setupCommand);
-program.addCommand(configCommand);
-program.addCommand(onboardCommand);
-program.addCommand(scheduleCommand);
-program.addCommand(chatRolesCommand);
-program.addCommand(migrateCommand);
-program.addCommand(sendCommand);
-program.addCommand(watchCommand);
-program.addCommand(packagesCommand);
-// Agent command handlers use optional AI contracts; IM-only commands must not load them.
-const needsAgentCommand = process.argv[2] === 'agent'
-  || (process.argv[2] === 'help' && process.argv[3] === 'agent');
-program.addCommand(needsAgentCommand
-  ? (await import('./commands/agent.js')).agentCommand
-  : new Command('agent').description('查看 Agent 能力 / Inspect Agent capabilities'));
-program.addCommand(runtimeCommand);
-program.addCommand(traceCommand);
-program.addCommand(usageCommand);
-program.addCommand(devCommand);
-program.addCommand(useCasesCommand);
-program.addCommand(previewCommand);
-program.addCommand(consoleCommand);
-program.addCommand(dbCommand);
-
-// #1250: an unknown subcommand is an error (exit 1) even with --help, where commander would
-// print the parent's help and exit 0; the message names the closest command.
-const unknownCommand = findUnknownCommand(program, process.argv.slice(2));
-if (unknownCommand) {
-  process.stderr.write(`${formatUnknownCommand(unknownCommand).join('\n')}\n`);
-  process.exit(1);
-}
-
-try {
-  await program.parseAsync();
-} catch (error) {
-  console.error(`zhin: ${error instanceof Error ? error.message : String(error)}`);
-  process.exitCode = 1;
+if (
+  process.env[INSTANCE_CHILD_ENV]
+  && args[0] === 'runtime'
+  && args[1] === 'start'
+  && !args.slice(2).some((arg) => PROGRAM_OPTIONS.has(arg))
+) {
+  const { runProjectInstance } = await import('./commands/runtime-instance.js');
+  try {
+    await runProjectInstance(args.slice(2));
+  } catch (error) {
+    console.error(`zhin: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
+} else {
+  await import('./program.js');
 }
