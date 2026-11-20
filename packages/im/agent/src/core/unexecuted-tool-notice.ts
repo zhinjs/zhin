@@ -15,7 +15,7 @@
  * "Side-effect tool" = any tool not declared read-only (`readOnly` / `isReadOnly`), the same rule
  * restricted turns already use; undeclared tools count as writing.
  */
-import { formatList, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
+import { createMessages, formatList, type Locale } from '@zhin.js/plugin-runtime';
 import { inlineToolName, type ToolCallRecord } from './tool-calls-user-format.js';
 
 /** Tools whose failure is internal plumbing, never an operation the user asked for. */
@@ -76,7 +76,12 @@ const ACTION_KIND_PATTERNS: ReadonlyArray<readonly [UnexecutedActionKind, RegExp
   ['message', /send|message|post|notice|announce|reply|forward/i],
 ];
 
-const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<Locale, string>>>> = {
+/**
+ * #1250 第 81 批: the user-facing notice and its kind labels, one bilingual catalog. The languages
+ * join the parts differently (one bracket with `；` in zh-CN, one bracket per part in en), so the
+ * sentence shapes `only` / `both` are entries too, not code branches.
+ */
+const noticeMessages = createMessages({
   reminder: { 'zh-CN': '提醒', en: 'reminders' },
   memory: { 'zh-CN': '记忆', en: 'memory' },
   config: { 'zh-CN': '配置', en: 'configuration' },
@@ -84,7 +89,19 @@ const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<
   file: { 'zh-CN': '文件', en: 'files' },
   voice: { 'zh-CN': '语音', en: 'voice' },
   message: { 'zh-CN': '消息发送', en: 'messages' },
-};
+  /** No known kind among the calls. */
+  kindsNone: { 'zh-CN': '部分', en: 'some actions' },
+  /** Exactly the named kinds. */
+  kindsExact: { 'zh-CN': '{labels}', en: '{labels}' },
+  /** Several known kinds: zh-CN marks the list as open (「等」), en lists them as they are. */
+  kindsSeveral: { 'zh-CN': '{labels}等', en: '{labels}' },
+  /** Known kinds plus calls of no known kind. */
+  kindsMore: { 'zh-CN': '{labels}等', en: '{labels} and other actions' },
+  notRun: { 'zh-CN': '{kinds}操作未执行', en: '(Not done: {kinds}.)' },
+  reported: { 'zh-CN': '{kinds}操作报告失败，是否已部分生效不确定', en: '(Reported as failed, may be partly done: {kinds}.)' },
+  only: { 'zh-CN': '（{part}）', en: '{part}' },
+  both: { 'zh-CN': '（{notRun}；{reported}）', en: '{notRun} {reported}' },
+});
 
 /**
  * The deterministic notice for unexecuted side-effect calls (#1250 owner review): always added when there
@@ -95,21 +112,16 @@ const ACTION_KIND_LABELS: Readonly<Record<UnexecutedActionKind, Readonly<Record<
  * ran or threw.
  */
 export function formatUnexecutedNotice(calls: readonly ToolCallRecord[], locale?: Locale): string {
-  const lang = resolveLocale(locale);
   const notRun = calls.filter((call) => call.reported !== true);
   const reported = calls.filter((call) => call.reported === true);
-  const parts: string[] = [];
-  if (lang === 'en') {
-    if (notRun.length) parts.push(`(Not done: ${englishKinds(notRun)}.)`);
-    if (reported.length) parts.push(`(Reported as failed, may be partly done: ${englishKinds(reported)}.)`);
-    return parts.join(' ');
-  }
-  if (notRun.length) parts.push(`${chineseKinds(notRun)}操作未执行`);
-  if (reported.length) parts.push(`${chineseKinds(reported)}操作报告失败，是否已部分生效不确定`);
-  return `（${parts.join('；')}）`;
+  const notRunPart = notRun.length ? noticeMessages(locale, 'notRun', { kinds: kindsText(notRun, locale) }) : '';
+  const reportedPart = reported.length ? noticeMessages(locale, 'reported', { kinds: kindsText(reported, locale) }) : '';
+  if (notRunPart && reportedPart) return noticeMessages(locale, 'both', { notRun: notRunPart, reported: reportedPart });
+  const part = notRunPart || reportedPart;
+  return part ? noticeMessages(locale, 'only', { part }) : '';
 }
 
-function kindLabels(calls: readonly ToolCallRecord[], lang: Locale): { labels: string[]; unknown: boolean } {
+function kindsText(calls: readonly ToolCallRecord[], locale: Locale | undefined): string {
   const labels: string[] = [];
   let unknown = false;
   for (const call of calls) {
@@ -118,20 +130,10 @@ function kindLabels(calls: readonly ToolCallRecord[], lang: Locale): { labels: s
       unknown = true;
       continue;
     }
-    const label = ACTION_KIND_LABELS[kind][lang];
+    const label = noticeMessages(locale, kind);
     if (!labels.includes(label)) labels.push(label);
   }
-  return { labels, unknown };
-}
-
-function chineseKinds(calls: readonly ToolCallRecord[]): string {
-  const { labels, unknown } = kindLabels(calls, 'zh-CN');
-  if (labels.length === 0) return '部分';
-  return `${formatList('zh-CN', labels)}${labels.length > 1 || unknown ? '等' : ''}`;
-}
-
-function englishKinds(calls: readonly ToolCallRecord[]): string {
-  const { labels, unknown } = kindLabels(calls, 'en');
-  if (labels.length === 0) return 'some actions';
-  return unknown ? `${formatList('en', labels)} and other actions` : formatList('en', labels);
+  if (labels.length === 0) return noticeMessages(locale, 'kindsNone');
+  const list = formatList(locale, labels);
+  return noticeMessages(locale, unknown ? 'kindsMore' : labels.length > 1 ? 'kindsSeveral' : 'kindsExact', { labels: list });
 }

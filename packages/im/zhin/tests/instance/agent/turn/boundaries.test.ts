@@ -23,7 +23,7 @@ import {
   runtimeImSessionKey,
 } from '@zhin.js/agent/runtime';
 import {
-  renderTriggerError,
+  renderChatTurnError,
   resolveTriggerTimeoutMs,
   routeSpecialistAgent,
   withTriggerTimeout,
@@ -849,14 +849,13 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
     expect(resolveTriggerTimeoutMs({ timeout: Number.NaN })).toBe(60_000);
   });
 
-  it('errorTemplate 默认 ❌ 模板并插值 {error}', () => {
-    expect(renderTriggerError(undefined, 'boom')).toBe('❌ AI 处理失败: boom');
+  it('errorTemplate 未配置或为空白时用聊天失败口吻，没有内置的 ❌ 模板（#1250 第 81 批）', () => {
+    expect(renderChatTurnError(undefined, new Error('boom'), false)).not.toMatch(/❌|AI 处理失败|boom/u);
+    expect(renderChatTurnError({ errorTemplate: '  ' }, new Error('boom'), false)).not.toMatch(/❌|AI 处理失败|boom/u);
   });
 
   it('errorTemplate 自定义模板插值 {error}', () => {
-    expect(renderTriggerError({ errorTemplate: 'ERR {error}' }, 'boom')).toBe('ERR boom');
-    // 空白模板回退默认
-    expect(renderTriggerError({ errorTemplate: '  ' }, 'boom')).toBe('❌ AI 处理失败: boom');
+    expect(renderChatTurnError({ errorTemplate: 'ERR {error}' }, new Error('boom'), false)).toBe('ERR boom');
   });
 
   it('withTriggerTimeout：限时内完成则正常返回', async () => {

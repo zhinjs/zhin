@@ -59,6 +59,12 @@ describe('unexecuted tool notice helpers (#1250)', () => {
     expect(formatUnexecutedNotice([call('write_file'), reported('mcp__x__y')])).toBe('（文件操作未执行；部分操作报告失败，是否已部分生效不确定）');
     expect(formatUnexecutedNotice([reported('voice_tts')], 'en')).toBe('(Reported as failed, may be partly done: voice.)');
     expect(formatUnexecutedNotice([call('write_file'), call('bash')], 'en')).toBe('(Not done: files, commands.)');
+    // #1250 第 81 批: one catalog; each language keeps its own sentence shape.
+    expect(formatUnexecutedNotice([call('write_file'), call('home_light_on')], 'en')).toBe('(Not done: files and other actions.)');
+    expect(formatUnexecutedNotice([call('write_file'), reported('voice_tts')], 'en'))
+      .toBe('(Not done: files.) (Reported as failed, may be partly done: voice.)');
+    expect(formatUnexecutedNotice([call('write_file')], 'en')).not.toMatch(/[\u4e00-\u9fff]/u);
+    expect(formatUnexecutedNotice([])).toBe('');
   });
 });
 

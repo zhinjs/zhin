@@ -6,7 +6,7 @@
  */
 import { describeCommandDenial } from '@zhin.js/permission';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { resolveLocale, type Locale, type PluginId } from '@zhin.js/plugin-runtime';
+import { createMessages, type Locale, type MessageValues, type PluginId } from '@zhin.js/plugin-runtime';
 
 /** Outcome codes (ADR 0061 §1.1–§1.6). Snake case, append-only. @public */
 export const MESSAGE_OUTCOMES = Object.freeze([
@@ -156,6 +156,7 @@ export interface MessageOutcomeTemplate {
   readonly admin: Bilingual;
 }
 
+/** Table data only; rendering goes through {@link outcomeMessages}. */
 const tpl = (senderZh: string, senderEn: string, adminZh: string, adminEn: string): MessageOutcomeTemplate =>
   Object.freeze({ sender: Object.freeze({ 'zh-CN': senderZh, en: senderEn }), admin: Object.freeze({ 'zh-CN': adminZh, en: adminEn }) });
 
@@ -215,6 +216,17 @@ const REASON_TEMPLATES: Readonly<Partial<Record<MessageOutcome, Readonly<Record<
 });
 
 /**
+ * #1250 第 81 批: the templates rendered through the repository's one bilingual catalog
+ * (`createMessages`), which checks at load that both languages use the same placeholders. Keys are
+ * `<outcome>.<audience>` and `<outcome>:<reason>.<audience>`.
+ */
+const outcomeMessages = createMessages(Object.fromEntries([
+  ...Object.entries(MESSAGE_OUTCOME_TEMPLATES).map(([code, template]) => [code, template] as const),
+  ...Object.entries(REASON_TEMPLATES).flatMap(([code, reasons]) =>
+    Object.entries(reasons ?? {}).map(([reason, template]) => [`${code}:${reason}`, template] as const)),
+].flatMap(([key, template]) => [[`${key}.sender`, template.sender], [`${key}.admin`, template.admin]])));
+
+/**
  * Renders the human-readable reason of a record for one audience. Missing placeholders read as
  * `—`; `detail` and `errorId` are only filled for the `admin` audience with `includeDetail`.
  * @public
@@ -223,13 +235,19 @@ export function formatMessageOutcome(
   record: Pick<MessageOutcomeRecord, 'outcome'> & Partial<MessageOutcomeRecord>,
   options: Readonly<{ audience: 'sender' | 'admin'; locale?: Locale; includeDetail?: boolean }>,
 ): string {
-  const template = (record.reason ? REASON_TEMPLATES[record.outcome]?.[record.reason] : undefined)
-    ?? MESSAGE_OUTCOME_TEMPLATES[record.outcome] ?? MESSAGE_OUTCOME_TEMPLATES.unrecorded;
-  const locale = resolveLocale(options.locale);
-  const text = template[options.audience][locale];
-  return text.replace(/\{(\w+)\}/gu, (_match, name: string) => {
-    if ((name === 'detail' || name === 'errorId') && options.audience === 'admin' && !options.includeDetail) return '—';
-    const value = name === 'stage' ? record.lastStage ?? record.stage : (record as Record<string, unknown>)[name];
-    return typeof value === 'string' && value ? value : '—';
-  });
+  const key = record.reason && REASON_TEMPLATES[record.outcome]?.[record.reason] ? `${record.outcome}:${record.reason}`
+    : Object.hasOwn(MESSAGE_OUTCOME_TEMPLATES, record.outcome) ? record.outcome : 'unrecorded';
+  return outcomeMessages(options.locale, `${key}.${options.audience}`, outcomeValues(record, options));
+}
+
+/** Every placeholder's value: the record field, or `—` when absent or hidden from this audience. */
+function outcomeValues(
+  record: Partial<MessageOutcomeRecord>,
+  options: Readonly<{ audience: 'sender' | 'admin'; includeDetail?: boolean }>,
+): MessageValues {
+  return Object.fromEntries(MESSAGE_OUTCOME_PLACEHOLDERS.map((name) => {
+    if ((name === 'detail' || name === 'errorId') && options.audience === 'admin' && !options.includeDetail) return [name, '—'];
+    const value = name === 'stage' ? record.lastStage ?? record.stage : record[name];
+    return [name, typeof value === 'string' && value ? value : '—'];
+  }));
 }

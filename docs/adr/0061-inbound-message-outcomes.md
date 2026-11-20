@@ -121,7 +121,7 @@ sidebar: false
 | `approval_unavailable` | `unattended` / `no_channel` | 发起人 | 这个操作需要有人确认，但现在没有可确认的渠道，{tool} 没有执行。 / This action needs approval but no one can approve it here; {tool} did not run. | 策略 `{policy}`，原因 `{reason}`。 / Policy `{policy}`, reason `{reason}`. |
 | `tool_failed_reported` | `tool_failed` | 发起人 | 有一步操作失败了（{tool}），回复里已说明。 / A step failed ({tool}); the reply says so. | 错误：{detail}。 / Error: {detail}. |
 | `model_timeout` | `no_response` / `request_timeout` / `turn_timeout` | 发起人 | 模型服务没有响应，这次没回上，请稍后再试。 / The model did not respond; please try again later. | `{provider}/{model}` {phase} 超时 {ms} ms（第 {attempt} 次）。 / `{provider}/{model}` {phase} timed out after {ms} ms (attempt {attempt}). |
-| `model_error` | `ProviderErrorKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `unknown`）| 发起人 | 沿用 `chatFailureLine` 现有话术（“刚卡了一下……” 等）。 / Existing `chatFailureLine` lines. | 沿用 `chatFailureLine` 的原因括注 + `{provider}/{model}`。 / Same cause as `chatFailureLine` + `{provider}/{model}`. |
+| `model_error` | `ProviderErrorKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `unknown`）| 发起人 | 模型服务出错了，这次没回上，请稍后再试。 / The model service failed; please try again later.（不复用聊天里当场说的 `chatFailureLine` 话术，原因见 §1.8） | 模型失败（`{reason}`）。 / Model failed (`{reason}`).；`reason` 即 `ProviderErrorKind`，与 `chatFailureLine` 的原因括注同一组码 |
 | `budget_exhausted` | `budget_exceeded:<budget>` | 发起人 | 这件事步骤太多，做到一半停下了。 / Too many steps; stopped partway. | 超出预算 `{budget}`。 / Budget `{budget}` exceeded. |
 | `interaction_timeout` | `timeout`（指令 / Handler / 中间件的 `ask()` 超时，框架已回复「输入超时」；#1250）| 发起人 | 等你回答超时了，这次没有继续。 / The question timed out; nothing more was done. | 提问超时，提问方 `{owner}`（{stage}）。 / Prompt timed out, asked by `{owner}` ({stage}). |
 | `interaction_cancelled` | `cancelled`（回复了取消词）/ `interrupted`（等待期间发了指令、媒体或 @ 机器人）/ `superseded`（被同一人的新提问顶替）（#1250）| 发起人 | 你退出了这次提问，没有继续。 / You left the question; nothing more was done.（`superseded`：这个提问被之后的新提问替代了，没有继续。 / A newer question replaced this one; nothing more was done.）| 提问结束（`{reason}`），提问方 `{owner}`（{stage}）。 / Prompt ended (`{reason}`), asked by `{owner}` ({stage}).（`superseded`：提问被同一会话中更新的提问替代，提问方 `{owner}`（{stage}）。）|
@@ -198,6 +198,37 @@ sidebar: false
 | `notify_failed` | 统一发送失败码 | 失败通知也没发出去。 / The failure notice could not be sent either. |
 
 插件 `schedules/`（`@zhin.js/schedule-feature`）的每次执行同样写一行（`source: 'plugin'`）。会话日程唤醒（`schedule_wake_fired` / `missed` / `merged`）继续写决策审计，同时按本表写结局。notice / request / system 事件**不**逐条写结局（量大、多数无人关心），只在处理器抛错时写 `internal_error`，在请求被自动处理时写 `request_handled`（`approve` / `reject` / `ignored`）。
+
+#### 1.8 失败文案的三个出处与边界（#1250 第 81 批）
+
+同一次失败可能在三个地方被说出来。三处各管一个界面，不互相代替；文案一律写进 `createMessages`（`@zhin.js/plugin-runtime`）的中英双语目录，语言用 `resolveLocale` 解析，不另写字典、`locale === 'en' ? … : …` 分支或自造的占位替换。`createMessages` 加载时检查两种语言的占位符一致，缺值直接报错；结局模板的缺值由调用处补 `—`（见下）。
+
+| 出处 | 什么时候说 | 在哪里显示 | 口吻 | 文件 |
+| --- | --- | --- | --- | --- |
+| 聊天失败话术 `chatFailureLine` | 回合失败（模型报错、超时、回合抛错）的当场 | 聊天里，主动发一句 | 像群友：不提模型、密钥、重试；发送者是主人时才在括号里附上原因 | `packages/im/agent/src/outbound/chat-failure.ts` |
+| 结局模板 `formatMessageOutcome` | 事后被问“为什么” | Sandbox 刚发消息的结局提示（`GET /api/conversations/outcomes`，只用发起人模板），以及 §3 规划的 `why` / Console / CLI 查询 | 陈述事实：发起人模板说发生了什么、要不要重发；管理员模板带阶段、插件、原因码 | `packages/im/core/src/plugin-runtime/im/message-outcome.ts` |
+| 命令反馈 `renderCommandFeedback` | 指令被拒绝、限流、参数不对的当场 | 聊天里，作为这条指令的回复 | 说清缺什么、等多久；permit 拒绝一律用 `describeCommandDenial()`（`@zhin.js/permission`，第 78 批） | `packages/im/core/src/plugin-runtime/im/command-feedback.ts` |
+
+下面几处随回复附带的事实说明从属于第一类（聊天里当场说），不是另一套话术：
+
+- 回合**完成**但模型没写出可见回复：`formatReplyFallback`（`packages/im/agent/src/core/tool-calls-user-format.ts`）说明实际原因（无可用工具、工具被拒、空回复）和下一步。回合没有失败，所以不用拟人化的“卡了一下”，而是告诉人该换说法、找人批准还是发 `/clear`。`/clear` 是不看命令前缀的清空词（`isClearCommand`，`packages/im/agent/src/plugin-runtime/ingress/content.ts`），所以中英文都照写，不拼账号前缀；定时任务的兜底改为点名任务与 `zhin trace`。
+- 回合末的未执行说明 `formatUnexecutedNotice`（`core/unexecuted-tool-notice.ts`）、后台协作的失败与停止行（`collaboration/turn-collaboration.ts`）、出站媒体被拒时替换媒体的占位文本（Core `built/outbound-media-trust.ts`，来源被拒与地址被拒共用一个目录）。
+- `ai.trigger.errorTemplate` 是运维写的文本，不是框架文案：配置了就把第一个 `{error}` 换成错误信息后发出；未配置（或为空白）时就是 `chatFailureLine`。框架不再自带“❌ AI 处理失败”之类的默认模板。
+
+**新增失败文案放哪里**（避免出现第四套）：
+
+1. 回合失败时在聊天里当场说的话：新增一种 `ChatFailureKind`，在 `chat-failure.ts` 的目录里加话术与原因括注；入口、管线和插件不另写一句。
+2. 解释某条消息为什么是这个结局：新增结局码或 `reason`，写进 `MESSAGE_OUTCOME_TEMPLATES`（码级）；只有码级模板会说错时才在 `REASON_TEMPLATES` 加原因级模板。
+3. 指令被拦下（拒绝、限流、参数）：`command-feedback.ts`；permit 拒绝只用 `describeCommandDenial()`。
+4. 不属于以上三类、随回复附带的事实说明，留在产生它的模块，但必须用 `createMessages`；它对应某个结局码时，结局模板只概括，不复述原句。
+
+**语义重复的条目。**
+
+- 超时：聊天里当场说的是 `chatFailureLine('timeout' | 'no_response' | 'turn_timeout')`（“刚卡了一下，你再说一遍？”，主人另见“模型超时 / 模型服务无响应 / 处理超时”）；结局 `model_timeout` 的发起人模板（“模型服务没有响应，这次没回上，请稍后再试。”）是事后问 `why` 时的解释。两句有意不同：当场那句不点破内部原因，免得群聊里刷技术细节；被问“为什么”时用户要的正是原因。两处共用原因码而不是文案：`model_timeout` 的 `reason`（`no_response` / `request_timeout` / `turn_timeout`）与 `model_error` 的 `reason`（`ProviderErrorKind`）就是 `chatFailureLine` 的种类，管理员模板直接显示它，不另起名字。
+- 限流：指令被限时，聊天里当场回的是命令反馈的冷却 / 忙 / 容量 / 身份句（冷却带秒数）；结局 `rate_limited` 的发起人模板只概括“太频繁或正忙，这次没有处理”，因为同一个码还覆盖 Mailbox 的 `queue_full` / `expired`（聊天里由 `ingressMessages` 当场说）。
+- 拒绝：结局 `permission_denied` 的发起人模板就是 `describeCommandDenial()` 的通用句，与命令反馈同源，不重复写。
+
+**结局模板的渲染。** `formatMessageOutcome` 把 `MESSAGE_OUTCOME_TEMPLATES` 与 `REASON_TEMPLATES` 装进一个 `createMessages` 目录（键为 `<码>.<受众>`、`<码>:<原因>.<受众>`），调用时为 `MESSAGE_OUTCOME_PLACEHOLDERS` 的每个占位符给值：记录里没有该字段、字段为空，或 `detail` / `errorId` 对没要求 `includeDetail` 的管理员受众隐藏时，都显示 `—`。
 
 ### 2. 记录位置：新增轻量的「消息结局」表，链接到决策审计与 turn trace
 
