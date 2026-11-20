@@ -256,6 +256,7 @@ export class AssistantStatus {
   #readUsageTraceDir: UsageTraceDirSource = () => undefined;
   #readProviderDisplay: () => Promise<ProviderDisplayIndex | undefined> = async () => undefined;
   #readUsageEndpoints: UsageEndpointSource = () => undefined;
+  #readScheduleJobLabels: () => Promise<ReadonlyMap<string, string> | undefined> = async () => undefined;
   readonly #usageStats = new UsageStatsService({
     dir: () => this.#readUsageTraceDir(),
     now: () => this.#now(),
@@ -282,6 +283,10 @@ export class AssistantStatus {
         const anywhere = endpoints.filter(row => row.id === endpoint || row.name === endpoint);
         return anywhere.length === 1 ? anywhere[0]!.name : undefined;
       };
+    },
+    scheduleJobResolver: async () => {
+      const labels = await this.#readScheduleJobLabels();
+      return labels ? (jobId: string) => labels.get(jobId) : undefined;
     },
   });
 
@@ -375,6 +380,14 @@ export class AssistantStatus {
     this.#usageStats.dispose();
     this.#readUsageEndpoints = () => {
       try { return read(); } catch { return undefined; }
+    };
+  }
+
+  /** Schedule job id → label for `usage-stats` session names (#1250 b63); binding drops the result cache. */
+  bindUsageScheduleJobs(read: () => Promise<ReadonlyMap<string, string> | undefined>): void {
+    this.#usageStats.dispose();
+    this.#readScheduleJobLabels = async () => {
+      try { return await read(); } catch { return undefined; }
     };
   }
 
