@@ -109,7 +109,6 @@ function toRuntimeGame(definition: GameDefinition): RuntimeRegisteredGame {
     icon: definition.icon,
     description: definition.description,
     descriptionI18n: definition.descriptionI18n,
-    commandPrefix: definition.commandPrefix,
     commandPath: definition.commandPath,
     quickStart: definition.quickStart,
     quickStartI18n: definition.quickStartI18n,

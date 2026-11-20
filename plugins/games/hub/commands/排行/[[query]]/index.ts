@@ -37,7 +37,6 @@ export default defineCommand({
       const hit = games.find(
         (g) => g.id === query
           || (g.titleI18n?.[locale] ?? g.title).includes(query)
-          || g.commandPrefix.includes(query)
           || g.aliases?.some((a) => a.includes(query)),
       );
       if (!hit) {

@@ -25,7 +25,7 @@ export * from './command-message.js';
 export * from './memory-db.js';
 export * from './send-content-text.js';
 export * from './runtime-constants.js';
-export * from './command-alias.js';
+export * from './command-match.js';
 export * from './random.js';
 export { formatGameHelp, gameCommandHint, gameCommandFeedback, type GameHelpRequest } from './game-command-help.js';
 
