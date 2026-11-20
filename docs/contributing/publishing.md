@@ -62,7 +62,27 @@ npm 上已经存在的版本号不能再发。`changeset publish` 遇到这种�
 - `pnpm check:release-plan`（PR 的 contracts 阶段）：发版计划里的新版本号已在 npm 上就失败，并给出第一个空闲的 minor。离线时本地只警告，CI 里失败。
 - `pnpm check:version-collisions`（发布前）：本地版本号已在 npm 上、且高于 npm 的 `latest`，说明是别的版本线占用的号，失败。
 
-遇到撞号：把 `package.json` 的 `version` 设成目标版本的前一个号，保留原来的 changeset（例如目标是 core 1.6.0，就写 `1.5.16`，再用 minor 升上去），并在 `version-policy.json` 里批准这个 minor。依赖它的包要一并加 patch changeset 重新发布，让它们的依赖和 peer 范围指向新版本。
+遇到撞号：把 `package.json` 的 `version` 设成目标版本的前一个号，保留原来的 changeset（例如目标是 core 1.6.0，就写 `1.5.16`，再用 minor 升上去），并在 `version-policy.json` 里批准这个 minor，`version` 必填且写目标版本：
+
+```json
+{ "package": "@zhin.js/core", "type": "minor", "version": "1.6.0", "reason": "所有者已批准（zhinjs/zhin#<issue>，<YYYY-MM-DD>）：1.2.0–1.5.16 已被旧架构占用，改发 1.6.0" }
+```
+
+依赖它的包要一并加 patch changeset 重新发布，让它们的依赖和 peer 范围指向新版本。
+
+`pnpm check:release-plan` 把计划里每个包的 `newVersion` 与该包**最近一次发布**的稳定 tag（`<包名>@X.Y.Z` 中 tag 提交时间最新的一个，同一提交取较高版本）比较，而不只看计划的 `type`：
+
+- major 与最新 tag 不同：一律拒绝；
+- minor 高于最新 tag：必须有 `version` 恰好等于 `newVersion` 的批准。批准只能写 `X.Y.0`，所以手改 `package.json` 跨到新 minor 再挂 patch（如 1.9.1 → 手改 1.10.3 → patch 1.10.4）无法通过；唯一例外是已合并、尚未打 tag 的批准 minor 升版提交之上的后续 patch（`package.json` 正是批准的 `X.Y.0`，且由真实升版提交产生）；
+- 留在最新 tag 的 minor 内改到更高 patch（撞号时跳过被占用的 patch 号）不需要批准。
+
+所以撞号流程两步都合法：同一 minor 内改到较高 patch 直接发；要跳到下一 minor，就把 `package.json` 设到目标前一个号并按上面登记目标版本的批准。还没有任何稳定 tag 的新包不做这项比较，它的首个版本按[新包首次发布](#新包首次发布)手动发布。按时间而不是按版本号取基线，是因为旧架构版本线号码更高、但发布更早（如 `@zhin.js/cli@4.0.1` 早于 1.x 重置后的 `1.9.1`），不能拿它当基线。
+
+发版打 tag 后，对应批准就成了陈旧批准，之后的 PR 会因此失败：发版后删除该条（通常在 main→feat 回同步的那次提交里一起删）。
+
+## 预发布
+
+不支持预发布（`changeset pre enter`、`1.2.0-beta.0` 这类版本）：批准只认 `X.Y.0`，tag 基线、撞号检查也都只处理稳定版本。存在 `.changeset/pre.json`，或发布计划里的旧/新版本带预发布标识时，`pnpm check:release-plan` 直接报错说明不支持；先 `pnpm changeset pre exit` 并删除 `.changeset/pre.json`，`package.json` 用稳定版本号。
 
 ## 打包产物导入检查
 
