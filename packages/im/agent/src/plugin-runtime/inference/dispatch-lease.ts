@@ -6,13 +6,22 @@
  *
  * Internal module: deliberately not re-exported. Token identity is not the guard (#1250 第 84 批):
  * a token's id is readable, and a caller of `CommandIndex.dispatch` may pass its own `operation`
- * factory whose resource view answers `has` / `use` for any token. What a command accepts as the
- * dispatch lease is a port the Host issued ({@link issueDispatchLease}, recorded in a module-private
- * WeakSet and checked with {@link isIssuedDispatchLease}); anything else is no lease at all. The Host
- * issues it only to operations whose owner is the Root plugin and that no plugin dispatched (a
- * message view bound from a plugin author, `delegatedFrom`); a plugin-dispatched Root operation gets
- * {@link dispatchLeaseWithheldToken} instead, and a command that needs the lease tells the sender to
- * send it directly.
+ * factory whose resource view answers `has` / `use` for any token. Neither is a module-wide registry:
+ * `createHostOperationResources` is a public export, so a plugin can build its own factory and have
+ * it issue a port. The protection is twofold:
+ *
+ * 1. Only ports issued by **this Host instance** count. Each `createHostOperationResources` call has
+ *    its own issuer ({@link createDispatchLeaseIssuer}, a WeakSet private to that call); the Agent
+ *    Host hands its own instance's `isDispatchLease` to `createRuntimeManagementCommands`, so a port
+ *    from any other factory — a plugin's included — is no lease at all.
+ * 2. The Host side (`AgentTurnIngressRoute.runManagementOperation` / `clearAsCommand`) checks the
+ *    lease `retain()` returns against the real SnapshotStore (`AgentRuntime.ownsLease`) and refuses
+ *    a lease that store did not issue.
+ *
+ * The Host issues the port only to operations whose owner is the Root plugin and that no plugin
+ * dispatched (a message view bound from a plugin author, `delegatedFrom`); a plugin-dispatched Root
+ * operation gets {@link dispatchLeaseWithheldToken} instead, and a command that needs the lease tells
+ * the sender to send it directly.
  */
 import { createRootPrivateToken, type SnapshotLease } from '@zhin.js/plugin-runtime';
 
@@ -39,23 +48,30 @@ export const dispatchLeaseWithheldToken = createRootPrivateToken<true>(
   'zhin.agent.dispatch-lease-withheld', 'The dispatch lease was withheld from a plugin-dispatched Root operation',
 );
 
-/** Ports the Host issued; a look-alike object (same shape, same token) is not in here. */
-const issuedDispatchLeases = new WeakSet<object>();
-
-/**
- * @internal Host only (`createHostOperationResources`): the dispatch lease port of one Root IM
- * operation, frozen and recorded as Host-issued.
- */
-export function issueDispatchLease(port: DispatchLeasePort): DispatchLeasePort {
-  const issued: DispatchLeasePort = Object.freeze({
-    retain: port.retain,
-    ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}),
-  });
-  issuedDispatchLeases.add(issued);
-  return issued;
+/** One Host instance's issuer: what it issued and nothing else (a look-alike, or another issuer's port, is not). */
+export interface DispatchLeaseIssuer {
+  /** The dispatch lease port of one Root IM operation, frozen and recorded as issued by this issuer. */
+  issue(port: DispatchLeasePort): DispatchLeasePort;
+  /** True only for a port this issuer's {@link DispatchLeaseIssuer.issue} returned. */
+  isIssued(value: unknown): value is DispatchLeasePort;
 }
 
-/** True only for a port {@link issueDispatchLease} returned: what a resource view hands out is checked, not trusted. */
-export function isIssuedDispatchLease(value: unknown): value is DispatchLeasePort {
-  return typeof value === 'object' && value !== null && issuedDispatchLeases.has(value);
+/**
+ * @internal Host only (`createHostOperationResources`): a fresh issuer per factory instance. The
+ * registry is private to the issuer, never module-wide, so a second factory (a plugin's own) cannot
+ * mint ports the first one accepts.
+ */
+export function createDispatchLeaseIssuer(): DispatchLeaseIssuer {
+  const issued = new WeakSet<object>();
+  return Object.freeze({
+    issue(port: DispatchLeasePort): DispatchLeasePort {
+      const frozen: DispatchLeasePort = Object.freeze({
+        retain: port.retain,
+        ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}),
+      });
+      issued.add(frozen);
+      return frozen;
+    },
+    isIssued: (value: unknown): value is DispatchLeasePort => typeof value === 'object' && value !== null && issued.has(value),
+  });
 }

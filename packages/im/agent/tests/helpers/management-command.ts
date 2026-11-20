@@ -14,6 +14,7 @@ export async function runManagementCommand(name: string, input: Readonly<{
 }>): Promise<unknown> {
   const commands = createRuntimeManagementCommands({
     zhinAgent: {} as never,
+    isDispatchLease: () => false,
     open: async (_message, _dispatch, run) => run({ sessionKey: 'session' }),
     clear: async () => undefined,
     ...input.host,

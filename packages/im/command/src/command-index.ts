@@ -1134,7 +1134,6 @@ function commandSuggestionName(record: CommandRecord, locale: Locale): string {
     .map(segment => segment === `$${parameter.name}` ? values.join('|') : segment).join(' ');
 }
 
-/** The message's resolved language, else the same project language messages use ({@link projectLocale}). */
 /** The command prefix the dispatched message carries (`Message.commandPrefix`), if any. */
 function sourceCommandPrefix(source: unknown): string | undefined {
   if (!source || typeof source !== 'object') return undefined;
@@ -1142,6 +1141,7 @@ function sourceCommandPrefix(source: unknown): string | undefined {
   return typeof prefix === 'string' ? prefix : undefined;
 }
 
+/** The message's resolved language, else the same project language messages use ({@link projectLocale}). */
 function commandLocale(source: unknown, snapshot: RuntimeSnapshot): Locale {
   const locale = source && typeof source === 'object' && 'locale' in source ? source.locale : undefined;
   return isLocale(locale) ? locale : projectLocale(snapshot);

@@ -255,6 +255,8 @@ ai:
 
 当前行为（已知，另起议题）：`/compact`、`/tree`、`/fork`、`/reset` 作用于发送者自己的会话；开启群合并窗口（`ai.agent.mailbox.merge`）时，被合并的 AI 回合用的是群的场景会话，这几个命令不作用于它。未安装 Agent 时不注册。旧的无前缀 `ai.health` 已删除，请用 `/health`；`/forget` 改为 `/memory forget`。
 
+嵌入方自行装配时（#1250 第 84 批）：`createRuntimeManagementCommands()` 必须配合 Agent Host 的操作资源使用——同一个 `createHostOperationResources()` 实例的 `im` 端口提供给 Root 的 `imOperationResourcesToken`，它的 `isDispatchLease` 传给 `createRuntimeManagementCommands({ …, isDispatchLease })`。命令只认这个实例签发的分发租约（插件自己调用公开的 `createHostOperationResources()` 签出的不算），Host 侧还会用真实快照存储校验租约。缺了 Host 资源时，`/models`、`/health`、`/tree`、`/fork`、`/compact`、`/reset` 即使直接发送也不执行，回复「管理命令在此实例不可用。」（结局 `refused`，原因 `management_unavailable`）；`zhin start` 装配的实例总是带着它们。
+
 **清空对话上下文**：私聊里直接发，群里 @ 机器人再发 `清空`、`重置`、`clear`，或 `/clear`、`/new`、`/reset`（大小写不限，半角或全角斜杠都行，整条消息只有这个词；Telegram 群里也可以发 `/clear@<本机器人用户名>`，@ 的是别的机器人时不算）。机器人归档你在这个会话里的 AI 多轮上下文（私聊是你和机器人的私聊会话，群里是你自己在这个群的会话，不影响别人），回复「已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。」——长期记忆（`/memory`）、定时任务和会话设置都不动。插件命令先认领了这条消息时按插件命令处理。命令前缀为 `/` 时 `/reset` 是 Agent 的 Root 管理命令：有聊天角色的人发它直接归档会话（见上文）；其他人发它与 `/clear` 完全一样——同一条清空路径、同样的触发与 @ 要求、确认冷却和闸门，不会收到无权限回复——清空了时消息结局记 `command_replied`（附带 `cleared`；冷却期内没有再发确认时记 `cleared`）；没有清空时结局如实记录：群里未 @ 等 AI 不回应你的情况记 `not_addressed`（原因 `clear_command`），控制面停了出站记 `filtered_by_policy`（原因 `outbound_stopped`），直播间里记 `not_addressed`（原因 `live_room_clear`）。清空只在机器人会回应你的地方生效：私聊或 @ 机器人，并经过控制面与发言闸门（控制面没有停用 / 禁言这个会话、机器人能发言、AI 触发开着且会回应私聊或 @）；`ai.access` 不参与判定。直播间和插话（机器人主动接话）里不触发清空——那里的会话是大家共享的——`清空`、`/clear` 这类文字照旧当普通消息处理；没有聊天角色的人在直播间里发 `/reset`（Root 命令）则不清空也不进 AI 回合，静默不回复。控制面拦了出站时既不清空也不回复。短时间重复发送不会刷屏：已经没有可清空的内容时，同一会话同一个人 60 秒内只确认一次。
 
 主人或有聊天角色的用户还可以使用：`/models`（列出语言模型）、`/health`（AI 服务健康状态）。

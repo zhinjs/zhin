@@ -233,7 +233,7 @@ it('answers an Agent management command a plugin dispatched with a request to se
     createOperationResources: input => f.ports.im.open({ ...input, lease, snapshots: f.snapshots }),
   });
   const open = vi.fn(), clear = vi.fn();
-  const slots = createRuntimeManagementCommands({ zhinAgent: {} as never, open, clear }).map(command => createCapabilitySlot({
+  const slots = createRuntimeManagementCommands({ zhinAgent: {} as never, isDispatchLease: f.ports.isDispatchLease, open, clear }).map(command => createCapabilitySlot({
     owner: f.root, feature: commandFeatureId, localName: command.name, source: `/agent/${command.name}`, definition: command.definition }));
   const bindingHook = Symbol.for('zhin.operation-input-binding/1');
   const pluginView = (message as unknown as Record<symbol, (owner: string, snapshot: unknown) => RuntimeMessage>)[bindingHook]!(plugin, lease.value);

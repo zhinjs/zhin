@@ -4,7 +4,8 @@
  * the Agent Host's real IM operation resources (`createHostOperationResources`) — and is refused with a
  * request to send it directly: the prompt names the command with the message's prefix, goes out
  * through the outbound chain, and the message's outcome is `refused` / `direct_command_required`.
- * A caller-built `operation` that claims the dispatch lease gets no further.
+ * A caller-built `operation` that claims the dispatch lease gets no further, nor does a port a plugin
+ * minted with its own `createHostOperationResources` (only this Host instance's ports count).
  */
 import { describe, expect, it, vi } from 'vitest';
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec,
@@ -17,6 +18,7 @@ import { SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView,
   type PrimaryConfig, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createHostOperationResources } from '@zhin.js/agent/runtime';
 import { createRuntimeManagementCommands, type RuntimeManagementDispatch } from '@zhin.js/agent';
+import { dispatchLeaseToken } from '../../../../agent/src/plugin-runtime/inference/dispatch-lease.js';
 
 class TestEndpoint implements Endpoint {
   readonly sent: EndpointSendRequest[] = [];
@@ -38,7 +40,12 @@ async function fixture(forward: Forward) {
     run({ sessionKey: 'session' } as never));
   const clear = vi.fn(async (_message: Message, _dispatch: RuntimeManagementDispatch) => undefined);
   const archiveSession = vi.fn(async () => true);
-  const management = createRuntimeManagementCommands({ zhinAgent: { archiveSession } as never, open: open as never, clear })
+  // The Agent Host's IM operation resources, as `host-installer.ts` provides them (and hands their
+  // `isDispatchLease` to the management commands).
+  const operationResources = createHostOperationResources({ host: {} as never, quota: {} as never });
+  const host = operationResources.im;
+  const management = createRuntimeManagementCommands({ zhinAgent: { archiveSession } as never,
+    isDispatchLease: operationResources.isDispatchLease, open: open as never, clear })
     .map(command => createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: command.name,
       source: `/agent/${command.name}`, definition: command.definition }));
   const adapterSlot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'forward-test', source: '/adapters/forward-test',
@@ -56,8 +63,6 @@ async function fixture(forward: Forward) {
     } }) });
   const document = { configVersion: 2, plugins: { buttons: 'buttons' } };
   const primary: PrimaryConfig = { document, expanded: document, get: () => undefined };
-  // The Agent Host's IM operation resources, as `host-installer.ts` provides them.
-  const host = createHostOperationResources({ host: {} as never, quota: {} as never }).im;
   const state: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [buttons] }],
     [buttons, { id: buttons, parent: root, instanceKey: 'buttons', packageName: 'buttons', packageRoot: '/fixture/buttons', children: [] }],
@@ -129,6 +134,34 @@ describe('an Agent management command a plugin middleware forwards (#1250 第 84
       expect(retain).not.toHaveBeenCalled();
       expect(f.clear).not.toHaveBeenCalled();
       expect(f.open).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
+
+  it('does not take a port a plugin minted with its own createHostOperationResources: the command does not run', async () => {
+    // Review repro (#1250 第 84 批): the factory is a public export of `@zhin.js/agent/runtime`, so a
+    // plugin can build its own, hand it the real snapshot (read through the message's global hook)
+    // with a forged lease, and get a port issued — by its own factory, not by this Host.
+    const snapshotHook = Symbol.for('zhin.operation-input-snapshot/1');
+    const released = vi.fn();
+    const f = await fixture((commands, input) => {
+      const snapshot = (input as unknown as Record<symbol, () => { root: never }>)[snapshotHook]!();
+      const minted = createHostOperationResources({ host: { rootId: snapshot.root, hostOwnerId: snapshot.root } as never, quota: {} as never });
+      const forgedLease = { value: snapshot, active: true, release: released };
+      const signal = new AbortController().signal;
+      const view = minted.im.open({ message: input, owner: snapshot.root, signal, lease: forgedLease as never,
+        snapshots: { acquire: () => forgedLease, retain: () => forgedLease, owns: () => true } as never })!;
+      expect(minted.isDispatchLease(view.use(dispatchLeaseToken))).toBe(true);
+      return commands.dispatch({ input: 'reset', source: input, operation: { signal, create: ({ signal }) => ({ signal, resources: view }) } });
+    });
+    try {
+      await f.receive('btn:reset');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ status: 'executed', refused: true, refusalReason: 'direct_command_required' })]);
+      expect(f.endpoint.sent.map(request => request.payload)).toEqual(['ℹ️ 该命令不能经插件转发执行，请直接发送 /reset。']);
+      expect(released).not.toHaveBeenCalled();
+      expect(f.clear).not.toHaveBeenCalled();
+      expect(f.open).not.toHaveBeenCalled();
+      expect(f.archiveSession).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });
 });

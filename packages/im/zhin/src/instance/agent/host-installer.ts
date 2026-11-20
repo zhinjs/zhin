@@ -446,6 +446,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       for (const command of createRuntimeManagementCommands({
         zhinAgent,
         semanticMemory: semanticMemory ?? null,
+        // #1250 第 84 批: only the dispatch lease ports this Host's own operation resources issued (the
+        // `im` port provided above) count; a port from another factory (a plugin's) does not.
+        isDispatchLease: port => operationResources.isDispatchLease(port),
         // Each command retains the generation that dispatched it (an operation resource bound to the
         // IM runtime's own lease for the message), never whichever generation is current by then.
         open: (message, dispatch, run) => ingressRoute.runManagementOperation(message, dispatch, run),

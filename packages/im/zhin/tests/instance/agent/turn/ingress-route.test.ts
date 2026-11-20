@@ -27,8 +27,11 @@ import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
  * #1250 第 83 批: the Host's IM operation resources for one message, as Core opens them with the lease
  * it holds for the message (`imOperationResourcesToken`): a management command retains that generation.
  */
+/** One Agent Host's operation resources: its `im` port and the `isDispatchLease` the management commands get. */
+const hostResources = createHostOperationResources({ host: {} as never, quota: {} as never });
+
 function hostOperationResources(lease: SnapshotLease, snapshots: Pick<SnapshotReader, 'retain'>, conversationSequence?: number) {
-  const port = createHostOperationResources({ host: {} as never, quota: {} as never }).im;
+  const port = hostResources.im;
   return (input: Readonly<{ message: unknown; owner: PluginId; signal: AbortSignal }>) =>
     port.open({ lease, snapshots: snapshots as SnapshotReader, message: input.message as never, owner: input.owner, signal: input.signal,
       ...(conversationSequence !== undefined ? { conversationSequence } : {}) });
@@ -50,6 +53,7 @@ function installManagementCommands(snapshot: RuntimeSnapshot, route: () => Agent
   mutable.resources.get(root)!.set(permissionHostToken.id, new PermissionHost());
   const slots = createRuntimeManagementCommands({
     zhinAgent: zhinAgent as never,
+    isDispatchLease: hostResources.isDispatchLease,
     open: (message, dispatch, run) => route().runManagementOperation(message, dispatch, run),
     clear: async (message, dispatch) => { await route().clearAsCommand(message, dispatch); },
   }).map(command => createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: command.name,
@@ -471,7 +475,13 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
   const release = vi.fn();
   // The IM runtime's lease for the message; a command retains it through the Host operation resources.
   const held = { value: snapshot, active: true, release: vi.fn() } as unknown as SnapshotLease;
-  const openResources = hostOperationResources(held, { retain: () => ({ value: snapshot, active: true, release }) as never });
+  // The leases this fixture's store issued: the Host checks a dispatch lease against its real store.
+  const issued = new WeakSet<object>();
+  const openResources = hostOperationResources(held, { retain: () => {
+    const lease = { value: snapshot, active: true, release };
+    issued.add(lease);
+    return lease as never;
+  } });
   const reply = vi.fn(async (content: unknown) => {
     if (JSON.stringify(content).includes('Confirm operation')) {
       expect(coordinator.resolveClaim({ ...message, content: 'yes', segments: [] } as never)).toBe(true);
@@ -508,7 +518,8 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     options.execute ? options.execute(request) : { status: 'completed', output: [] });
   const route = new AgentTurnIngressRoute({
     withInferenceScope: inference.withInferenceScope,
-    projectRoot: process.cwd(), runtime: { executeLeased } as never, resolveEndpointOwner: () => 'user',
+    projectRoot: process.cwd(), runtime: { executeLeased, ownsLease: (lease: SnapshotLease) => issued.has(lease) } as never,
+    resolveEndpointOwner: () => 'user',
     im: { createInteraction: (source: Message) => coordinator.create(source) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
@@ -1112,7 +1123,8 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
     const snapshots = new SnapshotStore(snapshot);
     const route: AgentTurnIngressRoute = new AgentTurnIngressRoute({
       withInferenceScope: ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":false,"confidence":0.1,"reason":"no"}') }).withInferenceScope,
-      projectRoot: '/host-a', runtime: { executeLeased } as never,
+      // The Root's real store: the route checks a management command's dispatch lease against it.
+      projectRoot: '/host-a', runtime: { executeLeased, ownsLease: (lease: SnapshotLease) => snapshots.owns(lease) } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext: async () => ({ blocks: [], cursor: 5 }),
         commitConversationContext: async () => undefined, inboundMediaOrigins: () => [] } as never,
       ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
@@ -1373,6 +1385,30 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
       expect(silent.$reply).not.toHaveBeenCalled();
       expect(silent.record).toMatchObject({ outcome: 'not_addressed', reason: 'clear_command' });
     } finally { await off.close(); }
+  });
+
+  it('refuses a dispatch lease the Root\'s real store did not issue, on both management paths (#1250 第 84 批)', async () => {
+    const f = clearFixture();
+    try {
+      const lease = f.snapshots.acquire();
+      try {
+        // Shaped like a lease on the real generation, but the store never issued it.
+        const foreign = { value: lease.value, active: true, release: vi.fn() } as unknown as SnapshotLease;
+        const message = { conversation: groupChat, content: '/reset', endpointId: 'account-a', commandPrefix: '/', locale: 'zh-CN', mentioned: true,
+          sender: { id: 'alice' }, message: { conversation: groupChat, id: 'foreign-reset' }, $reply: vi.fn() } as unknown as Message;
+        const dispatch = { signal: new AbortController().signal, retainLease: () => foreign };
+        const run = vi.fn();
+        await expect(f.route.clearAsCommand(message, dispatch)).rejects.toThrow('The dispatch lease does not belong to this Root');
+        await expect(f.route.runManagementOperation(message, dispatch, run)).rejects.toThrow('The dispatch lease does not belong to this Root');
+        expect(run).not.toHaveBeenCalled();
+        expect(message.$reply).not.toHaveBeenCalled();
+        // The real store's own lease still runs.
+        await expect(f.route.runManagementOperation(message, { signal: dispatch.signal, retainLease: () => f.snapshots.retain(lease) },
+          async operation => operation.sessionKey)).resolves.toEqual(expect.any(String));
+      } finally { lease.release(); }
+      expect(f.archiveSession).not.toHaveBeenCalled();
+      expect(f.executeLeased).not.toHaveBeenCalled();
+    } finally { await f.close(); }
   });
 
   it('keeps /reset from a member silent in a live room: no clear, no AI turn, outcome not_addressed (#1250 第 84 批)', async () => {

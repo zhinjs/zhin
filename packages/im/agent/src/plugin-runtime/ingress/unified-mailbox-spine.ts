@@ -582,13 +582,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /**
    * #1250 第 83 批: runs an Agent management Root command (`createRuntimeManagementCommands`) for
    * `message` against the session its AI turn would use, holding a lease on the generation that
-   * dispatched the command (`dispatch.retainLease`) meanwhile.
+   * dispatched the command (`dispatch.retainLease`) meanwhile. #1250 第 84 批: the retained lease must
+   * belong to this Root's real SnapshotStore ({@link retainOwnedLease}); any other lease is refused.
    */
   runManagementOperation<T>(message: Message, dispatch: RuntimeManagementDispatch, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
     const options = this.options;
+    const retainLease = dispatch.retainLease;
     return runManagementOperation({
       message, signal: dispatch.signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
-      ...(dispatch.retainLease ? { retainLease: dispatch.retainLease } : {}),
+      ...(retainLease ? { retainLease: () => this.#retainOwnedLease(retainLease) } : {}),
       ...(options.withInferenceScope ? { withInferenceScope: options.withInferenceScope } : {}),
       ...(options.withModelScope ? { withModelScope: options.withModelScope } : {}),
     }, run);
@@ -608,7 +610,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
    */
   async clearAsCommand(message: Message, dispatch: RuntimeManagementDispatch): Promise<boolean> {
     if (!dispatch.retainLease) throw new Error('The dispatching generation is unavailable');
-    const lease = dispatch.retainLease();
+    const lease = this.#retainOwnedLease(dispatch.retainLease);
     try {
       let cleared = false;
       await this.#route(message, lease, lease.value.root, dispatch.conversationSequence, () => { cleared = true; });
@@ -616,6 +618,21 @@ export class AgentTurnIngressRoute implements IngressRoute {
     } finally {
       lease.release();
     }
+  }
+
+  /**
+   * #1250 第 84 批: the dispatch lease a management command hands over, checked against the real
+   * SnapshotStore (`AgentRuntime.ownsLease`). The command already accepts only ports this Host instance
+   * issued; this second check refuses a lease that store did not issue whatever port carried it. A
+   * foreign lease is not released here: it is not ours.
+   */
+  #retainOwnedLease(retain: () => SnapshotLease): SnapshotLease {
+    const lease = retain();
+    const runtime = this.options.runtime as Partial<Pick<AgentRuntime, 'ownsLease'>>;
+    if (typeof runtime.ownsLease !== 'function' || !runtime.ownsLease(lease) || !lease.active) {
+      throw new Error('The dispatch lease does not belong to this Root');
+    }
+    return lease;
   }
 
   #noteSpoke(key: string): void {

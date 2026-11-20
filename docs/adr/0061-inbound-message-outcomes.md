@@ -108,6 +108,7 @@ sidebar: false
 | `suggested` | `near_miss` | 发起人 | 没有这条指令，已提示相近的指令。 / No such command; suggested a close one. | 近似匹配提示，来自 `{owner}`。 / Near-match suggestion from `{owner}`. |
 | `refused` | `user_facing_error` | 发起人 | 插件拒绝了这次请求。 / The plugin declined.（聊天里回复的是错误本身） | `UserFacingError` 来自 `{owner}`（`{stage}`）。 / `UserFacingError` from `{owner}` (`{stage}`). |
 | `refused` | 指令自带的拒绝码（`UserFacingError` 的 `reason`，如 `simulated-sender`、`unkeyed-conversation`、`not-admin`、`usage`；#1250 第 31 批） | 发起人 | 同上 | 同上；`reason` 为该码，回复文字仍是错误本身。码须匹配 `^[a-z][a-z0-9_.:-]{0,63}$`，否则记 `user_facing_error`。 |
+| `refused` | `management_unavailable`（Agent 管理命令 `models` / `health` / `tree` / `fork` / `compact` / `reset` 所在实例没有接 Agent Host 的操作资源 `createHostOperationResources`，即使用户直接发送也不执行；#1250 第 84 批） | 发起人 | 管理命令在此实例不可用，没有执行。 / Management commands are not available on this instance; nothing was run. | 管理命令 `{command}` 未执行：实例未接 Agent Host 的操作资源（`{reason}`）。 / Management command `{command}` not run: the instance has no Agent Host operation resources (`{reason}`). |
 
 #### 1.2 未执行但已在聊天里说明（`reply: yes`）
 

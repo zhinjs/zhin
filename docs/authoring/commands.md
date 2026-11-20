@@ -716,7 +716,7 @@ export default defineMiddleware({
 - 帮助文本和命令里的 `formatCommand()` 用这条消息的命令前缀（例如 `/`），不传 `commandPrefix` 也带前缀。
 - `dispatch` 返回的 `value` 就是给用户的回复：中间件必须把它回复出去（如上例 `return result.value`），否则用户收不到。命令以 UserFacingError 拒绝时（`refused: true`），这条消息的结局记为 `refused`（原因为命令的拒绝码），由 `dispatch` 记录，与用户直接发送时一致。
 - 可以分发任何插件的命令，也可以分发 Root 命令（项目自己 `commands/` 下的命令，以及 `bind` / `claim` / `config` / `restart` / `role` 等宿主命令）：照常执行，拿到的操作资源（例如推理客户端）和用户直接发送时一样；装不装 Agent 都一样。
-- 例外是需要**分发租约**的 Agent 管理命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）：经插件转发时 Host 不提供分发租约，命令不执行，`dispatch` 返回 `status: 'executed'`、`refused: true`、`refusalReason: 'direct_command_required'`，`value` 是请用户直接发送该命令的提示（中英文，带命令前缀，如「请直接发送 /reset。」），结局 `refused` / `direct_command_required`。中间件把 `result.value` 回复出去即可（如上例）。租约只认 Host 签发的：自己传 `operation` 并声称提供租约同样不执行。`memory` / `memory forget` 不需要租约，照常执行。
+- 例外是需要**分发租约**的 Agent 管理命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）：经插件转发时 Host 不提供分发租约，命令不执行，`dispatch` 返回 `status: 'executed'`、`refused: true`、`refusalReason: 'direct_command_required'`，`value` 是请用户直接发送该命令的提示（中英文，带命令前缀，如「请直接发送 /reset。」），结局 `refused` / `direct_command_required`。中间件把 `result.value` 回复出去即可（如上例）。租约只认本 Host 实例签发的：自己传 `operation` 并声称提供租约、或用自己调用 `createHostOperationResources()` 签出的端口，同样不执行。`memory` / `memory forget` 不需要租约，照常执行。
 - 这样执行的命令没有 `context.interaction`（多轮追问）；需要追问的流程请让用户直接发命令文本。
 - 不需要改写参数时也可以不经中间件：JSX `<button onClick>` 回调本身带 `permit`（见[按钮](./middleware-components.md#按钮)）；QQ 官方的 `mode: 'command'` 按钮由平台把 `payload` 预填成用户消息，按普通命令走同一条匹配与鉴权链路（其他平台的适配器目前不支持这种按钮）。
 

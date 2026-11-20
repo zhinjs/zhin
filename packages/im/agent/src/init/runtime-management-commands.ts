@@ -12,12 +12,19 @@
  * 只接受人类来源：由命令分发统一过滤（第 84 批，`@zhin.js/core` 的 `isNonHumanOrigin`）——消息 `origin`
  * （或无可信来源时的 `metadata.origin`）不是 `human` 时不进任何命令，结局 `ignored_bot` / `non_human_origin`。
  *
- * 需要分发租约的命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）只认 Host 签发的租约端口
- * （第 84 批，`isIssuedDispatchLease`）。由插件中间件 / handler / 按钮回调经 `CommandIndex.dispatch` 转发时
- * Host 不给租约（`dispatchLeaseWithheldToken`），调用方自造 `operation` 资源视图也拿不到：命令不执行，以
- * UserFacingError（原因 `direct_command_required`）拒绝，`dispatch` 结果的 `value` 是请用户直接发送该命令的提示
- * （带消息的命令前缀），由转发的中间件回复出去；未传 `operation` 时 `CommandIndex.dispatch` 自己把这条消息的
- * 结局记为 `refused` / `direct_command_required`。`memory` 不需要租约，照常执行。
+ * 需要分发租约的命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）只认**本 Host 实例**签发的
+ * 租约端口（第 84 批，`createHostOperationResources(...).isDispatchLease`，经 `RuntimeManagementCommandHost.isDispatchLease`
+ * 传入；不是模块级登记——插件自己调用公开的 `createHostOperationResources` 签出的端口不算），Host 侧再用真实
+ * SnapshotStore 校验租约（`AgentRuntime.ownsLease`）。由插件中间件 / handler / 按钮回调经 `CommandIndex.dispatch`
+ * 转发时 Host 不给租约（`dispatchLeaseWithheldToken`），调用方自造 `operation` 资源视图（或另一个工厂签发的端口）
+ * 也拿不到：命令不执行，以 UserFacingError（原因 `direct_command_required`）拒绝，`dispatch` 结果的 `value` 是请用户
+ * 直接发送该命令的提示（带消息的命令前缀），由转发的中间件回复出去；未传 `operation` 时 `CommandIndex.dispatch`
+ * 自己把这条消息的结局记为 `refused` / `direct_command_required`。`memory` 不需要租约，照常执行。
+ *
+ * 必须配合 Host 资源：`createRuntimeManagementCommands` 要和同一个 `createHostOperationResources` 实例一起用——
+ * 它的 `im` 端口提供给 `imOperationResourcesToken`，它的 `isDispatchLease` 传给本函数。缺了任何一样（嵌入方没接
+ * Host 资源），需要租约的命令即使用户直接发送也不执行，回复「管理命令在此实例不可用」（原因
+ * `management_unavailable`）。
  */
 import { defineCommand, UserFacingError, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
 import type { Message } from '@zhin.js/core/runtime';
@@ -29,7 +36,7 @@ import { jumpSessionTree, listSessionTree } from '../session/session-tree-comman
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import { resolveRuntimeSenderRoles } from '../plugin-runtime/ingress/request-capabilities.js';
-import { dispatchLeaseToken, dispatchLeaseWithheldToken, isIssuedDispatchLease } from '../plugin-runtime/inference/dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken, type DispatchLeasePort } from '../plugin-runtime/inference/dispatch-lease.js';
 
 /** Management commands need any zhin chat role (`trusted` or higher) on the conversation's chain. */
 export const RUNTIME_MANAGEMENT_PERMIT = 'trusted';
@@ -68,6 +75,14 @@ export interface RuntimeManagementDispatch {
 
 export interface RuntimeManagementCommandHost {
   readonly zhinAgent: ZhinAgent;
+  /**
+   * #1250 第 84 批: `isDispatchLease` of the `createHostOperationResources` instance whose `im` port this
+   * Root provides (`imOperationResourcesToken`). Only the dispatch lease ports that instance issued
+   * count; a port from any other factory (a plugin can call the public factory too) does not. Without
+   * it (or without those operation resources), the commands that need the lease answer
+   * `management_unavailable` even when sent directly.
+   */
+  readonly isDispatchLease: (port: unknown) => boolean;
   /**
    * Enables `memory` and `memory forget` (#734): anyone can view or forget the semantic memory
    * stored about themselves (their own `user` scope). Without it neither command is registered.
@@ -130,6 +145,23 @@ function inputOf(command: CommandInput): Message {
 /** Refusal code (ADR 0061 `refused` reason) of a management command a plugin forwarded. */
 export const DIRECT_COMMAND_REQUIRED = 'direct_command_required';
 
+/** Refusal code (ADR 0061 `refused` reason) of a management command on an instance without the Host's operation resources. */
+export const MANAGEMENT_UNAVAILABLE = 'management_unavailable';
+
+/**
+ * #1250 第 84 批: the commands were registered without the Agent Host's operation resources (no
+ * `isDispatchLease`, or the operation has neither the dispatch lease nor the withheld marker), so no
+ * dispatch lease can ever be issued here. The sender reads that management commands are unavailable.
+ */
+class ManagementUnavailableError extends UserFacingError {
+  constructor() {
+    super('Management commands are not available on this instance', { reason: MANAGEMENT_UNAVAILABLE });
+  }
+  override format(locale?: Locale): string {
+    return t(locale, 'managementUnavailable');
+  }
+}
+
 /**
  * #1250 第 84 批: a plugin (middleware / handler / button callback) dispatched this command, so the Host
  * withheld the dispatch lease it needs. The sender reads a request to send the command directly.
@@ -147,18 +179,25 @@ class DirectCommandRequiredError extends UserFacingError {
 
 /**
  * The dispatch of `command`: its signal and the dispatching generation (`name` is its path, for the
- * reply). Only a dispatch lease the Host issued counts (#1250 第 84 批): a plugin-dispatched Root
- * operation has the Host resources without it (`dispatchLeaseWithheldToken`), and a resource view a
- * caller supplied itself (an explicit `operation` factory answering `has` / `use` for the lease
- * token, or no Host resources at all) holds no issued lease either. Then the command does not run
- * and the sender reads a request to send it directly — in production every directly sent command has
- * the Host's resources, since the Agent Host that registers these commands also provides them.
+ * reply). Only a dispatch lease this Host instance issued counts (#1250 第 84 批, `isDispatchLease`):
+ * - a plugin-dispatched Root operation has the Host resources without it (`dispatchLeaseWithheldToken`),
+ *   and a resource view a caller supplied itself (an explicit `operation` factory answering `has` /
+ *   `use` for the lease token, or holding a port another `createHostOperationResources` issued) holds
+ *   no lease of this Host either: the command does not run and the sender reads a request to send it
+ *   directly (`direct_command_required`);
+ * - with no Host resources at all (no `isDispatchLease`, or neither the lease nor the withheld marker:
+ *   the embedder did not wire `createHostOperationResources`), the command does not run and the
+ *   sender reads that management commands are unavailable here (`management_unavailable`).
  */
-function dispatchOf(command: CommandRun & Pick<CommandContext, 'formatCommand'>, name: string): RuntimeManagementDispatch {
-  const port = !command.has(dispatchLeaseWithheldToken) && command.has(dispatchLeaseToken) ? command.use(dispatchLeaseToken) : undefined;
-  if (!isIssuedDispatchLease(port)) throw new DirectCommandRequiredError(command.formatCommand(name) ?? name);
-  return { signal: command.signal, retainLease: () => port.retain(),
-    ...(port.conversationSequence !== undefined ? { conversationSequence: port.conversationSequence } : {}) };
+function dispatchOf(host: RuntimeManagementCommandHost, command: CommandRun & Pick<CommandContext, 'formatCommand'>, name: string): RuntimeManagementDispatch {
+  const withheld = command.has(dispatchLeaseWithheldToken);
+  const offered = !withheld && command.has(dispatchLeaseToken);
+  if (typeof host.isDispatchLease !== 'function' || (!withheld && !offered)) throw new ManagementUnavailableError();
+  const port = offered ? command.use(dispatchLeaseToken) : undefined;
+  if (!offered || !host.isDispatchLease(port)) throw new DirectCommandRequiredError(command.formatCommand(name) ?? name);
+  const issued = port as DispatchLeasePort;
+  return { signal: command.signal, retainLease: () => issued.retain(),
+    ...(issued.conversationSequence !== undefined ? { conversationSequence: issued.conversationSequence } : {}) };
 }
 
 async function listLanguageProfiles(operation: RuntimeManagementOperation) {
@@ -177,11 +216,17 @@ function withModelScope<T>(operation: RuntimeManagementOperation, run: () => Pro
  * with semantic memory — `memory` / `memory forget`. No execution policy: like before, they have no
  * cooldown (the operator-only ones are not reachable by bystanders, `memory` reads only the sender's
  * own entries, `reset` from anyone else is the clear command with its own confirmation cooldown).
+ *
+ * Must be used with the Host's operation resources (#1250 第 84 批): one `createHostOperationResources`
+ * instance whose `im` port the Root provides as `imOperationResourcesToken` and whose `isDispatchLease`
+ * is passed here as `host.isDispatchLease`. Without them the commands that need the dispatch lease
+ * (`models` / `health` / `tree` / `fork` / `compact` / `reset`) never run and answer
+ * `management_unavailable`, even when sent directly.
  */
 export function createRuntimeManagementCommands(host: RuntimeManagementCommandHost): readonly RuntimeManagementCommand[] {
   const agent = () => asPrivate(host.zhinAgent);
   const open = <T>(name: string, command: CommandRun & Pick<CommandContext, 'formatCommand'>, run: (operation: RuntimeManagementOperation) => Promise<T>) =>
-    host.open(inputOf(command), dispatchOf(command, name), run);
+    host.open(inputOf(command), dispatchOf(host, command, name), run);
   const commands: RuntimeManagementCommand[] = [
     {
       name: 'models',
@@ -251,7 +296,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
         execute: async command => {
           const message = inputOf(command);
           if (resolveRuntimeSenderRoles(message).hostRole === undefined) {
-            await host.clear(message, dispatchOf(command, 'reset'));
+            await host.clear(message, dispatchOf(host, command, 'reset'));
             return undefined;
           }
           return open('reset', command, async operation => {

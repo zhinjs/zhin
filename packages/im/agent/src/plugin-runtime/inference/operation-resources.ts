@@ -19,7 +19,7 @@ import {
 import { getLogger } from '@zhin.js/logger';
 import type { HostInference } from './host.js';
 import { resolveInferenceMessageContext, resolveInferenceTurnContext } from './turn-context.js';
-import { dispatchLeaseToken, dispatchLeaseWithheldToken, issueDispatchLease, type DispatchLeasePort } from './dispatch-lease.js';
+import { createDispatchLeaseIssuer, dispatchLeaseToken, dispatchLeaseWithheldToken, type DispatchLeasePort } from './dispatch-lease.js';
 
 interface OperationResourcesOptions {
   readonly host: HostInference;
@@ -46,11 +46,20 @@ interface OpenOperationInput {
   readonly conversationSequence?: number;
 }
 
-/** Each authorized Command/Tool owns a lazy client and an independent borrowed generation lease. */
+/**
+ * Each authorized Command/Tool owns a lazy client and an independent borrowed generation lease.
+ *
+ * #1250 第 84 批: `isDispatchLease` recognizes the dispatch lease ports issued by **this** call only.
+ * The Agent Host passes it to `createRuntimeManagementCommands`; a port another factory issued (this
+ * function is public, so a plugin can call it too) is not accepted there.
+ */
 export function createHostOperationResources(options: OperationResourcesOptions): Readonly<{
   im: ImOperationResourcesPort;
   agent: AgentOperationResourcesPort;
+  /** True only for a dispatch lease port this factory instance issued to one of its Root IM operations. */
+  isDispatchLease(port: unknown): boolean;
 }> {
+  const issuer = createDispatchLeaseIssuer();
   const contextOptions = {
     rootId: options.host.rootId,
     hostOwnerId: options.host.hostOwnerId,
@@ -105,10 +114,10 @@ export function createHostOperationResources(options: OperationResourcesOptions)
       },
     });
     // #1250 第 83 批: the exact generation this operation was dispatched in, retained on demand.
-    // #1250 第 84 批: issued (recorded as Host-made), so a look-alike port from a caller's own
-    // `operation` factory is not taken for it.
+    // #1250 第 84 批: issued by this factory instance (recorded by its own issuer), so a look-alike
+    // port from a caller's own `operation` factory, or a port another factory issued, is not taken for it.
     const dispatchLease: DispatchLeasePort | undefined = input.dispatchLease
-      ? issueDispatchLease({
+      ? issuer.issue({
         retain: () => input.snapshots.retain(input.lease),
         ...(input.conversationSequence !== undefined ? { conversationSequence: input.conversationSequence } : {}),
       })
@@ -132,6 +141,7 @@ export function createHostOperationResources(options: OperationResourcesOptions)
     getLogger('inference').warn('Operation inference usage or cleanup reporting failed');
   }
   return Object.freeze({
+    isDispatchLease: (port: unknown) => issuer.isIssued(port),
     im: {
       open: (input) =>
         open({
