@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
@@ -192,7 +193,7 @@ export function findOutdatedAiStackInPackageJson(
 export function findInstalledAiStackIncompatibilities(
   cwd: string,
   pkg: PackageJsonLike,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): AiStackIncompatibility[] {
   const aiMajor = resolvePackageMajor(cwd, pkg, 'ai');
   if (aiMajor == null || aiMajor >= 7) return [];
@@ -338,7 +339,7 @@ export function diagnoseAIDependencies(
   cwd: string,
   config: { ai?: unknown },
   pkg?: PackageJsonLike,
-  locale: 'zh-CN' | 'en' = 'zh-CN',
+  locale: Locale = 'zh-CN',
   proposal?: unknown,
 ): AIDependencyDiagnosis | null {
   if (!isAiEnabledInConfig(config)) return null;

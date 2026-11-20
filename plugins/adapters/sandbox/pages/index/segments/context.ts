@@ -1,12 +1,12 @@
+import type { ConsoleLocale } from '@zhin.js/client';
 import type { ReactNode } from 'react';
-import type { SandboxLocale } from '../messages.js';
 
 /**
  * ADR 0064 §2: what a Sandbox segment renderer may read about the message it renders in.
  * Renderers never reach into the page's state; interaction goes through `sendAction`.
  */
 export interface SandboxSegmentRenderContext {
-  readonly locale: SandboxLocale;
+  readonly locale: ConsoleLocale;
   /** The message was sent by the simulated user (inverse colours, never interactive). */
   readonly isSent: boolean;
   readonly messageId?: string;

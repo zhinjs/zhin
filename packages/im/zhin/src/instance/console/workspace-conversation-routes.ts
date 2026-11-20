@@ -1,5 +1,5 @@
 import { HttpBodyError, readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
-import type { DatabaseHost, SnapshotReader } from '@zhin.js/plugin-runtime';
+import { queryLocale, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import {
   listWorkspaceConversations,
@@ -9,6 +9,7 @@ import {
   type WorkspaceConversationInput,
 } from './workspace-conversations.js';
 import { noStore } from './no-store.js';
+import { invalidLocaleResponse } from './query-locale.js';
 import { sandboxQuickCommands } from './sandbox-quick-commands.js';
 
 /** Metadata only: no message replay, migration, expiry, or task execution. */
@@ -40,7 +41,8 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
     if (!connectionId || (kind !== 'private' && kind !== 'group' && kind !== 'channel') || (id !== null && (!id || id.length > 256))) {
       return jsonResponse(400, { success: false, code: 'invalid_workspace_query', error: '请提供当前 Sandbox 连接与会话' });
     }
-    const locale = url.searchParams.get('locale') === 'en' ? 'en' : 'zh-CN';
+    const locale = queryLocale(url.searchParams);
+    if (!locale) return invalidLocaleResponse();
     try {
       const data = await withSandboxWorkspaceScope(snapshots, connectionId, async (scope, snapshot) =>
         sandboxQuickCommands(scope, snapshot, { kind, id: id ?? scope.ownerId }, locale));

@@ -5,7 +5,7 @@
  * templates shown to the sender and to administrators.
  */
 import type { ConversationRef } from '@zhin.js/im-contract';
-import type { Locale, PluginId } from '@zhin.js/plugin-runtime';
+import { resolveLocale, type Locale, type PluginId } from '@zhin.js/plugin-runtime';
 
 /** Outcome codes (ADR 0061 §1.1–§1.6). Snake case, append-only. @public */
 export const MESSAGE_OUTCOMES = Object.freeze([
@@ -224,7 +224,7 @@ export function formatMessageOutcome(
 ): string {
   const template = (record.reason ? REASON_TEMPLATES[record.outcome]?.[record.reason] : undefined)
     ?? MESSAGE_OUTCOME_TEMPLATES[record.outcome] ?? MESSAGE_OUTCOME_TEMPLATES.unrecorded;
-  const locale: Locale = options.locale === 'en' ? 'en' : 'zh-CN';
+  const locale = resolveLocale(options.locale);
   const text = template[options.audience][locale];
   return text.replace(/\{(\w+)\}/gu, (_match, name: string) => {
     if ((name === 'detail' || name === 'errorId') && options.audience === 'admin' && !options.includeDetail) return '—';

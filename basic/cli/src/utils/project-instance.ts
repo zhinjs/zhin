@@ -2,6 +2,7 @@
  * Loads the project's `zhin.js` instance modules (ADR 0054 §0). `@zhin.js/cli` does not depend on
  * `zhin.js` or any IM layer: commands that need instance code resolve it from the project at run time.
  */
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { moduleResolve } from 'import-meta-resolve';
@@ -116,7 +117,7 @@ export interface AgentTraceModuleView {
 export interface AgentModuleView {
   buildAgentSurfaceInfoReport(root: string): Promise<unknown>;
   /** `locale` is ignored by @zhin.js/agent before 1.6 (English output). */
-  formatAgentSurfaceInfoReport(report: never, locale?: 'zh-CN' | 'en'): string;
+  formatAgentSurfaceInfoReport(report: never, locale?: Locale): string;
 }
 
 export interface InstanceCliModule {

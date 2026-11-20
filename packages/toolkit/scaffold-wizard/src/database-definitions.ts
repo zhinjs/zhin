@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import type { DatabaseConfig } from './types.js';
 
@@ -161,7 +162,7 @@ export function getDatabaseDialectDefinition(dialect: string): DatabaseDialectDe
   return definitions.get(dialect as DatabaseDialect);
 }
 
-export function databaseChoiceLabel(definition: DatabaseDialectDefinition, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function databaseChoiceLabel(definition: DatabaseDialectDefinition, locale: Locale = 'zh-CN'): string {
   const driver = definition.driver
     ? wizardText(locale, "；驱动 {v0} {v1}", [definition.driver.package, definition.driver.version])
     : '';
@@ -173,7 +174,7 @@ function expandEnvReferences(
   path: string,
   env: Readonly<Record<string, string | undefined>>,
   issues: DatabaseSchemaIssue[],
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): string {
   let output = '';
   let index = 0;
@@ -241,7 +242,7 @@ function validateValue(
   path: string,
   env: Readonly<Record<string, string | undefined>>,
   issues: DatabaseSchemaIssue[],
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): void {
   let value = rawValue;
   if (typeof value === 'string') {
@@ -317,7 +318,7 @@ function validateValue(
 export function validateDatabaseConfig(
   config: unknown,
   env: Readonly<Record<string, string | undefined>> = {},
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): readonly DatabaseSchemaIssue[] {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     return [{ kind: 'invalid', path: 'database', message: wizardText(locale, "database 必须是对象") }];

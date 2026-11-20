@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import {
   extractBearerToken,
   publicConsoleAccess,
@@ -8,10 +9,10 @@ import {
 } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 
-export type ConsolePageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en' | string, string>>>;
+export type ConsolePageTitleI18n = Readonly<Partial<Record<Locale | string, string>>>;
 
 /** `definePage({ keywords })`: one alias list, or lists per locale (ADR 0063). */
-export type ConsolePageKeywords = readonly string[] | Readonly<Partial<Record<'zh-CN' | 'en', readonly string[]>>>;
+export type ConsolePageKeywords = readonly string[] | Readonly<Partial<Record<Locale, readonly string[]>>>;
 
 export type ExtendedRuntimeConsolePage = RuntimeConsolePage & {
   readonly owner?: string;

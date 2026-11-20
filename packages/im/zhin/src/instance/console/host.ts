@@ -24,7 +24,9 @@ import {
   resolveLocalizedPageTitle,
   type ExtendedRuntimeConsolePage,
 } from './entry-projection.js';
+import { queryLocale } from '@zhin.js/plugin-runtime';
 import { internalErrorResponse } from './internal-error.js';
+import { invalidLocaleResponse } from './query-locale.js';
 
 const clientPublicBase = '/assets/client';
 const noStore = Object.freeze({ 'cache-control': 'no-store' });
@@ -74,6 +76,8 @@ export function registerConsoleHttp(options: {
   ));
   http.route('GET', '/entries', async (request, context) => {
     try {
+      // Absent stays absent (untranslated titles); an unsupported value is a 400 like every Console route.
+      if (!queryLocale(context.url.searchParams)) return invalidLocaleResponse();
       const locale = context.url.searchParams.get('locale') ?? undefined;
       const pages = await listPages(options.console, requestConsoleAccess(http, request, context), { locale });
       return jsonResponse(200, projectConsoleEntries(pages, { locale }), noStore);
@@ -82,6 +86,7 @@ export function registerConsoleHttp(options: {
     }
   });
   http.route('GET', '/console/api/pages', async (request, context) => {
+    if (!queryLocale(context.url.searchParams)) return invalidLocaleResponse();
     const locale = context.url.searchParams.get('locale') ?? undefined;
     // The list depends on the caller's token, so it must never be cached or shared.
     return jsonResponse(200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, context), locale) }, noStore);
@@ -105,6 +110,7 @@ export function registerConsoleHttp(options: {
     }
   });
   const serveConsoleIndex: HttpHandler = async (request, context) => {
+    if (!queryLocale(context.url.searchParams)) return invalidLocaleResponse();
     const locale = context.url.searchParams.get('locale') ?? undefined;
     return htmlResponse(renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, context), locale)));
   };

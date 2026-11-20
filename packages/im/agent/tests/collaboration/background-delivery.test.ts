@@ -11,7 +11,7 @@ import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
 import type { ActorTurnOutcome, CollaborationDirectory } from '../../src/collaboration/contracts.js';
 import type { DeliveryOutcome, DeliveryPort, ReplyPort, TurnIngress } from '../../src/turn/turn-ingress.js';
 
-function turn(ports: Partial<{ delivery: DeliveryPort; reply: ReplyPort }>, locale = 'zh-CN', unattended = false): TurnIngress {
+function turn(ports: Partial<{ delivery: DeliveryPort; reply: ReplyPort }>, locale: 'zh-CN' | 'en' = 'zh-CN', unattended = false): TurnIngress {
   return {
     identity: { rootId: 'root', generation: 1, traceId: 't', turnId: 'turn-1' },
     input: { text: 'hi', locale },
@@ -51,7 +51,7 @@ describe('background collaboration delivery', () => {
 
   it('tells the human when the aggregating turn itself failed, in their language', async () => {
     const port = delivery();
-    await createBackgroundTeller(turn({ delivery: port }, 'en-US')).deliverResult({ status: 'failed', content: 'AI provider: operation-closed' }, new AbortController().signal);
+    await createBackgroundTeller(turn({ delivery: port }, 'en')).deliverResult({ status: 'failed', content: 'AI provider: operation-closed' }, new AbortController().signal);
     expect(texts(port)).toEqual(['A background task failed while putting its result together. Please try again.']);
   });
 
@@ -72,7 +72,7 @@ describe('background collaboration delivery', () => {
 
   it('never shows the empty-reply note: an aggregation without a reply gets a localized notice', async () => {
     const port = delivery();
-    await createBackgroundTeller(turn({ delivery: port }, 'en-US')).deliverResult({ status: 'completed', content: EMPTY_REPLY_NOTE }, new AbortController().signal);
+    await createBackgroundTeller(turn({ delivery: port }, 'en')).deliverResult({ status: 'completed', content: EMPTY_REPLY_NOTE }, new AbortController().signal);
     expect(texts(port)).toEqual(['A background task finished without a result.']);
   });
 

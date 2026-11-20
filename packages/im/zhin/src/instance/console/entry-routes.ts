@@ -2,7 +2,9 @@ import { jsonResponse } from '@zhin.js/host-http';
 import type { HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { buildConsoleEntriesBody, listPages, requestConsoleAccess } from './entry-projection.js';
+import { queryLocale } from '@zhin.js/plugin-runtime';
 import { internalErrorResponse } from './internal-error.js';
+import { invalidLocaleResponse } from './query-locale.js';
 
 export interface RegisterConsoleEntryRoutesOptions {
   readonly http: HttpHost;
@@ -13,8 +15,9 @@ export function registerConsoleEntryRoutes(options: RegisterConsoleEntryRoutesOp
   const { http, consoleRuntime } = options;
   http.route('GET', '/entries', async (request, context) => {
     try {
-      const rawLocale = context.url.searchParams.get('locale') ?? undefined;
-      const locale = rawLocale && rawLocale.trim() ? rawLocale.trim() : undefined;
+      // Absent stays absent (untranslated titles); an unsupported value is a 400 like every Console route.
+      if (!queryLocale(context.url.searchParams)) return invalidLocaleResponse();
+      const locale = context.url.searchParams.get('locale') ?? undefined;
       const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, context), { locale });
       // Entries depend on the caller's token, so they must never be cached or shared.
       return jsonResponse(200, buildConsoleEntriesBody(pages, undefined, { locale }), { 'cache-control': 'no-store' });

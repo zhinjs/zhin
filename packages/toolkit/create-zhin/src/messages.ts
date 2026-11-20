@@ -1,6 +1,5 @@
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from '@zhin.js/scaffold-wizard';
-
-export type CreateLocale = 'zh-CN' | 'en';
 
 /**
  * Strings owned by create-zhin (ADR 0053 onboarding flow). Shared wizard
@@ -58,14 +57,14 @@ const CREATE_MESSAGES = {
     en: 'Port {v0} is in use and no nearby port is free; keeping {v0}. Change http.port in the configuration before starting.',
   },
   'create.done.docs': { 'zh-CN': '  文档：{v0}', en: '  Docs: {v0}' },
-} as const satisfies Record<string, Record<CreateLocale, string>>;
+} as const satisfies Record<string, Record<Locale, string>>;
 
 export type CreateMessageKey = keyof typeof CREATE_MESSAGES;
 
 /** Localize a create-zhin string; unknown keys fall back to the shared wizard catalog. */
-export function createText(locale: CreateLocale | undefined, key: CreateMessageKey | string, values: readonly unknown[] = []): string {
+export function createText(locale: Locale | undefined, key: CreateMessageKey | string, values: readonly unknown[] = []): string {
   if (!Object.hasOwn(CREATE_MESSAGES, key)) return wizardText(locale, key, values);
-  const template = CREATE_MESSAGES[key as CreateMessageKey][locale === 'en' ? 'en' : 'zh-CN'];
+  const template = CREATE_MESSAGES[key as CreateMessageKey][resolveLocale(locale)];
   return template.replace(/\{v(\d+)\}/gu, (match, index: string) => {
     const value = values[Number(index)];
     return value === undefined ? match : String(value);

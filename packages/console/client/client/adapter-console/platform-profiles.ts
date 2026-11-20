@@ -1,4 +1,4 @@
-import type { AdapterConsoleLocale } from './messages.js';
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import type { AdapterConsoleFieldOptionView, AdapterConsoleFieldView } from './types.js';
 
 export interface PlatformConnectionMode {
@@ -1023,7 +1023,7 @@ export function getPlatformProfile(adapterKey: string): PlatformAdapterProfile {
 export function resolveFieldDisplay(
   adapterKey: string,
   field: AdapterConsoleFieldView,
-  locale: AdapterConsoleLocale,
+  locale: ConsoleLocale,
 ): {
   readonly displayLabel: string;
   readonly placeholder?: string;

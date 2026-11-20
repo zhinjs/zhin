@@ -9,10 +9,11 @@
  */
 import { jsonResponse, type HttpHost } from '@zhin.js/host-http';
 import { formatMessageOutcome, type MessageOutcomeReader, type MessageOutcomeRecord } from '@zhin.js/core/runtime';
-import type { SnapshotReader } from '@zhin.js/plugin-runtime';
+import { queryLocale, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { ConsoleConversationOutcome } from '@zhin.js/console-protocol';
 import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
+import { invalidLocaleResponse } from './query-locale.js';
 
 const MAX_MESSAGE_ID = 2048;
 const LIMIT = 20;
@@ -28,7 +29,7 @@ function ownerSenderIds(ownerId: string): readonly string[] {
  * One record as the Sandbox shows it: codes and the sender-facing text. The operator text (plugin
  * names, stage) is never returned: this route needs only `endpoint.view`.
  */
-export function consoleConversationOutcome(record: MessageOutcomeRecord, locale: 'zh-CN' | 'en'): ConsoleConversationOutcome {
+export function consoleConversationOutcome(record: MessageOutcomeRecord, locale: Locale): ConsoleConversationOutcome {
   return Object.freeze({
     id: record.id,
     ...(record.messageId ? { messageId: record.messageId } : {}),
@@ -55,7 +56,8 @@ export function registerConversationOutcomeRoutes(options: Readonly<{
     const sessionKey = url.searchParams.get('sessionKey') ?? '';
     const connectionId = url.searchParams.get('connectionId') ?? '';
     const messageId = url.searchParams.get('messageId');
-    const locale = url.searchParams.get('locale') === 'en' ? 'en' : 'zh-CN';
+    const locale = queryLocale(url.searchParams);
+    if (!locale) return invalidLocaleResponse();
     if (!connectionId || !sessionKey || (messageId !== null && (!messageId || messageId.length > MAX_MESSAGE_ID))) {
       return jsonResponse(400, { success: false, code: 'invalid_outcome_query', error: '请提供当前连接和有效的 Sandbox 会话' });
     }

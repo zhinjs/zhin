@@ -1,6 +1,6 @@
 import { adminText, taskDetail, formatTaskDetail, isAdminTextKey, LocalizedTaskError, type AdminTextKey } from './admin-i18n.js';
 import { rssMessages as t } from './i18n.js';
-import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { formatList, resolveLocale, type Locale } from 'zhin.js/i18n';
 import { createHash, randomUUID } from 'node:crypto';
 import { createDeliveryTarget, type DeliveryTarget, type OutboundHost, type PluginStateStore } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -258,9 +258,9 @@ export class AdministratorRssTasks implements PluginTaskProvider {
       tasks: book.tasks.map(task => ({ id: task.id, ownership: 'administrator', title: `RSS · ${task.url}`.slice(0, 200), target: task.target,
         state: task.state, createdAt: task.createdAt, ...(task.lastRunAt === null ? {} : { lastRunAt: task.lastRunAt }), parameters: { url: task.url,
           ...(task.quiet ? { quietTimezone: task.quiet.timezone, quietStart: task.quiet.start, quietEnd: task.quiet.end } : {}) },
-        detail: [formatTaskDetail(task, locale), task.quiet ? adminText(locale, 'quietDescription', task.quiet) : '',
+        detail: formatList(locale, [formatTaskDetail(task, locale), task.quiet ? adminText(locale, 'quietDescription', task.quiet) : '',
           task.pending ? adminText(locale, task.state === 'scheduled' ? 'pendingDescription' : 'summaryDescription', { count: task.pending.countCapped ? adminText(locale, 'countCapped', { count: task.pending.count }) : task.pending.count }) : '',
-          adminText(locale, 'pollDescription', { cron: this.#config.pollCron }), task.lastCheckAt === null ? '' : adminText(locale, 'checkedDescription', { at: new Date(task.lastCheckAt).toISOString() }), adminText(locale, 'stateNote')].filter(Boolean).join(locale === 'en' ? '; ' : '；'),
+          adminText(locale, 'pollDescription', { cron: this.#config.pollCron }), task.lastCheckAt === null ? '' : adminText(locale, 'checkedDescription', { at: new Date(task.lastCheckAt).toISOString() }), adminText(locale, 'stateNote')].filter(Boolean), { separator: 'semicolon' }),
         actions: task.state === 'scheduled' ? ['pause', 'cancel'] : task.state === 'paused' ? ['update', 'resume', 'cancel'] : task.state === 'unknown' ? ['cancel'] : [],
       })) };
   }

@@ -19,10 +19,10 @@ import {
 import type { ConsoleMcpConnectTestResult, ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   informativeKeywords,
-  isLocale,
   normalizePluginCategory,
   packageAuthorName,
   pickLocalizedText,
+  queryLocale,
   readPluginMarketplaceMetadata,
   type PluginLocalizedText,
 } from '@zhin.js/plugin-runtime';
@@ -455,8 +455,11 @@ function registerMarketplaceRoutes(
     const rawCategory = url.searchParams.get('category') || undefined;
     const category = rawCategory === undefined ? undefined : normalizePluginCategory(rawCategory) ?? rawCategory;
     const official = url.searchParams.get('official') ?? undefined;
-    const rawLocale = url.searchParams.get('locale');
-    const locale = isLocale(rawLocale) ? rawLocale : undefined;
+    // Absent: untranslated names; an unsupported or repeated `locale` is a 400 like every Console route.
+    const locale = url.searchParams.has('locale') ? queryLocale(url.searchParams) : undefined;
+    if (!locale && url.searchParams.has('locale')) {
+      return jsonResponse(400, { success: false, code: 'invalid_locale', error: 'locale must be zh-CN or en' });
+    }
     const searchKeyword = q.trim().toLowerCase();
 
     try {

@@ -2,9 +2,10 @@
  * Declarative page model (ADR 0063 P2): the spec types, the value expressions and the blueprint
  * normalization shared by `DeclarativePageView` and `DataTable`. No rendering here.
  */
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import type React from 'react';
 import { PluginRpcError } from '../console-utils/remoteApi.js';
-import type { PluginUiLocale, PluginUiText } from '../ui/locale.js';
+import type { PluginUiText } from '../ui/locale.js';
 import type { RpcResource } from '../ui/rpc.js';
 import type { RendererTone } from '../renderer/kit.js';
 
@@ -38,7 +39,7 @@ export type DeclarativeValueExpr =
   /** `data[path]` is `{ 'zh-CN': …, en: … }`; the viewer's locale picks one. */
   | { readonly $i18n: string; readonly fallback?: string | number | boolean };
 
-export function pickLocalizedDataValue(value: unknown, locale: PluginUiLocale): unknown {
+export function pickLocalizedDataValue(value: unknown, locale: ConsoleLocale): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
   return locale === 'en'
@@ -81,7 +82,7 @@ export function resolveDataPath(data: unknown, path: string): unknown {
 export function evaluateDeclarativeExpr(
   exprOrKey: unknown,
   data: unknown,
-  locale: PluginUiLocale,
+  locale: ConsoleLocale,
   t: PluginUiText['t'],
 ): React.ReactNode {
   if (exprOrKey === null || exprOrKey === undefined) return '-';
@@ -363,7 +364,7 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
 
 export interface DeclarativePageContext<TData = Record<string, unknown>> {
   readonly pluginId: string;
-  readonly locale: PluginUiLocale;
+  readonly locale: ConsoleLocale;
   readonly t: PluginUiText['t'];
   readonly resource: RpcResource<TData>;
   readonly call: <TResult = unknown>(method: string, params?: Readonly<Record<string, unknown>>) => Promise<TResult>;
@@ -408,7 +409,7 @@ export function formatTimeHMS(timestamp: number): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-export function pickText(text: DeclarativeI18nText | undefined, locale: PluginUiLocale, t: PluginUiText['t']): string {
+export function pickText(text: DeclarativeI18nText | undefined, locale: ConsoleLocale, t: PluginUiText['t']): string {
   if (!text) return '';
   if (typeof text === 'string') return t(text);
   if (locale === 'en' && text.en) return text.en;
@@ -420,7 +421,7 @@ export function formatError(error: unknown, t: PluginUiText['t']): string {
   return error instanceof Error && error.message ? error.message : t('操作失败');
 }
 
-export function resolveBlueprintText(text: DeclarativeI18nText | undefined, locale: 'en' | 'zh-CN' = 'en'): string {
+export function resolveBlueprintText(text: DeclarativeI18nText | undefined, locale: ConsoleLocale = 'en'): string {
   if (!text) return '';
   if (typeof text === 'string') return text;
   if (locale === 'en') return text.en ?? text['zh-CN'] ?? text.zh ?? '';
@@ -768,7 +769,7 @@ export const VALID_BADGE_TONES = new Set<BadgeTone>(['neutral', 'success', 'warn
 export function resolveBadgeTone<TData>(
   toneSpec: BadgeTone | DeclarativeValueExpr | ((data: TData) => BadgeTone) | undefined,
   data: TData | undefined,
-  locale: PluginUiLocale,
+  locale: ConsoleLocale,
   t: PluginUiText['t'],
 ): BadgeTone {
   if (!toneSpec) return 'neutral';
@@ -786,7 +787,7 @@ export function resolveBadgeTone<TData>(
 export function isEntryMuted(
   spec: boolean | DeclarativeValueExpr | undefined,
   data: unknown,
-  locale: PluginUiLocale,
+  locale: ConsoleLocale,
   t: PluginUiText['t'],
 ): boolean {
   if (spec === undefined || spec === false) return false;

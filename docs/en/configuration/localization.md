@@ -97,6 +97,10 @@ The preferred alias must exist in `alias`. Menus, help, and command references u
 
 Every `createMessages()` key requires both languages with matching placeholder names. Substitution is single-pass, and returns plain text; JSX/renderers remain responsible for HTML escaping.
 
+To list several items, use `formatList(locale, items)` from `zhin.js/i18n` instead of a hand-written separator: Chinese uses `、` and English `, `, so `formatList('en', ['a', 'b'])` is `a, b`. Pass `{ separator: 'comma' }` for longer phrases (`，` / `, `) and `{ separator: 'semicolon' }` for clauses (`；` / `; `). It only joins: no `and` in English, no escaping or sorting.
+
+Check a language value with `isLocale()` and fall back with `resolveLocale()` (an unsupported value becomes `zh-CN`); do not write `locale === 'en' ? 'en' : 'zh-CN'` or guess from an `en` prefix. Commands and messages share one project language: the project language projected with the current generation, then the Root configuration's `locale`. The Console API's `?locale=` accepts a single `zh-CN` or `en`; when absent the default language applies (page lists and the plugin marketplace then show untranslated names), any other value is a 400 (`invalid_locale`).
+
 Translate schema labels without changing validation or persisted values:
 
 ```ts

@@ -1,3 +1,4 @@
+import type { ConsoleLocale } from './locale.js';
 import type { ConsoleAdapterLoginDeclaration, ConsoleLoginFlow, ConsoleLoginTask } from './login.js';
 
 export const SIDE_EVENT_PUSH = {
@@ -489,13 +490,13 @@ export interface ConsoleEndpointFailure {
 /** Raw transport state an Adapter reports for an Endpoint. */
 export type ConsoleEndpointTransportState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped' | 'unknown';
 
-const ENDPOINT_TRANSPORT_LABELS: Readonly<Record<'zh-CN' | 'en', Readonly<Record<ConsoleEndpointTransportState, string>>>> = Object.freeze({
+const ENDPOINT_TRANSPORT_LABELS: Readonly<Record<ConsoleLocale, Readonly<Record<ConsoleEndpointTransportState, string>>>> = Object.freeze({
   'zh-CN': Object.freeze({ idle: '未连接', connecting: '连接中', open: '已连接', reconnecting: '重连中', closed: '已断开', stopped: '已停用', unknown: '状态未知' }),
   en: Object.freeze({ idle: 'Not connected', connecting: 'Connecting', open: 'Connected', reconnecting: 'Reconnecting', closed: 'Disconnected', stopped: 'Stopped', unknown: 'Unknown' }),
 });
 
 /** Readable text of an Endpoint transport state (`open` → `已连接`); unknown values map to the unknown label. */
-export function endpointTransportLabel(state: string | undefined, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function endpointTransportLabel(state: string | undefined, locale: ConsoleLocale = 'zh-CN'): string {
   const labels = ENDPOINT_TRANSPORT_LABELS[locale] ?? ENDPOINT_TRANSPORT_LABELS['zh-CN'];
   return labels[(state ?? 'unknown') as ConsoleEndpointTransportState] ?? labels.unknown;
 }
@@ -846,6 +847,7 @@ export interface ConsoleVenueDefinition {
   readonly floor?: 'moderated' | 'open';
 }
 
+export * from './locale.js';
 export * from './login.js';
 export * from './permissions.js';
 export * from './plugin-permissions.js';

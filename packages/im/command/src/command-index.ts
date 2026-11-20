@@ -7,7 +7,9 @@ import {
   disabledFeatureOwners,
   htmlRendererToken,
   resolveFeatureTargetKey,
-  resolveLocale,
+  formatList,
+  isLocale,
+  projectLocale,
   type CapabilityId,
   type CapabilitySlot,
   type PluginId,
@@ -573,7 +575,7 @@ export class CommandIndex {
     const names = await this.suggest(text, options);
     if (names.length === 0) return undefined;
     const locale = options.locale ?? commandLocale(options.source, options.snapshot ?? this.snapshot);
-    return commandMessages(locale, 'didYouMean', { commands: names.join(commandMessages(locale, 'suggestionSeparator')) });
+    return commandMessages(locale, 'didYouMean', { commands: formatList(locale, names) });
   }
 
   async execute(name: string, args: readonly string[] = [], operationSnapshot: RuntimeSnapshot = this.snapshot): Promise<unknown> {
@@ -1076,9 +1078,10 @@ function commandSuggestionName(record: CommandRecord, locale: Locale): string {
     .map(segment => segment === `$${parameter.name}` ? values.join('|') : segment).join(' ');
 }
 
+/** The message's resolved language, else the same project language messages use ({@link projectLocale}). */
 function commandLocale(source: unknown, snapshot: RuntimeSnapshot): Locale {
   const locale = source && typeof source === 'object' && 'locale' in source ? source.locale : undefined;
-  return resolveLocale(locale ?? (snapshot.config.get(snapshot.root) as { locale?: unknown } | undefined)?.locale);
+  return isLocale(locale) ? locale : projectLocale(snapshot);
 }
 
 export function isCommandIndex(value: unknown): value is CommandIndex {

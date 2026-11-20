@@ -39,6 +39,7 @@ export {
   type KnownConsoleEventType,
   type KnownConsoleEventEnvelope,
   type ParsedConsoleSseFrame,
+  type ConsoleLocale,
 } from "@zhin.js/console-protocol";
 
 export {
@@ -129,7 +130,7 @@ export {
   type UsePluginRpcOptions,
   type UsePluginDataOptions,
 } from './ui/rpc.js';
-export { useLocale, detectLocale, translate, formatClock, type PluginUiLocale, type PluginUiText } from './ui/locale.js';
+export { useLocale, detectLocale, translate, formatClock, type PluginUiText } from './ui/locale.js';
 
 // Declarative page renderer on @zhin.js/console-ui (ADR 0063 P2).
 export {

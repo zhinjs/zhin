@@ -108,7 +108,7 @@ export type ProcessMonitorStatusSnapshot = {
   readonly uptime: string;
   readonly uptimeMs: number;
   /** Both Console locales, so the page never mixes a Chinese duration into an English view. */
-  readonly uptimeI18n: Readonly<Record<'zh-CN' | 'en', string>>;
+  readonly uptimeI18n: Readonly<Record<Locale, string>>;
   /** This run's start (ISO) and why the monitor thinks it started. */
   readonly startedAt: string;
   readonly startReason: StartupReason | 'unknown';
@@ -120,7 +120,7 @@ export type ProcessMonitorStatusSnapshot = {
   readonly crashCount: number;
   readonly totalUptime: string;
   readonly totalUptimeMs: number;
-  readonly totalUptimeI18n: Readonly<Record<'zh-CN' | 'en', string>>;
+  readonly totalUptimeI18n: Readonly<Record<Locale, string>>;
   /** `YYYY-MM-DD` the cumulative counters start from; empty when unknown. */
   readonly trackingSince: string;
   readonly trackingSinceEstimated: boolean;

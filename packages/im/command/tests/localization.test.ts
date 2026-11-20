@@ -1,5 +1,5 @@
 import {
-  childPluginId, createCapabilitySlot, rootPluginId, htmlRendererToken,
+  childPluginId, createCapabilitySlot, rootPluginId, htmlRendererToken, projectLocaleToken,
   type CapabilitySlot, type Locale, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { CommandIndex, commandFeatureId, defineCommand, type CommandDefinition } from '../src/index.js';
@@ -54,6 +54,15 @@ describe('operation-scoped command localization', () => {
     expect((await index.dispatch({ input: '菜单' })).menu?.commands).toEqual([{ name: 'daily list', description: '查看提醒' }]);
     const englishProject = new CommandIndex(slots, snapshot(slots, 'en'), {});
     expect((await englishProject.dispatch({ input: 'menu' })).menu?.locale).toBe('en');
+  });
+
+  it('takes the project language the way messages do: the projected token before the Root configuration (#1250 batch 77)', async () => {
+    const slots = [command('list', defineCommand({ description: '查看提醒', descriptionI18n: { en: 'List reminders' }, execute: () => 'ok' }))];
+    const state = snapshot(slots, 'zh-CN');
+    const projected: RuntimeSnapshot = { ...state, resources: new Map([...state.resources, [root, new Map([[projectLocaleToken.id, 'en']])]]) };
+    const index = new CommandIndex(slots, projected, {});
+    expect((await index.dispatch({ input: 'menu' })).menu?.locale).toBe('en');
+    expect((await index.dispatch({ input: 'menu', source: message('zh-CN') })).menu?.locale).toBe('zh-CN');
   });
 
   it('preserves explicit menu keywords and pins a navigation operation to its original locale', async () => {

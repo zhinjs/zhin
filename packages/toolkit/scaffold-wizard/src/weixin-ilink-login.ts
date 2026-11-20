@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 /**
  * 微信 iLink（ClawBot）扫码登录流程 — 向导内联实现。
@@ -71,7 +72,7 @@ function buildBaseInfo(): Record<string, string> {
  * 微信 iLink 扫码登录：获取二维码 → 展示 → 长轮询直至 confirmed。
  * 成功返回 bot_token 等凭证；过期/超时/网络失败抛 IlinkQrLoginError。
  */
-export async function loginWithIlinkQr(options: IlinkQrLoginOptions, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<IlinkQrLoginResult> {
+export async function loginWithIlinkQr(options: IlinkQrLoginOptions, locale: Locale = 'zh-CN'): Promise<IlinkQrLoginResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const apiBaseUrl = options.baseUrl ?? DEFAULT_BASE_URL;

@@ -1,4 +1,5 @@
-import { sandboxText, type SandboxLocale } from './messages.js';
+import type { ConsoleLocale } from '@zhin.js/client';
+import { sandboxText } from './messages.js';
 import { getSandboxApiBase, getSandboxAuthHeaders } from './sandboxTransport.js';
 
 export type SandboxScope = 'private' | 'group' | 'channel';
@@ -224,7 +225,7 @@ export function deriveTaskRuns(snapshot: AgentTraceSnapshot | null): AgentTaskRu
   }).sort((left, right) => right.startedAt - left.startedAt);
 }
 
-export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null, locale: SandboxLocale = 'zh-CN'): WorkbenchArtifact[] {
+export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null, locale: ConsoleLocale = 'zh-CN'): WorkbenchArtifact[] {
   if (!snapshot) return [];
   const outcomes = new Map<string, AgentTraceEvent>();
   for (const event of snapshot.events) {
@@ -278,7 +279,7 @@ export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null, lo
   }).sort((left, right) => right.recordedAt - left.recordedAt);
 }
 
-export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: AgentRunIdentity | undefined, locale: SandboxLocale = 'zh-CN'): AgentRunStep[] {
+export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: AgentRunIdentity | undefined, locale: ConsoleLocale = 'zh-CN'): AgentRunStep[] {
   if (!snapshot || !run) return [];
   const { turnId } = run;
   const events = snapshot.events.filter((event) => matchesRun(event, run));
@@ -370,7 +371,7 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
   return steps;
 }
 
-export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context: AgentRunReportContext = {}, locale: SandboxLocale = 'zh-CN'): string {
+export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context: AgentRunReportContext = {}, locale: ConsoleLocale = 'zh-CN'): string {
   const runs = deriveTaskRuns(snapshot);
   const requestedRun = context.run;
   const run = requestedRun ? runs.find((candidate) => candidate.id === runIdentityKey(requestedRun)) : runs[0];
@@ -417,7 +418,7 @@ export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context
   return `${lines.join('\n').trim()}\n`;
 }
 
-export function presentTraceEvent(event: AgentTraceEvent, locale: SandboxLocale = 'zh-CN'): { readonly title: string; readonly detail: string; readonly tone: string } {
+export function presentTraceEvent(event: AgentTraceEvent, locale: ConsoleLocale = 'zh-CN'): { readonly title: string; readonly detail: string; readonly tone: string } {
   const data = event.data;
   const tool = String(data.toolName ?? 'tool');
   switch (event.type) {
@@ -443,7 +444,7 @@ export function presentTraceEvent(event: AgentTraceEvent, locale: SandboxLocale 
   }
 }
 
-export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, locale: SandboxLocale = 'zh-CN', signal?: AbortSignal): Promise<AgentTraceSnapshot> {
+export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, locale: ConsoleLocale = 'zh-CN', signal?: AbortSignal): Promise<AgentTraceSnapshot> {
   const base = getSandboxApiBase() || window.location.origin;
   const url = new URL('/api/agent/traces', `${base}/`);
   url.searchParams.set('sessionKey', sessionKey);
@@ -459,7 +460,7 @@ export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, loc
   return body.data;
 }
 
-export async function cancelAgentTask(sessionKey: string, locale: SandboxLocale = 'zh-CN'): Promise<boolean> {
+export async function cancelAgentTask(sessionKey: string, locale: ConsoleLocale = 'zh-CN'): Promise<boolean> {
   const base = getSandboxApiBase() || window.location.origin;
   const response = await fetch(new URL('/api/agent/tasks/cancel', `${base}/`), {
     method: 'POST',
@@ -485,7 +486,7 @@ function usageTotal(data: Record<string, unknown>): number {
   return Number(usageRecord(data).totalTokens ?? 0);
 }
 
-function usageDetail(data: Record<string, unknown>, locale: SandboxLocale = 'zh-CN'): string {
+function usageDetail(data: Record<string, unknown>, locale: ConsoleLocale = 'zh-CN'): string {
   const usage = usageRecord(data);
   return sandboxText(locale, "输入 {0} · 输出 {1}", [Number(usage.promptTokens ?? 0).toLocaleString(locale), Number(usage.completionTokens ?? 0).toLocaleString(locale)]);
 }
@@ -500,7 +501,7 @@ function preview(value: unknown): string {
   try { return JSON.stringify(value).slice(0, 96); } catch { return String(value).slice(0, 96); }
 }
 
-function duration(value: unknown, locale: SandboxLocale = 'zh-CN'): string {
+function duration(value: unknown, locale: ConsoleLocale = 'zh-CN'): string {
   const ms = Number(value);
   return Number.isFinite(ms) ? `${ms.toLocaleString(locale)} ms` : sandboxText(locale, "执行完成");
 }
@@ -533,7 +534,7 @@ function toolStepDetail(toolName: string, args: Record<string, unknown>, fallbac
   return fallback;
 }
 
-function taskStatusText(status: AgentTaskStatus, locale: SandboxLocale = 'zh-CN'): string {
+function taskStatusText(status: AgentTaskStatus, locale: ConsoleLocale = 'zh-CN'): string {
   if (status === 'running') return sandboxText(locale, "运行中");
   if (status === 'completed') return sandboxText(locale, "已完成");
   if (status === 'cancelled') return sandboxText(locale, "已取消");
@@ -551,7 +552,7 @@ function markdownInline(value: string): string {
   return value.replace(/[\\`*_[\]<>]/gu, '\\$&').replace(/\r?\n/gu, ' ');
 }
 
-function reportStepTitle(value: string, locale: SandboxLocale = 'zh-CN'): string {
+function reportStepTitle(value: string, locale: ConsoleLocale = 'zh-CN'): string {
   const tool = /^运行 (.+)$/u.exec(value)?.[1];
   return tool ? sandboxText(locale, "运行 {0}", [markdownInlineCode(tool)]) : markdownInline(value);
 }

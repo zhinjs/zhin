@@ -25,7 +25,6 @@ export const groupRuleMessages = createMessages({
   exemptOwners: { 'zh-CN': '平台群主 / 管理员与 zhin owner', en: 'platform group owners / admins and the zhin owner' },
   exemptExtra: { 'zh-CN': '另加 {count} 人', en: '{count} more people' },
   exemptNone: { 'zh-CN': '无', en: 'none' },
-  listSeparator: { 'zh-CN': '，', en: ', ' },
   cardContent: { 'zh-CN': '说明：', en: 'Notes:' },
   cardApprove: { 'zh-CN': '批准：{command}', en: 'Approve: {command}' },
   cardReject: { 'zh-CN': '驳回：{command}', en: 'Reject: {command}' },

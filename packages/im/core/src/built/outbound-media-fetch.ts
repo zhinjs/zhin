@@ -267,7 +267,7 @@ function hostDetails(url: string): { readonly host?: string } {
 /** The default fetcher: pinned Node transport. Adapters use it unless a test injects another. */
 export const fetchOutboundMedia: OutboundMediaFetcher = createOutboundMediaFetcher();
 
-const NOTICE: Readonly<Record<'zh-CN' | 'en', { readonly labels: Readonly<Record<string, string>>; readonly fallback: string; readonly text: (label: string) => string }>> = {
+const NOTICE: Readonly<Record<Locale, { readonly labels: Readonly<Record<string, string>>; readonly fallback: string; readonly text: (label: string) => string }>> = {
   'zh-CN': {
     labels: { image: '图片', audio: '语音', record: '语音', video: '视频', file: '文件' },
     fallback: '附件',

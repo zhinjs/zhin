@@ -97,6 +97,10 @@ preferredAliasI18n: { en: 'earthquake subscribe' },
 
 `createMessages()` 要求每个 key 同时提供两种语言，且占位符名称一致。替换只执行一次；用户内容中的 `{name}` 不会再次展开。结果是普通文本，HTML 转义继续由 JSX/渲染器负责。
 
+列举多项时用 `formatList(locale, items)`（`zhin.js/i18n`），不要手写分隔符：中文用 `、`，英文用 `, `，例如 `formatList('en', ['a', 'b'])` 得到 `a, b`。较长的短语传 `{ separator: 'comma' }`（`，` / `, `），分句传 `{ separator: 'semicolon' }`（`；` / `; `）。它只做拼接，英文不会加 `and`，也不转义或排序。
+
+语言值一律用 `isLocale()` 判断、`resolveLocale()` 回退（不支持的值得到 `zh-CN`），不要写 `locale === 'en' ? 'en' : 'zh-CN'` 或按 `en` 前缀猜测。命令与消息使用同一个项目语言：先取当前 generation 投影的项目语言，再取根配置的 `locale`。Console 接口的 `?locale=` 只接受一个 `zh-CN` 或 `en`；缺省时使用默认语言（页面列表与插件市场缺省时显示未翻译的名称），其它值返回 400（`invalid_locale`）。
+
 配置 Schema 可声明显示翻译：
 
 ```ts

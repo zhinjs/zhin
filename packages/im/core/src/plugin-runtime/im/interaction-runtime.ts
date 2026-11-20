@@ -1,6 +1,5 @@
-import { resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
+import { projectLocale, resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from '../../built/interaction-messages.js';
-import { projectLocale } from './inbound-spine.js';
 import {
   conversationRefKey,
   type ConversationRef,

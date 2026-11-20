@@ -8,6 +8,7 @@ import { createConfigDocument, HOST_CONFIG_KEYS, JsonConfigDocument, NodePackage
 import {
   featureId, pluginVerificationToken, rootPluginId, readPluginConfigurationMap,
   type SnapshotReader, type PluginNodeSnapshot, type RuntimeSnapshot, type RuntimeConfigDocument,
+  type Locale,
 } from '@zhin.js/plugin-runtime';
 import type {
   PluginDependencyCheck, PluginInspectOptions, PluginInstallPlan, PluginManagementPort, PluginManagementState,
@@ -848,7 +849,7 @@ function verificationChecks(host?: import('@zhin.js/plugin-runtime').PluginVerif
   if (new Set(checks.map(check => check.id)).size !== checks.length) throw new Error('Duplicate plugin verification check id');
   return Object.freeze(checks);
 }
-function verificationTranslations<T extends boolean>(value: unknown, list: T, expectedLength?: number): Readonly<Partial<Record<'zh-CN' | 'en', T extends true ? readonly string[] : string>>> | undefined {
+function verificationTranslations<T extends boolean>(value: unknown, list: T, expectedLength?: number): Readonly<Partial<Record<Locale, T extends true ? readonly string[] : string>>> | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid plugin verification translations');
   const result: Record<string, string | readonly string[]> = {};
@@ -859,7 +860,7 @@ function verificationTranslations<T extends boolean>(value: unknown, list: T, ex
     if (list ? !Array.isArray(entry) || entry.length !== expectedLength || !entry.every(nonempty) : !nonempty(entry)) throw new Error('Invalid plugin verification translations');
     result[locale] = Array.isArray(entry) ? Object.freeze([...entry]) : entry as string;
   }
-  return Object.freeze(result) as Readonly<Partial<Record<'zh-CN' | 'en', T extends true ? readonly string[] : string>>>;
+  return Object.freeze(result) as Readonly<Partial<Record<Locale, T extends true ? readonly string[] : string>>>;
 }
 function checksRevision(incarnation: string, owner: string | undefined, checks: readonly import('@zhin.js/plugin-runtime').PluginVerificationCheck[]) {
   return createHash('sha256').update(JSON.stringify([incarnation, owner, checks])).digest('hex');

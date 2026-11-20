@@ -1,4 +1,5 @@
-import { sandboxText, type SandboxLocale } from './messages.js';
+import type { ConsoleLocale } from '@zhin.js/client';
+import { sandboxText } from './messages.js';
 import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import {
     sandboxInboundFaceSegment,
@@ -15,7 +16,7 @@ export interface MessageSegment {
 }
 
 export interface RichTextEditorProps {
-    locale?: SandboxLocale
+    locale?: ConsoleLocale
     placeholder?: string
     onSend?: (text: string, segments: MessageSegment[]) => void
     onChange?: (text: string, segments: MessageSegment[]) => void

@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
@@ -344,7 +345,7 @@ export const ADAPTERS: AdapterDefinition[] = [
 /**
  * 适配器选择与 Endpoint 配置引导向导
  */
-export async function configureAdapters(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AdapterSetupResult> {
+export async function configureAdapters(locale: Locale = 'zh-CN'): Promise<AdapterSetupResult> {
   console.log('');
   console.log(chalk.blue(wizardText(locale, "🔌 配置聊天适配器")));
   console.log(chalk.gray(wizardText(locale, "  Sandbox 适合本地调试；生产环境请额外勾选目标 IM 平台。")));
@@ -550,7 +551,7 @@ export function buildFieldBasedInstanceConfig(adapter: AdapterDefinition, values
 /**
  * 获取适配器配置需要写入 .env 的环境变量文本
  */
-export function generateAdapterEnvVars(result: AdapterSetupResult, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function generateAdapterEnvVars(result: AdapterSetupResult, locale: Locale = 'zh-CN'): string {
   const entries = Object.entries(result.envVars);
   if (entries.length === 0) return '';
 
@@ -585,7 +586,7 @@ export function collectAdapterPluginManifest(result: AdapterSetupResult): Array<
 /**
  * 获取适配器配置后的简要说明（用于初始化完成提示）
  */
-export function getAdapterSetupNotes(result: AdapterSetupResult, locale: 'zh-CN' | 'en' = 'zh-CN'): string[] {
+export function getAdapterSetupNotes(result: AdapterSetupResult, locale: Locale = 'zh-CN'): string[] {
   const notes: string[] = [];
   for (const instance of result.instances) {
     const context = instance.instanceKey;
@@ -635,7 +636,7 @@ export function getAdapterSetupNotes(result: AdapterSetupResult, locale: 'zh-CN'
  * field-based adapters use their defaults (secrets become `${ENV}` references with empty `.env`
  * values); adapters with a dedicated configurer keep their own credential questions.
  */
-export async function buildDefaultAdapterSetup(values: readonly string[], locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AdapterSetupResult> {
+export async function buildDefaultAdapterSetup(values: readonly string[], locale: Locale = 'zh-CN'): Promise<AdapterSetupResult> {
   const result: AdapterSetupResult = { packages: [], plugins: [], instances: [], envVars: {}, requiresDatabase: false };
   for (const value of values) {
     const adapter = ADAPTERS.find((entry) => entry.value === value);

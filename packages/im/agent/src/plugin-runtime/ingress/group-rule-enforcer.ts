@@ -64,7 +64,7 @@ import {
   type ToolHardGateResult,
 } from '../../security/index.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { Locale } from '@zhin.js/plugin-runtime';
+import { formatList, type Locale } from '@zhin.js/plugin-runtime';
 import { cardLine, cardLiteral, joinCardLines, quotedLines, type CardLine, type CardValues } from '../../init/card-text.js';
 import { managementCommandReference, type AgentCommandPresentation } from '../../init/command-presentation.js';
 import { checkControlAtIngress } from './control-gate.js';
@@ -880,10 +880,10 @@ export function formatGroupRuleCard(
   const locale = presentation.locale;
   const code = groupRuleHashShort(rule.contentHash);
   const extraExempt = rule.exempt.userIds.length;
-  const exempt = [
+  const exempt = formatList(locale, [
     rule.exempt.ownerAndAdmins ? t(locale, 'exemptOwners') : undefined,
     extraExempt ? t(locale, 'exemptExtra', { count: extraExempt }) : undefined,
-  ].filter(Boolean).join(t(locale, 'listSeparator')) || t(locale, 'exemptNone');
+  ].filter((part): part is string => !!part), { separator: 'comma' }) || t(locale, 'exemptNone');
   // The rule's notes are user / model text: a quoted, literal block under the header, never compiled and
   // never a line of its own that could read like the card's command lines.
   return joinCardLines([
