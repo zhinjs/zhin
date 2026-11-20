@@ -6,9 +6,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  findLatestReleasedVersions,
+  findMinorLineViolations,
   findMissingVersionTags,
+  findPrereleaseReleases,
+  findStaleApprovals,
+  findUnapprovedMinorReleases,
   findVersionedReleaseBaseline,
   findUncoveredPackageChanges,
+  isMinorReleaseVersion,
 } from './release-version-coverage.mjs';
 import { findPlannedCollisions, readRegistryVersions } from './registry-version-collisions.mjs';
 
@@ -125,8 +131,7 @@ function readChangesetDeclarations() {
   return declarations;
 }
 
-function readWorkspacePackagesWithVersionTags(plannedPackages, approvedMinors) {
-  const packages = listWorkspacePackages();
+function readVersionTags() {
   const tags = spawnSync(
     'git',
     ['for-each-ref', '--format=%(objectname) %(*objectname) %(refname:strip=2)', 'refs/tags'],
@@ -147,6 +152,28 @@ function readWorkspacePackagesWithVersionTags(plannedPackages, approvedMinors) {
       tagToCommit.set(tagName, peeled || obj);
     }
   }
+  // Commit date of each tag (peeled for annotated tags): the most recently released version is
+  // the baseline, so tags of an abandoned, higher-numbered version line (the pre-1.x
+  // architecture's `@zhin.js/cli@4.0.1`, released before the 1.x reset) do not set it.
+  const dates = spawnSync(
+    'git',
+    ['for-each-ref', '--format=%(committerdate:unix) %(*committerdate:unix) %(refname:strip=2)', 'refs/tags'],
+    { cwd: root, encoding: 'utf8' },
+  );
+  if (dates.status !== 0) {
+    process.stderr.write(dates.stdout);
+    process.stderr.write(dates.stderr);
+    process.exit(dates.status ?? 1);
+  }
+  const tagDates = new Map();
+  for (const line of dates.stdout.trim().split('\n').filter(Boolean)) {
+    const match = /^(\d*)\s+(\d*)\s+(.+)$/.exec(line);
+    if (match) tagDates.set(match[3], Number(match[2] || match[1]) || undefined);
+  }
+  return { existingTags, tagToCommit, tagDates };
+}
+
+function readWorkspacePackagesWithVersionTags({ packages, existingTags, tagToCommit }, plannedPackages, approvedMinors) {
   const evidenceCache = new Map();
   const versionedBaselines = new Map();
   for (const pkg of packages) {
@@ -212,8 +239,12 @@ if (versionPolicy.defaultReleaseType !== 'patch') {
 }
 
 /**
- * `approvedNonPatchReleases`: `[{ package, type: 'minor', reason }]`. Only listed packages may
- * release a minor; a major is never allowed, approved or not. Clear the list after publishing.
+ * `approvedNonPatchReleases`: `[{ package, type: 'minor', version, reason }]`, at most one entry
+ * per package. `version` is the one approved target (`X.Y.0`): the release plan may bump
+ * `package` as a minor only to exactly that version, and a version commit may carry it before
+ * its tag exists. A major is never allowed, approved or not. Delete an entry once its version
+ * is published — stale or unused entries fail this check (see `findStaleApprovals`), so an old
+ * approval can never authorize a new minor.
  */
 function readApprovedMinors(policy) {
   const approvals = policy.approvedNonPatchReleases ?? [];
@@ -229,15 +260,17 @@ function readApprovedMinors(policy) {
       problems.push(`${where} must be an object`);
       continue;
     }
-    const { package: name, type, reason } = approval;
+    const { package: name, type, version, reason } = approval;
     if (typeof name !== 'string' || !name.trim()) problems.push(`${where}.package must be a package name`);
     else if (approved.has(name)) problems.push(`${where}.package ${name} is listed twice`);
     if (type !== 'minor') problems.push(`${where}.type must be "minor" (major releases are never allowed)`);
+    if (version === undefined) problems.push(`${where}.version is required (the approved target version, e.g. "1.14.0")`);
+    else if (!isMinorReleaseVersion(version)) problems.push(`${where}.version must be a minor release version X.Y.0 (got ${JSON.stringify(version)})`);
     if (typeof reason !== 'string' || !reason.trim()) problems.push(`${where}.reason must explain the breaking change`);
     for (const key of Object.keys(approval)) {
-      if (!['package', 'type', 'reason'].includes(key)) problems.push(`${where} has unknown key ${key}`);
+      if (!['package', 'type', 'version', 'reason'].includes(key)) problems.push(`${where} has unknown key ${key}`);
     }
-    if (typeof name === 'string' && name.trim() && type === 'minor') approved.set(name, reason);
+    if (typeof name === 'string' && name.trim() && type === 'minor' && !approved.has(name)) approved.set(name, { version, reason });
   }
   if (problems.length > 0) {
     console.error('Invalid .changeset/version-policy.json:');
@@ -247,8 +280,26 @@ function readApprovedMinors(policy) {
   return approved;
 }
 
+// Prerelease mode (`changeset pre enter`) is not supported: the version policy, approvals
+// (`X.Y.0` only), tag baselines and registry checks all assume stable `X.Y.Z` versions.
+const PRERELEASE_UNSUPPORTED = 'Prereleases are not supported by this repository\'s release policy '
+  + '(approvals, tags and registry checks only handle stable X.Y.Z versions; see docs/contributing/publishing.md).';
+if (fs.existsSync(path.join(changesetDir, 'pre.json'))) {
+  console.error(`${PRERELEASE_UNSUPPORTED}\n- .changeset/pre.json exists: run \`pnpm changeset pre exit\` and delete .changeset/pre.json, then release stable versions.`);
+  process.exit(1);
+}
+
+/** A complete approval entry to paste into approvedNonPatchReleases (the reason is a placeholder). */
+function approvalEntry(name, version) {
+  const reason = '所有者已批准（zhinjs/zhin#<issue>，<YYYY-MM-DD>）：<破坏性变更说明>';
+  return `{ "package": ${JSON.stringify(name)}, "type": "minor", "version": ${JSON.stringify(version)}, "reason": ${JSON.stringify(reason)} }`;
+}
+
 const declarations = readChangesetDeclarations();
 const approvedMinors = readApprovedMinors(versionPolicy);
+
+// Declarations only name the package; the approved target version is matched against the
+// computed release plan below.
 
 const forbiddenDeclarations = declarations.filter((declaration) => declaration.type === 'major'
   || (declaration.type === 'minor' && !approvedMinors.has(declaration.package)));
@@ -280,20 +331,95 @@ try {
     }
     plan = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
   }
-  // Covers dependents bumped by Changesets too: only approved packages may go minor, nothing major.
-  const forbiddenReleases = plan.releases
-    .filter((release) => release.type === 'major' || (release.type === 'minor' && !approvedMinors.has(release.name)))
-    .map((release) => `${release.name} (${release.type}: ${release.oldVersion} -> ${release.newVersion})`);
+  const prereleases = findPrereleaseReleases(plan.releases);
+  if (prereleases.length > 0) {
+    console.error(PRERELEASE_UNSUPPORTED);
+    for (const release of prereleases) {
+      console.error(`- ${release.name}: ${release.oldVersion} -> ${release.newVersion} (use a stable X.Y.Z version in package.json)`);
+    }
+    process.exit(1);
+  }
 
-  if (forbiddenReleases.length > 0) {
+  // Covers dependents bumped by Changesets too: nothing major, and a minor only to the exact
+  // version its approval names.
+  const majorReleases = plan.releases.filter((release) => release.type === 'major');
+  const unapprovedMinors = findUnapprovedMinorReleases({ releases: plan.releases, approvedMinors });
+  if (majorReleases.length > 0 || unapprovedMinors.length > 0) {
     console.error('Release plan contains forbidden bumps (unapproved minor, or any major):');
-    for (const release of forbiddenReleases) console.error(`- ${release}`);
+    for (const release of majorReleases) {
+      console.error(`- ${release.name} (major: ${release.oldVersion} -> ${release.newVersion})`);
+    }
+    for (const release of unapprovedMinors) {
+      const approval = release.approvedVersion === undefined
+        ? 'no approval'
+        : `approval is for ${release.approvedVersion}`;
+      console.error(`- ${release.name} (minor: ${release.oldVersion} -> ${release.newVersion}; unapproved minor, ${approval}). `
+        + 'Only with the owner\'s approval, put this entry in approvedNonPatchReleases (replacing any other entry for the package) '
+        + `and fill in the reason:\n    ${approvalEntry(release.name, release.newVersion)}`);
+    }
     process.exit(1);
   }
 
   const plannedReleases = plan.releases.filter((release) => release.type !== 'none');
   const plannedPackages = new Set(plannedReleases.map((release) => release.name));
-  const coverage = readWorkspacePackagesWithVersionTags(plannedPackages, approvedMinors);
+  const workspacePackages = listWorkspacePackages();
+  const { existingTags, tagToCommit, tagDates } = readVersionTags();
+  const currentVersions = new Map(workspacePackages.map((pkg) => [pkg.name, pkg.version]));
+
+  // The plan's type is not enough: a patch planned on top of a hand-edited package.json can
+  // still leave the latest published minor line. Compare every planned version with the
+  // package's most recently released stable tag instead (packages with no tag are new and
+  // skipped).
+  const directories = new Map(workspacePackages.map((pkg) => [pkg.name, pkg.directory]));
+  const lineEvidence = new Map();
+  const lineViolations = findMinorLineViolations({
+    releases: plannedReleases,
+    latestReleased: findLatestReleasedVersions(tagDates),
+    approvedMinors,
+    currentVersions,
+    hasVersionCommit: (name, version) => directories.has(name) && Boolean(findVersionedReleaseBaseline({
+      root, directory: directories.get(name), name, version, evidenceCache: lineEvidence, approvedMinors,
+    })),
+  });
+  if (lineViolations.length > 0) {
+    console.error('Release plan leaves the latest published minor line without an approval:');
+    for (const hit of lineViolations) {
+      if (hit.problem === 'major') {
+        console.error(`- ${hit.name}: ${hit.oldVersion} -> ${hit.newVersion}, latest tag ${hit.name}@${hit.released}; `
+          + 'changing the major version is never allowed. Restore package.json to the released major.');
+      } else {
+        console.error(`- ${hit.name}: ${hit.oldVersion} -> ${hit.newVersion}, latest tag ${hit.name}@${hit.released}; `
+          + `a new minor line needs an approval for exactly ${hit.newVersion}`
+          + `${hit.approvedVersion === undefined ? '' : ` (approval is for ${hit.approvedVersion})`}. `
+          + 'Do not hand-edit package.json into a new minor: keep it on the released line and declare a minor changeset '
+          + 'with an approved X.Y.0 target (for a version collision, set package.json just below the approved target, '
+          + 'see docs/contributing/publishing.md).');
+      }
+    }
+    process.exit(1);
+  }
+
+  const staleApprovals = findStaleApprovals({
+    approvedMinors,
+    plannedMinors: new Map(plannedReleases
+      .filter((release) => release.type === 'minor')
+      .map((release) => [release.name, release.newVersion])),
+    currentVersions,
+    existingTags,
+  });
+  if (staleApprovals.length > 0) {
+    console.error('Stale entries in .changeset/version-policy.json approvedNonPatchReleases (delete them):');
+    for (const stale of staleApprovals) console.error(`- ${stale.package}@${stale.version} ${stale.problem}`);
+    console.error('An approval only covers one unpublished version. Once publishing has tagged it, delete the entry '
+      + '(usually in the same commit that syncs main back into the feature branch); a new minor needs a new approval.');
+    process.exit(1);
+  }
+
+  const coverage = readWorkspacePackagesWithVersionTags(
+    { packages: workspacePackages, existingTags, tagToCommit },
+    plannedPackages,
+    approvedMinors,
+  );
   const uncovered = findUncoveredPackageChanges({
     packages: coverage.packages,
     plannedPackages,
