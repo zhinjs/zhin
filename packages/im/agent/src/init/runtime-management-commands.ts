@@ -93,6 +93,19 @@ function described(key: keyof typeof descriptions): Pick<CommandDefinition, 'des
   return { description: descriptions[key]['zh-CN'], descriptionI18n: { en: descriptions[key].en } };
 }
 
+/** A management command declaration: a plain {@link CommandDefinition} without the runtime brand. */
+type ManagementCommandInput = Omit<CommandDefinition, '$feature' | '$parameter'>;
+/** What a management command's `execute` receives. */
+type ManagementCommandContext = Parameters<CommandDefinition['execute']>[0];
+
+/**
+ * `defineCommand` (same runtime validation and branding) under a non-generic signature. The
+ * authoring overload infers params / options / result across a union over every registered adapter;
+ * these commands are stored as plain `CommandDefinition`s anyway, so that inference only costs type
+ * checker time and memory (it pushed the repository type-check past the CI heap limit).
+ */
+const define = defineCommand as unknown as (definition: ManagementCommandInput) => CommandDefinition;
+
 type CommandInput = Pick<CommandContext, 'input'>;
 type CommandRun = Pick<CommandContext, 'signal' | 'has' | 'use'> & CommandInput;
 
@@ -145,7 +158,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
   const commands: RuntimeManagementCommand[] = [
     {
       name: 'models',
-      definition: defineCommand({
+      definition: define({
         ...described('models'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         execute: command => fromBot('models', command) ? undefined : open(command, async operation => {
           const profiles = await listLanguageProfiles(operation);
@@ -155,7 +168,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
     },
     {
       name: 'health',
-      definition: defineCommand({
+      definition: define({
         ...described('health'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         execute: command => fromBot('health', command) ? undefined : open(command, async operation => {
           const profiles = await listLanguageProfiles(operation);
@@ -165,7 +178,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
     },
     {
       name: 'tree',
-      definition: defineCommand({
+      definition: define({
         ...described('tree'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         params: { index: { type: 'integer', optional: true, min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
         execute: command => fromBot('tree', command) ? undefined : open(command, async operation => {
@@ -182,16 +195,17 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
     },
     {
       name: 'fork',
-      definition: defineCommand({
+      definition: define({
         ...described('fork'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         params: { index: { type: 'integer', min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
         execute: command => fromBot('fork', command) ? undefined : open(command, operation =>
-          withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, command.params.index, command.locale))),
+          // `index` is a required `integer` param: the command module parses it before `execute` runs.
+          withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, command.params.index as number, command.locale))),
       }),
     },
     {
       name: 'compact',
-      definition: defineCommand({
+      definition: define({
         ...described('compact'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         execute: command => fromBot('compact', command) ? undefined : open(command, async operation => {
           const result = await withModelScope(operation, () => host.zhinAgent.compactSession(operation.sessionKey, command.locale));
@@ -201,7 +215,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
     },
     {
       name: 'reset',
-      definition: defineCommand({
+      definition: define({
         // No permit: open to everyone, so the menu lists it for everyone. A trusted sender archives
         // the session the message's AI turn would use (in a live room the shared scene task too),
         // always, with a fixed confirmation; anyone else gets exactly the clear command (`/clear`),
@@ -235,16 +249,16 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
  * private chat, and `memory forget` answers with a count, never with memory content.
  */
 function memoryCommands(runtime: SemanticMemoryRuntime): RuntimeManagementCommand[] {
-  const scopeOf = (command: CommandContext): Readonly<{ scope: 'user'; scope_key: string }> | string => {
+  const scopeOf = (command: ManagementCommandContext): Readonly<{ scope: 'user'; scope_key: string }> | string => {
     if (!runtime.active) return t(command.locale, 'memoryUnavailable');
     const senderId = inputOf(command).sender?.id?.trim();
     return senderId ? { scope: 'user', scope_key: senderId } : t(command.locale, 'memoryIdentity');
   };
-  const forgetCommand = (command: CommandContext) => command.formatCommand('memory forget') ?? 'memory forget';
+  const forgetCommand = (command: ManagementCommandContext) => command.formatCommand('memory forget') ?? 'memory forget';
   return [
     {
       name: 'memory',
-      definition: defineCommand({
+      definition: define({
         ...described('memory'), options: {},
         execute: async command => {
           if (fromBot('memory', command)) return undefined;
@@ -264,7 +278,7 @@ function memoryCommands(runtime: SemanticMemoryRuntime): RuntimeManagementComman
     },
     {
       name: 'memory/forget',
-      definition: defineCommand({
+      definition: define({
         ...described('forget'), options: {},
         execute: async command => {
           if (fromBot('memory forget', command)) return undefined;
