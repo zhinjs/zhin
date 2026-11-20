@@ -10,6 +10,7 @@ import {
   resolveOutboundCapabilities,
 } from '../../index.js';
 import { resolveToolHardGateImApproval } from '../../security/index.js';
+import { welcomePartsContent } from '../../session-ops.js';
 import type { AgentRuntime } from '../index.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { flattenOutputElements } from './content.js';
@@ -328,9 +329,9 @@ export function createMemberLifecycle(input: Readonly<{
     reader: () => im.conversationEventReader,
     decisionEvents: () => agent.agent.getDecisionEvents?.(),
     send: async (conversation, parts) => {
-      const content = parts.map((part) => (part.type === 'text'
-        ? { type: 'text', data: { text: part.text } }
-        : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
+      // #1250: the operator's template text is an outbound template; nicknames / group names filled
+      // into it are data, sent as untrusted text so `${bot.menu}` in a nickname stays as written.
+      const content = welcomePartsContent(parts);
       if (content.length === 0) return { status: 'suppressed' as const };
       return deliveryOutcomeFromReceipt(await im.send({ conversation, requester: rootPluginId(), content }));
     },

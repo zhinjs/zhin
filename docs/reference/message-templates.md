@@ -12,7 +12,14 @@
 
 - **只做路径查找**：占位符只能是属性路径（`a.b.c`、`a[0].b`），按白名单字段逐级取自有数据属性。`${1+1}`、`${fn()}`、未知字段、值为空或不存在的路径都**原样保留**在文本里，不报错、不执行任何代码。
 - **只扫描一次**：替换进去的值不会再被当成模板。用户可控的内容（昵称、消息正文、正则捕获组）只当数据：昵称写成 `${bot.menu}` 的新成员，欢迎语里出现的就是字面的 `${bot.menu}`。
-- **不受信任的内容不展开**：标记为不受信任来源的内容（`untrustedContent(...)`，例如 Agent 模型输出、问答回答里的正则捕获组）里的 `${…}` 不做替换。
+- **只有作者撰写的文本会展开**：插件代码与运营者配置里写的文本才是模板。经 `incoming` 传入的数据（`sender`、`message`）只作为填进去的值；标记为不受信任来源的内容（`untrustedContent(...)`，例如 Agent 模型输出、问答回答里的正则捕获组、Agent 入群欢迎里的昵称与群名）里的 `${…}` 不做替换。
+- **把用户内容拼进自己的文本时必须分段**：插件把存储的用户内容（问答、关键词、昵称、错误信息里引用的用户输入……）拼进自己的回复再发出时，拼进去的部分必须用 `untrustedContent(...)` 单独分段，否则整段文本都会当模板展开——教会 `你好|你好 ${sender.name}` 后，确认消息会显示成「你好 Admin」。只有插件自己的文案留在模板文本里：
+
+  ```ts
+  import { untrustedContent } from '@zhin.js/core/runtime';
+  const trust = { source: 'my-plugin.echo' };
+  return ['已保存：「', untrustedContent(answer, trust), '」，发送 ${bot.menu} 查看'];
+  ```
 - **按需计算**：文本里没有 `${` 时什么都不算；前缀和菜单在第一次遇到占位符时算一次，`${command.*}` 只在文本里写了它时才列命令。
 
 ## 字段
@@ -25,7 +32,7 @@
 | `${bot.endpoint}` | 发送账号的 Endpoint 标识（`conversation.endpoint.id`） |
 | `${bot.endpointId}` | 平台报告的账号实例名（如 ICQQ 的 uin、sandbox 的 bot 名）；只在回复带有它的入站消息时有 |
 | `${bot.prefix}` | 发送账号的命令前缀；没有前缀时为空字符串 |
-| `${bot.menu}` | 发送账号的菜单入口：前缀 + 菜单关键词（根配置 `menuKeyword`，默认「菜单」/ `menu`）；`menuKeyword: false` 关闭菜单时原样保留 |
+| `${bot.menu}` | 发送账号的菜单入口：前缀 + 菜单关键词（根配置 `menuKeyword`，默认「菜单」/ `menu`）；菜单关键词按这次发送的语言取（`$reply` 用入站消息的语言，与 `message.commandMenu` 一致；没有语言时用项目语言）。`menuKeyword: false` 关闭菜单时**原样保留**（不替换成空串，以免句子缺了一半而没人察觉），并在日志里告警一次（`reason=menu_disabled`），提示把它从文本里删掉或打开菜单 |
 | `${conversation.kind}` / `${conversation.id}` | 会话类型（`private` / `group` / `channel`）与会话 id |
 | `${sender.id}` / `${sender.name}` / `${sender.roles}` | 这次发送所回应的人（见下方「主体」）；定时任务、跨会话发送时没有 |
 | `${message.content}` | 入站消息的纯文本（由事件触发的发送为空） |
@@ -57,6 +64,12 @@ await this.use(outboundMessageToken).send({
 - 命令名里的 `-` 写成 `_`：`commands/stats-rank` → `${command.stats_rank}`（插件本地名不允许 `_`，所以不会撞名）。以数字开头的段无法写成路径，不提供。
 - 只列发出消息的插件自己的命令（最多 256 条）；别的插件的命令、在该会话被关闭的插件的命令、不存在的路径都原样保留。
 - 一个命令如果还有子命令，只能通过子命令访问；`${command}`、`${command.group}` 这类非叶子路径原样保留。
+
+## 旧写法
+
+旧的 `{name}`、`{id}`、`{sender}`、`{sender.id}`、`{time}`、`{date}` 以及单段的 `${menu}`、`${prefix}` 等不再展开，也不会自动迁移，会按原样发出。group-suite 在首次用到时（入群欢迎、群里第一条消息、问答命中或教学时）检测欢迎语与已存问答里的旧写法，按账号和文本各告警一次，并给出对应的新写法（如 `{name} → ${sender.name}`、`${menu} → ${bot.menu}`）。
+
+Agent 会话欢迎（Console「会话运营」，ADR 0037）沿用自己的 `{members}` / `{nickname}` / `{group}` / `{rules_url}` 变量：它们可以一次欢迎多名成员，`${sender.*}` 只能表示一个人，且已存模板与 Console 预览依赖这套变量。变量填进去的昵称、群名、群规链接按数据发送（不受信任分段），其余运营者写的文本仍是出站模板，可以写 `${bot.menu}`。
 
 ## 与配置文件里的环境变量引用
 

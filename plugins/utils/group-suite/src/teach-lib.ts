@@ -9,6 +9,8 @@ import {
 } from './shared-runtime.js';
 import type { GroupSuiteRuntime } from './runtime-state.js';
 import { untrustedContent, type SendContent } from '@zhin.js/core/runtime';
+import { createEcho, echoReply } from './echo.js';
+import { hintLegacyPlaceholders } from './welcome-template.js';
 
 export const TEACH_USAGE_HINT = '格式：关键词 回答，或 问题|答案';
 
@@ -197,7 +199,7 @@ export async function teachAdd(
   payload: string,
   regex = false,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return t(input.locale, 'teachRetry');
   if (regex && !cfg.teachAllowRegex) return t(input.locale, 'regexDisabled');
@@ -214,7 +216,8 @@ export async function teachAdd(
     try {
       new RegExp(question, 'i');
     } catch (e) {
-      return t(input.locale, 'invalidRegex', { error: (e as Error).message });
+      // The engine's message quotes the pattern: user text, so it is not a template.
+      return echoReply(mark => t(input.locale, 'invalidRegex', { error: mark((e as Error).message) }));
     }
     if (!isSafeRegex(question)) return t(input.locale, 'unsafeRegex');
   }
@@ -239,6 +242,7 @@ export async function teachAdd(
   })) as Record<string, unknown>[];
 
   if (duplicate.length > 0 && !regex) {
+    hintLegacyPlaceholders('teach', input.conversation?.endpoint.id ?? '', answer);
     await QA.update({ answer, updated_at: ts() }).where(
       qaWhereKey(duplicate[0] as {
         question: string;
@@ -247,9 +251,11 @@ export async function teachAdd(
         is_regex?: number | boolean;
       }),
     );
-    return t(input.locale, 'teachUpdated', { question, answer });
+    // The stored answer is a template for the auto-reply, but quoted here it is shown as written.
+    return echoReply(mark => t(input.locale, 'teachUpdated', { question: mark(question), answer: mark(answer) }));
   }
 
+  hintLegacyPlaceholders('teach', input.conversation?.endpoint.id ?? '', answer);
   await QA.insert({
     question,
     answer,
@@ -263,9 +269,8 @@ export async function teachAdd(
     updated_at: ts(),
   });
 
-  return regex
-    ? t(input.locale, 'regexLearned', { question, answer })
-    : t(input.locale, 'teachLearned', { question, answer });
+  return echoReply(mark => t(input.locale, regex ? 'regexLearned' : 'teachLearned',
+    { question: mark(question), answer: mark(answer) }));
 }
 
 export async function teachList(
@@ -273,7 +278,7 @@ export async function teachList(
   cfg: GroupSuiteConfig,
   page = 1,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return t(input.locale, 'teachDb');
   const safePage = Math.max(1, page);
@@ -287,20 +292,21 @@ export async function teachList(
   const pageNum = Math.min(safePage, totalPages);
   const start = (pageNum - 1) * cfg.teachPageSize;
   const pageItems = allItems.slice(start, start + cfg.teachPageSize);
+  const echo = createEcho();
   const lines = pageItems.map((item, i) => {
     const prefix = item.is_regex ? t(input.locale, 'regex') : t(input.locale, 'exact');
-    const q = item.is_regex ? `/${item.question}/` : item.question;
-    return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
+    const q = item.is_regex ? `/${echo.mark(item.question)}/` : echo.mark(item.question);
+    return `${start + i + 1}. ${prefix} ${q} → ${echo.mark(item.answer)}`;
   });
   const header = t(input.locale, 'teachTitle');
-  return `${t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length })}\n${hint}`;
+  return echo.content(`${t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length })}\n${hint}`);
 }
 
 export async function teachForget(
   input: MessageInput,
   questionRaw: string,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return t(input.locale, 'teachDb');
   const question = questionRaw.trim();
@@ -311,7 +317,7 @@ export async function teachForget(
     context_type: ctxType,
     context_id: ctxId,
   })) as Record<string, unknown>[];
-  if (items.length === 0) return t(input.locale, 'questionMissing', { question });
+  if (items.length === 0) return echoReply(mark => t(input.locale, 'questionMissing', { question: mark(question) }));
   await QA.delete().where(
     qaWhereKey(items[0] as {
       question: string;
@@ -320,7 +326,7 @@ export async function teachForget(
       is_regex?: number | boolean;
     }),
   );
-  return t(input.locale, 'questionRemoved', { question });
+  return echoReply(mark => t(input.locale, 'questionRemoved', { question: mark(question) }));
 }
 
 /**
@@ -364,6 +370,8 @@ export async function tryTeachReply(
   }
 
   const answer = String(matched.answer ?? '');
+  // Old `{name}` / `{time}` / `${menu}` answers are sent as written; tell the operator once (#1250).
+  hintLegacyPlaceholders('teach', input.conversation?.endpoint.id ?? '', answer);
   const m = matched.is_regex ? teachRegex(String(matched.question))?.exec(content) : undefined;
   return processAnswer(answer, input.locale, m || undefined);
 }

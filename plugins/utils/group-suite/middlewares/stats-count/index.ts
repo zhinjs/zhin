@@ -1,7 +1,8 @@
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { groupSuiteConfigFor, type GroupSuiteConfig } from '../../src/config.js';
-import { hintWelcomePrefix } from '../../src/welcome-template.js';
+import { hintLegacyPlaceholders, hintWelcomePrefix } from '../../src/welcome-template.js';
+import { groupSuiteSendsWelcome } from '../../src/welcome-scope.js';
 import { recordMessage } from '../../src/stats-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
@@ -15,11 +16,15 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
       recordMessage(context.input, runtime);
     }
     // #1250: the first group message of an account carries its real command prefix; no public API
-    // gives it earlier, so the welcome-text check runs here once per account and text.
-    const prefix = context.input.commandPrefix;
-    if (prefix && context.input.conversation.kind === 'group') {
-      const { welcomeMessage } = groupSuiteConfigFor(context, context.input);
-      hintWelcomePrefix(context.input.conversation.endpoint.id, welcomeMessage, prefix);
+    // gives it earlier, so the welcome-text checks run here once per account and text — only for a
+    // group this plugin actually welcomes (in welcomeConversations, not taken over by the Agent).
+    const conversation = context.input.conversation;
+    if (conversation.kind === 'group') {
+      const { welcomeMessage, welcomeConversations } = groupSuiteConfigFor(context, context.input);
+      if (welcomeMessage && groupSuiteSendsWelcome(context, welcomeConversations, conversation)) {
+        hintLegacyPlaceholders('welcomeMessage', conversation.endpoint.id, welcomeMessage);
+        hintWelcomePrefix(conversation.endpoint.id, welcomeMessage, context.input.commandPrefix);
+      }
     }
     await next();
   },

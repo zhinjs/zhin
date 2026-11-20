@@ -12,7 +12,14 @@ Accounts of the same instance may have different command prefixes and menu keywo
 
 - **Path lookup only**: a placeholder is a property path (`a.b.c`, `a[0].b`) resolved step by step through own data properties of the whitelisted fields. `${1+1}`, `${fn()}`, unknown names and paths without a value **stay in the text as written**; nothing is executed.
 - **One pass**: substituted values are never scanned again. User-controlled values (nicknames, message text, regex captures) are data: a new member whose nickname is `${bot.menu}` is welcomed with a literal `${bot.menu}`.
-- **Untrusted content is not expanded**: `${…}` inside content marked as coming from an untrusted source (`untrustedContent(...)`: Agent model output, regex captures in taught answers) is left alone.
+- **Only authored text is expanded**: text written in plugin code or operator configuration is the template. Data passed in `incoming` (`sender`, `message`) is only ever a filled-in value, and `${…}` inside content marked as coming from an untrusted source (`untrustedContent(...)`: Agent model output, regex captures in taught answers, nicknames and group names in the Agent join welcome) is left alone.
+- **Quote user content in its own part**: a plugin that copies stored user content (taught pairs, keywords, nicknames, user input quoted in an error) into its own reply must send each copied value as a separate `untrustedContent(...)` part; otherwise the whole text is a template, and after teaching `hi|hi ${sender.name}` the confirmation reads "hi Admin". Only the plugin's own wording stays in the template text:
+
+  ```ts
+  import { untrustedContent } from '@zhin.js/core/runtime';
+  const trust = { source: 'my-plugin.echo' };
+  return ['Saved: “', untrustedContent(answer, trust), '”. Send ${bot.menu} to see more'];
+  ```
 - **Computed on demand**: text without `${` costs nothing; the prefix and menu are resolved once at the first placeholder, and `${command.*}` lists commands only for a text that names it.
 
 ## Fields
@@ -25,7 +32,7 @@ Every placeholder has at least two segments, grouped as follows:
 | `${bot.endpoint}` | Endpoint id of the sending account (`conversation.endpoint.id`) |
 | `${bot.endpointId}` | Account instance name as the platform reports it (an ICQQ uin, a sandbox bot name); only when replying to an incoming message that carries it |
 | `${bot.prefix}` | Command prefix of the sending account; empty when it has none |
-| `${bot.menu}` | Menu entry of the sending account: prefix + menu keyword (root `menuKeyword`, default `菜单` / `menu`); left as written when `menuKeyword: false` turns the menu off |
+| `${bot.menu}` | Menu entry of the sending account: prefix + menu keyword (root `menuKeyword`, default `菜单` / `menu`), in the language of this send (`$reply` uses the incoming message's language, as `message.commandMenu` does; otherwise the project language). With `menuKeyword: false` the menu is off and `${bot.menu}` is **left as written** (not emptied, so a sentence never silently loses its instruction) and one warning is logged (`reason=menu_disabled`) to remove it or turn the menu on |
 | `${conversation.kind}` / `${conversation.id}` | Conversation kind (`private` / `group` / `channel`) and id |
 | `${sender.id}` / `${sender.name}` / `${sender.roles}` | The person this send answers (see "Subject" below); absent for scheduled and cross-conversation sends |
 | `${message.content}` | Plain text of the incoming message (empty for an event-triggered send) |
@@ -57,6 +64,12 @@ await this.use(outboundMessageToken).send({
 - Write `-` as `_`: `commands/stats-rank` → `${command.stats_rank}` (plugin-local names never contain `_`, so this cannot collide). A segment that starts with a digit cannot be written as a path and is not offered.
 - Only the sending plugin's own commands are listed (at most 256); other plugins' commands, commands of a plugin switched off in that conversation and unknown paths stay as written.
 - A command that has subcommands is reachable only through them; non-leaf paths such as `${command}` or `${command.group}` stay as written.
+
+## Old placeholders
+
+The old `{name}`, `{id}`, `{sender}`, `{sender.id}`, `{time}`, `{date}` and single-name forms such as `${menu}` / `${prefix}` are no longer expanded and are not migrated: they are sent as written. group-suite checks its welcome message and stored teach answers on first use (a member joining, the first group message, a matching or newly taught answer) and logs one warning per account and text with the new path for each (for example `{name} → ${sender.name}`, `${menu} → ${bot.menu}`).
+
+The Agent session welcome (Console session operations, ADR 0037) keeps its own `{members}` / `{nickname}` / `{group}` / `{rules_url}` variables: one welcome can greet several members, which `${sender.*}` (one person) cannot express, and saved templates and the Console preview rely on them. The nicknames, group name and rules link filled in are sent as data (untrusted parts); the rest of the operator's text is still an outbound template and may use `${bot.menu}`.
 
 ## Environment references in configuration files
 

@@ -119,7 +119,13 @@ group-suite:
 模板只做一次扫描：新成员昵称、提问内容、正则捕获组都只当数据，里面写的 `${bot.menu}` 不会再被展开。
 
 账号配置了命令前缀、欢迎语里却直接写了「帮助」「菜单」「help」「menu」而没有用 `${bot.menu}` / `${bot.prefix}` 时，
-插件在该账号收到第一条群消息时打一条 warn（每个账号与文本一次）；`zhin doctor` 看不到插件按账号的配置。
+插件在该账号收到第一条群消息时打一条 warn（每个账号与文本一次，只对本插件实际负责欢迎的群：在 `welcomeConversations` 内、且未由 Agent 会话欢迎接管）；`zhin doctor` 看不到插件按账号的配置。
+
+旧写法 `{name}`、`{id}`、`{sender}`、`{sender.id}`、`{time}`、`{date}`、单段 `${menu}` / `${prefix}` 等不再展开，也不会自动迁移。
+欢迎语与已存问答首次用到时，插件按账号与文本各打一条 warn，列出每个旧写法对应的新写法（如 `{name} → ${sender.name}`）。
+
+命令回复里引用的存储内容——`teach` 的确认、`teach-list`、`forget`、`keyword-add` / `keyword-list` / `keyword-remove`、排行与个人统计里的昵称——按存储原样显示，不当模板展开：
+教会 `你好|你好 ${sender.name}` 后，确认消息显示的就是 `你好 ${sender.name}`，真正自动回复时才填成提问者的名字。
 
 ### 两套自动回复：teach 问答 与 keyword 关键词回复
 

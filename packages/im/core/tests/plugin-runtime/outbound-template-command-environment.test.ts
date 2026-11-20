@@ -10,6 +10,7 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 import { ImRuntime, installComponentHost } from '../../src/plugin-runtime/im/index.js';
 import { MessageDispatcher } from '../../src/plugin-runtime/im/message-dispatcher.js';
 import * as environment from '../../src/plugin-runtime/im/outbound-command-environment.js';
+import { getLogger } from '@zhin.js/logger';
 
 class MemoryEndpoint implements EndpointContract {
   readonly sent: EndpointSendRequest[] = [];
@@ -123,6 +124,36 @@ describe('outbound templates · command environment of the sending account (#125
     try {
       expect(await off.send(0, '${bot.menu} ${bot.prefix}')).toBe('${bot.menu} #');
     } finally { await off.close(); }
+  });
+
+  it('renders ${bot.menu} / ${command.*} in the send\'s locale (SendRequest.locale), else the project locale', async () => {
+    const f = await fixture();
+    try {
+      // `$reply` carries message.locale as SendRequest.locale: an English user gets the English menu word.
+      expect(await f.send(0, '${bot.menu} ${command.checkin}', { locale: 'en' })).toBe('#menu #checkin');
+      expect(await f.send(0, '${bot.menu}', { locale: 'zh-CN' })).toBe('#菜单');
+      expect(await f.send(0, '${bot.menu}')).toBe('#菜单');
+    } finally { await f.close(); }
+    const english = await fixture({ rootConfig: { locale: 'en' } });
+    try {
+      expect(await english.send(0, '${bot.menu}')).toBe('#menu');
+      expect(await english.send(0, '${bot.menu}', { locale: 'zh-CN' })).toBe('#菜单');
+    } finally { await english.close(); }
+  });
+
+  it('keeps ${bot.menu} as written with the menu off and warns once per generation', async () => {
+    const warn = vi.spyOn(getLogger('im.outbound'), 'warn');
+    const off = await fixture({ rootConfig: { menuKeyword: false } });
+    try {
+      expect(await off.send(0, '发送 ${bot.menu} 查看')).toBe('发送 ${bot.menu} 查看');
+      expect(await off.send(1, '${bot.menu}')).toBe('${bot.menu}');
+      const warned = warn.mock.calls.filter(([line]) => String(line).includes('menu_disabled'));
+      expect(warned).toHaveLength(1);
+      expect(String(warned[0]![0])).not.toContain('查看');
+    } finally {
+      warn.mockRestore();
+      await off.close();
+    }
   });
 
   it('lists only the requester\'s commands: nested, dashed and missing paths', async () => {

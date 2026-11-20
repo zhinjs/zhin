@@ -1,4 +1,5 @@
 import { resolveGroupId } from '../src/stats-lib.js';
+import { plainText } from './plain-text.js';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from '@zhin.js/middleware';
@@ -103,13 +104,13 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       ...emptyCtx,
       input: groupInput as never,
     });
-    expect(String(result)).toContain('签到成功');
-    expect(String(result)).not.toContain('尚未就绪');
+    expect(plainText(result)).toContain('签到成功');
+    expect(plainText(result)).not.toContain('尚未就绪');
 
     const again = await doCheckin(groupInput, resolveGroupSuiteConfig({}), runtime);
     expect(again).toContain('已经签到');
 
-    const points = await myPoints(groupInput, runtime);
+    const points = plainText(await myPoints(groupInput, runtime));
     expect(points).toContain('积分');
     expect(points).toContain('今日已签到');
 
@@ -121,7 +122,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
         origin: { kind: 'im', platform: 'test', endpoint: 'memory', scope: 'group', sceneId: 'g1' },
       } as never,
     );
-    expect(String(summary)).toContain('Alice');
+    expect(plainText(summary)).toContain('Alice');
   });
 
   it('并发双签只成功一次（per-user 串行化）', async () => {
@@ -133,7 +134,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     expect(results.filter((r) => r.includes('签到成功'))).toHaveLength(1);
     expect(results.filter((r) => r.includes('已经签到'))).toHaveLength(1);
 
-    const points = await myPoints(groupInput, runtime);
+    const points = plainText(await myPoints(groupInput, runtime));
     expect(points).toContain('累计签到: 1 天');
   });
 
@@ -143,13 +144,13 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       ...emptyCtx,
       input: groupInput as never,
     });
-    expect(String(points)).toContain('Alice');
+    expect(plainText(points)).toContain('Alice');
 
     const rank = await rankCommand.execute({
       ...emptyCtx,
       input: groupInput as never,
     });
-    expect(String(rank)).toContain('积分排行');
+    expect(plainText(rank)).toContain('积分排行');
   });
 
   it('teach add / list / forget / reply work in memory', async () => {
@@ -158,29 +159,29 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       args: ['你好', '你好呀～'],
       input: groupInput as never,
     });
-    expect(String(taught)).toContain('学会了');
+    expect(plainText(taught)).toContain('学会了');
 
     const listed = await teachListCommand.execute({
       ...emptyCtx,
       params: { page: 1 },
       input: groupInput as never,
     });
-    expect(String(listed)).toContain('你好');
-    expect(String(listed)).toContain('keyword-list');
+    expect(plainText(listed)).toContain('你好');
+    expect(plainText(listed)).toContain('keyword-list');
 
     const reply = await tryTeachReply(
       { ...groupInput, content: '你好' },
       resolveGroupSuiteConfig({}),
       runtime,
     );
-    expect(reply).toContain('你好呀');
+    expect(plainText(reply)).toContain('你好呀');
 
     const forgotten = await forgetCommand.execute({
       ...emptyCtx,
       args: ['你好'],
       input: groupInput as never,
     });
-    expect(String(forgotten)).toContain('已忘记');
+    expect(plainText(forgotten)).toContain('已忘记');
   });
 
   it('stats count + mystats work in memory', async () => {
@@ -190,15 +191,15 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       ...emptyCtx,
       input: groupInput as never,
     });
-    expect(String(stats)).toContain('消息统计');
-    expect(String(stats)).toContain('Alice');
+    expect(plainText(stats)).toContain('消息统计');
+    expect(plainText(stats)).toContain('Alice');
 
     const mine = await mystatsCommand.execute({
       ...emptyCtx,
       input: groupInput as never,
     });
-    expect(String(mine)).toContain('今日');
-    expect(String(mine)).toMatch(/2 条|2条/);
+    expect(plainText(mine)).toContain('今日');
+    expect(plainText(mine)).toMatch(/2 条|2条/);
   });
 
   it('keyword-add uses params + trailing args', async () => {
@@ -208,7 +209,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       params: { keyword: 'hi' },
       args: ['hello', 'there'],
     });
-    expect(String(result)).toContain('已添加');
+    expect(plainText(result)).toContain('已添加');
     expect(matchKeyword('say hi', keywordStore(groupInput, runtime))).toBe('hello there');
   });
 

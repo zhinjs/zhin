@@ -1,4 +1,5 @@
 import checkinCommand from '../commands/checkin/index.ts';
+import { plainText } from './plain-text.js';
 import myPointsCommand from '../commands/mypoints/index.ts';
 import teachCommand from '../commands/teach/index.ts';
 import { tryTeachReply } from '../src/teach-lib.js';
@@ -40,9 +41,9 @@ it('management works with a persistent Database Host while automatic replies are
     },
   } } as never);
   const context = { config: resolveGroupSuiteConfig({}), input, params: { keyword: 'hi' }, args: ['hello'], use: () => host };
-  expect(await keywordAdd.execute(context as never)).toContain('已添加');
-  expect(await keywordList.execute(context as never)).toContain('hello');
-  expect(await keywordList.execute(context as never)).toContain('teach-list');
+  expect(plainText(await keywordAdd.execute(context as never))).toContain('已添加');
+  expect(plainText(await keywordList.execute(context as never))).toContain('hello');
+  expect(plainText(await keywordList.execute(context as never))).toContain('teach-list');
   // The dictionary row plus the plugin-scope index the Console counts keywords from (#1250).
   expect(rows.size).toBe(2);
   expect([...rows.keys()].filter(key => key.includes('keyword-conversations'))).toHaveLength(1);
@@ -84,7 +85,7 @@ it.each(['private', 'channel'] as const)('labels %s rankings as their actual con
   const runtime = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
   const scene = { ...input, conversation: { ...input.conversation, kind } };
   const config = resolveGroupSuiteConfig({}); await doCheckin(scene, config, runtime);
-  const report = await pointsRank(scene, config, runtime);
+  const report = plainText(await pointsRank(scene, config, runtime));
   expect(report).toContain(kind === 'private' ? '当前私聊积分排行' : '本频道积分排行');
   expect(report).not.toContain('全局');
 });
@@ -103,14 +104,14 @@ it('localizes commands, their real command hint, tools and HTML without translat
   const runtime = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
   const context = { input, locale: 'en', config: resolveGroupSuiteConfig({ ephemeralKeywords: true }),
     params: {}, args: [], use: () => runtime, formatCommand: (path: string) => path === 'checkin' ? '!ops checkin' : undefined };
-  expect(await myPointsCommand.execute(context as never)).toContain('!ops checkin');
-  expect(await myPointsCommand.execute({ ...context, formatCommand: () => undefined } as never)).not.toContain('“checkin”');
-  expect(await checkinCommand.execute(context as never)).toContain('Checked in!');
-  expect(await myPointsCommand.execute(context as never)).toContain('Checked in today');
-  expect(await teachCommand.execute({ ...context, args: ['你好|您好，这是用户内容'] } as never)).toContain('Learned!');
+  expect(plainText(await myPointsCommand.execute(context as never))).toContain('!ops checkin');
+  expect(plainText(await myPointsCommand.execute({ ...context, formatCommand: () => undefined } as never))).not.toContain('“checkin”');
+  expect(plainText(await checkinCommand.execute(context as never))).toContain('Checked in!');
+  expect(plainText(await myPointsCommand.execute(context as never))).toContain('Checked in today');
+  expect(plainText(await teachCommand.execute({ ...context, args: ['你好|您好，这是用户内容'] } as never))).toContain('Learned!');
   expect(await tryTeachReply({ ...input, locale: 'en', content: '你好' }, context.config, runtime)).toBe('您好，这是用户内容');
-  expect(await keywordAdd.execute({ ...context, params: { keyword: '中文' }, args: ['保留原文'] } as never)).toContain('Keyword added: “中文” → “保留原文”');
-  expect(await keywordList.execute(context as never)).toContain('Keywords (1)');
+  expect(plainText(await keywordAdd.execute({ ...context, params: { keyword: '中文' }, args: ['保留原文'] } as never))).toContain('Keyword added: “中文” → “保留原文”');
+  expect(plainText(await keywordList.execute(context as never))).toContain('Keywords (1)');
   recordMessage(input, runtime); await flushStatsBuffer(runtime);
   const card = await statsCard.execute(context as never);
   expect(JSON.stringify(card)).toContain("Today&#39;s group message statistics");

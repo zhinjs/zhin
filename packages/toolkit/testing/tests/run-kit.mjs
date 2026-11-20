@@ -15,6 +15,7 @@ import { databaseRootHostToken, databaseHostToken, PluginDatabaseHost, rootPlugi
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const temporary = await mkdtemp(join(tmpdir(), 'zhin-test-kit-'));
 const mode = process.argv[2] ?? 'base';
+const deliveredText = payload => (Array.isArray(payload) ? payload : [payload]).map(item => typeof item === 'string' ? item : item?.data?.text ?? '').join('');
 const put = async (path, content) => { await mkdir(dirname(path), {recursive:true}); await writeFile(path, content); };
 const json = async (path, value) => put(path, JSON.stringify(value));
 const link = async (name, source) => {
@@ -97,7 +98,8 @@ try {
     kit.clearDeliveries();await incoming('bye');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     // Concurrent different senders mutate the same persistent state through real CAS retries.
     await Promise.all(Array.from({length:8},(_,i)=>kit.receive({content:`alpha keyword-add k${i} r${i}`,conversation:{kind:'group',id:'g1'},sender:{id:`s${i}`,chatRole:'admin'}})));
-    await incoming('alpha keyword-list');for(let i=0;i<8;i++)assert.match(kit.deliveries.at(-1).payload,new RegExp(`k${i}`));
+    // Quoted keywords are literal (untrusted) segments of the reply (#1250): read the delivered text.
+    await incoming('alpha keyword-list');for(let i=0;i<8;i++)assert.match(deliveredText(kit.deliveries.at(-1).payload),new RegExp(`k${i}`));
     // Identical group ids on two endpoint identities have separate check-in and teaching records.
     await incoming('alpha checkin');assert.match(kit.deliveries.at(-1).payload,/签到成功/);
     await incoming('alpha checkin',[],'g1','other');assert.match(kit.deliveries.at(-1).payload,/签到成功/);
@@ -118,9 +120,9 @@ try {
     await assert.rejects(kit.patchConfig([{op:'set',path:['alpha','keywordReply'],value:'bad'}]));
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     const source=join(temporary,'plugins/group-suite/commands/keyword-list/index.ts');
-    await put(source,(await readFile(source,'utf8')).replace("return t(context.locale, 'keywordList',", "return '热更新词库\\n' + t(context.locale, 'keywordList',"));
+    await put(source,(await readFile(source,'utf8')).replace("return echo.content(t(context.locale, 'keywordList',", "return echo.content('热更新词库\\n' + t(context.locale, 'keywordList',"));
     assert.equal((await kit.reloadSource(source)).status,'reloaded');
-    await incoming('alpha keyword-list');assert.match(kit.deliveries.at(-1).payload,/热更新词库/);
+    await incoming('alpha keyword-list');assert.match(deliveredText(kit.deliveries.at(-1).payload),/热更新词库/);
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     await incoming('bye');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     // Whole plugin reload replaces owner Resources, while persistent keywords keep their exact scope.
