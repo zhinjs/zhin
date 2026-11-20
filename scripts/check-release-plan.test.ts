@@ -251,7 +251,10 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     const approve = (repo: ReturnType<typeof fixture>, approvals: unknown) => {
       repo.write('.changeset/version-policy.json', JSON.stringify({ defaultReleaseType: 'patch', approvedNonPatchReleases: approvals }));
     };
-    const demoMinor = [{ package: '@test/demo', type: 'minor', reason: '破坏性变更' }];
+    const demoMinor = [{ package: '@test/demo', type: 'minor', version: '1.2.0', reason: '破坏性变更' }];
+    const declareDemoMinor = (repo: ReturnType<typeof fixture>) => {
+      repo.write('.changeset/fix.md', '---\n"@test/demo": minor\n---\nBreaking demo.\n');
+    };
 
     it('accepts a pending minor for an approved package', () => {
       const repo = fixture();
@@ -265,7 +268,7 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
 
     it('rejects a minor declaration for a package that is not approved', () => {
       const repo = fixture();
-      approve(repo, [{ package: '@test/other', type: 'minor', reason: '别的包' }]);
+      approve(repo, [{ package: '@test/other', type: 'minor', version: '1.2.0', reason: '别的包' }]);
       repo.write('.changeset/fix.md', '---\n"@test/demo": minor\n---\nBreaking demo.\n');
       repo.commit();
       const result = repo.check();
@@ -284,10 +287,18 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     });
 
     it.each([
-      [[{ package: '@test/demo', type: 'major', reason: 'x' }], 'type must be "minor"'],
-      [[{ package: '@test/demo', type: 'minor' }], 'reason must explain'],
+      [[{ package: '@test/demo', type: 'major', version: '1.2.0', reason: 'x' }], 'type must be "minor"'],
+      [[{ package: '@test/demo', type: 'minor', version: '1.2.0' }], 'reason must explain'],
       [[...demoMinor, ...demoMinor], 'listed twice'],
-      [[{ package: '', type: 'minor', reason: 'x' }], 'package must be a package name'],
+      [[{ package: '@test/demo', type: 'minor', version: '1.2.0', reason: 'x' }, { package: '@test/demo', type: 'minor', version: '1.3.0', reason: 'y' }], 'listed twice'],
+      [[{ package: '', type: 'minor', version: '1.2.0', reason: 'x' }], 'package must be a package name'],
+      [[{ package: '@test/demo', type: 'minor', reason: 'x' }], 'version is required'],
+      [[{ package: '@test/demo', type: 'minor', version: '1.2.1', reason: 'x' }], 'version must be a minor release version X.Y.0'],
+      [[{ package: '@test/demo', type: 'minor', version: '2.0.0', reason: 'x' }], 'version must be a minor release version X.Y.0'],
+      [[{ package: '@test/demo', type: 'minor', version: '1.2', reason: 'x' }], 'version must be a minor release version X.Y.0'],
+      [[{ package: '@test/demo', type: 'minor', version: '1.2.0-beta.0', reason: 'x' }], 'version must be a minor release version X.Y.0'],
+      [[{ package: '@test/demo', type: 'minor', version: 1.2, reason: 'x' }], 'version must be a minor release version X.Y.0'],
+      [[{ ...demoMinor[0], approvedBy: 'owner' }], 'has unknown key approvedBy'],
     ])('rejects an invalid approval list %#', (approvals, message) => {
       const repo = fixture();
       approve(repo, approvals);
@@ -322,6 +333,112 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
       const result = repo.check();
       expect(result.output).toContain('1 versioned packages awaiting tags');
       expect(result.status).toBe(0);
+    });
+
+    it('rejects a planned minor whose approval names another version', () => {
+      const repo = fixture();
+      approve(repo, [{ ...demoMinor[0], version: '1.3.0' }]);
+      declareDemoMinor(repo);
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/demo (minor: 1.1.0 -> 1.2.0; unapproved minor, approval is for 1.3.0)');
+      expect(result.output).toContain('"version": "1.2.0"');
+    });
+
+    it('rejects an approval whose version is already published (tag exists)', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      declareDemoMinor(repo);
+      repo.commit();
+      repo.bump({ version: '1.2.0' });
+      repo.git('tag', '@test/demo@1.2.0');
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/demo@1.2.0 is already published (tag @test/demo@1.2.0 exists)');
+    });
+
+    it('rejects a stale approval even when a new minor would reuse it', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      declareDemoMinor(repo);
+      repo.commit();
+      repo.bump({ version: '1.2.0' });
+      repo.git('tag', '@test/demo@1.2.0');
+      declareDemoMinor(repo);
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/demo (minor: 1.2.0 -> 1.3.0; unapproved minor, approval is for 1.2.0)');
+    });
+
+    it('rejects an approval lower than the current version', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      repo.write('packages/demo/package.json', JSON.stringify({ name: '@test/demo', version: '1.3.0' }));
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/demo@1.2.0 is lower than the current version 1.3.0');
+    });
+
+    it('rejects an orphan approval for a package the plan does not bump as a minor', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/demo@1.2.0 is not used: the release plan has no minor for @test/demo and its current version is 1.1.0');
+    });
+
+    it('rejects an approval for a package outside the workspace', () => {
+      const repo = fixture();
+      approve(repo, [...demoMinor, { package: '@test/gone', type: 'minor', version: '1.2.0', reason: '已删除的包' }]);
+      declareDemoMinor(repo);
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/gone@1.2.0 is not a publishable workspace package');
+    });
+
+    it('accepts the approved minor version output in a version PR', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      declareDemoMinor(repo);
+      repo.commit();
+      repo.git('checkout', '-qb', 'changeset-release/main');
+      repo.bump({ version: '1.2.0' });
+      const result = repo.check({ GITHUB_HEAD_REF: 'changeset-release/main', GITHUB_BASE_REF: 'main' });
+      expect(result.output).toContain('1 versioned packages awaiting tags');
+      expect(result.status).toBe(0);
+    });
+
+    it('accepts a follow-up patch on top of an unpublished approved minor version commit', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      declareDemoMinor(repo);
+      repo.commit();
+      repo.bump({ version: '1.2.0' });
+      repo.write('packages/demo/src/index.ts', 'export const value = 5;\n');
+      repo.write('.changeset/next.md', '---\n"@test/demo": patch\n---\nNext fix.\n');
+      repo.commit();
+      const result = repo.check();
+      expect(result.output).toContain('1 pending patch releases, 0 approved minor releases');
+      expect(result.status).toBe(0);
+    });
+
+    it('only accepts a minor version commit whose version matches the approval', () => {
+      const repo = fixture();
+      declareDemoMinor(repo);
+      repo.commit();
+      repo.bump({ version: '1.2.0' });
+      const versionCommit = repo.git('rev-parse', 'HEAD');
+      const baseline = (version: string) => findVersionedReleaseBaseline({
+        root: repo.root, directory: 'packages/demo', name: '@test/demo', version: '1.2.0',
+        approvedMinors: new Map([['@test/demo', { version }]]),
+      });
+      expect(baseline('1.2.0')).toBe(versionCommit);
+      expect(baseline('1.3.0')).toBeUndefined();
     });
 
     it('rejects a minor version output whose consumed changeset only declared a patch', () => {

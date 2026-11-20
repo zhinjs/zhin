@@ -216,11 +216,25 @@ pnpm pub       # = pnpm changeset publish; publishes to npm
 
 During daily development you only need `pnpm release` to commit the changeset file; `bump` and `pub` are executed by CI.
 
-The version policy permits `patch` only. Every changeset declaration must use `patch`, and
-`approvedNonPatchReleases` in `.changeset/version-policy.json` must stay empty.
-`pnpm check:release-plan` inspects both the raw declarations and the complete plan Changesets
-derives; any `minor` or `major`, including bumps inferred through dependency propagation, fails CI,
-and there is no exemption entry.
+The version policy permits `patch` by default and never permits `major`. `pnpm check:release-plan`
+inspects both the raw declarations and the complete plan Changesets derives, including bumps inferred
+through dependency propagation. A `minor` passes only after the repository owner approves it and it is
+recorded in `approvedNonPatchReleases` of `.changeset/version-policy.json`:
+
+```json
+{ "package": "@zhin.js/core", "type": "minor", "version": "1.14.0", "reason": "Approved by the owner (…): …" }
+```
+
+- `version` is required: the approved target version (`X.Y.0`). It must equal the package's
+  `newVersion` in the release plan; a package-only entry or a different version is rejected as an
+  unapproved minor, and the error prints the `version` to record.
+- A package has at most one approval (one target version) at a time; unknown keys are rejected.
+- **Delete the entry after publishing.** The check fails on stale approvals and asks for their
+  removal: the version is already published (tag `<name>@<version>` exists), it is lower than the
+  current `package.json` version, or the plan has no minor for the package and `package.json` does
+  not carry that version either (an orphan). Two states are valid: the plan is about to bump to that
+  version, or a version PR has already set `package.json` to it and the tag does not exist yet. An old
+  approval therefore never lets a new minor through without the owner's consent.
 Release coverage deliberately ignores only tests and Changesets-generated `CHANGELOG.md` files.
 Package-local build, type-check, and tooling configuration can change emitted code or declarations,
 so those configuration changes also require a patch changeset.

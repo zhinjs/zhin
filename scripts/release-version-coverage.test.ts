@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  compareReleaseVersions,
   findMissingVersionTags,
+  findStaleApprovals,
+  findUnapprovedMinorReleases,
   findUncoveredPackageChanges,
+  isMinorReleaseVersion,
   isReleaseRelevantPath,
 } from './release-version-coverage.mjs';
 
@@ -88,5 +92,90 @@ describe('release version coverage', () => {
       plannedPackages: new Set(),
       existingTags: new Set(['@zhin.js/logger@1.1.1']),
     })).toEqual(['@zhin.js/schema@1.1.0']);
+  });
+});
+
+describe('approved minor releases', () => {
+  const approvals = (entries: Record<string, string | undefined>) => new Map(
+    Object.entries(entries).map(([name, version]) => [name, { version }]),
+  );
+  const coreMinor = { name: '@zhin.js/core', type: 'minor', oldVersion: '1.13.1', newVersion: '1.14.0' };
+
+  it('recognizes minor release versions and orders versions', () => {
+    expect(isMinorReleaseVersion('1.14.0')).toBe(true);
+    expect(isMinorReleaseVersion('0.1.0')).toBe(true);
+    for (const version of ['1.14.1', '2.0.0', '1.14', '01.2.0', '1.2.0-beta.0', undefined, 1.2]) {
+      expect(isMinorReleaseVersion(version)).toBe(false);
+    }
+    expect(compareReleaseVersions('1.9.0', '1.10.0')).toBe(-1);
+    expect(compareReleaseVersions('1.10.0', '1.9.1')).toBe(1);
+    expect(compareReleaseVersions('1.10.0', '1.10.0')).toBe(0);
+    expect(compareReleaseVersions('1.10.0', 'next')).toBeUndefined();
+  });
+
+  it('requires an approval for exactly the planned minor version', () => {
+    const releases = [coreMinor, { name: '@zhin.js/ai', type: 'patch', oldVersion: '1.8.2', newVersion: '1.8.3' }];
+    expect(findUnapprovedMinorReleases({ releases, approvedMinors: approvals({ '@zhin.js/core': '1.14.0' }) })).toEqual([]);
+    expect(findUnapprovedMinorReleases({ releases, approvedMinors: approvals({}) })).toEqual([
+      { name: '@zhin.js/core', oldVersion: '1.13.1', newVersion: '1.14.0', approvedVersion: undefined },
+    ]);
+    // A package-only approval (no version) or one for another version never matches.
+    expect(findUnapprovedMinorReleases({ releases, approvedMinors: approvals({ '@zhin.js/core': undefined }) }))
+      .toHaveLength(1);
+    expect(findUnapprovedMinorReleases({ releases, approvedMinors: approvals({ '@zhin.js/core': '1.13.0' }) })).toEqual([
+      { name: '@zhin.js/core', oldVersion: '1.13.1', newVersion: '1.14.0', approvedVersion: '1.13.0' },
+    ]);
+  });
+
+  describe('stale approvals', () => {
+    const stale = ({
+      approved = { '@zhin.js/core': '1.14.0' } as Record<string, string>,
+      plannedMinors = new Map<string, string>(),
+      current = '1.13.1',
+      tags = [] as string[],
+    }) => findStaleApprovals({
+      approvedMinors: approvals(approved),
+      plannedMinors,
+      currentVersions: new Map([['@zhin.js/core', current]]),
+      existingTags: new Set(tags),
+    });
+
+    it('keeps an approval the plan is about to use', () => {
+      expect(stale({ plannedMinors: new Map([['@zhin.js/core', '1.14.0']]) })).toEqual([]);
+    });
+
+    it('keeps an approval whose version commit is waiting for its tag (version PR)', () => {
+      // Also covers a follow-up patch on top of the unpublished minor version commit: the plan
+      // then has no minor for the package, but package.json already carries the approved version.
+      expect(stale({ current: '1.14.0' })).toEqual([]);
+    });
+
+    it('rejects an approval whose version is already tagged', () => {
+      expect(stale({ current: '1.14.0', tags: ['@zhin.js/core@1.14.0'] })).toEqual([{
+        package: '@zhin.js/core', version: '1.14.0', problem: 'is already published (tag @zhin.js/core@1.14.0 exists)',
+      }]);
+      expect(stale({ plannedMinors: new Map([['@zhin.js/core', '1.14.0']]), tags: ['@zhin.js/core@1.14.0'] }))
+        .toHaveLength(1);
+    });
+
+    it('rejects an approval lower than the current version', () => {
+      expect(stale({ current: '1.14.1' })).toEqual([{
+        package: '@zhin.js/core', version: '1.14.0', problem: 'is lower than the current version 1.14.1',
+      }]);
+      expect(stale({ current: '1.15.0', plannedMinors: new Map([['@zhin.js/core', '1.16.0']]) })).toHaveLength(1);
+    });
+
+    it('rejects an orphan approval', () => {
+      expect(stale({})).toEqual([{
+        package: '@zhin.js/core',
+        version: '1.14.0',
+        problem: 'is not used: the release plan has no minor for @zhin.js/core and its current version is 1.13.1',
+      }]);
+    });
+
+    it('rejects an approval for a package outside the workspace', () => {
+      expect(stale({ approved: { '@zhin.js/core': '1.14.0', '@zhin.js/gone': '1.2.0' }, plannedMinors: new Map([['@zhin.js/core', '1.14.0']]) }))
+        .toEqual([{ package: '@zhin.js/gone', version: '1.2.0', problem: 'is not a publishable workspace package' }]);
+    });
   });
 });

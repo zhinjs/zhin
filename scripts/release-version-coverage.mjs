@@ -2,9 +2,90 @@ import { spawnSync } from 'node:child_process';
 
 const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)CHANGELOG\.md$/;
 
+const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+/** Strict `X.Y.Z` (no prerelease / build metadata) → `[X, Y, Z]`, otherwise `undefined`. */
+export function parseReleaseVersion(version) {
+  const match = typeof version === 'string' ? RELEASE_VERSION.exec(version) : null;
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : undefined;
+}
+
+/** A version a minor bump can produce: `X.Y.0` with `Y >= 1` (`X.0.0` would be a major). */
+export function isMinorReleaseVersion(version) {
+  const parsed = parseReleaseVersion(version);
+  return Boolean(parsed && parsed[1] >= 1 && parsed[2] === 0);
+}
+
+/** Semver order of two strict `X.Y.Z` versions; `undefined` when either is not one. */
+export function compareReleaseVersions(left, right) {
+  const a = parseReleaseVersion(left);
+  const b = parseReleaseVersion(right);
+  if (!a || !b) return undefined;
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * Planned `minor` releases without an approval for exactly that target version.
+ * `approvedMinors`: `Map<package, { version }>` from `.changeset/version-policy.json`.
+ */
+export function findUnapprovedMinorReleases({ releases, approvedMinors }) {
+  return releases
+    .filter((release) => release.type === 'minor' && approvedMinors.get(release.name)?.version !== release.newVersion)
+    .map((release) => ({
+      name: release.name,
+      oldVersion: release.oldVersion,
+      newVersion: release.newVersion,
+      approvedVersion: approvedMinors.get(release.name)?.version,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/**
+ * Approvals that no longer authorize anything and must be deleted from
+ * `approvedNonPatchReleases`. An approval `{ package, version }` is live only while
+ * `${package}@${version}` is still unpublished AND one of these holds:
+ *   (a) the release plan bumps `package` as a minor right now (whether the planned
+ *       `newVersion` equals `version` is checked by `findUnapprovedMinorReleases`), or
+ *   (b) package.json already carries `version` (a version PR / merged version commit
+ *       waiting for `changeset publish` to create the tag).
+ * Everything else is stale, checked in this order:
+ *   - `package` is not a publishable workspace package;
+ *   - the tag `${package}@${version}` exists (already published — delete after publishing);
+ *   - `version` is lower than the current package.json version (a later release already
+ *     went out, so this approval can never be used again);
+ *   - neither (a) nor (b): an orphan approval that a future minor could silently reuse.
+ * Note: `version === current` with no tag and only a planned patch is still case (b): the
+ * minor version commit is merged but unpublished, and a follow-up patch was added on top.
+ *
+ * `plannedMinors`: `Map<package, newVersion>`; `currentVersions`: `Map<package, version>`
+ * for publishable workspace packages; `existingTags`: `Set<'name@version'>`.
+ */
+export function findStaleApprovals({ approvedMinors, plannedMinors, currentVersions, existingTags }) {
+  const stale = [];
+  for (const [name, { version }] of approvedMinors) {
+    const current = currentVersions.get(name);
+    let problem;
+    if (current === undefined) {
+      problem = 'is not a publishable workspace package';
+    } else if (existingTags.has(`${name}@${version}`)) {
+      problem = `is already published (tag ${name}@${version} exists)`;
+    } else if (compareReleaseVersions(version, current) === -1) {
+      problem = `is lower than the current version ${current}`;
+    } else if (!plannedMinors.has(name) && version !== current) {
+      problem = `is not used: the release plan has no minor for ${name} and its current version is ${current}`;
+    }
+    if (problem) stale.push({ package: name, version, problem });
+  }
+  return stale.sort((left, right) => left.package.localeCompare(right.package));
+}
+
 // Tags are created only after publishing. Until then, use verified Changesets
 // output as the baseline, and still check for package changes after that commit.
-// `approvedMinors` (package names) may also be versioned X.Y.Z → X.(Y+1).0 from a minor declaration.
+// A package may also be versioned X.Y.Z → X.(Y+1).0 from its own minor declaration, but only
+// when `approvedMinors.get(name).version` is exactly the version package.json now carries.
 export function findVersionedReleaseBaseline({ root, directory, name, version, evidenceCache = new Map(), approvedMinors = new Map() }) {
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
@@ -31,7 +112,7 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
     if (!before || !after || before[1] !== after[1]) return undefined;
     const patchBump = before[2] === after[2] && Number(after[3]) > Number(before[3]);
     const minorBump = Number(after[2]) === Number(before[2]) + 1 && after[3] === '0';
-    if (!patchBump && !(minorBump && approvedMinors.has(name))) return undefined;
+    if (!patchBump && !(minorBump && approvedMinors.get(name)?.version === version)) return undefined;
 
     const changelogFile = `${directory}/CHANGELOG.md`;
     const hasHeading = (text) => (text ?? '').split(/\r?\n/).some((line) => line.trim() === `## ${version}`);
@@ -49,6 +130,8 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
           return match ? [{ name: match[1] ?? match[2] ?? match[3], type: match[4] }] : [];
         });
       });
+      // Other packages' minor declarations only need an approval entry here; each of those
+      // packages is matched against its own approved version when it is validated itself.
       const allowed = ({ name: packageName, type }) => type === 'patch' || (type === 'minor' && approvedMinors.has(packageName));
       const declaredPackages = declarations.length > 0 && declarations.every(allowed)
         ? new Set(declarations.map(({ name: packageName }) => packageName))

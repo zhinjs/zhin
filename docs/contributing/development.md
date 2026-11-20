@@ -200,10 +200,22 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 
 日常开发只需 `pnpm release` 提交 changeset 文件；`bump` 和 `pub` 由 CI 执行。
 
-版本策略只允许 `patch`。所有 changeset 声明都必须使用 `patch`，
-`.changeset/version-policy.json` 的 `approvedNonPatchReleases` 必须保持为空。
-`pnpm check:release-plan` 会同时检查原始声明和 Changesets 推导出的完整发布计划；
-只要出现 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败，不提供豁免入口。
+版本策略默认只允许 `patch`，`major` 永远不允许。`pnpm check:release-plan` 会同时检查原始声明和
+Changesets 推导出的完整发布计划（包括依赖传播推导出的升级）。`minor` 只有经仓库所有者批准、
+在 `.changeset/version-policy.json` 的 `approvedNonPatchReleases` 中登记后才能通过：
+
+```json
+{ "package": "@zhin.js/core", "type": "minor", "version": "1.14.0", "reason": "所有者已批准（…）：…" }
+```
+
+- `version` 必填，是批准的目标版本（`X.Y.0`），必须与发布计划中该包的 `newVersion` 完全一致；
+  只登记包名、或版本对不上，都按“未批准的 minor”拦截，报错里会给出应写的 `version`。
+- 每个包同时只能有一条批准（一个目标版本）；未知字段报错。
+- **发布后必须删除该条。** 以下情况都按陈旧批准报错并要求删除：该版本已发布
+  （tag `<包名>@<version>` 已存在）、低于当前 `package.json` 版本、或本次计划没有该包的 minor
+  且 `package.json` 也不是这个版本（孤儿批准）。计划正要升到该版本，或版本 PR 已把
+  `package.json` 升到该版本但尚未打 tag，这两种是合法的。这样往届批准不会让新的 minor
+  未经所有者同意就通过。
 发布覆盖检查只忽略测试文件和 Changesets 生成的 `CHANGELOG.md`。包内构建、类型检查和
 工具配置仍可能改变最终产物或声明文件，因此这些配置变更也必须由 patch changeset 覆盖。
 
