@@ -4,6 +4,7 @@
  * collects several candidates, the default visibility / reply per code and the zh-CN / en
  * templates shown to the sender and to administrators.
  */
+import { describeCommandDenial } from '@zhin.js/permission';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { Locale, PluginId } from '@zhin.js/plugin-runtime';
 
@@ -170,7 +171,7 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
   suggested: tpl('没有这条指令，已提示相近的指令。', 'No such command; suggested a close one.', '近似匹配提示，来自 {owner}。', 'Near-match suggestion from {owner}.'),
   refused: tpl('插件拒绝了这次请求。', 'The plugin declined.', 'UserFacingError 来自 {owner}（{stage}）。', 'UserFacingError from {owner} ({stage}).'),
   invalid_input: tpl('指令参数不对，已回复用法。', 'Wrong arguments; usage was sent.', '指令 {command} 参数校验失败。', 'Command {command} failed validation.'),
-  permission_denied: tpl('你没有权限执行这条指令。', 'You are not allowed to run this command.', '指令 {command} 缺少权限（{reason}）。', 'Command {command} denied ({reason}).'),
+  permission_denied: tpl(describeCommandDenial(undefined, 'zh-CN'), describeCommandDenial(undefined, 'en'), '指令 {command} 缺少权限（{reason}）。', 'Command {command} denied ({reason}).'),
   rate_limited: tpl('太频繁或正忙，这次没有处理，请稍后再试。', 'Too frequent or busy; not processed this time.', '限流：{reason}。', 'Limited: {reason}.'),
   approval_denied: tpl('需要确认的操作被拒绝了，没有执行。', 'The action needing approval was declined and did not run.', '审批被拒绝：{detail}。', 'Approval declined: {detail}.'),
   approval_timeout: tpl('等确认超时了，操作没有执行。', 'Approval timed out; the action did not run.', '审批超时：{detail}。', 'Approval timed out: {detail}.'),

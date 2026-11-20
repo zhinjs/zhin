@@ -413,7 +413,7 @@ export async function tryStopActiveMailTurn(input: {
   if (!gate || !isCancelIntent(matchedContent, message.commandPrefix)) return false;
 
   let stoppedKey = sessionKey;
-  let stopped = await gate.stop(sessionKey, senderId, senderRoles.isMaster, entryActorName);
+  let stopped = await gate.stop(sessionKey, senderId, senderRoles.hostRole === 'owner', entryActorName);
   if (
     stopped !== 'stopped'
     && mergeWindowEnabled
@@ -423,7 +423,7 @@ export async function tryStopActiveMailTurn(input: {
     && turnAccess.origin.scope !== 'private'
   ) {
     const sceneKey = runtimeSceneTaskSessionKey(turnAccess, projectRoot);
-    if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.isMaster, entryActorName)) === 'stopped') {
+    if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.hostRole === 'owner', entryActorName)) === 'stopped') {
       stopped = 'stopped';
       stoppedKey = sceneKey;
     }

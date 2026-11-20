@@ -2,6 +2,7 @@ import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/ad
 import { commandFeatureId, defineCommand, type CommandContext, type CommandParams } from '@zhin.js/command';
 import type { ConsoleConfigApplicationStatus } from '@zhin.js/console-protocol';
 import { readOperationSession } from '@zhin.js/feature-kit';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ConfigChatAccessError, ConfigChatRequestRejectedError, parseConfigurationPath, formatConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
@@ -13,7 +14,6 @@ const messages = createMessages({
   getDescription: { 'zh-CN': '读取一个聊天可管理的配置字段', en: 'Read one chat-manageable configuration field' },
   setDescription: { 'zh-CN': '修改一个聊天可管理的配置字段', en: 'Change one chat-manageable configuration field' },
   unsetDescription: { 'zh-CN': '删除一个可选的聊天可管理配置字段', en: 'Remove one optional chat-manageable configuration field' },
-  denied: { 'zh-CN': '仅允许真实 Bot 主人在私聊中管理配置。', en: 'Configuration management requires a real Bot owner in a private chat.' },
   sensitive: { 'zh-CN': '敏感配置不能通过聊天读写，请使用本机 CLI。', en: 'Sensitive configuration cannot be read or changed in chat. Use the local CLI.' },
   permission: { 'zh-CN': '主人、信任名单与审批等权限配置不能通过聊天读写，请使用本机 CLI。', en: 'Owner, trust and approval settings cannot be read or changed in chat. Use the local CLI.' },
   scope: { 'zh-CN': '该配置不在聊天可管理范围内，请使用本机 CLI。', en: 'This configuration is outside the chat-manageable scope. Use the local CLI.' },
@@ -80,12 +80,17 @@ export function parseChatConfigurationValue(text: string, types: readonly string
 
 /**
  * Host-owned `config fields|get|set|unset` (alias `配置`); no Agent, model tool,
- * whole-document apply, or reply side channel. Only a private chat from a master of
- * any configured endpoint on the receiving Adapter passes (C2, see
- * `createConfigurationChatAuthorizer`); every read/write is limited by the chat field
- * policy (C3/C4). The declarative permit is `private()` only: the sender's `master`
- * role is projected for the receiving endpoint alone, so the authorizer is the
- * authoritative owner check.
+ * whole-document apply, or reply side channel. Only a private chat from a **global** chat owner
+ * passes (C2, ADR 0056 §2, see `createConfigurationChatAuthorizer`); every read/write is limited
+ * by the chat field policy (C3/C4).
+ *
+ * The declarative permit is `owner@global` + `private()` (#1250 第 78 批). `owner@global` reads
+ * the sender facts the Runtime wrote on the message (`sender.chatRoleLevels.owner === 'global'`):
+ * the same stored grants of the same identity (the receiving Adapter's instance alias + sender id)
+ * as `senderIsGlobalOwner`, so in a group a sender who is not a global owner stays silent
+ * (`permission_denied`), a private chat says how a global owner is granted, and a global owner
+ * in a group is asked to use a private chat. The authorizer still runs as the authoritative,
+ * execution-time check (it also requires the receiving endpoint to be started).
  */
 export function installConfigurationHost(options: Readonly<{ store: Store; authorize: ConfigurationChatAuthorizer }>): RootResourceInstaller {
   return context => {
@@ -100,10 +105,11 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       context.addFeature(commandFeatureId, action ? `config/${action}` : 'config', defineCommand({
         description: messages('zh-CN', description), descriptionI18n: { en: messages('en', description) },
         alias: [action ? `配置 ${action}` : '配置'],
-        permit: ['private()'], params, options: {},
+        permit: ['owner@global', 'private()'], params, options: {},
         execute: async command => {
-          try { if (!allowed(command)) return messages(command.locale, 'denied'); }
-          catch { return messages(command.locale, 'denied'); }
+          const denied = () => describeGlobalOwnerRequired(command.locale, { privateChat: true });
+          try { if (!allowed(command)) return denied(); }
+          catch { return denied(); }
           try {
             command.signal.throwIfAborted();
             return await execute(command);

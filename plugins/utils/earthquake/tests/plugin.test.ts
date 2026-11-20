@@ -12,9 +12,10 @@ import recentTool from '../skills/earthquake/tools/recent_earthquakes/index.ts';
 import { DEFAULT_EARTHQUAKE_CONFIG, resolveEarthquakeConfig } from '../src/config.js';
 import { extractConversation } from '../src/conversation.js';
 import { earthquakeServiceToken } from '../src/runtime.js';
-import { canManageConversation } from '@zhin.js/command';
-import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../src/permission.ts';
+import { canManageConversation, describeConversationManagerDenial } from '@zhin.js/command';
 import { jsonResponse, MIRROR_URL, mirrorBody, OFFICIAL_URL, statusResponse, USGS_URL, usgsBody, type QuakeSpec } from './fixtures.js';
+
+const SUBSCRIPTION_PERMISSION_DENIED_MESSAGE = describeConversationManagerDenial('zh-CN');
 
 function liveQuake(id: string, minutesAgo: number, overrides: Partial<QuakeSpec> = {}): QuakeSpec {
   return {

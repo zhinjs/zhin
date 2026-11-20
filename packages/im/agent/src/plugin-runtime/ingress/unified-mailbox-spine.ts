@@ -744,7 +744,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const gate = intentResolver || message.metadata?.turnIntent !== undefined ? undefined : mailbox;
     const plainText = isPlainTextRuntimeMessage(message);
     const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
-      message, trigger, plainText, isMaster: senderRoles.isMaster, content: matched.content,
+      message, trigger, plainText, isMaster: senderRoles.hostRole === 'owner', content: matched.content,
     });
     // #1250: the triggered text (`清空`, `#clear`) or the addressed message itself (`@bot /clear`)
     // clears the sender's own session. Never in a live room or an ambient interjection — their session
@@ -856,7 +856,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       reportInboundOutcome(message, turnFailureOutcome(error, admission?.signal.aborted === true, turnId));
       return handleIngressTurnFailure({
         error, admission, modelStartedAt, modelPayload, audit, sessionKey, trigger,
-        isMaster: senderRoles.isMaster, locale: message.locale, outboundBlocked, reply,
+        isMaster: senderRoles.hostRole === 'owner', locale: message.locale, outboundBlocked, reply,
       });
     } finally {
       capabilityActive = false;

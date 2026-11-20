@@ -2,7 +2,7 @@ import type { CommandDispatchResult, CommandExecutionLimit, CommandIndex, Comman
 import { readOperationInputResources } from '@zhin.js/feature-kit';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { Fragment, jsx } from '@zhin.js/jsx';
-import { parsePermitName } from '@zhin.js/permission';
+import { describeCommandDenial } from '@zhin.js/permission';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createToken, createMessages, resolveLocale, type CapabilityId, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageSenderRef, SendContent } from './contracts.js';
@@ -54,17 +54,7 @@ function feedbackFrom(result: CommandDispatchResult): CommandFeedback | undefine
 }
 
 const feedbackMessages = createMessages({
-  denied: { 'zh-CN': '没有权限执行此指令。', en: 'You do not have permission to run this command.' },
-  deniedBecause: { 'zh-CN': '无法执行此指令：{reason}', en: 'This command cannot run here: {reason}' },
-  // ADR 0060 §5.3: zhin role conditions say where roles come from (never which role or who holds it).
-  deniedRole: {
-    'zh-CN': '没有权限执行此指令：它需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
-    en: 'You do not have permission to run this command: it needs a zhin role. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',
-  },
-  deniedRoleStanding: {
-    'zh-CN': '没有权限执行此指令：它需要 zhin 角色，群主 / 群管理员的平台身份不等于 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
-    en: 'You do not have permission to run this command: it needs a zhin role, and being a group owner / admin on the platform is not one. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',
-  },
+  // Permit refusals: `describeCommandDenial` (`@zhin.js/permission`), the one source of their text (#1250 第 78 批).
   cooldown: { 'zh-CN': '此指令仍在冷却，请稍后再试。', en: 'This command is on cooldown. Try again later.' },
   wait: { 'zh-CN': '此指令仍在冷却，约 {seconds} 秒后再试。', en: 'This command is on cooldown. Try again in about {seconds} seconds.' },
   busy: { 'zh-CN': '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。', en: 'Your previous command is still running. Wait for it to finish before trying again.' },
@@ -72,25 +62,14 @@ const feedbackMessages = createMessages({
   identity: { 'zh-CN': '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。', en: 'This command was not accepted because a trusted identity or valid execution context is missing. Ask an administrator to check the adapter and runtime.' },
 });
 
-function explainsDenial(permit: string | undefined): boolean {
-  return typeof permit === 'string' && /^(platform|platform-role|platform-permission|bot|bot-role|bot-permission):/u.test(permit);
-}
-
-function deniesZhinRole(permit: string | undefined): boolean {
-  return typeof permit === 'string' && parsePermitName(permit)?.kind === 'role';
-}
-
 function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: string): string {
   if (feedback.status === 'invalid') {
     return [...feedback.issues.map(issue => issue.message), feedback.help].filter(Boolean).join('\n');
   }
-  // Platform / Bot conditions say what is missing (e.g. 「机器人不是本群管理员」); zhin role and
-  // conversation conditions keep the generic sentence.
-  if (feedback.status === 'denied') {
-    if (feedback.reason && explainsDenial(feedback.permit)) return feedbackMessages(locale, 'deniedBecause', { reason: feedback.reason });
-    if (deniesZhinRole(feedback.permit)) return feedbackMessages(locale, standing === 'owner' || standing === 'admin' ? 'deniedRoleStanding' : 'deniedRole');
-    return feedbackMessages(locale, 'denied');
-  }
+  // Platform / Bot conditions say what is missing (e.g. 「机器人不是本群管理员」), zhin role conditions
+  // where roles come from, `private()` asks for a private chat; the rest keep the generic sentence.
+  if (feedback.status === 'denied') return describeCommandDenial(feedback.permit, locale, {
+    ...(standing ? { standing } : {}), ...(feedback.reason ? { reason: feedback.reason } : {}) });
   const reason = feedback.limit?.reason;
   const waitMs = feedback.limit?.retryAfterMs;
   return reason === 'cooldown'

@@ -5,7 +5,7 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 import { createRuntimeTurnAccess, createRuntimeTurnRequest, runtimeImSessionKey,
   runtimePersonalSessionAddress, runtimeSceneTaskSessionKey } from '@zhin.js/agent/runtime';
 
-const roles = { isMaster: false, isTrusted: false };
+const roles = {};
 const conversation: ConversationRef = {
   endpoint: { adapter: 'root', id: 'root\0zhin.adapter\0qq' }, kind: 'group', id: 'group',
   parent: { kind: 'group', id: 'guild' }, threadId: 'thread',

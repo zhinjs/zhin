@@ -8,7 +8,7 @@ async function fixture() {
   const session = await sessionStore.getOrCreateActive({ session_key: 'audit' });
   const zhinAgent = { contextRepository: repository, agentSessionStore: sessionStore };
   const deps = { service: {} as never, zhinAgent: zhinAgent as never, sessionKey: 'audit', locale: 'en' as const,
-    commandPrefix: '!', senderRoles: { isMaster: true, isTrusted: false } };
+    commandPrefix: '!', senderRoles: { hostRole: 'owner' as const } };
   return { repository, sessionStore, session, zhinAgent, deps };
 }
 

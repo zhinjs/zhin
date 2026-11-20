@@ -11,9 +11,11 @@ import listTool from '../skills/bilibili/tools/bili_list_subscriptions/index.ts'
 import { BiliApiError } from '../src/api.js';
 import { resolveBilibiliConfig } from '../src/config.js';
 import { bilibiliRuntimeToken, type BilibiliRuntime } from '../src/runtime.js';
-import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../src/permission.js';
+import { describeConversationManagerDenial } from 'zhin.js/command';
 import { BILI_STATE_TABLE, BILI_SUBS_TABLE, getBiliState, getBiliSubs } from '../src/store.js';
 import { biliMessage, commandContext, dyn, harness, live } from './fixtures.js';
+
+const SUBSCRIPTION_PERMISSION_DENIED_MESSAGE = describeConversationManagerDenial('zh-CN');
 
 describe('@zhin.js/plugin-bilibili commands', () => {
   it('captures subscription language while display commands use the current language and prefix', async () => {

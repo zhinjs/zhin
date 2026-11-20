@@ -28,10 +28,6 @@ export interface MessageSender{
   permissions?:string[]
   /** 平台群成员身份（owner / admin / member）— 仅供 platform checker */
   role?: string;
-  /** enrich 快照：endpoint 实例 master */
-  isMaster?: boolean;
-  /** enrich 快照：endpoint 实例 trusted */
-  isTrusted?: boolean;
 }
 /**
  * 通用字典类型

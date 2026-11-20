@@ -2,7 +2,8 @@ import type { Locale } from '@zhin.js/plugin-runtime';
 import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from '../init/command-presentation.js';
 import { ownerApprovalMessages as t } from './owner-approval-messages.js';
 import * as path from 'node:path';
-import { chatRoleIncludes, hostChatRole, type Message } from '@zhin.js/core';
+import { hasChatRole, isOwner, type Message } from '@zhin.js/core';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 import { workspaceRoot } from '../discovery/utils.js';
 import type { OwnerApprovalAddress } from './owner-approval-contracts.js';
 import { OwnerApprovalStore } from './owner-approval-store.js';
@@ -20,7 +21,7 @@ export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
   readonly ownerId?: string;
   readonly subjectId: string;
   /**
-   * Whether the sender is a global chat owner (ADR 0056 §2, `hostChatRole(sender) === 'owner'`). Any
+   * Whether the sender is a global chat owner (ADR 0056 §2, `isOwner(sender)` from `@zhin.js/core`). Any
    * global owner may use the command, not only the first one the account resolves to.
    */
   readonly senderIsGlobalOwner: boolean;
@@ -89,7 +90,7 @@ export class OwnerApprovalRuntime {
     const address = ownerCommandAddress(context);
     if (context.scope !== 'private' || !address || !context.senderIsGlobalOwner) {
       if (!context.senderIsGlobalOwner) context.onUnauthorized?.('not_global_owner');
-      return t(locale, 'denied');
+      return describeGlobalOwnerRequired(locale, { privateChat: true });
     }
 
     if (/^approve\s+always\s+bash\s*$/iu.test(text)) {
@@ -138,9 +139,8 @@ export function ownerApprovalAddressFromMessage(message: Message): OwnerApproval
  * (ADR 0056 §2); a lower-level owner counts as trusted here.
  */
 export function resolveToolRequesterRole(message: Message): ToolRequesterRole {
-  const role = hostChatRole(message.sender);
-  if (role === 'owner') return 'owner';
-  if (chatRoleIncludes(role, 'trusted')) return 'trusted';
+  if (isOwner(message.sender)) return 'owner';
+  if (hasChatRole(message.sender, 'trusted')) return 'trusted';
   if (!message.sender?.id) return 'unknown';
   const address = ownerApprovalAddressFromMessage(message);
   return address && String(message.sender.id) === address.ownerId ? 'owner' : 'other';

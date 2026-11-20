@@ -3,6 +3,8 @@
  *
  * 由 Agent Host 在 unmatched route 前拦截，不进入普通 Agent turn。
  */
+import type { ChatRole } from '@zhin.js/core';
+import { describeCommandDenial } from '@zhin.js/permission';
 import { managementMessages as t } from './management-messages.js';
 import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from './command-presentation.js';
 import type { AIService } from '../service.js';
@@ -15,10 +17,13 @@ import {
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 
+/** The sender's host-wide chat role (`RuntimeSenderRoles` of the Agent ingress). */
 export type RuntimeManagementSenderRoles = {
-  readonly isMaster: boolean;
-  readonly isTrusted: boolean;
+  readonly hostRole?: ChatRole;
 };
+
+/** Management commands need any zhin chat role (`trusted` or higher) on the conversation's chain. */
+const CHAT_ROLE_PERMIT = 'trusted';
 
 export type RuntimeManagementDeps = AgentCommandPresentation & {
   readonly service: AIService;
@@ -65,7 +70,8 @@ export async function handleRuntimeManagementCommand(
   const locale = deps.locale;
   const command = (name: string) => managementCommandReference(name, deps.commandPrefix)!;
 
-  const isOperator = deps.senderRoles.isMaster || deps.senderRoles.isTrusted;
+  // Any zhin chat role on this conversation's chain: the permit `trusted`, whose refusal says so.
+  const isOperator = deps.senderRoles.hostRole !== undefined;
   const agent = asPrivate(deps.zhinAgent);
   const denied = (text: string): string => {
     deps.onUnauthorized?.('not_operator');
@@ -73,7 +79,7 @@ export async function handleRuntimeManagementCommand(
   };
 
   if (/^models\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return denied(t(locale, 'denied'));
+    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
     if (!deps.inference) throw new Error('Inference operation is not configured');
     const profiles = await deps.inference.list({ kind: 'language' });
     const r = [t(locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
@@ -81,13 +87,13 @@ export async function handleRuntimeManagementCommand(
   }
 
   if (/^tree\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return denied(t(locale, 'denied'));
+    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
     return listSessionTree(agent, deps.sessionKey, deps);
   }
 
   const treeJump = text?.match(/^tree\s+(\d+)\s*$/iu);
   if (treeJump) {
-    if (!isOperator) return denied(t(locale, 'denied'));
+    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
     const n = parseLeadingInt(treeJump[1] ?? '');
     if (n == null) return t(locale, 'usage', { command: command('tree') + ' 2' });
     return deps.withModelScope
@@ -97,7 +103,7 @@ export async function handleRuntimeManagementCommand(
 
   const fork = text?.match(/^fork\s+(\d+)\s*$/iu);
   if (fork) {
-    if (!isOperator) return denied(t(locale, 'denied'));
+    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
     const n = parseLeadingInt(fork[1] ?? '');
     if (n == null) return t(locale, 'usage', { command: command('fork') + ' 2' });
     return deps.withModelScope
@@ -106,7 +112,7 @@ export async function handleRuntimeManagementCommand(
   }
 
   if (/^compact\s*$/iu.test(text ?? '')) {
-    if (!isOperator) return denied(t(locale, 'denied'));
+    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
     const compact = () => deps.zhinAgent.compactSession(deps.sessionKey, locale);
     const result = await (deps.withModelScope ? deps.withModelScope(compact) : compact());
     return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
@@ -124,7 +130,7 @@ export async function handleRuntimeManagementCommand(
   if (memoryReply != null) return memoryReply;
 
   if (bareHealth) {
-    if (!isOperator) return denied(t(locale, 'denied'));
+    if (!isOperator) return denied(describeCommandDenial(CHAT_ROLE_PERMIT, locale));
     if (!deps.inference) throw new Error('Inference operation is not configured');
     const profiles = await deps.inference.list({ kind: 'language' });
     return `${t(locale, 'health')}\n${profiles.length} configured language profiles`;

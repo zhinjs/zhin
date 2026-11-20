@@ -710,6 +710,19 @@ export function bindingScopeCovers(
 }
 
 /**
+ * Whether a grant (or a user's role binding) is the built-in `owner` role at the **global** scope —
+ * the Console owner (ADR 0049). The one definition the Host, the gateway and its token registry share.
+ */
+export function isGlobalOwnerGrant(grant: Readonly<{ role?: string; scope: ConsoleBindingScope }>): boolean {
+  return grant.role === 'owner' && grant.scope.kind === 'global';
+}
+
+/** Whether any of `grants` (grants or role bindings) is a global `owner` ({@link isGlobalOwnerGrant}). */
+export function hasGlobalOwnerGrant(grants: readonly Readonly<{ role?: string; scope: ConsoleBindingScope }>[]): boolean {
+  return grants.some(isGlobalOwnerGrant);
+}
+
+/**
  * Whether any grant holds `permission` for `target`. A plugin permission (`<plugin>:<action>`)
  * is also held through `plugin.perms.<level>`; `levelOf` supplies declared levels (default:
  * inferred from the suffix). Plugin permissions count at an adapter / endpoint binding only for a

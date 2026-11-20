@@ -6,6 +6,7 @@ import {
   expandPluginPermissions,
   grantsAllow,
   grantsAllowAlsoRequired,
+  hasGlobalOwnerGrant,
   isPluginConsoleRpcType,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
@@ -104,7 +105,7 @@ export function isLocalSocketPrincipal(principal: ConsolePrincipal | undefined):
 /** A user principal with a global `owner` binding (the local socket principal is one). */
 export function isGlobalOwnerPrincipal(principal: ConsolePrincipal | undefined): boolean {
   return isUserPrincipal(principal)
-    && principal.grants.some((grant) => grant.role === 'owner' && grant.scope.kind === 'global');
+    && hasGlobalOwnerGrant(principal.grants);
 }
 
 /**
