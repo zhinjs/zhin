@@ -1,4 +1,4 @@
-import { componentHostToken, createToken, htmlRendererToken, type CapabilityId, type ComponentHost, type HtmlRendererHost, type Locale, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { componentHostToken, createToken, htmlRendererToken, projectLocale, type CapabilityId, type ComponentHost, type HtmlRendererHost, type Locale, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
@@ -20,7 +20,6 @@ import {
   type SendContent,
 } from './contracts.js';
 import { JsxButtonRegistry } from './interactive-router.js';
-import { projectLocale } from './inbound-spine.js';
 import {
   outboundCommandEnvironmentToken,
   templateCommandPaths,

@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import type { DatabaseConfig } from './types.js';
 
@@ -64,7 +65,7 @@ export function mergeEnvText(existing: string, extra: string): string {
 }
 
 /** 生成数据库连接环境变量（连接参数落 .env，配置文件只引用 ${VAR}）。 */
-export function generateDatabaseEnvVars(config: DatabaseConfig, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function generateDatabaseEnvVars(config: DatabaseConfig, locale: Locale = 'zh-CN'): string {
   const envVars: string[] = [];
 
   switch (config.dialect) {
@@ -119,7 +120,7 @@ export function generateDatabaseEnvVars(config: DatabaseConfig, locale: 'zh-CN' 
  * User-entered passwords and credential-bearing connection URLs are never
  * copied from the interactive wizard.
  */
-export function generateDatabaseEnvExample(config: DatabaseConfig, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function generateDatabaseEnvExample(config: DatabaseConfig, locale: Locale = 'zh-CN'): string {
   let lines: string[] = [];
   switch (config.dialect) {
     case 'mysql':

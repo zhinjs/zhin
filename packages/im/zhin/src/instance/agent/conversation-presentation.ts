@@ -8,9 +8,9 @@
  * exactly the way the ingress parses it.
  */
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
-import { messageLocale, projectLocale } from '@zhin.js/core/runtime';
+import { messageLocale } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { createToken, type Locale, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { createToken, projectLocale, type Locale, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 
 export interface ConversationPresentationTarget {
   readonly platform: string;

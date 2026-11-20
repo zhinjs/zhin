@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { pickMediaRawUrl, resolveMediaSrc } from '@zhin.js/client';
+import { pickMediaRawUrl, resolveMediaSrc, type ConsoleLocale } from '@zhin.js/client';
 import { Download, FileText } from 'lucide-react';
-import { sandboxText, type SandboxLocale } from '../messages.js';
+import { sandboxText } from '../messages.js';
 import { stringField, type SandboxSegmentContextResolver, type SandboxSegmentRenderer } from './context.js';
 import { isSandboxMediaPath } from '../../../src/media-url.js';
 
@@ -13,7 +13,7 @@ type HostedKind = 'image' | 'video' | 'audio' | 'file';
  * placeholder is shown. SVG and HTML are stored as `file`, so they only ever reach `HostedFile`.
  */
 function HostedMedia({ kind, url, resolve, locale, alt, name }: {
-  readonly kind: HostedKind; readonly url: string; readonly resolve: SandboxSegmentContextResolver; readonly locale: SandboxLocale;
+  readonly kind: HostedKind; readonly url: string; readonly resolve: SandboxSegmentContextResolver; readonly locale: ConsoleLocale;
   readonly alt?: string; readonly name?: string;
 }): React.ReactElement {
   const [src, setSrc] = useState<string | null | undefined>(undefined);

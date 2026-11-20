@@ -52,7 +52,7 @@ import {
   type ConsoleScopeTarget,
 } from '@zhin.js/console-protocol';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
-import { createMessages, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
+import { createMessages, formatList, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 // ---------------------------------------------------------------- sources
 
@@ -759,7 +759,7 @@ function clip(text: string): string {
 }
 
 function listed(values: readonly string[], locale: Locale): string {
-  const shown = values.slice(0, MAX_LISTED).join(locale === 'en' ? ', ' : '、');
+  const shown = formatList(locale, values.slice(0, MAX_LISTED));
   return values.length > MAX_LISTED ? `${shown} …(+${values.length - MAX_LISTED})` : shown;
 }
 
@@ -1072,7 +1072,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         subject: { adapter: drift.instanceKey, plugin: drift.instanceKey },
         state: { configOnly: drift.configOnly, savedOnly: drift.savedOnly, changed: drift.changed },
         title: t('drift.title', { adapter: drift.instanceKey }),
-        detail: t('drift.detail', { parts: parts.join(locale === 'en' ? '; ' : '；') }),
+        detail: t('drift.detail', { parts: formatList(locale, parts, { separator: 'semicolon' }) }),
         action: { label: t('drift.action'), path: ATTENTION_PATHS.adapterAccounts(drift.instanceKey) },
         visible: allows(P.ENDPOINT_VIEW, Object.freeze({ kind: 'adapter', adapter: drift.instanceKey })),
       };

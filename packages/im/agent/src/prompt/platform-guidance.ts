@@ -9,18 +9,17 @@
  */
 import { getLogger } from '@zhin.js/logger';
 import type { TurnCapabilities } from '@zhin.js/core';
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import { labelThirdPartyGuidance } from './third-party-guidance.js';
 
 const logger = getLogger('agent.platform-guidance');
-
-export type PlatformGuidanceLocale = 'zh-CN' | 'en';
 
 /** Adapter-authored `profile.prompt.text` is cut to this many characters. */
 export const PLATFORM_CUSTOM_TEXT_MAX_CHARS = 600;
 const EMOJI_SAMPLE = 4;
 
 export interface PlatformGuidanceOptions {
-  readonly locale?: PlatformGuidanceLocale;
+  readonly locale?: Locale;
   /** The adapter is not owned by the agent owner: its custom text is labelled `external_content` (#726). */
   readonly external?: boolean;
   /** Label source for external text, e.g. `adapter:icqq`. */
@@ -51,7 +50,7 @@ interface Words {
   unit: { s: string; min: string; h: string; d: string };
 }
 
-const WORDS: Record<PlatformGuidanceLocale, Words> = {
+const WORDS: Record<Locale, Words> = {
   en: {
     title: '# Platform',
     adapterNotes: '## Adapter notes',
@@ -116,8 +115,8 @@ function range(value: { min?: number; max?: number } | undefined, w: Words): str
   return '';
 }
 
-function words(locale: PlatformGuidanceLocale | undefined): Words {
-  return WORDS[locale === 'zh-CN' ? 'zh-CN' : 'en'];
+function words(locale: Locale | undefined): Words {
+  return WORDS[resolveLocale(locale)];
 }
 
 /** Behaviour-relevant lines only, in a fixed order. */

@@ -1,7 +1,8 @@
+import type { ConsoleLocale } from '@zhin.js/client';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Volume2, Square } from 'lucide-react';
 import { Button } from '@zhin.js/console-ui';
-import { sandboxText, type SandboxLocale } from '../messages.js';
+import { sandboxText } from '../messages.js';
 import { stringField, type SandboxSegmentRenderer } from './context.js';
 
 function speechSynthesisOf(): SpeechSynthesis | undefined {
@@ -60,7 +61,7 @@ export function createTtsPlayback(environment: TtsSpeechEnvironment = browserSpe
 }
 
 /** ADR 0064 G6: a `tts` segment shows its text and reads it aloud with the browser's speech synthesis. */
-function TtsMessage({ text, locale }: { readonly text: string; readonly locale: SandboxLocale }) {
+function TtsMessage({ text, locale }: { readonly text: string; readonly locale: ConsoleLocale }) {
   const [speaking, setSpeaking] = useState(false);
   const [available, setAvailable] = useState(false);
   const playback = useMemo(() => createTtsPlayback(), []);

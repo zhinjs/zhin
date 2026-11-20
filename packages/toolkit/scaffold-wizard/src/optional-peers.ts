@@ -1,7 +1,7 @@
 import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'node:path';
-import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import { readPluginConfigurationMap, type Locale } from '@zhin.js/plugin-runtime';
 import { findMissingPackageDependencies, findUnresolvedPackageInstalls, type PackageJsonLike } from './project-deps.js';
 
 export const SPEECH_PACKAGE = '@zhin.js/speech';
@@ -85,7 +85,7 @@ export function diagnoseOptionalPeers(
   cwd: string,
   config: Record<string, unknown>,
   pkg?: PackageJsonLike,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): OptionalPeersDiagnosis {
   const packageJsonPath = path.join(cwd, 'package.json');
   const packageJson = pkg ?? (fs.existsSync(packageJsonPath)
@@ -137,7 +137,7 @@ export function formatOptionalPeerFixCommand(diagnosis: OptionalPeerDiagnosis): 
   return `pnpm add ${unique.map((n) => `${n}@latest`).join(' ')}`;
 }
 
-export function getOptionalPeerDependencies(config: Record<string, unknown>, locale: 'zh-CN' | 'en' = 'zh-CN'): Record<string, string> {
+export function getOptionalPeerDependencies(config: Record<string, unknown>, locale: Locale = 'zh-CN'): Record<string, string> {
   const peers = diagnoseOptionalPeers(process.cwd(), config, undefined, locale);
   const deps: Record<string, string> = {};
   if (peers.speech?.required) deps[SPEECH_PACKAGE] = 'latest';

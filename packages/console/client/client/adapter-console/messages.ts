@@ -1,7 +1,7 @@
-import { detectLocale, translate, type PluginUiLocale } from '../ui/locale.js';
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
+import { detectLocale, translate } from '../ui/locale.js';
 
 /** Adapter Console 页面文案；键是中文原文，英文只做界面翻译（通用组件文案在 ui/locale.ts）。 */
-export type AdapterConsoleLocale = PluginUiLocale;
 
 const EN: Record<string, string> = {
   '模式': 'Mode',
@@ -165,7 +165,7 @@ const EN: Record<string, string> = {
 };
 
 export function adapterConsoleText(
-  locale: AdapterConsoleLocale,
+  locale: ConsoleLocale,
   zh: string,
   ...values: (string | number)[]
 ): string {
@@ -176,7 +176,7 @@ export const adapterConsoleLocale = detectLocale;
 
 /** 按语言挑选服务端返回的 i18n 文案；缺失时保留原文。 */
 export function pickI18n(
-  locale: AdapterConsoleLocale,
+  locale: ConsoleLocale,
   original: string | undefined,
   i18n: Readonly<Record<string, string>> | undefined,
 ): string | undefined {

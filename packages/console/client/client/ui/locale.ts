@@ -1,6 +1,6 @@
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import { useMemo, useSyncExternalStore } from 'react';
 
-export type PluginUiLocale = 'zh-CN' | 'en';
 
 /** 内置组件文案；键是中文原文，英文只做界面翻译。 */
 const KIT_EN: Readonly<Record<string, string>> = {
@@ -89,7 +89,7 @@ const KIT_EN: Readonly<Record<string, string>> = {
  * 跟随 Console：Console 把用户选的界面语言写在 `<html lang>` 上，优先读它；
  * 没有时才看 `navigator.languages`；无 DOM 时默认中文。
  */
-export function detectLocale(): PluginUiLocale {
+export function detectLocale(): ConsoleLocale {
   const lang = typeof document !== 'undefined' ? document.documentElement.lang : '';
   if (lang) return lang.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
   if (typeof navigator === 'undefined') return 'zh-CN';
@@ -107,7 +107,7 @@ function subscribeLocale(onChange: () => void): () => void {
 
 /** 以中文原文为键翻译，`{0}` `{1}` 为位置占位符；缺失翻译时回退原文。 */
 export function translate(
-  locale: PluginUiLocale,
+  locale: ConsoleLocale,
   dictionary: Readonly<Record<string, string>> | undefined,
   zh: string,
   ...values: readonly (string | number)[]
@@ -120,7 +120,7 @@ export function translate(
 }
 
 export interface PluginUiText {
-  readonly locale: PluginUiLocale;
+  readonly locale: ConsoleLocale;
   readonly t: (zh: string, ...values: readonly (string | number)[]) => string;
 }
 
@@ -129,7 +129,7 @@ export interface PluginUiText {
  * 取代各页面重复的 `detectLocale` + `text` 辅助函数。
  */
 export function useLocale(dictionary?: Readonly<Record<string, string>>): PluginUiText {
-  const locale = useSyncExternalStore(subscribeLocale, detectLocale, () => 'zh-CN' as PluginUiLocale);
+  const locale = useSyncExternalStore(subscribeLocale, detectLocale, () => 'zh-CN' as ConsoleLocale);
   return useMemo(() => ({
     locale,
     t: (zh: string, ...values: readonly (string | number)[]) => translate(locale, dictionary, zh, ...values),

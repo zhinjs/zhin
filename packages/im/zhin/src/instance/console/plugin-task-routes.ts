@@ -2,7 +2,7 @@ import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { HttpBodyError, extractBearerToken, isExplicitConsolePrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import {
   GenerationAdmissionGate, generationAdmissionSource, normalizeDeliveryTarget,
-  PluginTaskError, pluginTaskProviderToken, createMessages, isLocale, resolveLocale, type Locale,
+  PluginTaskError, pluginTaskProviderToken, createMessages, isLocale, queryLocale, resolveLocale, type Locale,
   type CapabilityId, type DeliveryTarget, type JsonValue, type PluginId,
   type PluginTask, type PluginTaskAction, type PluginTaskMutationReceipt, type PluginTaskProvider, type PluginTaskSnapshot,
   type RuntimeSnapshot, type SnapshotLease, type SnapshotReader,
@@ -36,7 +36,7 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
     const displayLocale = resolveLocale(url.searchParams.get('locale'));
     const denied = authorize(request, context, http, displayLocale);
     if (denied) return denied;
-    try { return send(listPluginUseCases(queryLocale(url))); }
+    try { return send(listPluginUseCases(taskQueryLocale(url))); }
     catch (error) { return failure(error, displayLocale); }
   }), { summary: 'List practical plugin use cases', tags: ['tasks'], description: 'Static metadata only; no plugin execution, configuration changes or message delivery.' });
   http.route('GET', `${base}/tasks/providers`, noStore(async (request, context) => {
@@ -47,7 +47,7 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
     let lease: SnapshotLease | undefined;
     const releases: Array<() => void> = [];
     try {
-      const locale = queryLocale(url);
+      const locale = taskQueryLocale(url);
       lease = acquire(snapshots);
       const snapshot = lease.value;
       const providers = [...snapshot.tree.keys()].flatMap(owner => {
@@ -99,12 +99,11 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
     description: 'Full-scope, generation-checked persistent task command. Request UUID and revision are reconciled by the provider. No test messages or blind retries.' });
 }
 
-function queryLocale(url: URL): Locale {
-  if ([...url.searchParams.keys()].some(key => key !== 'locale') || url.searchParams.getAll('locale').length > 1
-    || url.searchParams.has('locale') && !isLocale(url.searchParams.get('locale'))) {
-    throw new PluginTaskError('invalid_input', 'query');
-  }
-  return resolveLocale(url.searchParams.get('locale'));
+/** GET task routes take `locale` only. */
+function taskQueryLocale(url: URL): Locale {
+  const locale = queryLocale(url.searchParams);
+  if (!locale || [...url.searchParams.keys()].some(key => key !== 'locale')) throw new PluginTaskError('invalid_input', 'query');
+  return locale;
 }
 
 /** Denial response, or undefined when the caller presented an explicit Console credential. */

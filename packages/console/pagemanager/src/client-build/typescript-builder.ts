@@ -29,7 +29,7 @@ import {
   type ConsolePageBlueprint,
 } from '@zhin.js/console-contract';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
-import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type Locale } from '@zhin.js/plugin-runtime';
 import { readClientMetadata } from './metadata-worker.js';
 import {
   ALLOWED_ESM_CANONICAL,
@@ -340,7 +340,7 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
 
 type PageMeta = {
   readonly title?: string;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly icon?: string;
   readonly group?: string;
   readonly order?: number;
@@ -647,7 +647,7 @@ export function buildPageRegisterWrapper(
     readonly owner?: string;
     readonly route: string;
     readonly title: string;
-    readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    readonly titleI18n?: Readonly<Partial<Record<Locale, string>>>;
     readonly icon?: string;
     readonly group?: string;
     readonly order?: number;
@@ -675,7 +675,7 @@ function buildRegisterFunctionBody(options: {
   readonly owner?: string;
   readonly route: string;
   readonly title: string;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly icon?: string;
   readonly group?: string;
   readonly order?: number;

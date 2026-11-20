@@ -1,4 +1,5 @@
-import { sandboxText, type SandboxLocale } from './messages.js';
+import type { ConsoleLocale } from '@zhin.js/client';
+import { sandboxText } from './messages.js';
 import React, { useEffect, useRef, useState } from 'react';
 
 /** Largest render width honoured from an HTML segment (wider requests render at this width). */
@@ -23,7 +24,7 @@ export function htmlRenderScale(width: number | undefined, available: number): n
  * down proportionally to the chat column (#1250 command-menu-unreadable-in-sandbox).
  */
 export default function HtmlMessage({ html, locale = 'zh-CN', width: requestedWidth }: {
-  readonly html: string; readonly locale?: SandboxLocale; readonly width?: number;
+  readonly html: string; readonly locale?: ConsoleLocale; readonly width?: number;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const box = useRef<HTMLDivElement>(null);

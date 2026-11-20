@@ -1,5 +1,6 @@
 import { createToken } from './token.js';
 import type { DeliveryTarget } from './delivery-target.js';
+import type { RuntimeSnapshot } from './snapshot.js';
 
 /** Supported display languages. Time zone and command identities are independent. */
 export type Locale = 'zh-CN' | 'en';
@@ -15,8 +16,27 @@ export function resolveLocale(value: unknown): Locale {
   return isLocale(value) ? value : DEFAULT_LOCALE;
 }
 
+/**
+ * Strict `?locale=` of an HTTP route: absent yields `fallback`; one supported value yields it; an
+ * unknown or repeated value yields `undefined`, which the route answers with 400.
+ */
+export function queryLocale(params: URLSearchParams, fallback: Locale = DEFAULT_LOCALE): Locale | undefined {
+  const values = params.getAll('locale');
+  if (values.length === 0) return fallback;
+  return values.length === 1 && isLocale(values[0]) ? values[0] : undefined;
+}
+
 /** Immutable project language, projected with the operation's generation. */
 export const projectLocaleToken = createToken<Locale>('zhin.project-locale');
+
+/**
+ * The project language of a generation: the projected {@link projectLocaleToken}, else the Root's
+ * `locale` configuration, else {@link DEFAULT_LOCALE}. Commands, messages and outbound share it.
+ */
+export function projectLocale(snapshot: RuntimeSnapshot): Locale {
+  return resolveLocale(snapshot.resources.get(snapshot.root)?.get(projectLocaleToken.id)
+    ?? (snapshot.config.get(snapshot.root) as { locale?: unknown } | undefined)?.locale);
+}
 
 /** Root-owned preferences; identity never comes from display names or profile text. */
 export interface UserLocalePreferences {
@@ -50,6 +70,29 @@ export function createMessages<const T extends MessageCatalog>(catalog: T) {
       return String(values[name]);
     });
   };
+}
+
+export interface FormatListOptions {
+  /**
+   * `list` (default) for short items: `a、b` / `a, b`; `comma` for longer phrases: `a，b` / `a, b`;
+   * `semicolon` for clauses: `a；b` / `a; b`.
+   */
+  readonly separator?: 'list' | 'comma' | 'semicolon';
+}
+
+const LIST_SEPARATORS: Readonly<Record<NonNullable<FormatListOptions['separator']>, Readonly<Record<Locale, string>>>> = {
+  list: { 'zh-CN': '、', en: ', ' },
+  comma: { 'zh-CN': '，', en: ', ' },
+  semicolon: { 'zh-CN': '；', en: '; ' },
+};
+
+/**
+ * Joins display items with the language's separator (#1250). Plain concatenation on purpose:
+ * `Intl.ListFormat` adds a conjunction in `en` (`a, b, and c`) and has no `、` enumeration style in
+ * `zh-CN`, so it would change every existing message. Items are not escaped or reordered.
+ */
+export function formatList(locale: Locale | undefined, items: Iterable<string>, options: FormatListOptions = {}): string {
+  return [...items].join(LIST_SEPARATORS[options.separator ?? 'list'][resolveLocale(locale)]);
 }
 
 export interface FormatDateTimeOptions {

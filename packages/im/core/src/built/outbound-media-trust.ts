@@ -171,7 +171,7 @@ function isRemoteSourceString(value: string): boolean {
   return /^https?:\/\//iu.test(value) || /^base64:\/\//iu.test(value) || isPlatformFileToken(value);
 }
 
-const NOTICE: Readonly<Record<'zh-CN' | 'en', { readonly labels: Readonly<Record<string, string>>; readonly text: (label: string) => string }>> = {
+const NOTICE: Readonly<Record<Locale, { readonly labels: Readonly<Record<string, string>>; readonly text: (label: string) => string }>> = {
   'zh-CN': {
     labels: { image: '图片', audio: '语音', video: '视频', file: '文件' },
     text: label => `[${label}未发送：媒体来源不被允许]`,

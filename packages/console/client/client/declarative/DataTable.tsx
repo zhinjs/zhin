@@ -3,6 +3,7 @@
  * with batch actions, row actions and expandable rows. In a container narrower than `sm` the
  * console-ui `Table` turns its rows into cards by itself (D18 第 6 条) instead of scrolling sideways.
  */
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Button,
@@ -16,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@zhin.js/console-ui';
-import { useLocale, type PluginUiLocale, type PluginUiText } from '../ui/locale.js';
+import { useLocale, type PluginUiText } from '../ui/locale.js';
 import { ActionButton, EmptyBlock, ToneBadge } from '../renderer/kit.js';
 import {
   pickText,
@@ -173,7 +174,7 @@ function useCopy(): CopyState {
   return useMemo(() => ({ copiedKey, onCopy }), [copiedKey, onCopy]);
 }
 
-function actionText(text: DeclarativeI18nText | undefined, locale: PluginUiLocale, t: PluginUiText['t']): string | undefined {
+function actionText(text: DeclarativeI18nText | undefined, locale: ConsoleLocale, t: PluginUiText['t']): string | undefined {
   return text === undefined ? undefined : pickText(text, locale, t);
 }
 

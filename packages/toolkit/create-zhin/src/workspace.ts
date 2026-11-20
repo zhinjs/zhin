@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from '@zhin.js/scaffold-wizard';
 import fs from 'fs-extra';
 import path from 'path';
@@ -51,7 +52,7 @@ function getConfigFilename(format: InitOptions['config']): string {
   }
 }
 
-function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilename: string, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilename: string, locale: Locale = 'zh-CN'): string {
   if (!database) return '';
   if (database.dialect === 'sqlite') {
     return wizardText(locale, "templates.databaseSqlite", [configFilename]);

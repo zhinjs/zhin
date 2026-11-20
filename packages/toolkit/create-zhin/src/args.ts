@@ -1,5 +1,6 @@
 import { ADAPTERS, DATABASE_DIALECT_DEFINITIONS, type DatabaseConfig, type InitOptions } from '@zhin.js/scaffold-wizard';
-import { createText, type CreateLocale } from './messages.js';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { createText } from './messages.js';
 
 export const TEMPLATE_VALUES = ['default', 'life-assistant'] as const;
 export const CONFIG_FORMAT_VALUES = ['yaml', 'json'] as const;
@@ -32,7 +33,7 @@ const DATABASE_DIALECTS = DATABASE_DIALECT_DEFINITIONS.map((definition) => defin
 const ADAPTER_VALUES = ADAPTERS.map((adapter) => adapter.value);
 
 function readChoice<T extends string>(
-  locale: CreateLocale | undefined,
+  locale: Locale | undefined,
   flag: string,
   value: string | undefined,
   choices: readonly T[],
@@ -44,7 +45,7 @@ function readChoice<T extends string>(
 }
 
 /** Parse arguments that remain after `readProjectLocaleArgument` removed `--locale`. */
-export function parseCreateArgs(args: readonly string[], locale?: CreateLocale): CreateArgs {
+export function parseCreateArgs(args: readonly string[], locale?: Locale): CreateArgs {
   let projectName: string | undefined;
   let yes = false;
   let skipInstall = false;
