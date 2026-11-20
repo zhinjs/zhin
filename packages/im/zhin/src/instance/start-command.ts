@@ -472,6 +472,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         authorize: authorizeRestartChat,
         restartSupported: () => restartSupported,
         requestRestart: () => requestProcessRestart('chat'),
+        audit: entry => { httpHost.tokenRegistry?.accessProvider?.audit?.(entry); },
       })(context);
       if (isRelationalDialect) {
         context.handoff.add({
