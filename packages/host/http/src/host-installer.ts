@@ -1,5 +1,6 @@
 import {
   bindGenerationAdmission,
+  createEnvironmentLookup,
   expandEnvironmentValue,
   type ConfigDocumentPort,
   type GenerationAdmissionBindable,
@@ -27,10 +28,7 @@ export async function resolveHttpConfig(
   if (!document || typeof document !== 'object') return {};
   const http = (document as Record<string, unknown>).http;
   if (!http || typeof http !== 'object') return {};
-  const value = expandEnvironmentValue(
-    http,
-    (key) => envOverlay?.[key] ?? process.env[key],
-  ) as Record<string, unknown>;
+  const value = expandEnvironmentValue(http, createEnvironmentLookup(envOverlay, process.env)) as Record<string, unknown>;
   const stored = http as Record<string, unknown>;
   if (value.tokens !== undefined && value.tokens !== null) throw new Error(HTTP_TOKENS_REMOVED_MESSAGE);
   const primary: HttpHostOptions = Object.freeze({
@@ -84,7 +82,7 @@ async function injectDesktopDeviceListener(
   envOverlay: Readonly<Record<string, string | undefined>> | undefined,
   projectRoot: string,
 ): Promise<readonly HttpHostOptions[]> {
-  const environment = (key: string) => envOverlay?.[key] ?? process.env[key];
+  const environment = createEnvironmentLookup(envOverlay, process.env);
   if (!parseEnabled(
     environment('ZHIN_DESKTOP_DEVICE_LISTENER_ENABLED') ?? false,
     'ZHIN_DESKTOP_DEVICE_LISTENER_ENABLED',

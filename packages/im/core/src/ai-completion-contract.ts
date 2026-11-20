@@ -6,7 +6,7 @@
  * configured; check with {@link hasResource} (or `context.has?.(token)`) before `use()`.
  */
 import { createToken, type Token } from '@zhin.js/plugin-runtime';
-import { hostChatRole } from '@zhin.js/im-contract';
+import { isOwner } from './built/chat-role-reader.js';
 
 /** Who a completion is billed to (`onBehalfOf`). `groupId` is `${platform}:${endpoint}:${sceneId}` in group / channel chats. */
 export interface UsageSubject {
@@ -156,7 +156,7 @@ export function usageSubjectFromMessage(message: UsageSubjectSource): UsageSubje
   return Object.freeze({
     userId,
     ...(kind === 'private' ? {} : { groupId: usageGroupId(platform, endpoint, sceneId) }),
-    owner: hostChatRole(message.sender) === 'owner',
+    owner: isOwner(message.sender),
   });
 }
 

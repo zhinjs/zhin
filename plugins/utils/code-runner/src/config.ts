@@ -1,4 +1,4 @@
-import { Schema } from 'zhin.js';
+import { isWholeEnvironmentReference, Schema } from 'zhin.js';
 
 /** Authoring declaration; scripts/sync-plugin-config-schemas.mjs generates the packaged schema.json for Runtime and Console. */
 export const codeRunnerConfig = Schema.object({
@@ -36,9 +36,9 @@ export interface CodeRunnerBackend {
 /** Missing or blank fields mean "not configured"; never fall back to a hard-coded public service. */
 export function resolveCodeRunnerBackend(config: Partial<CodeRunnerConfig> | undefined): CodeRunnerBackend | undefined {
   const endpoint = typeof config?.endpoint === 'string' ? config.endpoint.trim() : '';
-  // An unexpanded `${ENV}` reference means the variable is missing: treat it as unconfigured.
-  if (!endpoint || /^\$\{[^}]*\}$/u.test(endpoint)) return undefined;
-  const token = typeof config?.token === 'string' && config.token.trim() && !/^\$\{[^}]*\}$/u.test(config.token.trim())
+  // An unexpanded `${ENV}` reference (the shared plugin-runtime parser) means the variable is missing: unconfigured.
+  if (!endpoint || isWholeEnvironmentReference(endpoint)) return undefined;
+  const token = typeof config?.token === 'string' && config.token.trim() && !isWholeEnvironmentReference(config.token.trim())
     ? config.token.trim()
     : undefined;
   return { provider: config?.provider === 'glot' ? 'glot' : 'piston', endpoint, ...(token ? { token } : {}) };

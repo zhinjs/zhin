@@ -2,6 +2,7 @@ import {
   adapterFeatureId,
   hostChatRole,
   isAdapterIndex,
+  type ChatRole,
   type AdapterCapabilityProfile,
   type AITriggerConfig,
   type TurnCapabilities,
@@ -92,10 +93,13 @@ function resolveEndpointRoleTarget(
   return undefined;
 }
 
+/**
+ * The sender's chat role for host-wide trust (ADR 0056 §2, `hostChatRole` from `@zhin.js/core`):
+ * `owner` only for a **global** owner (a lower-level owner counts as `admin` here), `admin` /
+ * `trusted` as held on the conversation's chain, absent without a role.
+ */
 export interface RuntimeSenderRoles {
-  /** Chat role `owner` (ADR 0056; formerly `master`). */
-  readonly isMaster: boolean;
-  readonly isTrusted: boolean;
+  readonly hostRole?: ChatRole;
 }
 
 /** ADR 0041 §6: scene/sender facts are reused for at most this long. */
@@ -492,14 +496,12 @@ async function resolveTurnFacts(
 
 /**
  * Sender roles derive only from the Runtime-set `sender.chatRole` / `sender.chatRoleLevels` (ADR 0056:
- * stored grants along the conversation's scope chain; platform standing never counts). `isMaster`
- * means a **global** `owner` (host-wide trust); a lower-level owner counts as `admin`.
- * `isTrusted` means `trusted` or `admin` (admin includes trusted) without host owner.
+ * stored grants along the conversation's scope chain; platform standing never counts). `hostRole`
+ * is `owner` only for a **global** `owner` (host-wide trust); a lower-level owner counts as `admin`.
  */
 export function resolveRuntimeSenderRoles(message: Pick<Message, 'sender'>): RuntimeSenderRoles {
   const role = message.sender?.id ? hostChatRole(message.sender) : undefined;
-  const isMaster = role === 'owner';
-  return { isMaster, isTrusted: !isMaster && (role === 'admin' || role === 'trusted') };
+  return role ? { hostRole: role } : {};
 }
 
 export function resolveOwnerForRuntimeMessage(

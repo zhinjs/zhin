@@ -69,9 +69,48 @@ describe('start command unset ${VAR} warning (#1250)', () => {
     expect(message).not.toMatch(/QQ_APPID|QQ_SECRET/u);
   });
 
+  it('does not warn about references with a default', () => {
+    const warn = vi.fn();
+    warnUnsetConfigEnvPlaceholders({ http: { port: '${PORT:-8068}', token: '${HTTP_TOKEN:=}' }, x: { url: 'http://${HOST}/' } },
+      () => undefined, 'zhin.config.yml', { warn });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0]![0]);
+    expect(message).toContain('${HOST}');
+    expect(message).not.toMatch(/PORT|HTTP_TOKEN/u);
+  });
+
   it('stays silent when only a disabled plugin references unset variables', () => {
     const warn = vi.fn();
     warnUnsetConfigEnvPlaceholders(document, name => (name === 'HTTP_TOKEN' || name === 'RSS_KEY' ? 'set' : undefined), 'zhin.config.yml', { warn });
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('instance http config resolution (#1250)', () => {
+  it('expands http once, exactly like the gateway and the CLI', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { loadGatewayHttpConfig } = await import('@zhin.js/gateway/server');
+    const { loadRuntimeEnvironmentLayers } = await import('@zhin.js/gateway/project');
+    const { createConfigDocument } = await import('@zhin.js/runtime');
+    const { resolveInstanceHttpConfig } = await import('../../src/instance/start-command.js');
+    const root = await mkdtemp(join(tmpdir(), 'zhin-http-once-'));
+    try {
+      // `${B:-${C}}` with B unset expands to the text `${C}` (default up to the first `}`, then `}`);
+      // a `.env` value containing `${X}` is a literal. A second pass would turn both into values.
+      await writeFile(join(root, 'zhin.config.yml'),
+        'configVersion: 2\nhttp:\n  token: "${HTTP_ONCE_TOKEN}"\n  base: "${HTTP_ONCE_B:-${HTTP_ONCE_C}}"\n');
+      await writeFile(join(root, '.env'), 'HTTP_ONCE_TOKEN=lit${HTTP_ONCE_C}\nHTTP_ONCE_C=expanded-twice\n');
+      const raw = (await createConfigDocument(join(root, 'zhin.config.yml')).read()).document;
+      const layers = await loadRuntimeEnvironmentLayers(root, 'development');
+      const instance = await resolveInstanceHttpConfig(raw, layers, 'development', root);
+      const gateway = await loadGatewayHttpConfig(root, 'development');
+      expect(instance).toEqual(gateway);
+      expect(instance.token).toBe('lit${HTTP_ONCE_C}');
+      expect(instance.apiBase).toBe('${HTTP_ONCE_C}');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

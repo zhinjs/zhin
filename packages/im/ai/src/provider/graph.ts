@@ -6,6 +6,7 @@ import {
   type DecisionPurposePolicy, type DecisionPurpose, type AmbientJudgePolicy,
 } from './types.js';
 import { AMBIENT_JUDGE_KEYS } from './ambient-judge.js';
+import { parseEnvUri } from '@zhin.js/plugin-runtime';
 
 export const MODEL_KINDS = ['language', 'decision', 'image'] as const;
 export const DECISION_PURPOSES = ['skills', 'tools', 'memory', 'agents', 'approval'] as const;
@@ -104,7 +105,7 @@ function account(input: unknown, key: string, rootId: string): ProviderAccount {
   fields(auth, ['method', 'source']);
   if (!['none', 'api-key', 'oauth'].includes(String(auth.method))) return invalid();
   const source = optional(auth.source, text);
-  if (source !== undefined && (auth.method !== 'api-key' || !/^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/u.test(source))) return invalid();
+  if (source !== undefined && (auth.method !== 'api-key' || parseEnvUri(source) === undefined)) return invalid();
   return Object.freeze({ ...resource(raw, key, rootId), serviceId: text(raw.serviceId), incarnation: text(raw.incarnation),
     authentication: Object.freeze({ method: auth.method, ...(source !== undefined ? { source } : {}) }) as ProviderAccount['authentication'] });
 }

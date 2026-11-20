@@ -24,7 +24,7 @@ import {
   chatRoleIncludes, chatScopeChain, isChatIdentity, isChatRole, isConfirmWord, resolveChatRoleMessageContext,
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleSubjectFailure,
 } from '@zhin.js/core';
-import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
+import { ChatRoleStorageUnavailableError, hasGlobalOwner, type InstanceChatRoleService } from './chat-roles.js';
 import { unauthorizedCommandReply } from './unauthorized-command-reply.js';
 
 export interface FeatureSelfServiceConfig {
@@ -372,7 +372,7 @@ function holdsAdminAnywhere(deps: FeatureSelfServiceDeps, actor: FeatureChatActo
 function deniedReply(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, locale: Locale): string {
   const standing = actor.context.platform?.standing;
   const reply = messages(locale, standing === 'owner' || standing === 'admin' ? 'deniedStanding' : 'denied');
-  const ownerless = !deps.roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
+  const ownerless = !hasGlobalOwner(deps.roles);
   return refuse('not-admin', ownerless ? `${reply}\n${messages(locale, 'noOwnerHint')}` : reply);
 }
 

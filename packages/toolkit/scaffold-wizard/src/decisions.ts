@@ -1,4 +1,4 @@
-import type { Locale } from '@zhin.js/plugin-runtime';
+import { parseEnvUri, type Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
@@ -39,7 +39,7 @@ export async function configureTypeSafeDecisions(config: Readonly<Record<string,
   ]);
   const reference = record(record(record(proposal).accounts)[answers.instanceKey]).auth;
   const source = record(reference).source;
-  const existingVariable = typeof source === 'string' ? /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/.exec(source)?.[1] : undefined;
+  const existingVariable = parseEnvUri(source);
   return { ...answers, envVar: existingVariable ?? decisionKeyVariable(answers.instanceKey) };
 }
 

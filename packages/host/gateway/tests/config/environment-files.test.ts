@@ -87,6 +87,13 @@ describe('masked env view (issue #1250)', () => {
     expect(view.content).not.toMatch(SECRETS);
   });
 
+  it('flags only a whole ${NAME} without default as a reference (shared parser)', () => {
+    const view = maskEnvFileContent('.env', 'A=${B}\nC=${B:-fallback-secret}\nD=${B\nE=x${B}\n');
+    expect(view.variables.map(variable => [variable.key, variable.isReference === true])).toEqual([
+      ['A', true], ['C', false], ['D', false], ['E', false],
+    ]);
+  });
+
   it('reads a missing file as empty and refuses names outside the env file list', async () => {
     await withRoot(async (root) => {
       expect(await readEnvFileView(root, '.env')).toMatchObject({ variables: [], lines: [], content: '' });

@@ -68,5 +68,8 @@ describe("cleanSecret", () => {
   it("blanks unresolved env placeholders", () => {
     expect(cleanSecret("${CALDAV_PASSWORD}")).toBe("");
     expect(cleanSecret(" secret ")).toBe("secret");
+    // The shared parser decides what an unresolved placeholder is.
+    expect(cleanSecret("${CALDAV_PASSWORD:-}")).toBe("");
+    expect(cleanSecret("${1PASS}")).toBe("${1PASS}");
   });
 });

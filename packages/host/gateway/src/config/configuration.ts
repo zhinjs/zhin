@@ -5,6 +5,7 @@ import {
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   applyConfigPatches,
+  findUnsetEnvironmentReferences,
   readPluginConfigurationMap,
   rootPluginId,
   type RuntimeConfigDocument,
@@ -697,7 +698,6 @@ export class ConsoleConfigurationStore {
       ? { ...framed, properties: { ...Object.fromEntries(childKeys.map(key => [key, { type: 'object' }])), ...(framed.properties as Record<string, unknown>) } }
       : framed;
     const errors: Array<{ path: string; message: string }> = [];
-    const missingEnv = new Set<string>();
     const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };
     if (pluginName === 'ai') {
       // Startup composition deliberately retains legacy data for explicit
@@ -729,12 +729,13 @@ export class ConsoleConfigurationStore {
         errors.push({ path: `$${location.map(key => `.${key}`).join('')}`, message });
       }
     }
-    collectEnvironmentReferences(candidate.value, missingEnv, environment);
+    // Same check as the instance's startup warning; `${VAR:-…}` / `${VAR:=…}` never count as missing.
+    const missingEnv = findUnsetEnvironmentReferences(candidate.value, name => environment.has(name));
     return Object.freeze({
       schemaAvailable: schema !== null,
       valid: errors.length === 0,
       errors: Object.freeze(errors),
-      missingEnv: Object.freeze([...missingEnv].sort()),
+      missingEnv,
     });
   }
 
@@ -796,21 +797,6 @@ function projectDeclarationErrors(document: RuntimeConfigDocument, paths: readon
     }
   }
   return errors;
-}
-
-function collectEnvironmentReferences(
-  value: unknown,
-  missingEnv: Set<string>,
-  environment: Pick<EnvStore, 'has'>,
-): void {
-  if (typeof value === 'string') {
-    for (const name of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/gu)) {
-      if (!environment.has(name[1]!)) missingEnv.add(name[1]!);
-    }
-  }
-  if (value && typeof value === 'object') {
-    for (const item of Object.values(value)) collectEnvironmentReferences(item, missingEnv, environment);
-  }
 }
 
 export { configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';

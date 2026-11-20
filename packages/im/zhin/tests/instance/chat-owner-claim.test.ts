@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isProjectPathAllowed } from '@zhin.js/host-http';
-import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
+import { ChatRoleService, ChatRoleStore, hasGlobalOwner, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 import {
-  CHAT_OWNER_CLAIM_FILE, CHAT_OWNER_CLAIM_MAX_FAILURES, CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES, CHAT_OWNER_CLAIM_SENDER_WINDOW_MS, ChatOwnerClaim, chatOwnerClaimCodeHash, executeOwnerClaim, generateChatOwnerClaimCode, hasGlobalOwner,
+  CHAT_OWNER_CLAIM_FILE, CHAT_OWNER_CLAIM_MAX_FAILURES, CHAT_OWNER_CLAIM_MAX_SENDER_FAILURES, CHAT_OWNER_CLAIM_SENDER_WINDOW_MS, ChatOwnerClaim, chatOwnerClaimCodeHash, executeOwnerClaim, generateChatOwnerClaimCode,
 } from '../../src/instance/chat-owner-claim.js';
 
 const directories: string[] = [];

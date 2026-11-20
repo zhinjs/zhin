@@ -84,6 +84,9 @@ describe('findLiteralConfigSecrets', () => {
 
   it('needs no schema for the name fallback', () => {
     expect(paths(findLiteralConfigSecrets({ http: { token: 'x' }, custom: { apiKey: 'y', label: 'z' } }))).toEqual(['http.token', 'custom.apiKey']);
+    // Only references expansion would replace (or a valid env:// URI) are references; other `${` text is a literal.
+    expect(paths(findLiteralConfigSecrets({ http: { token: '${HTTP_TOKEN:-}' }, a: { apiKey: 'pre${KEY}' }, b: { apiKey: 'env://KEY' },
+      c: { apiKey: 'p${ss' }, d: { apiKey: '${1KEY}' }, e: { apiKey: 'env://bad-name' } }))).toEqual(['c.apiKey', 'd.apiKey', 'e.apiKey']);
   });
 
   it('formats one warning with paths and the doctor hint, without values', () => {

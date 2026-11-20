@@ -15,13 +15,11 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
 import { updateDotenvFile } from '@zhin.js/runtime';
-import type { ConfigPatch, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import { parseEnvironmentReference, type ConfigPatch, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { dotenvLine, findProjectLiteralSecrets, literalSecretEnvironmentName, readDocumentPath as readPath } from './literal-secrets.js';
 
 /** How a patch stores secret values: `env` (default) or `plain` (explicit opt-out, e.g. `zhin config set --plain`). */
 export type ConfigSecretStorage = 'env' | 'plain';
-
-const WHOLE_REFERENCE = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u;
 
 /** Result / error code when a write would store secret values in `.env` without `ops.env.write`. */
 export const SECRET_ENVIRONMENT_WRITE_REQUIRED = 'env-write-required';
@@ -95,8 +93,9 @@ export async function planSecretExternalization(
     if (typeof value !== 'string' || value === '' || value === readPath(current, secret.path)) continue;
     const label = secret.path.join('.');
     const canonical = canonicalSecretVariable(secret.path);
-    const reference = WHOLE_REFERENCE.exec(String(readPath(current, secret.path) ?? ''))?.[1];
-    // Only the field's own canonical variable is updated in place. Any other `${VAR}` the field
+    const reference = parseEnvironmentReference(readPath(current, secret.path))?.variable;
+    // Only the field's own canonical variable is updated in place (also when the field held
+    // `${VAR:-default}`; the write replaces it with `${VAR}`). Any other `${VAR}` the field
     // references may belong to something else (#1250): a fresh name is written instead.
     let variable = canonical;
     if (reference !== canonical) {

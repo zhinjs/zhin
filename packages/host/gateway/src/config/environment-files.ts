@@ -14,6 +14,7 @@ import {
   type ConsoleEnvRevealResult,
   type ConsoleEnvVariable,
 } from '@zhin.js/console-protocol';
+import { parseEnvironmentReference } from '@zhin.js/plugin-runtime';
 import { readDotenvFile, updateDotenvFile, writeDotenvFile } from '@zhin.js/runtime';
 
 const ENV_FILES: ReadonlySet<string> = new Set(ENV_FILE_NAMES);
@@ -43,7 +44,6 @@ export async function writeEnvFile(projectRoot: string, filename: string, conten
 
 // No `u` flag: the pattern is kept exactly as dotenv has it.
 const DOTENV_LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/dgm;
-const REFERENCE = /^\$\{[^}]+\}$/u;
 
 /** One assignment dotenv reads. Offsets are into the original content; `[start, end)` are whole lines. */
 interface EnvEntry {
@@ -146,12 +146,21 @@ function effectiveValue(key: string, rawValue: string): string {
   return parse(`${key}=${rawValue}`)[key] ?? '';
 }
 
+/**
+ * `ConsoleEnvVariable.isReference`: the value is exactly one `${NAME}` (the shared parser), with no
+ * default — a `${NAME:-…}` default can be the credential itself, so it is not flagged as a pointer.
+ */
+function isPlainEnvironmentReference(value: string): boolean {
+  const reference = parseEnvironmentReference(value);
+  return reference !== undefined && reference.default === undefined;
+}
+
 function maskedVariable(entry: EnvEntry): ConsoleEnvVariable {
   return Object.freeze({
     key: entry.key,
     masked: maskConsoleEnvValue(entry.value),
     hasValue: entry.value.length > 0,
-    ...(REFERENCE.test(entry.value) ? { isReference: true as const } : {}),
+    ...(isPlainEnvironmentReference(entry.value) ? { isReference: true as const } : {}),
   });
 }
 

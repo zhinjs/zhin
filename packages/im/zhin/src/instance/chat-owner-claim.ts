@@ -36,7 +36,7 @@ import { createMessages, type Locale, type SnapshotReader } from '@zhin.js/plugi
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ChatIdentity } from '@zhin.js/core';
 import type { InboundSecretGuard, Message } from '@zhin.js/core/runtime';
-import type { InstanceChatRoleService } from './chat-roles.js';
+import { hasGlobalOwner, type InstanceChatRoleService } from './chat-roles.js';
 import {
   chatRoleMigrationAdapterKinds, type ChatRoleAudit, type ChatRoleMigrationAdapterKind, type ChatRoleMigrationLogger,
 } from './chat-role-migration.js';
@@ -87,11 +87,6 @@ function sameCode(left: string, right: string): boolean {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
-}
-
-/** Whether any global `owner` grant exists. */
-export function hasGlobalOwner(roles: Pick<InstanceChatRoleService, 'store'>): boolean {
-  return roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
 }
 
 export type ChatOwnerClaimOutcome =

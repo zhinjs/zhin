@@ -38,6 +38,11 @@ export {
 /** Resolution over the instance's stored grants. */
 export type InstanceChatRoleService = ChatRoleService<ChatRoleStore>;
 
+/** Whether any global `owner` grant exists (the one check: claims, Console attention, chat hints). */
+export function hasGlobalOwner(roles: Pick<InstanceChatRoleService, 'store'>): boolean {
+  return roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
+}
+
 export const CHAT_ROLE_TABLE = 'chat_roles';
 const FIELDS = ['id', 'level', 'scope_key', 'adapter', 'user_id', 'principal_id', 'role', 'granted_by', 'granted_at'];
 const RELATIONAL = ['sqlite', 'mysql', 'pg'];

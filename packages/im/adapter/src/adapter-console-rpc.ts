@@ -31,6 +31,7 @@ import {
   type PluginConsoleRpcCall,
   type PluginConsoleRpcJson,
   type Token,
+  parseEnvironmentReference,
 } from '@zhin.js/plugin-runtime';
 import type { EndpointRunningInfo } from './endpoint-commands.js';
 import {
@@ -223,7 +224,14 @@ function permissionLevels(read: string | undefined, write: string | undefined,
   if (read && read !== write && PLUGIN_PERMISSION.test(read)) out.push({ id: read, level: 'read' });
   return out;
 }
-const ENV_REFERENCE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
+/**
+ * An env field shows its stored value only when it is a whole `${VAR}` reference: a
+ * `${VAR:-default}` default can itself be a credential, so it is masked like a literal.
+ */
+function showsEnvironmentReference(text: string): boolean {
+  const reference = parseEnvironmentReference(text);
+  return reference !== undefined && reference.default === undefined;
+}
 
 /** 过滤掉 i18n 里的 undefined，保证返回值是纯 JSON 对象。 */
 function stringsI18n(input: Readonly<Partial<Record<string, string>>> | undefined): Record<string, string> | undefined {
@@ -405,7 +413,7 @@ export function createAdapterConsoleRpc(
       const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
       if (!text) continue;
       if (field.env) {
-        values[field.key] = ENV_REFERENCE.test(text) ? text : '••••••';
+        values[field.key] = showsEnvironmentReference(text) ? text : '••••••';
       } else if (field.secret) {
         values[field.key] = '••••••';
       } else {

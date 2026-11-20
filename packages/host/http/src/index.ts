@@ -22,7 +22,6 @@ export type { HttpHostAddress, HttpHostOptions, HttpHostTlsOptions } from './hos
 export { listHttpHostAddresses } from './addresses.js';
 export {
   DEFAULT_HTTP_PORT,
-  ENVIRONMENT_REFERENCE_PATTERN,
   InvalidHttpPortError,
   describeInvalidPortValue,
   parseHttpPort,

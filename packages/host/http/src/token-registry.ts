@@ -1,5 +1,6 @@
 import {
   CONSOLE_PERMISSION_LIST,
+  isGlobalOwnerGrant,
   pluginPermissionLevelResolver,
   type ConsolePluginPermissionInfo,
   type ConsolePluginPermissionLevelResolver,
@@ -175,7 +176,7 @@ export class TokenRegistry {
     if (principal.kind === 'bootstrap') return principal.open ? unrestrictedConsoleAccess : publicConsoleAccess;
     // A global owner sees every page, including plugin pages whose permissions no plugin reports.
     // An owner API token narrowed below the full catalog is not unrestricted.
-    if (principal.grants.some(grant => grant.role === 'owner' && grant.scope.kind === 'global'
+    if (principal.grants.some(grant => isGlobalOwnerGrant(grant)
       && CONSOLE_PERMISSION_LIST.every(permission => grant.permissions.includes(permission)))) return unrestrictedConsoleAccess;
     return Object.freeze({
       unrestricted: false,

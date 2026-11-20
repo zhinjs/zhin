@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
 import { isConfirmWord, type ChatRoleService } from '@zhin.js/core';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 import { readOperationSession, type OperationSession } from '@zhin.js/feature-kit';
 import {
   createMessages,
@@ -31,10 +32,6 @@ const messages = createMessages({
   description: {
     'zh-CN': '安全重启 Bot 进程（需二次确认），重启完成后于当前会话回报结果（仅限全局 Bot 主人）',
     en: 'Safely restart the Bot process (needs a confirmation) and report the outcome in this conversation (global Bot owner only)',
-  },
-  denied: {
-    'zh-CN': '仅允许全局层 Bot 主人（owner）执行重启指令。',
-    en: 'Only a global Bot owner (chat role owner at the global level) is allowed to restart the bot.',
   },
   confirmPrompt: {
     'zh-CN': '⚠️ 将重启实例，所有会话会短暂中断。{seconds} 秒内回复 {command} 以确认。',
@@ -221,7 +218,7 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
             input: command.input, kind: scene?.kind, text, reason, command: 'restart', authorized });
           if (!allowed || !session || !scene) {
             audit('restart', 'denied', 'not-global-owner');
-            return unauthorized(messages(locale, 'denied'), 'not-global-owner');
+            return unauthorized(describeGlobalOwnerRequired(locale, { bindCommand: command.formatCommand('bind') }), 'not-global-owner');
           }
           if (!options.restartSupported()) {
             audit('restart', 'denied', 'unsupported');
