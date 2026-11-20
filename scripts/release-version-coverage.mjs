@@ -82,6 +82,93 @@ export function findStaleApprovals({ approvedMinors, plannedMinors, currentVersi
   return stale.sort((left, right) => left.package.localeCompare(right.package));
 }
 
+/** A version with a prerelease or build identifier (`1.2.0-beta.0`, `1.2.0+sha`). */
+export function isPrereleaseVersion(version) {
+  return typeof version === 'string' && /^\d+\.\d+\.\d+[-+]/u.test(version);
+}
+
+/** Planned releases whose old or new version carries a prerelease identifier (unsupported). */
+export function findPrereleaseReleases(releases) {
+  return releases
+    .filter((release) => release.type !== 'none'
+      && (isPrereleaseVersion(release.oldVersion) || isPrereleaseVersion(release.newVersion)))
+    .map(({ name, oldVersion, newVersion }) => ({ name, oldVersion, newVersion }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/**
+ * The most recently released stable version per package: `Map<'name@x.y.z', commitDate>` →
+ * `Map<name, 'x.y.z'>`. The tag whose commit is newest wins (ties: the higher version), so an
+ * abandoned version line with higher numbers but older releases (this repository's pre-1.x
+ * architecture went up to e.g. `@zhin.js/cli@4.0.1` before the 1.x reset) is not the baseline.
+ * Tags without a readable date rank behind dated ones. Prerelease tags and tags that are not
+ * `name@X.Y.Z` are ignored.
+ */
+export function findLatestReleasedVersions(tagDates) {
+  const latest = new Map();
+  for (const [tag, rawDate] of tagDates) {
+    const at = tag.lastIndexOf('@');
+    if (at <= 0) continue;
+    const name = tag.slice(0, at);
+    const version = tag.slice(at + 1);
+    if (!parseReleaseVersion(version)) continue;
+    const date = Number.isFinite(rawDate) ? rawDate : -Infinity;
+    const previous = latest.get(name);
+    if (previous === undefined || date > previous.date
+      || (date === previous.date && compareReleaseVersions(version, previous.version) === 1)) {
+      latest.set(name, { version, date });
+    }
+  }
+  return new Map([...latest].map(([name, { version }]) => [name, version]));
+}
+
+/**
+ * Planned releases that leave the minor line of the package's latest published (tagged) version
+ * without an approval. The plan's `type` alone is not enough: a patch on top of a hand-edited
+ * package.json (1.9.1 → 1.10.3, then patch → 1.10.4) would otherwise cross a minor unapproved.
+ * For every planned release whose package has a stable tag (`latestReleased`, see
+ * `findLatestReleasedVersions`):
+ *   - a different major than the latest tag is always rejected (`problem: 'major'`);
+ *   - a higher minor needs the approval `version === newVersion` (`problem: 'minor'`), with one
+ *     exception: a follow-up patch on top of an unpublished approved minor version commit, i.e.
+ *     package.json already carries the approved `X.Y.0`, `newVersion` stays on that `X.Y` line,
+ *     and `hasVersionCommit(name, X.Y.0)` confirms a real version commit produced it.
+ * Staying on the latest tag's minor line (any higher patch, e.g. a version-collision skip) is fine.
+ * Packages without any stable tag have never been released from this repository and are not
+ * compared here (their first publish is manual, see docs/contributing/publishing.md).
+ */
+export function findMinorLineViolations({
+  releases,
+  latestReleased,
+  approvedMinors,
+  currentVersions = new Map(),
+  hasVersionCommit = () => false,
+}) {
+  const violations = [];
+  for (const release of releases) {
+    if (release.type === 'none') continue;
+    const released = latestReleased.get(release.name);
+    const base = parseReleaseVersion(released);
+    const next = parseReleaseVersion(release.newVersion);
+    if (!base || !next) continue;
+    const approvedVersion = approvedMinors.get(release.name)?.version;
+    const violation = { name: release.name, oldVersion: release.oldVersion, newVersion: release.newVersion, released, approvedVersion };
+    if (next[0] !== base[0]) {
+      violations.push({ ...violation, problem: 'major' });
+      continue;
+    }
+    if (next[1] <= base[1] || approvedVersion === release.newVersion) continue;
+    const approved = parseReleaseVersion(approvedVersion);
+    const current = currentVersions.get(release.name);
+    const followUpPatch = Boolean(approved)
+      && approved[0] === next[0] && approved[1] === next[1]
+      && current === approvedVersion
+      && hasVersionCommit(release.name, approvedVersion);
+    if (!followUpPatch) violations.push({ ...violation, problem: 'minor' });
+  }
+  return violations.sort((left, right) => left.name.localeCompare(right.name));
+}
+
 // Tags are created only after publishing. Until then, use verified Changesets
 // output as the baseline, and still check for package changes after that commit.
 // A package may also be versioned X.Y.Z → X.(Y+1).0 from its own minor declaration, but only

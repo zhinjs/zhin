@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   compareReleaseVersions,
+  findLatestReleasedVersions,
+  findMinorLineViolations,
   findMissingVersionTags,
+  findPrereleaseReleases,
   findStaleApprovals,
   findUnapprovedMinorReleases,
   findUncoveredPackageChanges,
@@ -124,6 +127,64 @@ describe('approved minor releases', () => {
       .toHaveLength(1);
     expect(findUnapprovedMinorReleases({ releases, approvedMinors: approvals({ '@zhin.js/core': '1.13.0' }) })).toEqual([
       { name: '@zhin.js/core', oldVersion: '1.13.1', newVersion: '1.14.0', approvedVersion: '1.13.0' },
+    ]);
+  });
+
+  it('takes the most recently released stable tag per package as the baseline', () => {
+    expect(findLatestReleasedVersions(new Map<string, number | undefined>([
+      ['@zhin.js/cli@4.0.1', 100], // abandoned pre-1.x line: higher number, released earlier
+      ['@zhin.js/cli@1.9.0', 300],
+      ['@zhin.js/cli@1.9.1', 300], // same commit date: the higher version wins
+      ['@zhin.js/cli@1.10.0-beta.1', 400],
+      ['@zhin.js/cli@1.10', 400],
+      ['zhin.js@1.9.0', undefined],
+      ['zhin.js@0.1.0', 1],
+      ['v1.0.0', 500],
+    ]))).toEqual(new Map([['@zhin.js/cli', '1.9.1'], ['zhin.js', '0.1.0']]));
+  });
+
+  describe('minor line of the latest tag', () => {
+    const latestReleased = new Map([['@zhin.js/cli', '1.9.1']]);
+    const patch = (oldVersion: string, newVersion: string) => ({ name: '@zhin.js/cli', type: 'patch', oldVersion, newVersion });
+    const check = (release: object, approved: Record<string, string> = {}, extra = {}) => findMinorLineViolations({
+      releases: [release], latestReleased, approvedMinors: approvals(approved), ...extra,
+    }).map(({ problem }) => problem);
+
+    it('rejects a patch plan on a hand-edited new minor and any major', () => {
+      expect(check(patch('1.10.3', '1.10.4'))).toEqual(['minor']);
+      // An approval only ever names X.Y.0, so a hand-edited X.Y.Z can never be approved.
+      expect(check(patch('1.10.3', '1.10.4'), { '@zhin.js/cli': '1.10.0' })).toEqual(['minor']);
+      expect(check(patch('2.0.0', '2.0.1'))).toEqual(['major']);
+      expect(check({ ...patch('1.9.1', '2.0.0'), type: 'major' }, { '@zhin.js/cli': '2.0.0' })).toEqual(['major']);
+    });
+
+    it('accepts the released line, an exact approval, and an untagged new package', () => {
+      expect(check(patch('1.9.1', '1.9.2'))).toEqual([]);
+      expect(check(patch('1.9.7', '1.9.8'))).toEqual([]);
+      expect(check({ ...patch('1.9.9', '1.10.0'), type: 'minor' }, { '@zhin.js/cli': '1.10.0' })).toEqual([]);
+      expect(check({ name: '@zhin.js/new', type: 'patch', oldVersion: '3.4.0', newVersion: '3.4.1' })).toEqual([]);
+    });
+
+    it('accepts a follow-up patch only on a real approved version commit', () => {
+      const approved = { '@zhin.js/cli': '1.10.0' };
+      const currentVersions = new Map([['@zhin.js/cli', '1.10.0']]);
+      expect(check(patch('1.10.0', '1.10.1'), approved, { currentVersions, hasVersionCommit: () => true })).toEqual([]);
+      expect(check(patch('1.10.0', '1.10.1'), approved, { currentVersions, hasVersionCommit: () => false })).toEqual(['minor']);
+      expect(check(patch('1.11.0', '1.11.1'), approved, {
+        currentVersions: new Map([['@zhin.js/cli', '1.11.0']]), hasVersionCommit: () => true,
+      })).toEqual(['minor']);
+    });
+  });
+
+  it('lists planned releases with prerelease versions', () => {
+    expect(findPrereleaseReleases([
+      { name: 'b', type: 'patch', oldVersion: '1.2.0', newVersion: '1.2.1-beta.0' },
+      { name: 'a', type: 'patch', oldVersion: '1.2.0-rc.1', newVersion: '1.2.0' },
+      { name: 'c', type: 'patch', oldVersion: '1.2.0', newVersion: '1.2.1' },
+      { name: 'd', type: 'none', oldVersion: '1.0.0-x', newVersion: '1.0.0-x' },
+    ])).toEqual([
+      { name: 'a', oldVersion: '1.2.0-rc.1', newVersion: '1.2.0' },
+      { name: 'b', oldVersion: '1.2.0', newVersion: '1.2.1-beta.0' },
     ]);
   });
 
