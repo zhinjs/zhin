@@ -154,16 +154,21 @@ export class ImToolApprovalChannel {
       && (input.senderIsGlobalOwner === true
         || this.#owner(current.origin.platform, current.origin.endpointKey) === input.senderId.trim());
     const locale = input.locale;
+    // zhinjs/zhin#1250: a sender who could settle no card here is refused as unauthorized (the ingress
+    // stays silent in a group, explains in a private chat); approvers keep every hint below.
+    const authorized = ownerSettles || isImApprover(settings, input.platform, input.senderId);
+    const refuse = (text: string): string => {
+      if (!authorized) input.onUnauthorized?.('not_approver');
+      return text;
+    };
     if (!settings.enabled && !ownerSettles) {
-      return t(locale, selfChange && input.scope !== 'private' ? 'selfPrivateOnly' : 'channelOff');
+      return refuse(t(locale, selfChange && input.scope !== 'private' ? 'selfPrivateOnly' : 'channelOff'));
     }
     const channel = ownerSettles && input.scope === 'private' ? 'im_dm' : commandChannel(settings, input);
     if (!channel) {
-      return t(locale, settings.delivery === 'approver_group' && settings.enabled ? 'privateOrGroupOnly' : 'privateOnly');
+      return refuse(t(locale, settings.delivery === 'approver_group' && settings.enabled ? 'privateOrGroupOnly' : 'privateOnly'));
     }
-    if (!ownerSettles && !isImApprover(settings, input.platform, input.senderId)) {
-      return t(locale, 'notApprover');
-    }
+    if (!authorized) return refuse(t(locale, 'notApprover'));
     if (!current || !current.origin || current.origin.platform !== input.platform) {
       return t(locale, 'notFound', { id: approvalId });
     }

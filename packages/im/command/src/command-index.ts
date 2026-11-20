@@ -18,6 +18,7 @@ import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { bindOperationInput, readOperationInputResources, readOperationInputSnapshot, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   describeDeniedPermit,
+  parsePermitName,
   permissionHostToken,
   type PermissionHost,
 } from '@zhin.js/permission';
@@ -230,6 +231,18 @@ export interface CommandMenuConfig {
 /** Adapter capabilities' feature id; compared as a string so Command stays independent of the adapter package. */
 const ADAPTER_FEATURE = 'zhin.adapter';
 const DEFAULT_MENU_KEYWORDS = new Set(['菜单', '帮助', 'help', 'menu']);
+
+/** Permit kinds that are conditions on the sender (zhin role, platform standing, user id). */
+const SENDER_PERMIT_KINDS: ReadonlySet<string> = new Set(['role', 'platform', 'platform-role', 'platform-permission', 'user']);
+
+/**
+ * Whether a permit is a condition on the sender rather than on the place (`group()`, `adapter(…)`) or
+ * the Bot (`bot:admin`). Custom (non-builtin) permits cannot be told apart and count as the sender's.
+ */
+function deniesSender(permit: string): boolean {
+  const parsed = parsePermitName(permit);
+  return parsed ? SENDER_PERMIT_KINDS.has(parsed.kind) : true;
+}
 
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
@@ -803,7 +816,18 @@ export class CommandIndex {
     const options = { source, ...(cachedOnly ? { cachedOnly } : {}) };
     if (await host.checkAll(permits, subject, options)) return undefined;
     // Denied: name the first unmet permit for the reply (same evaluator; Bot standing is cached now).
-    try { return (await host.firstDenied?.(permits, subject, options)) ?? null; } catch { return null; }
+    let first: string | undefined;
+    try { first = await host.firstDenied?.(permits, subject, options); } catch { return null; }
+    if (first === undefined) return null;
+    if (deniesSender(first)) return first;
+    // zhinjs/zhin#1250: a scene or Bot condition failed first (`group()`, `bot:admin` …). When the
+    // sender also fails a condition on themself (`trusted`, `platform:admin` …), that one is named
+    // instead: the denial is then about the sender's permission, which a group answers silently.
+    for (const permit of permits) {
+      if (permit === first || !deniesSender(permit)) continue;
+      try { if (!(await host.check(permit, subject))) return permit; } catch { return permit; }
+    }
+    return first;
   }
 
   /** Whether the menu should list `record` for `source` (adapter restriction + permits). */

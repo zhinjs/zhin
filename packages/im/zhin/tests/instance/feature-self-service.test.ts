@@ -1,4 +1,4 @@
-import { AMBIENT_FEATURE_ID } from '@zhin.js/core/runtime';
+import { AMBIENT_FEATURE_ID, inboundOutcomeSink } from '@zhin.js/core/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
   applyConfigPatches, childPluginId, createCapabilitySlot, featureId, rootPluginId,
@@ -432,13 +432,19 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
   });
 
   it('requires an explicit confirmation for global switches and restarts', async () => {
-    const { run, setGlobalEnabled, audits, roles } = await harness(on, {}, ['root']);
+    const { run, setGlobalEnabled, audits, roles, deps } = await harness(on, {}, ['root']);
     await promote(roles, 'other');
     const admin = actor({ user: 'root' });
     expect(await run(admin, '关闭 rss 全局')).toBe('全局停用 rss 会重启实例。确认请在 2 分钟内发送：功能 确认 123456');
     expect(setGlobalEnabled).not.toHaveBeenCalled();
     expect(await run(admin, '确认 000000')).toBe('没有待确认的操作，或确认码已过期。');
     expect(await run(actor({ user: 'other', standing: 'owner' }), '确认 123456')).toBe('没有待确认的操作，或确认码已过期。');
+    // zhinjs/zhin#1250: the code is another sender's, refused as not theirs (silent in a group when installed);
+    // a wrong code of the sender's own is the ordinary mistake.
+    await expect(runFeatureChat({ tokens: ['确认', '123456'], actor: actor({ user: 'other' }), locale: 'zh-CN' }, deps))
+      .rejects.toMatchObject({ reason: 'confirm-not-own' });
+    await expect(runFeatureChat({ tokens: ['确认', '000000'], actor: admin, locale: 'zh-CN' }, deps))
+      .rejects.toMatchObject({ reason: 'confirm-missing' });
     expect(await run(admin, '确认 123456')).toBe('已停用 rss（全局），实例正在重启。');
     expect(setGlobalEnabled).toHaveBeenCalledWith('rss', false);
     expect(audits.at(-1)).toMatchObject({ action: 'feature.chat:disable', target: 'global:', outcome: 'ok' });
@@ -483,7 +489,8 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     expect(await role(actor({ user: 'frank' }), '授予 gina admin')).toBe('已保存（会话层），立即生效。');
     const tokens = featureChatTokens({ segments: [{ type: 'text', data: { text: '撤销 ' } }, { type: 'at', data: { user_id: 'dave' } }, { type: 'text', data: { text: ' admin' } }], args: [] });
     expect(tokens).toEqual(['撤销', { user: 'dave' }, 'admin']);
-    expect(await executeRoleChat({ tokens, actor: actor({ user: 'dave' }), locale: 'zh-CN' }, (await harness()).deps)).toBe('你在该范围的角色不足以授予或撤销 admin。');
+    // #1250: holding admin nowhere (a fresh harness), dave is refused for the permission before the change is weighed.
+    expect(await executeRoleChat({ tokens, actor: actor({ user: 'dave' }), locale: 'zh-CN' }, (await harness()).deps)).toMatch(/^你在该范围没有 admin 角色/u);
     // dave is now a peer admin of the grantor: only a higher role or an admin above may revoke it.
     expect(await executeRoleChat({ tokens, actor: groupAdmin, locale: 'zh-CN' }, { ...(await harness()).deps, roles }))
       .toBe('对方在该范围已是 admin，与你同级；只有更高的角色或更高层的 admin 才能修改或撤销。');
@@ -665,7 +672,10 @@ describe('Sandbox group conversation (#1250 self-service-unknown-conversation-op
     const actor = resolved.ok ? resolved.actor : undefined;
     await expect(runFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'not-admin' });
     await expect(runRoleChat({ tokens: ['列表'], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'not-admin' });
-    await expect(runRoleChat({ tokens: ['nonsense'], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'usage' });
+    // #1250: holding admin nowhere is refused before the arguments are read (like `功能`).
+    await expect(runRoleChat({ tokens: ['nonsense'], actor, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'not-admin' });
+    const boss = resolveFeatureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } } as never);
+    await expect(runRoleChat({ tokens: ['nonsense'], actor: boss.ok ? boss.actor : undefined, locale: 'zh-CN' }, deps)).rejects.toMatchObject({ reason: 'usage' });
     // Turned off: the reply says so and the outcome reason is `self-service-disabled`.
     await expect(runFeatureChat({ tokens: [], actor, locale: 'zh-CN' }, { ...deps, config: DEFAULT_FEATURE_SELF_SERVICE }))
       .rejects.toMatchObject({ reason: 'self-service-disabled' });
@@ -688,8 +698,8 @@ describe('Sandbox group conversation (#1250 self-service-unknown-conversation-op
 
 // #1250: usage hints and follow-ups name the installed command the way this conversation sends it.
 describe('command spellings carry the real prefix', () => {
-  async function installed() {
-    const { deps } = await harness(on, { 'qq/bot-1': 'boss' }, [], new FeatureOverrideStore(), 20);
+  async function installed(globalOwners: string[] = []) {
+    const { deps } = await harness(on, { 'qq/bot-1': 'boss' }, globalOwners, new FeatureOverrideStore(), 20);
     const slots: CapabilitySlot<CommandDefinition>[] = [];
     const context = {
       hasFeature: () => true,
@@ -706,8 +716,67 @@ describe('command spellings carry the real prefix', () => {
     const dm = { conversation: { kind: 'private' as const, id: 'boss', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } };
     const say = async (input: string, prefix: string, source: object = group, locale: 'zh-CN' | 'en' = 'zh-CN') =>
       (await index.dispatch({ input, source: { ...source, locale }, commandPrefix: prefix })).value as string;
-    return { say, dm };
+    /** Dispatches with a recording outcome ledger (the inbound message's own, in production). */
+    const send = async (input: string, sender: string, kind: 'group' | 'private') => {
+      const outcomes: { outcome: string; reason?: string; reply?: string }[] = [];
+      const sink = { report: (candidate: never) => { outcomes.push(candidate); return true; }, enter() {} };
+      const source = { conversation: { kind, id: kind === 'group' ? '100' : sender, endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
+        sender: { id: sender }, locale: 'zh-CN', [inboundOutcomeSink]: () => sink };
+      const result = await index.dispatch({ input, source, commandPrefix: '' });
+      return { value: result.value as string | undefined, refused: (result as { refused?: boolean }).refused === true, outcomes };
+    };
+    return { say, dm, send, deps };
   }
+
+  it('stays silent to a sender without the permission in a group and explains in a private chat (#1250)', async () => {
+    const { send } = await installed();
+    const cases = [['功能 关闭 rss', 'not-admin'], ['功能', 'not-admin'], ['角色 列表', 'not-admin'], ['角色 授予 u9 admin 账号', 'not-admin'],
+      // Malformed `角色` from a sender holding admin nowhere: refused for the permission first, not the format.
+      ['角色 授予', 'not-admin'], ['角色 乱写', 'not-admin'], ['角色 授予 #不存在 admin', 'not-admin'], ['角色 授予 #cp_zzzzzz admin', 'not-admin']] as const;
+    for (const [text, reason] of cases) {
+      const quiet = await send(text, 'stranger', 'group');
+      expect(quiet.value).toBeUndefined();
+      expect(quiet.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason, reply: 'no', stage: 'command' })]);
+      const dm = await send(text, 'stranger', 'private');
+      expect(dm.value).toContain('admin');
+      expect(dm.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason, reply: 'yes' })]);
+    }
+  });
+
+  it('keeps answering the mistakes of a sender who holds the permission in a group (#1250)', async () => {
+    const { send } = await installed();
+    const usage = await send('功能 乱写', 'boss', 'group');
+    expect(usage.value).toMatch(/^用法：/u);
+    expect(usage.refused).toBe(true);
+    expect(usage.outcomes).toEqual([]);
+    const expired = await send('功能 确认 999999', 'boss', 'group');
+    expect(expired.value).toBe('没有待确认的操作，或确认码已过期。');
+    // An admin's malformed `角色` is still answered with the format problem.
+    for (const text of ['角色 乱写', '角色 授予', '角色 授予 #cp_zzzzzz admin']) {
+      const mistake = await send(text, 'boss', 'group');
+      expect(mistake.value).toBeTruthy();
+      expect(mistake.value).not.toContain('没有 admin');
+      expect(mistake.refused).toBe(true);
+      expect(mistake.outcomes).toEqual([]);
+    }
+    // Granting owner needs an owner above: a role refusal, silent in the group.
+    const above = await send('角色 授予 u9 owner 账号', 'boss', 'group');
+    expect(above.value).toBeUndefined();
+    expect(above.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'owner-denied', reply: 'no' })]);
+  });
+
+  it('confirming another sender\'s global switch: told to a global admin, silent to anyone else in a group (#1250)', async () => {
+    const { send } = await installed(['root', 'root2']);
+    expect((await send('功能 关闭 rss 全局', 'root', 'group')).value).toContain('功能 确认 123456');
+    // Another global admin could make the change: a mistake of someone authorized, answered (reason kept).
+    const peer = await send('功能 确认 123456', 'root2', 'group');
+    expect(peer.value).toBe('没有待确认的操作，或确认码已过期。');
+    expect(peer.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'confirm-not-own', reply: 'yes' })]);
+    // An admin below global could not: silent in the group.
+    const below = await send('功能 确认 123456', 'boss', 'group');
+    expect(below.value).toBeUndefined();
+    expect(below.outcomes).toEqual([expect.objectContaining({ outcome: 'permission_denied', reason: 'confirm-not-own', reply: 'no' })]);
+  });
 
   const escape = (text: string) => text.replace(/\//gu, '\\/');
 

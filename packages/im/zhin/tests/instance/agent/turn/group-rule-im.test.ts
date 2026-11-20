@@ -70,8 +70,51 @@ describe('group rule IM channel', () => {
     const rule = await submitted();
     const code = groupRuleHashShort(rule.contentHash);
     expect(await command(`rule approve ${code}`, { senderId: 'u-2', senderChatRole: undefined })).toContain('只有本群群主或管理员');
+    // #1250: the refusal is flagged as unauthorized (the ingress stays silent in the group); listing is open to everyone.
+    const onUnauthorized = vi.fn();
+    await command(`rule reject ${code}`, { senderId: 'u-2', senderChatRole: undefined, onUnauthorized });
+    expect(onUnauthorized).toHaveBeenCalledWith('not_rule_approver');
+    const listing = vi.fn();
+    expect(await command('rules', { senderId: 'u-2', senderChatRole: undefined, onUnauthorized: listing })).toContain(code);
+    expect(listing).not.toHaveBeenCalled();
+    const admin = vi.fn();
+    expect(await command('rule approve nope', { onUnauthorized: admin })).not.toContain('只有本群群主或管理员');
+    expect(admin).not.toHaveBeenCalled();
     expect((await store.get(rule.id))!.status).toBe('pending');
     expect(await command(`rule approve ${code}`, { senderId: 'u-7', senderChatRole: undefined })).toContain('已生效');
+  });
+
+  it('refuses a non-approver in a channel for the permission before saying the command is group-only (#1250)', async () => {
+    const { command, submitted } = harness({ approvers: ['u-7'] });
+    const code = groupRuleHashShort((await submitted()).contentHash);
+    for (const verb of ['approve', 'reject', 'disable']) {
+      const stranger = vi.fn();
+      expect(await command(`rule ${verb} ${code}`, { scope: 'channel', senderId: 'u-2', senderChatRole: undefined, onUnauthorized: stranger }))
+        .toContain('只有本群群主或管理员');
+      expect(stranger).toHaveBeenCalledWith('not_rule_approver');
+      // An approver (chat admin, or a configured IM approver) is told the command is for groups only.
+      const approver = vi.fn();
+      expect(await command(`rule ${verb} ${code}`, { scope: 'channel', onUnauthorized: approver })).toContain('只能在对应的群');
+      expect(await command(`rule ${verb} ${code}`, { scope: 'channel', senderId: 'u-7', senderChatRole: undefined, onUnauthorized: approver }))
+        .toContain('只能在对应的群');
+      expect(approver).not.toHaveBeenCalled();
+    }
+    // The open listing still answers everyone with the group-only hint.
+    const listing = vi.fn();
+    expect(await command('rules', { scope: 'channel', senderId: 'u-2', senderChatRole: undefined, onUnauthorized: listing })).toContain('只能在对应的群');
+    expect(listing).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-approver before saying rules are unavailable (#1250)', async () => {
+    const channel = new GroupRuleImChannel({ rules: () => undefined, imApproval: () => resolveToolHardGateImApproval(undefined), send: vi.fn(async () => undefined) });
+    const base = { platform: 'icqq', scope: 'group' as const, sceneId: '123', endpoint: '10086', commandText: 'rule approve abcdef' };
+    const stranger = vi.fn();
+    expect(cardText((await channel.handleCommand({ ...base, senderId: 'u-2', onUnauthorized: stranger }))!)).toContain('只有本群群主或管理员');
+    expect(stranger).toHaveBeenCalledWith('not_rule_approver');
+    const admin = vi.fn();
+    const reply = cardText((await channel.handleCommand({ ...base, senderId: 'u-1', senderChatRole: 'admin', onUnauthorized: admin }))!);
+    expect(reply).not.toContain('只有本群群主或管理员');
+    expect(admin).not.toHaveBeenCalled();
   });
 
   it('only settles in the rule\'s own group and with a matching code', async () => {

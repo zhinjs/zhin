@@ -14,6 +14,7 @@ import type {
   ImApprovalChannelPort,
 } from './ports.js';
 import type { RuntimeSenderRoles } from './request.js';
+import { respondToUnauthorized } from './unauthorized-reply.js';
 
 const logger = getLogger('agent');
 
@@ -65,6 +66,18 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
   } = input;
   const service = agent.service;
   const zhinAgent = agent.agent;
+  // zhinjs/zhin#1250: a handler reports that its reply refuses a sender without the permission; that
+  // refusal is answered in a private chat only and is silent in a group or channel.
+  let unauthorized: string | undefined;
+  const onUnauthorized = (reason: string) => { unauthorized ??= reason; };
+  const answer = async (text: SendContent, op: string, send: (content: SendContent) => Promise<unknown> = reply): Promise<true> => {
+    const denied = unauthorized;
+    const delivery = denied === undefined
+      ? (await send(text), 'replied')
+      : await respondToUnauthorized({ message, text, reason: denied, reply: send, command: 'agent' });
+    logger.info(formatCompact({ op, handled: true, ...(denied !== undefined ? { denied, delivery } : {}) }));
+    return true;
+  };
 
   // Agent 管理命令（/models /tree /reset…）— 在 AI trigger 前拦截
   const managementReply = await handleRuntimeManagementCommand({
@@ -87,12 +100,11 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
     },
     semanticMemory: agent.semanticMemory ?? null,
     senderId: turnAccess.principal.subjectId,
+    onUnauthorized,
   });
   if (managementReply != null) {
     const fixed = input.replyFixed && /^reset\s*$/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '');
-    await (fixed ? input.replyFixed! : reply)(managementReply);
-    logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
-    return true;
+    return answer(managementReply, 'agent_host_management', fixed ? text => input.replyFixed!(text as string) : reply);
   }
 
   // ADR 0039 slice B: `rule approve|reject|disable <code>` / `rules` in the rule's own group.
@@ -107,13 +119,10 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         commandText: managementCommandText(message.content, message.commandPrefix),
         ...(message.locale ? { locale: message.locale } : {}),
         ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
+        onUnauthorized,
       })
     : null;
-  if (groupRuleReply != null) {
-    await reply(groupRuleReply);
-    logger.info(formatCompact({ op: 'agent_host_group_rule', handled: true }));
-    return true;
-  }
+  if (groupRuleReply != null) return answer(groupRuleReply, 'agent_host_group_rule');
 
   // G6 (#1013): hard-gate cards (`approve tap_…` / `deny tap_…`) before the owner `/approve` commands.
   const toolApprovalReply = turnAccess.origin.kind === 'im'
@@ -125,13 +134,10 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         commandText: managementCommandText(message.content, message.commandPrefix),
         senderIsGlobalOwner: hostChatRole(message.sender) === 'owner',
         ...(message.locale ? { locale: message.locale } : {}),
+        onUnauthorized,
       }) ?? null
     : null;
-  if (toolApprovalReply != null) {
-    await reply(toolApprovalReply);
-    logger.info(formatCompact({ op: 'agent_host_tool_approval_im', handled: true }));
-    return true;
-  }
+  if (toolApprovalReply != null) return answer(toolApprovalReply, 'agent_host_tool_approval_im');
 
   const approveReply = /^approve(?:\s|$)/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '')
     ? zhinAgent.ownerApprovals.handleCommand(
@@ -144,15 +150,12 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
           scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : 'private',
           locale: message.locale,
           commandPrefix: message.commandPrefix,
+          onUnauthorized,
         },
         message.content,
       )
     : null;
-  if (approveReply != null) {
-    await reply(approveReply);
-    logger.info(formatCompact({ op: 'agent_host_approve', handled: true }));
-    return true;
-  }
+  if (approveReply != null) return answer(approveReply, 'agent_host_approve');
 
   return false;
 }
