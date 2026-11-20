@@ -13,11 +13,9 @@ export { CHINA_REGION_ALIASES, eventMagnitude, matchesFilter, matchesRegions } f
 export type { EventFilter } from './filters.js';
 export { formatEvent, formatEventList, formatEventTime } from './format.js';
 export {
-  computeBackoffDelay,
   getTextWithRetry,
   HttpRequestError,
   isRetryableStatus,
-  parseRetryAfter,
 } from './http.js';
 export type { FetchLike, HttpDependencies, RetryPolicy, SleepLike } from './http.js';
 export { SlidingWindowRateLimiter } from './rate-limit.js';

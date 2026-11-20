@@ -5,25 +5,25 @@
       "package": "zhin.js",
       "type": "minor",
       "version": "1.10.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——`zhin.js/i18n` 新增导出 `formatList()` 与类型 `FormatListOptions`（主入口经 `@zhin.js/plugin-runtime` 同时得到 `formatList`、`queryLocale`、`projectLocale`）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——`config` 命令 permit 改为 `owner@global` + `private()`；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——主入口经 `@zhin.js/plugin-runtime`（`export *`）同时得到 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与相关类型，插件（如 code-runner、calendar）据此判断未展开的 `${VAR}`。同属 1.10.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——实例接口 `GET /agent/trace-archive/sessions` 返回值新增会话来源与可读名称（定时任务会话显示任务名），用量统计定时任务行显示任务名。1.9.0 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`（经 `@zhin.js/core` 再导出）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——`zhin.js/i18n` 新增导出 `formatList()` 与类型 `FormatListOptions`（主入口经 `@zhin.js/plugin-runtime` 同时得到 `formatList`、`queryLocale`、`projectLocale`）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——`config` 命令 permit 改为 `owner@global` + `private()`；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——主入口经 `@zhin.js/plugin-runtime`（`export *`）同时得到 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与相关类型，插件（如 code-runner、calendar）据此判断未展开的 `${VAR}`。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——主入口经 `@zhin.js/plugin-runtime` 新增 `escapeHtml()`、`parseRetryAfterMs()`、`computeBackoffDelay()` 与类型 `BackoffPolicy`，`sleep()` 改由 plugin-runtime 提供并支持可选 `AbortSignal`"
     },
     {
       "package": "@zhin.js/gateway",
       "type": "minor",
       "version": "1.8.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——用量会话按聊天拆分并带可读名称（与实例 trace 会话名格式一致）。1.7.0 已发布，本次为 1.8.0，npm 上 1.8.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——Console 全局所有者判定改用 `@zhin.js/console-protocol` 的 `hasGlobalOwnerGrant`（行为不变）。同属 1.8.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——用量会话按聊天拆分并带可读名称（与实例 trace 会话名格式一致）。1.7.0 已发布，本次为 1.8.0，npm 上 1.8.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——Console 全局所有者判定改用 `@zhin.js/console-protocol` 的 `hasGlobalOwnerGrant`（行为不变）。同属 1.8.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——`@zhin.js/gateway/usage` 的 `parseSessionKey` 改名为 `sessionAddressOf` 并改用 console-protocol 的会话键解析（只有四段会话键给出 scope / sceneId）。同属 1.8.0。"
     },
     {
       "package": "@zhin.js/agent",
       "type": "minor",
       "version": "1.10.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——Trace 会话摘要新增 `origin`、`platform`、`scope_kind`、`scene_label`、`display_name`、`conversations`、`conversations_total`；`@zhin.js/agent/trace` 新增导出 `sanitizeOriginText`、`turnOriginDisplayName` 等来源命名函数与 `withSessionScheduleLabels`；工具审批卡片新增 `origin`（`ToolApprovalCardOrigin`）、`platform`、`scopeKind`、`sceneLabel`、`displayName`。1.9.1 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 73 批——审批卡/群规卡格式化函数改收 presentation 对象（不再接受前缀字符串）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，`@zhin.js/agent/turn` 的 `isCancelIntent()` 新增可选参数 `commandPrefix`。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 75 批——删除兼容键 ingressMessages.cleared。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——（不兼容）`RuntimeSenderRoles`、`TurnIntentSenderRoles`、`RuntimeManagementSenderRoles` 的 `isMaster` / `isTrusted` 改名为 `hostRole`；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 82 批——（不兼容）`hasIgnoredTriggerPrefix()` 新增必填参数 `commandPrefix`：AI 入口的命令样前缀统一为适配器真实 `commandPrefix` 加 `ai.trigger.ignorePrefixes`，合并窗口去掉写死的 `/^[/#]/`。同属 1.10.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 63 批——Trace 会话摘要新增 `origin`、`platform`、`scope_kind`、`scene_label`、`display_name`、`conversations`、`conversations_total`；`@zhin.js/agent/trace` 新增导出 `sanitizeOriginText`、`turnOriginDisplayName` 等来源命名函数与 `withSessionScheduleLabels`；工具审批卡片新增 `origin`（`ToolApprovalCardOrigin`）、`platform`、`scopeKind`、`sceneLabel`、`displayName`。1.9.1 已发布，本次为 1.10.0，npm 上 1.10.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 73 批——审批卡/群规卡格式化函数改收 presentation 对象（不再接受前缀字符串）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，`@zhin.js/agent/turn` 的 `isCancelIntent()` 新增可选参数 `commandPrefix`。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 75 批——删除兼容键 ingressMessages.cleared。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——（不兼容）`RuntimeSenderRoles`、`TurnIntentSenderRoles`、`RuntimeManagementSenderRoles` 的 `isMaster` / `isTrusted` 改名为 `hostRole`；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 81 批——删除 `@zhin.js/agent/runtime` 的导出 `renderTriggerError()`（回合失败的聊天回复只剩 `renderChatTurnError()` 一处，不再有内置的「❌ AI 处理失败」模板，不留兼容）。同属 1.10.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 82 批——（不兼容）`hasIgnoredTriggerPrefix()` 新增必填参数 `commandPrefix`：AI 入口的命令样前缀统一为适配器真实 `commandPrefix` 加 `ai.trigger.ignorePrefixes`，合并窗口去掉写死的 `/^[/#]/`。同属 1.10.0。"
     },
     {
       "package": "@zhin.js/core",
       "type": "minor",
       "version": "1.14.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 65 批——`IncomingMessage` 新增 `forwarded`，`recordIncoming` 新增选项 `textAuthoredBySender`，新增导出 `adapterDeclaresInboundTextAuthoredBySender`；IM 运行时为声明能力的适配器在私聊未改动的纯文本入站写入 HMAC 证据（ADR 0067 D8）。1.13.1 已发布，本次为 1.14.0，npm 上 1.14.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`。同属 1.14.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——删除 `@zhin.js/core/runtime` 的导出 `projectLocale()`（下沉到 `@zhin.js/plugin-runtime`，命令与消息共用同一条项目语言规则，不留兼容）。同属 1.14.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——（不兼容）删除 `MessageSender.isMaster` / `isTrusted`"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 65 批——`IncomingMessage` 新增 `forwarded`，`recordIncoming` 新增选项 `textAuthoredBySender`，新增导出 `adapterDeclaresInboundTextAuthoredBySender`；IM 运行时为声明能力的适配器在私聊未改动的纯文本入站写入 HMAC 证据（ADR 0067 D8）。1.13.1 已发布，本次为 1.14.0，npm 上 1.14.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 74 批——统一确认/取消词表，新增导出 `isConfirmWord()`、`isCancelWord()` 与类型 `ReplyWordOptions`。同属 1.14.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——删除 `@zhin.js/core/runtime` 的导出 `projectLocale()`（下沉到 `@zhin.js/plugin-runtime`，命令与消息共用同一条项目语言规则，不留兼容）。同属 1.14.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——（不兼容）删除 `MessageSender.isMaster` / `isTrusted`；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——不再从 `@zhin.js/kernel` 再导出 `sleep`（可中断的 `sleep` 由 `@zhin.js/plugin-runtime` 提供）"
     },
     {
       "package": "@zhin.js/adapter",
@@ -35,7 +35,7 @@
       "package": "@zhin.js/plugin-runtime",
       "type": "minor",
       "version": "1.5.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——出站模板 TemplateContext 重组为分组字段（不兼容：旧顶层占位符不再展开）：`bot`（`adapter`、`endpoint`、`endpointId` 与新增的 `prefix`、`menu`，新增导出类型 `TemplateBot`）、`conversation`（`kind`、`id`）、`sender`（`id`、`name`、`roles`；也承载事件触发发送的主体，如入群的新成员，经 `incoming.sender` 传入）、`message`（`content`、`segments`、`id`、`timestamp`、`mentioned`）与新增的 `command`（新增导出类型 `TemplateCommandPaths`），按发出消息的账号渲染带前缀的命令写法，所有插件可用；所有占位符至少两段，不与配置加载时的环境变量展开冲突。1.4.1 已发布，本次为 1.5.0，npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增 `formatList()`、类型 `FormatListOptions`、`queryLocale()`（Console 路由严格解析 `?locale=`）与 `projectLocale()`（从 `@zhin.js/core/runtime` 移入）。同属 1.5.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——新增 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与类型 `EnvironmentReference`、`EnvironmentReferenceMatch`、`EnvironmentReferenceOperator`、`EnvironmentLookup`（`${VAR}` / `env://` 引用识别与展开共用同一个解析器）。同属 1.5.0。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——出站模板 TemplateContext 重组为分组字段（不兼容：旧顶层占位符不再展开）：`bot`（`adapter`、`endpoint`、`endpointId` 与新增的 `prefix`、`menu`，新增导出类型 `TemplateBot`）、`conversation`（`kind`、`id`）、`sender`（`id`、`name`、`roles`；也承载事件触发发送的主体，如入群的新成员，经 `incoming.sender` 传入）、`message`（`content`、`segments`、`id`、`timestamp`、`mentioned`）与新增的 `command`（新增导出类型 `TemplateCommandPaths`），按发出消息的账号渲染带前缀的命令写法，所有插件可用；所有占位符至少两段，不与配置加载时的环境变量展开冲突。1.4.1 已发布，本次为 1.5.0，npm 上 1.5.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增 `formatList()`、类型 `FormatListOptions`、`queryLocale()`（Console 路由严格解析 `?locale=`）与 `projectLocale()`（从 `@zhin.js/core/runtime` 移入）。同属 1.5.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 79 批——新增 `parseEnvironmentReference()`、`isWholeEnvironmentReference()`、`environmentReferencesIn()`、`parseEnvUri()`、`isEnvironmentVariableName()`、`findUnsetEnvironmentReferences()`、`createEnvironmentLookup()` 与类型 `EnvironmentReference`、`EnvironmentReferenceMatch`、`EnvironmentReferenceOperator`、`EnvironmentLookup`（`${VAR}` / `env://` 引用识别与展开共用同一个解析器）。同属 1.5.0。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——新增导出 `escapeHtml()`、可中断 `sleep()`、`parseRetryAfterMs()`、`computeBackoffDelay()` 与类型 `BackoffPolicy`，统一 AI、适配器与插件各自的重试/退避/延时实现。同属 1.5.0。"
     },
     {
       "package": "@zhin.js/host-http",
@@ -47,7 +47,7 @@
       "package": "@zhin.js/console-protocol",
       "type": "minor",
       "version": "1.9.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增导出类型 `ConsoleLocale`（浏览器侧唯一的显示语言声明，与 `@zhin.js/plugin-runtime` 的 `Locale` 相同）。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——新增导出 `isGlobalOwnerGrant()`、`hasGlobalOwnerGrant()`（Console 全局所有者判定唯一来源）。1.8.0 已发布，本次为 1.9.0，npm 上 1.9.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 77 批——新增导出类型 `ConsoleLocale`（浏览器侧唯一的显示语言声明，与 `@zhin.js/plugin-runtime` 的 `Locale` 相同）。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——新增导出 `isGlobalOwnerGrant()`、`hasGlobalOwnerGrant()`（Console 全局所有者判定唯一来源）。1.8.0 已发布，本次为 1.9.0，npm 上 1.9.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——新增会话键共享解析 `parseConversationSessionKey()`、`formatConversationSessionKey()`、`isHashedSessionKey()` 与类型 `ConversationSessionKeyParts`，聊天角色导出格式 `CHAT_ROLES_EXPORT_FORMAT`、`CHAT_ROLES_EXPORT_VERSION`、`CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS`、`chatRolesBackupFileName()`、`isConsoleChatRolesExport()`，以及 `isFeatureConversationId()`"
     },
     {
       "package": "@zhin.js/client",
@@ -89,7 +89,43 @@
       "package": "@zhin.js/plugin-earthquake",
       "type": "minor",
       "version": "0.2.0",
-      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——（不兼容）删除未被引用的导出 `SUBSCRIPTION_PERMISSION_DENIED_MESSAGE`（`src/permission.ts`）与 i18n 键 `denied`，订阅拒绝改用标准 `describeConversationManagerDenial()`。0.1.17 已发布，本次为 0.2.0，npm 上 0.2.0 未被占用。"
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 78 批——（不兼容）删除未被引用的导出 `SUBSCRIPTION_PERMISSION_DENIED_MESSAGE`（`src/permission.ts`）与 i18n 键 `denied`，订阅拒绝改用标准 `describeConversationManagerDenial()`。0.1.17 已发布，本次为 0.2.0，npm 上 0.2.0 未被占用。；所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——不再导出 `computeBackoffDelay`、`parseRetryAfter`（改用 `zhin.js` 的 `computeBackoffDelay`、`parseRetryAfterMs`）。0.1.17 已发布，本次为 0.2.0，npm 上 0.2.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/kernel",
+      "type": "minor",
+      "version": "1.6.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——删除不支持中止的 `sleep` 导出（可中断的 `sleep` 统一由 `@zhin.js/plugin-runtime` 提供）。1.5.0 已发布，本次为 1.6.0，npm 上 1.6.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/ai",
+      "type": "minor",
+      "version": "1.9.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——不再导出 `computeBackoffDelay`、`parseRetryAfterMs`（统一到 `@zhin.js/plugin-runtime`，签名改为不含 Retry-After 参数的退避），`output` 的 HTML 转义改用 plugin-runtime 的 `escapeHtml`（新增转义 `'`）。1.8.2 已发布，本次为 1.9.0，npm 上 1.9.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/components",
+      "type": "minor",
+      "version": "1.2.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——`Markdown` 组件改名为 `MarkdownView`、`MarkdownProps` 改名为 `MarkdownViewProps`、主题组件名 `Markdown` 改为 `MarkdownView`，与 `zhin.js/jsx` 的 `Markdown` 消息标签区分，不保留旧名。1.1.16 已发布，本次为 1.2.0，npm 上 1.2.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/pagemanager",
+      "type": "minor",
+      "version": "1.3.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——主入口不再导出 `escapeHtml`（统一为 `@zhin.js/plugin-runtime` 的 `escapeHtml`，新增转义 `'`）。1.2.4 为当前版本，本次为 1.3.0，npm 上 1.3.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/adapter-weixin-ilink",
+      "type": "minor",
+      "version": "1.2.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——不再导出 `sleep`（改用 `zhin.js` 的可中断 `sleep`）。1.1.36 为当前版本，本次为 1.2.0，npm 上 1.2.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/plugin-nettools",
+      "type": "minor",
+      "version": "0.2.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 80 批——不再导出 `parseRetryAfter`（改用 `zhin.js` 的 `parseRetryAfterMs`）。0.1.17 已发布，本次为 0.2.0，npm 上 0.2.0 未被占用。"
     },
     {
       "package": "@zhin.js/game-kit",

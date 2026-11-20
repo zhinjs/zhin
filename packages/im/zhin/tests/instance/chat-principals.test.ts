@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { createChatRoleReader } from '@zhin.js/core';
 import { authorizeConsoleRpc, type ConsolePrincipal } from '@zhin.js/host-http';
-import { CHAT_PRINCIPALS_RPC, CHAT_ROLES_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
+import { CHAT_PRINCIPALS_RPC, CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, CHAT_ROLES_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
 import {
-  CHAT_ROLE_BACKUP_DIRECTORY, ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
+  ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
 import {
   CHAT_IDENTITY_RETENTION_MS, CHAT_IDENTITY_SIGHTING_THROTTLE_MS, defineChatPrincipalTables, isChatPrincipalId, newChatPrincipalId,
@@ -523,9 +523,9 @@ describe('chat_roles migration to the person model (ADR 0060 §2.3 / §4.5)', ()
     const roles = new ChatRoleService({ store });
     expect(migrated).toHaveLength(1);
     expect(migrated[0]).toMatchObject({ migrated: 3, backup: expect.stringContaining('chat-roles-') });
-    const backups = await readdir(join(root, CHAT_ROLE_BACKUP_DIRECTORY));
+    const backups = await readdir(join(root, ...CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS));
     expect(backups).toHaveLength(1);
-    const backup = JSON.parse(await readFile(join(root, CHAT_ROLE_BACKUP_DIRECTORY, backups[0]!), 'utf8'));
+    const backup = JSON.parse(await readFile(join(root, ...CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, backups[0]!), 'utf8'));
     expect(backup.roles).toHaveLength(3);
     expect(backup.roles.every((row: any) => row.principalId === undefined)).toBe(true);
     // Same roles at the same scopes: the migration grants nothing new.

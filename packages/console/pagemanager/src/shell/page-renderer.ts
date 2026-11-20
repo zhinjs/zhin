@@ -1,7 +1,7 @@
+import { escapeHtml } from '@zhin.js/plugin-runtime';
 import {
   type ConsoleIndexPage,
   type PageShellDescriptor,
-  escapeHtml,
   inferPageCategory,
   pageModuleScript,
   sandboxFallbackScript,

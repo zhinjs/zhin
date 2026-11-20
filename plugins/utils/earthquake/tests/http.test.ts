@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { computeBackoffDelay, parseRetryAfterMs } from 'zhin.js';
 import {
-  computeBackoffDelay,
   getTextWithRetry,
   HttpRequestError,
-  parseRetryAfter,
   type RetryPolicy,
 } from '../src/http.js';
 import { createRoutedFetch, jsonResponse, NOW, statusResponse } from './fixtures.js';
@@ -103,11 +102,11 @@ describe('getTextWithRetry', () => {
 
 describe('backoff helpers', () => {
   it('parses Retry-After seconds and HTTP dates', () => {
-    expect(parseRetryAfter('3', NOW)).toBe(3_000);
-    expect(parseRetryAfter(new Date(NOW + 5_000).toUTCString(), NOW)).toBe(5_000);
-    expect(parseRetryAfter(new Date(NOW - 5_000).toUTCString(), NOW)).toBe(0);
-    expect(parseRetryAfter('soon', NOW)).toBeUndefined();
-    expect(parseRetryAfter(null, NOW)).toBeUndefined();
+    expect(parseRetryAfterMs('3', NOW)).toBe(3_000);
+    expect(parseRetryAfterMs(new Date(NOW + 5_000).toUTCString(), NOW)).toBe(5_000);
+    expect(parseRetryAfterMs(new Date(NOW - 5_000).toUTCString(), NOW)).toBe(0);
+    expect(parseRetryAfterMs('soon', NOW)).toBeUndefined();
+    expect(parseRetryAfterMs(null, NOW)).toBeUndefined();
   });
 
   it('keeps jittered delays within [half, full] of the capped step', () => {

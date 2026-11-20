@@ -170,6 +170,12 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
     expect(supplementFailureLine('en')).toBe('Update: the background task did not finish.');
   });
 
+  it('leads a supplement in the turn language and never expands braces in its text (#1250 第 81 批)', () => {
+    expect(asSupplement({ status: 'completed', content: '', reply: '结果是 {count} 个' }, 'zh-CN')?.reply).toBe('补充：结果是 {count} 个');
+    expect(asSupplement({ status: 'completed', content: '', reply: 'it is {text}' }, 'en')?.reply).toBe('Update: it is {text}');
+    expect(asSupplement({ status: 'completed', content: '', reply: '更正：是 3 个' }, 'en')?.reply).toBe('更正：是 3 个');
+  });
+
   it('filters the marker out of a streamed snapshot without rewriting what may already be shown (#1250 第 56 批)', () => {
     const part = (key: string, value: Record<string, unknown>, complete = true) => ({ key, complete, value: value as never });
     const snapshot = { revision: 3, messages: [

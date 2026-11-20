@@ -44,7 +44,7 @@ engine.dispose();
 `ZhinError` 是带 `code`、`timestamp`、`context` 的结构化错误基类。
 
 ```ts
-import { renderTemplatePaths, sleep, Time, ZhinError } from '@zhin.js/kernel';
+import { renderTemplatePaths, Time, ZhinError } from '@zhin.js/kernel';
 
 renderTemplatePaths('你好 ${sender.name}，1+1=${1+1}', { sender: { name: 'Alice' } });
 // => '你好 Alice，1+1=${1+1}'
@@ -52,7 +52,7 @@ renderTemplatePaths('你好 ${sender.name}，1+1=${1+1}', { sender: { name: 'Ali
 
 `renderTemplatePaths` 只做白名单路径查找：占位符必须是纯属性路径（`a.b[0].c`），并且沿自有可枚举数据属性解析到已定义的非函数值才会被替换；表达式、函数调用、未知名称一律原样保留，不执行任何代码。
 
-IM identity 使用 `resolveIMSceneIdForSession`、`resolveIMSceneSessionId` 和 `resolveIMSessionId`，避免不同上层包各自实现会话键规则。`isHeartbeatEmpty` 判断 `HEARTBEAT.md` 是否没有可执行行。
+IM identity 使用 `resolveIMSceneIdForSession`、`resolveIMSceneSessionId` 和 `resolveIMSessionId`，避免不同上层包各自实现会话键规则；读取会话键用 `@zhin.js/console-protocol` 的 `parseConversationSessionKey`。可中断延时 `sleep`、`parseRetryAfterMs` 与 `computeBackoffDelay` 在 `@zhin.js/plugin-runtime`（插件经 `zhin.js` 导入）。`isHeartbeatEmpty` 判断 `HEARTBEAT.md` 是否没有可执行行。
 
 ## 主要导出
 
@@ -63,7 +63,7 @@ IM identity 使用 `resolveIMSceneIdForSession`、`resolveIMSceneSessionId` 和 
 | `resolveIMSessionId` | canonical IM 会话 identity |
 | `renderTemplatePaths` | `${path}` 白名单路径替换（不求值） |
 | `isHeartbeatEmpty` | 心跳文件是否为空 |
-| `Time` / `sleep` | 时间常量与延时 |
+| `Time` | 时间常量与格式化 |
 
 ## 安装
 

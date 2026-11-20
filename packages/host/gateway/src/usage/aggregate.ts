@@ -9,6 +9,7 @@ import { createReadStream } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { isHashedSessionKey, parseConversationSessionKey } from '@zhin.js/console-protocol';
 import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { PromptCacheProbe, type PromptCacheHint } from './prompt-cache.js';
 
@@ -503,14 +504,17 @@ export function sessionLabelOf(trace: any): string | undefined {
   return name ? `${name}（${shortSessionKey(key)}）` : shortSessionKey(key);
 }
 
-/** `platform:endpoint:scope:sceneId`; other shapes keep whatever parts they have. */
-export function parseSessionKey(key: string): { platform?: string; scope?: string; sceneId?: string } {
-  // Hashed identities (`personal-session:v1:<sha>`, `scene-task:v1:<sha>`) carry no address.
-  if (/^[a-z-]+:v\d+:[0-9a-f]{16,}$/u.test(key)) return {};
-  const parts = key.split(':');
-  if (parts.length >= 4) return { platform: parts[0]!, scope: parts[2]!, sceneId: parts.slice(3).join(':') };
-  if (parts.length === 3) return { platform: parts[0]!, scope: parts[1]!, sceneId: parts[2]! };
-  return parts[0] ? { platform: parts[0] } : {};
+/**
+ * Address of a usage session: `platform` / `scope` / `sceneId` from the four-segment conversation
+ * session key (`@zhin.js/console-protocol` owns the parser); hashed identities carry none, and any
+ * other key only names its first segment as the platform.
+ */
+export function sessionAddressOf(key: string): { platform?: string; scope?: string; sceneId?: string } {
+  if (isHashedSessionKey(key)) return {};
+  const parsed = parseConversationSessionKey(key);
+  if (parsed) return { platform: parsed.adapter, scope: parsed.kind, sceneId: parsed.id };
+  const platform = key.split(':', 1)[0];
+  return platform ? { platform } : {};
 }
 
 interface Tally { calls: number; input: number; output: number; cache: number; cacheWrite: number }
@@ -851,7 +855,7 @@ async function aggregateUsage(
     bySession: rankedSessions
       .slice(0, USAGE_STATS_SESSION_LIMIT)
       .map(([sessionKey, s]) => {
-        const parsed = parseSessionKey(sessionKey);
+        const parsed = sessionAddressOf(sessionKey);
         const label = accountLabel(s.platform ?? parsed.platform, s.endpoint);
         // A scheduled job's session is named after the job's label when the instance still knows it (#1250 b63).
         const jobLabel = s.parts?.scopeKind === 'schedule' ? scheduleLabel(s.jobId) : undefined;

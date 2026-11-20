@@ -38,7 +38,6 @@ export { describeFailure, isNettoolsError, NettoolsError, type NettoolsErrorKind
 export {
   DEFAULT_RETRY_POLICY,
   HttpClient,
-  parseRetryAfter,
   type FetchLike,
   type HttpDependencies,
   type RetryPolicy,

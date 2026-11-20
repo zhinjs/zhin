@@ -130,6 +130,9 @@ describe('outbound media from untrusted sources (ADR 0056 §2)', () => {
   it('localizes the visible notice and never logs the media value', async () => {
     const result = await render(untrustedContent([image({ kind: 'file', value: '/root/secret-name.txt' })], { ...MODEL, locale: 'en' }));
     expect(result).toEqual([{ type: 'text', data: { text: '[image not sent: media source not allowed]' } }]);
+    // #1250 第 81 批: the default language, from the same catalog as the URL refusal notice.
+    expect(await render(untrustedContent([image({ kind: 'file', value: '/root/secret-name.txt' })], MODEL)))
+      .toEqual([{ type: 'text', data: { text: '[图片未发送：媒体来源不被允许]' } }]);
   });
 
   it('classifies platform tokens', () => {

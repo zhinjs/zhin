@@ -104,12 +104,10 @@ export {
   DEFAULT_PROVIDER_RESILIENCE,
   ProviderRequestError,
   classifyProviderError,
-  computeBackoffDelay,
   createResilientCompletionPort,
   describeProviderFailure,
   providerFailureKind,
   isProviderFailureMessage,
-  parseRetryAfterMs,
   resolveProviderResilienceConfig,
 } from './llm/index.js';
 export type {

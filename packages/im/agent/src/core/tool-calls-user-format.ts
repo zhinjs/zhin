@@ -56,6 +56,7 @@ const fallbackMessages = createMessages({
   },
   causeNoTools: { 'zh-CN': '本轮没有可用的工具，模型也没有给出回复', en: 'No tools were available this round and the model gave no reply' },
   causeDenied: { 'zh-CN': '需要的工具被拒绝，没有运行', en: 'The required tool was denied and did not run' },
+  causeDeniedTool: { 'zh-CN': '需要的工具 {tools} 被拒绝，没有运行', en: 'The required tool {tools} was denied and did not run' },
   causeDeniedTools: { 'zh-CN': '需要的工具 {tools} 被拒绝，没有运行', en: 'The required tools {tools} were denied and did not run' },
   causeEmpty: {
     'zh-CN': '模型未返回可见内容（可能为推理型模型空回复或上下文过长）',
@@ -134,7 +135,7 @@ export function formatReplyFallback(fallback: ReplyFallback, context: ReplyFallb
   const cause = fallback.cause === 'no_tools'
     ? t('causeNoTools')
     : fallback.cause === 'tool_denied'
-      ? tools ? t('causeDeniedTools', { tools }) : t('causeDenied')
+      ? tools ? t(fallback.tools!.length === 1 ? 'causeDeniedTool' : 'causeDeniedTools', { tools }) : t('causeDenied')
       : t('causeEmpty');
   const schedule = context.schedule;
   if (schedule) {

@@ -1,6 +1,7 @@
 /**
  * OAuth redirect endpoint mounted on zhin's shared HTTP host.
  */
+import { escapeHtml } from "zhin.js";
 import type { CallbackResult } from "./chat-auth.js";
 
 export interface CalendarRouteHost {
@@ -13,14 +14,6 @@ export interface CalendarRouteHost {
     ) => Response | Promise<Response>,
     meta?: { readonly summary?: string; readonly tags?: readonly string[] }
   ): () => void;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function renderPage(result: CallbackResult): string {

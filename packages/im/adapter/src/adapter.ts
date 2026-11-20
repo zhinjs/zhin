@@ -7,7 +7,7 @@ import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfile
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { EndpointDeliveryError, SELF_PROFILE_FIELDS } from '@zhin.js/im-contract';
-import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
+import { computeBackoffDelay, DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
@@ -1250,8 +1250,7 @@ function startFacts<E extends AnyEndpoint>(child: Child<E>): Pick<EndpointMetada
   };
 }
 function retryDelay(attempt: number): number {
-  const base = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
-  return Math.round(base * (1 - RETRY_JITTER + Math.random() * 2 * RETRY_JITTER));
+  return computeBackoffDelay(attempt - 1, { baseDelayMs: RETRY_BASE_MS, maxDelayMs: RETRY_MAX_MS, jitter: RETRY_JITTER });
 }
 /** Stable, credential-free code: an error's own short code, else its class name. */
 function startErrorCode(error: unknown): string {

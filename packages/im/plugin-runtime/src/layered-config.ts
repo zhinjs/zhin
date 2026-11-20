@@ -168,7 +168,11 @@ function assertConversationParts(adapter: string, endpointId: string, conversati
   if (!isFeatureConversationId(conversation.id)) throw new TypeError('Conversation id must be 1-256 characters without control characters');
 }
 
-/** `<alias>/<endpointId>/<kind>:<escaped id>` (ADR 0055 §1). */
+/**
+ * `<alias>/<endpointId>/<kind>:<escaped id>` (ADR 0055 §1). `@zhin.js/console-protocol` keeps the
+ * same grammar for the Console wire (both packages are zero-dependency, so neither imports the
+ * other); `tests/contracts/feature-conversation-key.test.ts` locks the two together.
+ */
 export function formatFeatureConversationKey(adapter: string, endpointId: string, conversation: FeatureConversationTarget): string {
   assertConversationParts(adapter, endpointId, conversation);
   return `${adapter}/${endpointId}/${conversation.kind}:${escapeFeatureConversationId(conversation.id)}`;
