@@ -13,7 +13,7 @@ const WEATHER = 'api60s__skill__60s-life__weather';
 
 describe('reply fallback (#1250 b33)', () => {
   it('keeps the interactive empty-reply text when nothing else is known', () => {
-    expect(formatToolCallsForUser([])).toBe('模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /reset 后重试，或换用非推理模型。');
+    expect(formatToolCallsForUser([])).toBe('模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /clear 清空本会话上下文后重试，或换用非推理模型。');
   });
 
   it('names "no tools" for a scheduled job, with its name, id and trace, and no /reset', () => {
@@ -23,6 +23,7 @@ describe('reply fallback (#1250 b33)', () => {
     expect(text).toContain('没有可用的工具');
     expect(text).toContain('zhin trace turn-9');
     expect(text).not.toContain('/reset');
+    expect(text).not.toContain('/clear');
     expect(text).not.toContain('推理型模型');
   });
 
@@ -40,6 +41,7 @@ describe('reply fallback (#1250 b33)', () => {
     expect(described.fallback).toEqual({ cause: 'empty_reply' });
     expect(described.text).toContain('模型未返回可见内容');
     expect(described.text).not.toContain('/reset');
+    expect(described.text).not.toContain('/clear');
   });
 
   it('does not call real tool output a fallback', () => {

@@ -37,7 +37,7 @@ export interface EvalInboundMessage {
   readonly backgroundOwnReplies?: boolean;
   /**
    * #1250 (ADR 0067 D8): earlier plain-text messages in the same chat that nothing handled (e.g.
-   * `/clear`), stored and read back through the real core `ConversationRuntime` as an adapter that
+   * `/weather`), stored and read back through the real core `ConversationRuntime` as an adapter that
    * declares `inboundTextAuthoredBySender` delivers them. A string is this message's own sender; an
    * object may name another `senderId` or carry the adapter's `forwarded` marker (a Telegram forward).
    */

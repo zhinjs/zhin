@@ -29,12 +29,21 @@ export function resolveStableSenderId(message: Message): string {
   return message.sender?.id ?? 'anon';
 }
 
+/** Words that clear the session context on their own: `clear`, `清空`, `重置`. */
+const CLEAR_WORDS = new Set(['clear', '清空', '重置']);
+/** Slash spellings people use to reset a chat: `/clear`, `/reset`, `/new`. */
+const CLEAR_SLASH_WORDS = new Set(['clear', 'reset', 'new']);
+
+/**
+ * The one recognizer of the chat clear command (#1250): the whole message (trimmed, `NFKC`-normalized,
+ * any letter case) is `clear`, `清空` or `重置`, or `/clear`, `/reset` or `/new` with an ASCII or
+ * full-width slash. Nothing else matches (`/clear all`, `please clear`, `/清空`).
+ */
 export function isClearCommand(content: string): boolean {
-  const normalized = content.trim().toLowerCase();
-  return normalized === 'clear'
-    || normalized === '/clear'
-    || normalized === '重置'
-    || normalized === '清空';
+  const normalized = content.normalize('NFKC').trim().toLowerCase();
+  if (CLEAR_WORDS.has(normalized)) return true;
+  const slash = /^\/\s*([a-z]+)$/u.exec(normalized);
+  return slash?.[1] !== undefined && CLEAR_SLASH_WORDS.has(slash[1]);
 }
 
 export function completedOutput(
