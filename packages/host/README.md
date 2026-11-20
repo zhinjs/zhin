@@ -19,7 +19,7 @@ Host **不提供**内置管理页 UI，仅暴露 Console API。官方 UI 在独�
 
 1. 启动应用（Console/HTTP Host 由 `@zhin.js/cli` 自动装配，无需安装任何插件）。
 2. 浏览器打开 **https://console.zhin.dev**（或本地 `zhin-console/` 开发服）。
-3. 登录页填写 **API Base URL** 与 **Bearer Token**（`.env` 中 `HTTP_TOKEN` / `http.token`）。API Base 的端口即 `http.port`：`create-zhin` 生成的项目写入 `8068`（如 `http://127.0.0.1:8068`），未配置 `http.port` 时运行时回退 `8086`。
+3. 登录页填写 **API Base URL** 与 **Bearer Token**（`.env` 中 `HTTP_TOKEN` / `http.token`）。API Base 的端口即 `http.port`：`create-zhin` 生成的项目写入 `8068`（如 `http://127.0.0.1:8068`），未配置 `http.port` 时运行时默认同样是 `8068`。
 
 协议：`POST /api/console/request` + SSE `GET /api/events`；插件扩展经 `GET /entries` 动态加载。完整说明见 **[docs/console/index.md](../../docs/console/index.md)**。
 
