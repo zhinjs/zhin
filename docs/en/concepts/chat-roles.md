@@ -72,7 +72,7 @@ A conversation-level `owner` owns that conversation, not the host:
 
 | Capability | Needs |
 | --- | --- |
-| Agent dangerous tools / exec / file writes and sensitive reads, receiving owner approvals, restarting the instance, writing global / platform memory, high-trust scheduled runs, editing the project configuration from chat, cross-adapter account recovery | a **global** `owner` |
+| Agent dangerous tools / exec / file writes and sensitive reads, receiving owner approvals, restarting the instance (the chat `/restart` also needs a confirmation, see [Agent](../ai/agent.md)), writing global / platform memory, high-trust scheduled runs, editing the project configuration from chat, cross-adapter account recovery | a **global** `owner` |
 | Adding / removing adapter accounts (`<adapter> endpoint add\|remove`) | an `owner` at the **adapter level or above** |
 | Feature self-service, role management, subscriptions and other zhin functions | decided at the target scope |
 

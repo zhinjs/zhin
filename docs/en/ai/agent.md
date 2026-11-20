@@ -259,6 +259,8 @@ One chat conversation can also branch into a **session tree**, managed with chat
 
 Masters and permitted users also have `/models`, `/health`, `/cmd`, `/endpoints`, `/bindings`, `/tools` and `/mcp`.
 
+**Restarting the instance**: `/restart` (aliases `/重启`, `/reboot`) is for a **global** `owner` only (not trusted users, account / conversation owners or platform group owners, who get the ordinary permission denial) and works in private chats and groups alike (in a group it is triggered like any command, with the command prefix). The first message only answers with a confirmation prompt; the restart runs when the **same person in the same conversation** sends `/restart confirm` (or `/重启 确认`) within 60 seconds. An expired confirmation, another sender or another conversation does not count; start again. Once confirmed it replies "Restarting…" and shortly after asks the gateway to restart the instance along the same path as the Console restart (ADR 0054); when the instance is not supervised by the gateway (`--standalone`, `--once`) it says so and does nothing. After the instance is back online it reports the result in the same conversation. Every request, refusal and confirmation goes to the Console audit log (`instance.chat:restart`, identity and conversation identifiers only; a wrong argument only gets the usage hint and is not audited).
+
 ## Context compaction
 
 When a conversation nears the model's context window it's compacted automatically (`ai.agent.compaction`):
