@@ -13,7 +13,7 @@ import {
   Divider, KvTable, MetricBlock, StatChip, Badge, UsageBar, BarChart,
   RadarChart, Sparkline, TopicItem, ProfileRow, QuoteCard, EmptyState,
   Table, TableRow, TableCell, Checkbox, Radio, Switch, Button,
-  List, ListItem, Markdown, CodeBlock,
+  List, ListItem, MarkdownView, CodeBlock,
   DonutChart, Callout, Timeline, StepTracker, ComparisonBar, StatusGrid, HeatmapGrid,
 } from '../lib/index.js';
 
@@ -143,8 +143,8 @@ function markdownExamples() {
     '[静态链接示例](https://example.invalid/docs)',
   ].join('\n');
   return [
-    node(Markdown, { source }),
-    node(Markdown, { source: [
+    node(MarkdownView, { source }),
+    node(MarkdownView, { source: [
       '**安全边界：** 原始 HTML 显示为文字，不执行。',
       '',
       '<untrusted-widget data-mode="preview">HTML 作为文字</untrusted-widget>',

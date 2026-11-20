@@ -113,24 +113,31 @@ export function escapeFeatureConversationId(id: string): string {
   return id.replaceAll('%', '%25').replaceAll('/', '%2F');
 }
 
-/** Inverse of {@link escapeFeatureConversationId}; undefined for any other `%` sequence. */
+/** Inverse of {@link escapeFeatureConversationId}; undefined for any other `%` sequence or a raw `/`. */
 export function unescapeFeatureConversationId(escaped: string): string | undefined {
   if (/%(?!25|2[fF])/u.test(escaped) || escaped.includes('/')) return undefined;
   return escaped.replace(/%2[fF]|%25/gu, match => match === '%25' ? '%' : '/');
 }
 
-/** `<alias>/<endpointId>/<kind>:<escaped id>`; throws on an invalid reference. */
+/** Whether `id` can be a conversation key id: 1–256 characters without control characters. */
+export function isFeatureConversationId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && id.length <= FEATURE_CONVERSATION_ID_MAX_LENGTH && !CONVERSATION_CONTROL.test(id);
+}
+
+/**
+ * `<alias>/<endpointId>/<kind>:<escaped id>` (ADR 0055 §1); throws a `TypeError` on an invalid
+ * reference. `@zhin.js/plugin-runtime` keeps the same grammar for runtime resolution (both packages
+ * are zero-dependency); `tests/contracts/feature-conversation-key.test.ts` locks the two together.
+ */
 export function formatFeatureConversationKey(ref: ConsoleFeatureConversationRef): string {
-  if (!CONVERSATION_ALIAS.test(ref.adapter)) throw new TypeError('Conversation key adapter must be an instance alias');
-  if (!CONVERSATION_ENDPOINT_ID.test(ref.endpointId)) throw new TypeError('Conversation key endpointId is invalid');
+  if (!CONVERSATION_ALIAS.test(ref.adapter)) throw new TypeError('A conversation resolution key requires an adapter instance alias');
+  if (!CONVERSATION_ENDPOINT_ID.test(ref.endpointId)) throw new TypeError('A conversation resolution key requires a valid endpointId');
   if (!CONSOLE_FEATURE_CONVERSATION_KINDS.includes(ref.kind)) throw new TypeError('Conversation kind must be group, private or channel');
-  if (typeof ref.id !== 'string' || !ref.id || ref.id.length > FEATURE_CONVERSATION_ID_MAX_LENGTH || CONVERSATION_CONTROL.test(ref.id)) {
-    throw new TypeError('Conversation id is invalid');
-  }
+  if (!isFeatureConversationId(ref.id)) throw new TypeError('Conversation id must be 1-256 characters without control characters');
   return `${ref.adapter}/${ref.endpointId}/${ref.kind}:${escapeFeatureConversationId(ref.id)}`;
 }
 
-/** Parses a conversation resolution key; undefined when it is not one. */
+/** Parses a conversation resolution key; undefined for adapter / endpoint keys and malformed input. */
 export function parseFeatureConversationKey(key: string): ConsoleFeatureConversationRef | undefined {
   if (typeof key !== 'string') return undefined;
   const first = key.indexOf('/');

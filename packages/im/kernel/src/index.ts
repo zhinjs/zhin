@@ -45,7 +45,7 @@ export {
 
 // ── Utils ──
 export { renderTemplatePaths } from './template-paths.js';
-export { Time, sleep } from './utils.js';
+export { Time } from './utils.js';
 export type { Dict } from './utils.js';
 
 // ── Redaction (ADR 0061 P1: shared by the decision audit and the message outcome ledger) ──

@@ -1,3 +1,4 @@
+import { computeBackoffDelay, parseRetryAfterMs, sleep } from 'zhin.js';
 import { message } from './messages.js';
 /**
  * Resilient JSON-over-HTTP for third-party, keyless public APIs.
@@ -179,7 +180,7 @@ export class HttpClient {
 
   #classifyStatus(response: Response, provider: string): AttemptOutcome {
     const status = response.status;
-    const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'), this.#deps.now());
+    const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'), this.#deps.now());
     if (status === 429) {
       const error = new NettoolsError('rate_limited', message('rateLimited', { provider }), {
         status,
@@ -203,10 +204,7 @@ export class HttpClient {
       }
       return retryAfterMs;
     }
-    const exponential = this.#policy.baseDelayMs * 2 ** attempt;
-    const capped = Math.min(this.#policy.maxDelayMs, exponential);
-    const half = capped / 2;
-    return Math.round(half + this.#deps.random() * half);
+    return computeBackoffDelay(attempt, this.#policy, this.#deps.random);
   }
 }
 
@@ -218,22 +216,6 @@ type AttemptOutcome =
       readonly error: NettoolsError;
       readonly retryAfterMs?: number | undefined;
     };
-
-/** Parse `Retry-After` as delta-seconds or an HTTP-date. Invalid values are ignored. */
-export function parseRetryAfter(value: string | null, nowMs: number): number | undefined {
-  if (value === null) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  if (/^\d+$/u.test(trimmed)) {
-    return Number(trimmed) * 1000;
-  }
-  const dateMs = Date.parse(trimmed);
-  if (Number.isNaN(dateMs)) {
-    return undefined;
-  }
-  return Math.max(0, dateMs - nowMs);
-}
 
 function parseJsonSafely(text: string): unknown {
   try {
@@ -292,19 +274,8 @@ function abortedError(provider: string): NettoolsError {
 }
 
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new NettoolsError('aborted', message('aborted')));
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      reject(new NettoolsError('aborted', message('aborted')));
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
+  return sleep(ms, signal).catch((error: unknown) => {
+    if (signal?.aborted) throw new NettoolsError('aborted', message('aborted'));
+    throw error;
   });
 }

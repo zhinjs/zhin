@@ -114,7 +114,7 @@ const card = (
 | 表格 | `Table`、`TableRow`、`TableCell`                                                                         |
 | 控件 | `Checkbox`、`Radio`、`Switch`、`Button`                                                                  |
 | 列表 | `List`、`ListItem`                                                                                       |
-| 文档 | `Markdown`、`CodeBlock`                                                                                  |
+| 文档 | `MarkdownView`、`CodeBlock`                                                                              |
 | 图表 | `BarChart`、`RadarChart`、`Sparkline`                                                                    |
 | 内容 | `TopicItem`、`QuoteCard`、`ProfileRow`                                                                   |
 
@@ -141,7 +141,7 @@ const card = (
 
 `List` 的 `items` 接受 JSX 内容数组，`ordered` 与 `start` 控制编号。组合式 `children` 中的直接 ListItem（含 Fragment、ThemeProvider 中的项）也会自动编号；未知函数组件保持惰性，不预执行或消耗序号，动态项可改用 `items` 或显式 `marker`。ListItem 支持嵌套列表，`marker` 可以是 JSX、数字、Checkbox，设为 null/false 隐藏标记；`theme.text.listMarker` 和 `custom.text.marker` 可覆盖默认标记。List 容器没有额外外距/gap，每项使用对称外距。
 
-`Markdown` 将文档解析为这些展示组件，支持标题、段落、嵌套列表、任务项、表格、引用与代码；原始 HTML 内容作为文本处理，图片仅显示替代文案，链接仅保留安全协议或相对路径。`source` 或字符串 `children` 是待解析的 Markdown 文本。单篇最长 100,000 字符，最多 10,000 个 token、24 层解析深度；超限会报错，不静默截断。
+`MarkdownView` 将文档解析为这些展示组件，支持标题、段落、嵌套列表、任务项、表格、引用与代码；原始 HTML 内容作为文本处理，图片仅显示替代文案，链接仅保留安全协议或相对路径。`source` 或字符串 `children` 是待解析的 Markdown 文本。单篇最长 100,000 字符，最多 10,000 个 token、24 层解析深度；超限会报错，不静默截断。
 
 代码围栏使用 `CodeBlock`，也可直接组合它：
 

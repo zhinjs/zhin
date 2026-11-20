@@ -6,9 +6,10 @@
  */
 
 // ── Re-export generic utils from kernel ──
-export { Time, sleep } from '@zhin.js/kernel';
+export { Time } from '@zhin.js/kernel';
 
 // ── IM-specific utilities ──
+import { escapeHtml } from "@zhin.js/plugin-runtime";
 import type { MessageElement } from "./types.js";
 import { formatSegmentPreview } from "./built/segment-contract/preview.js";
 import { KeyboardSegment } from "./built/interactive-segments/keyboard-segment.js";
@@ -25,12 +26,7 @@ export function segment<T extends object>(type: string, data: T) {
 export namespace segment {
   export function escape<T>(text: T): T {
     if (typeof text !== "string") return text;
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;") as T;
+    return escapeHtml(text) as T;
   }
   export function unescape<T>(text: T): T {
     if (typeof text !== "string") return text;

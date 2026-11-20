@@ -12,7 +12,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
 import {
-  CHAT_PRINCIPALS_RPC, type ConsoleChatRolesExport, type ConsoleChatRolesImportResult,
+  CHAT_PRINCIPALS_RPC, CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, CHAT_ROLES_EXPORT_FORMAT, CHAT_ROLES_EXPORT_VERSION, chatRolesBackupFileName,
+  isConsoleChatRolesExport, type ConsoleChatRolesExport, type ConsoleChatRolesImportResult,
 } from '@zhin.js/console-protocol';
 import { logger } from '../utils/logger.js';
 import { output } from '../utils/output.js';
@@ -22,23 +23,17 @@ import {
 
 /** Where `export` writes without a file argument (also where the instance puts its pre-migration backup). */
 export function defaultChatRolesExportPath(root: string, now = new Date()): string {
-  return path.join(root, '.zhin', 'backups', `chat-roles-${now.toISOString().replace(/[:.]/gu, '-')}.json`);
+  return path.join(root, ...CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, chatRolesBackupFileName(now));
 }
 
 async function consoleRpc<T>(http: HostHttpConfig, type: string, data: Record<string, unknown> = {}): Promise<HostFetchResult<T>> {
   return hostPost<T>(http, '/console/request', { type, data, requestId: `cli-${Date.now()}` });
 }
 
-function isExport(value: unknown): value is ConsoleChatRolesExport {
-  const data = value as Partial<ConsoleChatRolesExport> | undefined;
-  return !!data && data.format === 'zhin.chat-roles' && data.version === 1
-    && Array.isArray(data.principals) && Array.isArray(data.identities) && Array.isArray(data.roles) && Array.isArray(data.consoleLinks);
-}
-
 export async function exportChatRoles(http: HostHttpConfig, file: string): Promise<{ ok: true; file: string; data: ConsoleChatRolesExport } | { ok: false; error: string }> {
   const result = await consoleRpc<ConsoleChatRolesExport>(http, CHAT_PRINCIPALS_RPC.EXPORT);
   if (!result.ok) return { ok: false, error: result.error ?? `HTTP ${result.status}` };
-  if (!isExport(result.data)) return { ok: false, error: '实例返回的不是 zhin.chat-roles 导出数据' };
+  if (!isConsoleChatRolesExport(result.data)) return { ok: false, error: `实例返回的不是 ${CHAT_ROLES_EXPORT_FORMAT} 导出数据` };
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(result.data, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
   return { ok: true, file, data: result.data };
@@ -49,7 +44,9 @@ export async function importChatRoles(http: HostHttpConfig, file: string): Promi
   try { data = JSON.parse(await readFile(file, 'utf8')); } catch (error) {
     return { ok: false, error: `无法读取 ${file}：${(error as Error).message}` };
   }
-  if (!isExport(data)) return { ok: false, error: `${file} 不是 zhin chat-roles export 的导出文件（format: zhin.chat-roles, version: 1）` };
+  if (!isConsoleChatRolesExport(data)) {
+    return { ok: false, error: `${file} 不是 zhin chat-roles export 的导出文件（format: ${CHAT_ROLES_EXPORT_FORMAT}, version: ${CHAT_ROLES_EXPORT_VERSION}）` };
+  }
   const result = await consoleRpc<ConsoleChatRolesImportResult>(http, CHAT_PRINCIPALS_RPC.IMPORT, { data });
   if (!result.ok || !result.data) return { ok: false, error: result.error ?? `HTTP ${result.status}` };
   return { ok: true, result: result.data };

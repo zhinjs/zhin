@@ -3,7 +3,7 @@ import type { ImRuntime } from '@zhin.js/core/runtime';
 import { conversationEventQueryFields, conversationRefKey, type ConversationEvent, type ConversationRef, type ForwardEntry, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import type { HttpHost } from '@zhin.js/host-http';
 import { encodeStorageIdentity, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
-import { parseConversationSessionKey } from './conversation-session.js';
+import { parseConversationSessionKey } from '@zhin.js/console-protocol';
 import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
 

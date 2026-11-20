@@ -1,3 +1,4 @@
+import { formatConversationSessionKey } from '@zhin.js/console-protocol';
 import type { ConsoleLocale } from '@zhin.js/client';
 import { sandboxText } from './messages.js';
 import { getSandboxApiBase, getSandboxAuthHeaders } from './sandboxTransport.js';
@@ -98,8 +99,9 @@ const terminalTypes = new Set(['turn_end', 'turn_cancelled', 'budget_exceeded', 
 const toolTerminalTypes = new Set(['tool_result', 'tool_denied', 'tool_failed', 'tool_cancelled']);
 const traceCachePrefix = 'zhin.sandbox.agent-trace.v1:';
 
+/** The IM session key of a Sandbox scene (the shared four-segment conversation session key). */
 export function buildSandboxSessionKey(endpointId: string, scope: SandboxScope, sceneId: string): string {
-  return `sandbox:${endpointId || 'sandbox-bot'}:${scope}:${sceneId}`;
+  return formatConversationSessionKey({ adapter: 'sandbox', endpointKey: endpointId || 'sandbox-bot', kind: scope, id: sceneId });
 }
 
 export function agentSessionsPath(sessionKey: string): string {

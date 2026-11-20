@@ -1,10 +1,10 @@
 import { jsx, renderToHtml } from "@zhin.js/jsx";
 import { htmlToDOM, Element, Text, type DOMNode } from "html-react-parser";
 import { renderImage, colorBox } from "./render-image.js";
-import { Markdown } from "../src/markdown.js";
+import { MarkdownView } from "../src/markdown.js";
 import { ThemeProvider } from "../src/theme.js";
 
-const htmlOf = (source: string) => renderToHtml(jsx(Markdown, { source }));
+const htmlOf = (source: string) => renderToHtml(jsx(MarkdownView, { source }));
 
 function nodeText(node: DOMNode): string {
   if (node instanceof Text) return node.data;
@@ -99,9 +99,9 @@ describe("safe Markdown JSX", () => {
       jsx(ThemeProvider, {
         theme: {
           palette: { text: "#224466", accentMem: "#336699" },
-          components: { Markdown: { background: "gold" } },
+          components: { MarkdownView: { background: "gold" } },
         },
-        children: jsx(Markdown, {
+        children: jsx(MarkdownView, {
           source: "# Source\n\n[Link](/guide)",
           custom: {
             style: { background: "ivory", margin: 0 },
@@ -118,7 +118,7 @@ describe("safe Markdown JSX", () => {
     expect(html).not.toContain("must not rewrite source");
     expect(html).not.toMatch(/\s(?:theme|custom|source)=/);
     expect(
-      await renderToHtml(jsx(Markdown, { children: "**children**" }))
+      await renderToHtml(jsx(MarkdownView, { children: "**children**" }))
     ).toMatch(/<strong[^>]*>children<\/strong>/);
   });
 

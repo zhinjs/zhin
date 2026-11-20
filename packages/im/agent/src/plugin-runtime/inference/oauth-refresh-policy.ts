@@ -1,4 +1,4 @@
-import { computeBackoffDelay } from '@zhin.js/ai';
+import { computeBackoffDelay } from '@zhin.js/plugin-runtime';
 import type { CredentialPayload, OAuthExchangeFailure, OAuthRecovery } from './credentials.js';
 
 type ReadyOAuth = Extract<CredentialPayload, { status: 'ready'; method: 'oauth' }>;
@@ -31,7 +31,7 @@ export function oauthRefreshCooldown(input: Readonly<{ error: unknown; previous:
   const failures = Math.min((input.previous.refresh?.failures ?? 0) + 1, 5);
   const retryAfterMs = typeof facts.retryAfterMs === 'number' && Number.isFinite(facts.retryAfterMs) && facts.retryAfterMs >= 0
     ? facts.retryAfterMs : undefined;
-  return { failures, nextAttemptAt: input.now + computeBackoffDelay(failures - 1, { baseDelayMs: 1_000, maxDelayMs: 10_000 }, retryAfterMs) };
+  return { failures, nextAttemptAt: input.now + (retryAfterMs ?? computeBackoffDelay(failures - 1, { baseDelayMs: 1_000, maxDelayMs: 10_000 })) };
 }
 
 /** Only normalized protocol facts leave the encrypted bundle; never retain raw errors/bodies. */

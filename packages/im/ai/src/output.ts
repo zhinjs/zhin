@@ -11,6 +11,7 @@
  *   - card:  结构化卡片 (标题 + 正文 + 字段 + 按钮)
  *   - file:  文件附件
  */
+import { escapeHtml } from '@zhin.js/plugin-runtime';
 
 // ============================================================================
 // OutputElement 类型定义
@@ -283,8 +284,4 @@ export function renderToSatori(elements: OutputElement[]): string {
         return '';
     }
   }).filter(Boolean).join('\n');
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

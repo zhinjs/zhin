@@ -1,3 +1,4 @@
+import { escapeHtml } from 'zhin.js'
 import type { LinkMeta, PlatformTheme } from './types.js'
 import type { Locale } from 'zhin.js/i18n'
 import { messages as t } from './i18n.js'
@@ -7,14 +8,6 @@ const THEMES: Record<LinkMeta['platform'], PlatformTheme> = {
   github: { name: 'GitHub', color: '#24292e', bg: '#F0F0F0' },
   douyin: { name: '抖音', color: '#FE2C55', bg: '#FFF0F3' },
   xiaohongshu: { name: '小红书', color: '#FF2442', bg: '#FFF0F2' },
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 function truncate(s: string | undefined, max: number): string {
