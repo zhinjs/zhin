@@ -6,11 +6,16 @@ import {
   type GithubEndpoint,
 } from '@zhin.js/adapter-github';
 import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
-import type { CapabilityContext } from 'zhin.js';
+import { formatDateTime, type CapabilityContext } from 'zhin.js';
 
 type GithubOperationContext = Pick<CapabilityContext, 'project'> & { readonly input?: unknown };
 
 const GITHUB_ENDPOINT = process.env.GITHUB_ENDPOINT_ID?.trim() || 'zhin-dev';
+
+/** Local calendar day (`YYYY-MM-DD`, process zone) of a GitHub ISO timestamp; `-` when absent or unparsable. */
+export function ghDate(value: string | null | undefined): string {
+  return formatDateTime(Date.parse(value ?? ''), undefined, { part: 'date' });
+}
 
 export function ghApiMessage(data: unknown, fallback: string): string {
   if (data && typeof data === 'object' && 'message' in data) {

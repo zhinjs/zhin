@@ -73,6 +73,21 @@ describe('process monitor: this run vs cumulative (#1250)', () => {
     expect(monitor.state.events?.some(event => event.at < now - EVENT_RETENTION_MS)).toBe(false);
   });
 
+  it('dates trackingSince by the local day of the process zone (#1250)', async () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    try {
+      const now = Date.UTC(2026, 10, 14, 12);
+      const since = Date.parse('2026-01-05T17:00:00Z');
+      const file = stateFile({ lastPid: process.pid + 1, lastStartTime: now - 60_000, cleanExit: true, restartCount: 0, crashCount: 0, totalUptime: 0, trackingSince: since, eventsSince: since, events: [] });
+      const monitor = new ProcessMonitor({ notifyOnCrash: false, notifyOnRestart: false, notifyOnStart: false }, { stateFile: file, now: () => now });
+      await started(monitor);
+      expect(monitor.getStatus('en').trackingSince).toBe('2026-01-06');
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+
   it('treats a non-finite trackingSince / eventsSince (1e999 parses to Infinity) as missing', async () => {
     const now = Date.UTC(2026, 10, 14, 12);
     const file = stateFile();

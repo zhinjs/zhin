@@ -52,6 +52,7 @@ describe('answer book', () => {
     expect(calendarDay(now, 'Asia/Shanghai')).toBe('2026-10-21');
     expect(calendarDay(now, 'UTC')).toBe('2026-10-20');
     expect(calendarDay(now, 'Not/AZone')).toBe('2026-10-20');
+    expect(calendarDay(Date.parse('2026-01-05T17:00:00Z'), 'Asia/Shanghai')).toBe('2026-01-06');
   });
 
   it('returns a listed answer when random', () => {

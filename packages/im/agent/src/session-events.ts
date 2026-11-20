@@ -13,6 +13,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { ScheduleEngine } from '@zhin.js/kernel';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import type { DecisionActor, DecisionEventInput, DecisionOutcome, DecisionReasonCode } from './decision-events.js';
 
 export const AI_SESSION_EVENTS_TABLE = 'ai_session_events';
@@ -239,13 +240,8 @@ export function formatSessionEventIn(ms: number): string {
 
 /** `{at}`：实例时区的 `YYYY-MM-DD HH:mm`。时区无效时回落默认时区。 */
 export function formatSessionEventAt(at: number, timezone = DEFAULT_SESSION_EVENT_TIMEZONE): string {
-  const format = (timeZone: string) => {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    }).formatToParts(new Date(at));
-    const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
-  };
+  // #1250: the repository's `YYYY-MM-DD HH:mm:ss`, cut to minutes (the reminder text never shows seconds).
+  const format = (timeZone: string) => formatDateTime(at, undefined, { timeZone }).slice(0, 16);
   try {
     return format(timezone);
   } catch {

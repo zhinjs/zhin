@@ -1,6 +1,7 @@
 import { defineCommand } from 'zhin.js/command';
 import {
   ghApiMessage,
+  ghDate,
   parsePositiveInt,
   requireRepo,
   resolveGhClient,
@@ -35,7 +36,7 @@ export default defineCommand({
     return [
       `#${p.number} ${p.title}`,
       `${p.user?.login ?? '?'} | ${p.state} | ${p.head?.ref} → ${p.base?.ref}`,
-      `${p.created_at?.split('T')[0]} | +${p.additions} -${p.deletions} (${p.changed_files} files)`,
+      `${ghDate(p.created_at)} | +${p.additions} -${p.deletions} (${p.changed_files} files)`,
       p.body ? `\n${p.body.slice(0, 800)}${p.body.length > 800 ? '...' : ''}` : '',
       p.html_url ? `\n${p.html_url}` : null,
     ].filter(Boolean).join('\n');

@@ -1,3 +1,4 @@
+import { formatDateTime } from 'zhin.js';
 import type { Locale } from 'zhin.js/i18n';
 import { rssMessages as t } from './i18n.js';
 /**
@@ -130,7 +131,11 @@ export function formatFeedPreview(title: string, items: FeedItem[], locale: Loca
   for (const item of items.slice(0, 5)) {
     lines.push('');
     lines.push(`${item.title}`);
-    if (item.date) lines.push(`  ${new Date(item.date).toLocaleString(locale)}`);
+    if (item.date) {
+      // #1250: the repository's date format in the process zone; a date the feed wrote unreadably is shown as written.
+      const time = Date.parse(item.date);
+      lines.push(`  ${Number.isFinite(time) ? formatDateTime(time, locale) : item.date}`);
+    }
     if (item.link) lines.push(`  ${item.link}`);
   }
   if (items.length > 5) lines.push(t(locale, 'more', { count: items.length - 5 }));
