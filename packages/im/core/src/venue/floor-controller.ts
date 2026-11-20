@@ -1,3 +1,5 @@
+import { sleep as defaultSleep } from '@zhin.js/plugin-runtime';
+
 export interface VenueFloorControllerOptions {
   readonly minIntervalMs?: number;
   readonly now?: () => number;
@@ -20,12 +22,7 @@ interface VenueFloorQueueState {
 export function createVenueFloorController(options: VenueFloorControllerOptions = {}): VenueFloorController {
   const minIntervalMs = Math.max(0, options.minIntervalMs ?? 0);
   const now = options.now ?? Date.now;
-  const sleep =
-    options.sleep
-    ?? ((ms: number) =>
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-      }));
+  const sleep = options.sleep ?? defaultSleep;
 
   const queues = new Map<string, VenueFloorQueueState>();
 

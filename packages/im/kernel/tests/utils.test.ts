@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Time, sleep } from '../src/utils'
+import { Time } from '../src/utils'
 
 describe('Time utilities', () => {
   describe('constants', () => {
@@ -66,13 +66,5 @@ describe('Time utilities', () => {
       const result = Time.template('yyyy-MM-dd hh:mm:ss', date)
       expect(result).toBe('2024-01-15 14:30:45')
     })
-  })
-})
-
-describe('sleep utility', () => {
-  it('should sleep for specified time', async () => {
-    const start = Date.now()
-    await sleep(100)
-    expect(Date.now() - start).toBeGreaterThanOrEqual(90)
   })
 })

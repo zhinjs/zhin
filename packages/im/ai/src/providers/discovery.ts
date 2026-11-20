@@ -1,5 +1,5 @@
 import { ProviderDiscoveryError, type CredentialGrant, type ProviderDiscoveryOptions, type ProviderModelObservation } from '../provider/driver.js';
-import { parseRetryAfterMs } from '../llm/provider-resilience.js';
+import { parseRetryAfterMs } from '@zhin.js/plugin-runtime';
 import type { StandardServiceOptions } from './schema.js';
 
 interface CatalogueProtocol {

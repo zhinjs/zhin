@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NettoolsError } from '../src/errors.js';
-import { parseRetryAfter } from '../src/http.js';
+import { parseRetryAfterMs } from 'zhin.js';
 import { createClient, createFakeNetwork, hang, json, sequence } from './helpers.js';
 
 const URL_UNDER_TEST = new URL('https://api.example.net/v1/thing');
@@ -154,13 +154,13 @@ describe('HttpClient.fetchJson', () => {
   });
 });
 
-describe('parseRetryAfter', () => {
+describe('parseRetryAfterMs', () => {
   it('parses delta seconds and HTTP dates, ignores junk', () => {
     const now = Date.parse('2026-10-20T08:00:00Z');
-    expect(parseRetryAfter('5', now)).toBe(5_000);
-    expect(parseRetryAfter('Tue, 20 Oct 2026 08:00:07 GMT', now)).toBe(7_000);
-    expect(parseRetryAfter('Tue, 20 Oct 2026 07:00:00 GMT', now)).toBe(0);
-    expect(parseRetryAfter('soon', now)).toBeUndefined();
-    expect(parseRetryAfter(null, now)).toBeUndefined();
+    expect(parseRetryAfterMs('5', now)).toBe(5_000);
+    expect(parseRetryAfterMs('Tue, 20 Oct 2026 08:00:07 GMT', now)).toBe(7_000);
+    expect(parseRetryAfterMs('Tue, 20 Oct 2026 07:00:00 GMT', now)).toBe(0);
+    expect(parseRetryAfterMs('soon', now)).toBeUndefined();
+    expect(parseRetryAfterMs(null, now)).toBeUndefined();
   });
 });

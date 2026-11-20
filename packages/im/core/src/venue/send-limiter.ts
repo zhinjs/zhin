@@ -1,3 +1,5 @@
+import { sleep as defaultSleep } from '@zhin.js/plugin-runtime';
+
 export interface VenueSendLimiterOptions {
   readonly minIntervalMs?: number;
   readonly maxBurst?: number;
@@ -34,12 +36,7 @@ export function createVenueSendLimiter(options: VenueSendLimiterOptions = {}): V
   const minIntervalMs = Math.max(0, options.minIntervalMs ?? 1000);
   const maxBurst = Math.max(1, Math.floor(options.maxBurst ?? 1));
   const now = options.now ?? Date.now;
-  const sleep =
-    options.sleep
-    ?? ((ms: number) =>
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-      }));
+  const sleep = options.sleep ?? defaultSleep;
 
   const buckets = new Map<string, BucketState>();
 
