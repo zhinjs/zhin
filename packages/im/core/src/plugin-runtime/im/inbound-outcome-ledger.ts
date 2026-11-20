@@ -39,6 +39,11 @@ export interface InboundOutcomeSink {
    * dispatch from one that dropped the message (#1250).
    */
   replied?(owner?: string): boolean;
+  /**
+   * How many candidates this message accepted so far (#1250 第 84 批): lets the command dispatch tell
+   * a command that reported its own outcome while it ran from one that did not.
+   */
+  reportCount?(): number;
 }
 
 const MAX_DETAIL_CHARS = 200;
@@ -97,6 +102,7 @@ export class InboundOutcomeLedger implements InboundOutcomeSink {
   readonly #facets: string[] = [];
   #lastStage: MessageOutcomeStage = 'ingress';
   #replies = 0;
+  #reports = 0;
   readonly #replyOwners = new Set<string>();
   #settled: MessageOutcomeRecord | undefined;
 
@@ -118,6 +124,7 @@ export class InboundOutcomeLedger implements InboundOutcomeSink {
     if (owner) this.#replyOwners.add(String(owner));
   }
   replied(owner?: string): boolean { return owner === undefined ? this.#replies > 0 : this.#replyOwners.has(String(owner)); }
+  reportCount(): number { return this.#reports; }
 
   markAddressed(addressed: boolean): void { if (addressed) this.#addressed = true; }
   linkDiagnostic(id: string | undefined): void { if (id) this.#diagnosticId = id; }
@@ -140,6 +147,7 @@ export class InboundOutcomeLedger implements InboundOutcomeSink {
       return false;
     }
     this.#lastStage = candidate.stage;
+    this.#reports++;
     for (const facet of candidate.facets ?? []) this.#addFacet(facet);
     const best = this.#best;
     if (!best) { this.#best = candidate; return true; }
@@ -245,6 +253,11 @@ export function reportInboundOutcome(message: unknown, candidate: MessageOutcome
  */
 export function inboundOutcomeReplied(message: unknown, owner?: string): boolean {
   return inboundOutcomeSinkOf(message)?.replied?.(owner) === true;
+}
+
+/** Candidates this inbound message accepted so far (`undefined` without a ledger). @internal */
+export function inboundOutcomeReportCount(message: unknown): number | undefined {
+  return inboundOutcomeSinkOf(message)?.reportCount?.();
 }
 
 /** Marks the stage a message is entering, for `unrecorded` diagnosis. @public */

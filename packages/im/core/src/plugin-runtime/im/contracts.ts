@@ -2,7 +2,7 @@ import type { EndpointChildLease, EndpointControl, EndpointManagement } from '@z
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import { createRootPrivateToken, resolveLocale, type PluginId, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader, type Locale } from '@zhin.js/plugin-runtime';
-import { operationInputBinding, operationInputSignal, operationInputResources, operationInputSnapshot, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
+import { operationInputBinding, operationInputOutcome, operationInputSignal, operationInputResources, operationInputSnapshot, operationSession, type OperationInputOutcomeCandidate, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
 import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
@@ -80,6 +80,16 @@ export interface ImOperationResourcesInput {
   readonly message: RuntimeMessage;
   readonly owner: PluginId;
   readonly signal: AbortSignal;
+  /** #1250 第 84 批: the message's conversation sequence, when it was recorded (not for a secret). */
+  readonly conversationSequence?: number;
+  /**
+   * #1250 第 84 批: the first plugin author the operation's message view was bound from before it was
+   * bound to `owner` (a plugin middleware / handler / command dispatched it, possibly over several
+   * hops: P → Q → Root and Root → P → Root both name P). The Host offers the same resources as for a
+   * direct dispatch except dispatch-scoped authority reserved for messages the Root dispatches itself
+   * (the Agent's dispatch lease).
+   */
+  readonly delegatedFrom?: PluginId;
 }
 export interface ImOperationResourcesPort {
   open(input: ImOperationResourcesInput): OperationResourceView | undefined;
@@ -405,8 +415,15 @@ export interface RuntimeMessageOperation {
   readonly signal?: AbortSignal;
   readonly captureInteraction?: (owner: PluginId) => CapturedEndpointOperation;
   readonly session?: RuntimeMessageSessionBinding;
-  readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>) => OperationResourceView | undefined;
+  readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal; delegatedFrom?: PluginId }>) => OperationResourceView | undefined;
   readonly registerOperationView?: (view: object, owner: PluginId) => void;
+  /**
+   * @internal #1250 第 84 批: the first non-Root author this view was (re)bound from. An operation
+   * created from such a view is delegated (see {@link ImOperationResourcesInput.delegatedFrom}): a
+   * plugin dispatching a Root command (or rebinding its message to the Root) runs it normally, but
+   * without the Root-only dispatch authority.
+   */
+  readonly delegatedFrom?: PluginId;
   readonly presentation?: RuntimeMessagePresentation;
   /**
    * ADR 0061: report port of this message's outcome ledger, shared by every author view. Only
@@ -533,9 +550,13 @@ export class RuntimeMessage implements MessageBase {
     }
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Message author: ${owner}`);
     if (this.#operation.requester === owner && this.#operation.snapshot === snapshot) return this;
+    const current = this.#operation.requester;
+    const delegatedFrom = this.#operation.delegatedFrom
+      ?? (current !== undefined && current !== snapshot.root ? current : undefined);
     return new RuntimeMessage(this.#facts, {
       ...this.#operation,
       requester: owner,
+      ...(delegatedFrom !== undefined ? { delegatedFrom } : {}),
       snapshot,
       presentation: {
         locale: this.locale,
@@ -552,7 +573,17 @@ export class RuntimeMessage implements MessageBase {
     return this.#operation.snapshot;
   }
 
-  /** @internal Metadata fields cannot replace this actual leased operation factory. */
+  /**
+   * @internal Metadata fields cannot replace this actual leased operation factory.
+   *
+   * #1250 第 84 批: the operation owner is the author the framework bound this view to, never one the
+   * caller names. An author-bound view opens Host resources only for its own author (the command /
+   * middleware / handler executor binds the view before handing it out); for any other owner the
+   * operation has no resources (never an error: the command still runs, like one without Host
+   * resources). A view whose binding chain passed through a plugin author opens them delegated, so
+   * the Host withholds Root-only dispatch authority. Only the framework's unbound view (held by Core's
+   * dispatcher, which picks the matched command's owner) opens them for any owner.
+   */
   [operationInputResources](snapshot: RuntimeSnapshot): CapabilityOperationFactory | undefined {
     this.#operation.assertActive?.();
     if (snapshot !== this.#operation.snapshot || snapshot.generation !== this.generation) {
@@ -563,9 +594,12 @@ export class RuntimeMessage implements MessageBase {
     return Object.freeze({ signal, create: (input: Parameters<CapabilityOperationFactory['create']>[0]) => {
       this.#operation.assertActive?.();
       if (!snapshot.tree.has(input.owner)) throw new Error(`Unknown operation owner: ${input.owner}`);
+      const author = this.#operation.requester;
       const actualSignal = input.signal === signal ? signal : AbortSignal.any([signal, input.signal]);
+      if (author !== undefined && input.owner !== author) return Object.freeze({ signal: actualSignal, resources: undefined });
       return Object.freeze({ signal: actualSignal, resources: this.#operation.createOperationResources?.({
         message: this, owner: input.owner, signal: actualSignal,
+        ...(this.#operation.delegatedFrom !== undefined ? { delegatedFrom: this.#operation.delegatedFrom } : {}),
       }) });
     } });
   }
@@ -579,6 +613,14 @@ export class RuntimeMessage implements MessageBase {
   /** @internal The inbound outcome ledger (ADR 0061); reports after settlement are ignored by it. */
   [inboundOutcomeSink](): InboundOutcomeSink | undefined {
     return this.#operation.outcomes;
+  }
+
+  /**
+   * @internal A Feature's outcome for this message (see `reportOperationInputOutcome`): the refusal of a
+   * command a plugin dispatched from it (#1250 第 84 批). Reports after settlement are ignored.
+   */
+  [operationInputOutcome](candidate: OperationInputOutcomeCandidate): boolean {
+    return this.#operation.outcomes?.report({ ...candidate }) ?? false;
   }
 
   /** @internal The command/handler author's actual leased operation. */

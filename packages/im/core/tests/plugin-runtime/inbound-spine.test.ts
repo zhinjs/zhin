@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import {
   executeInboundTurnSpine,
+  InboundOutcomeLedger,
+  inboundOutcomeSink,
+  isNonHumanOrigin,
+  reportInboundOutcome,
   installComponentHost,
   installOutboundHost,
   installLocaleHost,
@@ -123,6 +127,49 @@ describe('executeInboundTurnSpine & @zhin.js/core/runtime host installers', () =
     expect(outcome.dispatch.matched).toBe(false);
     expect(outcome.reply).toEqual({ owner: rootPluginId(), content: '没有这个指令，你是不是想用：rss list' });
     expect(reportDispatch).toHaveBeenCalledWith({ matched: false, path: 'none', replied: true });
+  });
+
+  it('keeps a message from something other than a person away from every command (#1250 第 84 批)', async () => {
+    const base = createEnvelope();
+    const ledger = new InboundOutcomeLedger({ conversation: base.message.conversation, receivedAt: 1 });
+    const message = { ...base.message, content: '/models', metadata: { origin: 'peer_bot' }, [inboundOutcomeSink]: () => ledger } as unknown as Message;
+    const dispatchCommand = vi.fn(async () => ({ dispatch: Object.freeze({ matched: true, status: 'denied' as const, command: 'models' }) }));
+    const suggestCommand = vi.fn(async () => 'did you mean /models');
+    const route = vi.fn(async () => false);
+    const outcome = await executeInboundTurnSpine(createEnvelope({ message, dispatchCommand, suggestCommand, ingressRoute: { route } }));
+    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(suggestCommand).not.toHaveBeenCalled();
+    expect(outcome.reply).toBeUndefined();
+    expect(ledger.settle()).toMatchObject({ outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'command' });
+  });
+
+  it('judges the origin from the trusted origin first, then the self-reported metadata (#1250 第 84 批)', () => {
+    expect(isNonHumanOrigin({ origin: 'peer_bot' })).toBe(true);
+    expect(isNonHumanOrigin({ metadata: { origin: 'member' } })).toBe(true);
+    expect(isNonHumanOrigin({ origin: 'human', metadata: { origin: 'self' } })).toBe(false);
+    expect(isNonHumanOrigin({ metadata: { origin: 'human' } })).toBe(false);
+    expect(isNonHumanOrigin({ metadata: {} })).toBe(false);
+    expect(isNonHumanOrigin({})).toBe(false);
+  });
+
+  it('keeps the outcome a command reported itself when it returned and sent nothing (#1250 第 84 批)', async () => {
+    const run = async (input: { report: boolean; value?: string; replied?: boolean }) => {
+      const base = createEnvelope();
+      const ledger = new InboundOutcomeLedger({ conversation: base.message.conversation, receivedAt: 1 });
+      const message = { ...base.message, content: '/reset', [inboundOutcomeSink]: () => ledger } as unknown as Message;
+      await executeInboundTurnSpine(createEnvelope({ message, dispatchCommand: async () => {
+        if (input.report) reportInboundOutcome(message, { outcome: 'not_addressed', reason: 'clear_command', stage: 'agent_gate' });
+        if (input.replied) ledger.noteReplyDelivered();
+        return { dispatch: Object.freeze({ matched: true, status: 'executed' as const, command: 'reset', owner: rootPluginId(),
+          ...(input.value !== undefined ? { value: input.value } : {}) }) };
+      } }));
+      return ledger.settle();
+    };
+    expect(await run({ report: true })).toMatchObject({ outcome: 'not_addressed', reason: 'clear_command' });
+    // A command that answered, or reported nothing, still records command_replied.
+    expect(await run({ report: true, value: 'done' })).toMatchObject({ outcome: 'command_replied', reason: 'executed' });
+    expect(await run({ report: true, replied: true })).toMatchObject({ outcome: 'command_replied', reason: 'executed' });
+    expect(await run({ report: false })).toMatchObject({ outcome: 'command_replied', reason: 'executed' });
   });
 
   it('keeps the AI path when no command is similar or a handler already replied', async () => {

@@ -10,6 +10,7 @@ import { resolveLocale, type CapabilityId, type PluginId, type RuntimeSnapshot }
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
 import { commandMenuReply, renderCommandFeedback } from './command-feedback.js';
 import { gatedCommandIndex } from './feature-gate.js';
+import { isNonHumanOrigin } from './inbound-origin.js';
 
 const logger = getLogger('command');
 
@@ -101,6 +102,8 @@ export class MessageDispatcher {
    * is checked; a pending prompt ends when the sender sends a command meanwhile.
    */
   routesToCommand(message: Message, snapshot: RuntimeSnapshot): boolean {
+    // #1250 第 84 批: a message from something other than a person reaches no command (inbound spine).
+    if (isNonHumanOrigin(message)) return false;
     const prefix = message.commandPrefix ?? this.resolvePrefix(message, snapshot);
     let input = normalizeCommandInputText(message);
     if (prefix && !input.startsWith(prefix)) return false;

@@ -16,7 +16,7 @@ export type {
 } from './endpoint-runtime.js';
 export * from './inbound-spine.js';
 export * from './host/index.js';
-export { isMessageOrigin, roomMembershipToken } from './inbound-origin.js';
+export { isMessageOrigin, isNonHumanOrigin, roomMembershipToken } from './inbound-origin.js';
 export type {
   MessageOrigin,
   RoomInboundRouteInput,

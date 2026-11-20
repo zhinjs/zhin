@@ -42,7 +42,8 @@ import type {
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import type { MessageDispatchOutcome } from './message-dispatcher.js';
 import { formatConversationLog } from './message-events.js';
-import { enterInboundOutcomeStage, inboundOutcomeReplied, reportInboundOutcome } from './inbound-outcome-ledger.js';
+import { enterInboundOutcomeStage, inboundOutcomeReplied, inboundOutcomeReportCount, reportInboundOutcome } from './inbound-outcome-ledger.js';
+import { isNonHumanOrigin } from './inbound-origin.js';
 import { interactionEndCandidate, interactionEndOf } from './interaction-end.js';
 import { silencesCommandDenial } from './interaction-refusal.js';
 import type { MessageOutcomeCandidate } from './message-outcome.js';
@@ -359,11 +360,23 @@ export async function executeInboundTurnSpine(
       ...(interactive.owner ? { owner: interactive.owner } : {}) });
   }
   if (!interactive) enterInboundOutcomeStage(message, 'command');
+  // #1250 第 84 批: commands answer people only. A message labelled as coming from something other
+  // than a person (another bot, see `isNonHumanOrigin`) reaches no command: no execution, no permit
+  // refusal, no near-miss hint. Middlewares and handlers above still saw it; the AI ingress route
+  // below leaves it unanswered for the same reason.
+  const nonHuman = !interactive && isNonHumanOrigin(message);
+  if (nonHuman) {
+    diagnostics?.step('dispatch', 'bot_origin');
+    reportInboundOutcome(message, { outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'command' });
+  }
   let commandMiss: 'prefix_mismatch' | 'empty_input' | 'unmatched' | undefined;
   let interactionEnded = false;
+  const reportsBeforeCommand = inboundOutcomeReportCount(message);
   const dispatched = interactive
     ? undefined
-    : await envelope.dispatchCommand((stage, status) => {
+    : nonHuman
+      ? { dispatch: Object.freeze({ matched: false }) } as MessageDispatchOutcome
+      : await envelope.dispatchCommand((stage, status) => {
       diagnostics?.step(stage, status);
       if (status === 'mismatch') commandMiss = 'prefix_mismatch';
       else if (status === 'empty_input') commandMiss = 'empty_input';
@@ -381,7 +394,7 @@ export async function executeInboundTurnSpine(
       diagnostics?.route('interaction');
       return { dispatch: Object.freeze({ matched: true, command: 'interaction', ...(end.owner ? { owner: end.owner as PluginId } : {}) }) };
     });
-  if (dispatched && !interactionEnded) reportCommandOutcome(message, dispatched.dispatch);
+  if (dispatched && !interactionEnded) reportCommandOutcome(message, dispatched.dispatch, reportsBeforeCommand);
   let result: MessageDispatchResult = interactive ?? dispatched!.dispatch;
   let stage: InboundSpineStage = interactive
     ? 'interactive'
@@ -396,7 +409,7 @@ export async function executeInboundTurnSpine(
       conv: formatConversationLog(message.conversation),
     }));
     let suggested: SendContent | undefined;
-    if (!repliedDuringHandlers && !envelope.hasReplied()) {
+    if (!repliedDuringHandlers && !envelope.hasReplied() && !nonHuman) {
       // A suggestion is a convenience: its failure keeps the ordinary AI path.
       try { suggested = await envelope.suggestCommand?.(); } catch { suggested = undefined; }
     }
@@ -788,8 +801,13 @@ function refusalReasonOf(result: MessageDispatchResult): string | undefined {
   return userFacingRefusalReason((result as { refusalReason?: unknown }).refusalReason);
 }
 
-/** Maps one command dispatch fact to its outcome (ADR 0061 §1.1 / §1.2). */
-function reportCommandOutcome(message: Message, result: MessageDispatchResult): void {
+/**
+ * Maps one command dispatch fact to its outcome (ADR 0061 §1.1 / §1.2). `reportsBefore` is the
+ * ledger's candidate count when the dispatch began: a command that returned nothing, sent nothing
+ * and reported its own outcome while it ran (#1250 第 84 批: `reset` that did not clear) keeps that
+ * outcome — the dispatch does not add `command_replied`, which would outrank a silent one.
+ */
+function reportCommandOutcome(message: Message, result: MessageDispatchResult, reportsBefore?: number): void {
   if (!result.matched) return;
   const base = { stage: 'command' as const, ...(result.command ? { command: result.command } : {}), ...(result.owner ? { owner: result.owner } : {}) };
   const refused = (result as { refused?: unknown }).refused === true;
@@ -810,6 +828,8 @@ function reportCommandOutcome(message: Message, result: MessageDispatchResult): 
       reportInboundOutcome(message, { ...base, outcome: 'rate_limited', reason: result.limit?.reason ?? 'limited' });
       return;
     default:
+      if (!refused && !result.menu && result.value === undefined && !inboundOutcomeReplied(message)
+        && reportsBefore !== undefined && (inboundOutcomeReportCount(message) ?? 0) > reportsBefore) return;
       // The command's own closed refusal code (UserFacingError `reason`), else the generic one.
       reportInboundOutcome(message, refused
         ? { ...base, outcome: 'refused', reason: refusalReasonOf(result) ?? 'user_facing_error' }

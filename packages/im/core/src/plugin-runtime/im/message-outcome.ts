@@ -206,9 +206,22 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
 
 /**
  * Reasons whose wording the outcome's template would misstate (#1250): a prompt replaced by a newer
- * prompt in the same conversation was not left by the sender.
+ * prompt in the same conversation was not left by the sender; a `reset` (the clear command) that did
+ * not clear was a command, not an unaddressed chat message (第 84 批); an Agent management command on an
+ * instance without the Host's operation resources was not declined by a plugin (第 84 批).
  */
 const REASON_TEMPLATES: Readonly<Partial<Record<MessageOutcome, Readonly<Record<string, MessageOutcomeTemplate>>>>> = Object.freeze({
+  refused: Object.freeze({
+    management_unavailable: tpl('管理命令在此实例不可用，没有执行。', 'Management commands are not available on this instance; nothing was run.',
+      '管理命令 {command} 未执行：实例未接 Agent Host 的操作资源（{reason}）。', 'Management command {command} not run: the instance has no Agent Host operation resources ({reason}).'),
+  }),
+  not_addressed: Object.freeze({
+    clear_command: tpl('清空指令只在我会回复你的地方生效（群里要 @ 我），这次没有清空。',
+      'The clear command only works where I answer you (mention me in a group); nothing was cleared.',
+      '清空指令未生效：此处 AI 不回复该发送者或未点名（{reason}）。', 'Clear command not applied: not addressed or the AI does not answer the sender here ({reason}).'),
+    live_room_clear: tpl('直播间里清空指令不清空上下文，也不进 AI 回合。', 'In a live room the clear command clears nothing and starts no AI turn.',
+      '直播间里清空指令不生效（{reason}）。', 'Clear command not applied in a live room ({reason}).'),
+  }),
   interaction_cancelled: Object.freeze({
     superseded: tpl('这个提问被之后的新提问替代了，没有继续。', 'A newer question replaced this one; nothing more was done.',
       '提问被同一会话中更新的提问替代，提问方 {owner}（{stage}）。', 'Prompt replaced by a newer prompt in the conversation, asked by {owner} ({stage}).'),

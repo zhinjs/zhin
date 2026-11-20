@@ -232,7 +232,7 @@
     "export{EndpointRuntime}from './endpoint-runtime.js';",
     "export{MessageBus,messageBusToken,type EndpointEvent,type MessageBusEventMap,type MessageBusEventName,type RuntimeMessageEvent,type RuntimeMessageEventSource,type RuntimeMessageRendering,type RuntimeSceneEventSignal,type RuntimeSceneEventSource,type OutboundFallbackReason,}from './message-events.js';",
     "export{enterInboundOutcomeStage,InboundOutcomeLedger,inboundOutcomeSink,MessageOutcomeLog,onUnrecordedInboundOutcome,reportInboundOutcome,type InboundOutcomeLedgerInit,type InboundOutcomeSink,type MessageOutcomeLogOptions,type MessageOutcomeQuery,type MessageOutcomeReader,type UnrecordedOutcomeListener,}from './inbound-outcome-ledger.js';",
-    "export{isMessageOrigin,roomMembershipToken}from './inbound-origin.js';",
+    "export{isMessageOrigin,isNonHumanOrigin,roomMembershipToken}from './inbound-origin.js';",
     "export{renderToSegments,isNativeMessageTag,type MessageRenderOptions}from '../../jsx/message-renderer.js';"
   ],
   "core/runtime/host": [

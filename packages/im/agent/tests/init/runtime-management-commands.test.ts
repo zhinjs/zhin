@@ -9,10 +9,25 @@ import {
   type RuntimeManagementDispatch,
   type RuntimeManagementOperation,
 } from '../../src/init/runtime-management-commands.js';
-import { dispatchLeaseToken } from '../../src/plugin-runtime/inference/dispatch-lease.js';
+import { createDispatchLeaseIssuer, dispatchLeaseToken, dispatchLeaseWithheldToken } from '../../src/plugin-runtime/inference/dispatch-lease.js';
 
 /** `@zhin.js/feature-kit`'s operation hook: the IM runtime's per-message operation resources. */
 const operationInputResources = Symbol.for('zhin.operation-input-resources/1');
+
+type Resources = { has(token: unknown): boolean; use(token: unknown): unknown };
+
+/** The issuer of the Host instance these commands are wired to (`isDispatchLease` in {@link harness}). */
+const hostIssuer = createDispatchLeaseIssuer();
+
+/** What the Agent Host offers a Root operation sent directly: a dispatch lease this Host issued. */
+function leaseResources(retain: () => SnapshotLease = () => ({ value: undefined, active: true, release() {} }) as unknown as SnapshotLease,
+  issuer = hostIssuer): Resources {
+  const port = issuer.issue({ retain });
+  return { has: token => token === dispatchLeaseToken, use: token => {
+    if (token !== dispatchLeaseToken) throw new Error('unexpected token');
+    return port;
+  } };
+}
 
 /**
  * zhinjs/zhin#1250 第 83 批: the Agent management commands are Root commands. These tests run them
@@ -40,6 +55,7 @@ function harness(options: {
   };
   const commands = createRuntimeManagementCommands({
     zhinAgent: { archiveSession, compactSession } as never,
+    isDispatchLease: port => hostIssuer.isIssued(port),
     open: async (message, dispatch, run) => { opened.push(message); dispatches.push(dispatch); return run(operation); },
     clear,
     ...options.host,
@@ -58,7 +74,9 @@ function harness(options: {
   const dispatcher = new MessageDispatcher(() => prefix);
 
   async function send(content: string, at: { kind?: 'private' | 'group' | 'channel'; role?: Role; locale?: 'zh-CN' | 'en';
-    metadata?: Record<string, unknown>; resources?: { has(token: unknown): boolean; use(token: unknown): unknown } } = {}) {
+    metadata?: Record<string, unknown>; resources?: Resources | null } = {}) {
+    // Sent directly, the Host offers the dispatch lease (production: every message's IM operation).
+    const resources = at.resources === null ? undefined : at.resources ?? leaseResources();
     const kind = at.kind ?? 'group';
     const outcomes: Record<string, unknown>[] = [];
     const sink = { report: (candidate: Record<string, unknown>) => { outcomes.push(candidate); return true; }, enter() {} };
@@ -71,8 +89,8 @@ function harness(options: {
       $reply: vi.fn(async () => ({ status: 'sent' })),
       [inboundOutcomeSink]: () => sink,
       // The IM runtime's operation resources for this message (Host-provided in production).
-      ...(at.resources ? { [operationInputResources]: () => ({ signal: new AbortController().signal,
-        create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources: at.resources }) }) } : {}),
+      ...(resources ? { [operationInputResources]: () => ({ signal: new AbortController().signal,
+        create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources }) }) } : {}),
     } as unknown as Message;
     const route = vi.fn(async () => true);
     const outcome = await executeInboundTurnSpine({
@@ -182,30 +200,91 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
   it('hands every command the generation that dispatched it, from the message\'s operation resources', async () => {
     const lease = { release: vi.fn() } as unknown as SnapshotLease;
     const retain = vi.fn(() => lease);
-    const resources = { has: (token: unknown) => token === dispatchLeaseToken, use: (token: unknown) => {
-      if (token !== dispatchLeaseToken) throw new Error('unexpected token');
-      return { retain };
-    } };
+    const resources = leaseResources(retain);
     const h = harness();
     await h.send('/models', { role: 'trusted', resources });
     expect(h.dispatches[0]!.retainLease?.()).toBe(lease);
     expect(retain).toHaveBeenCalledOnce();
     await h.send('/reset', { resources });
     expect(h.clear.mock.calls[0]![1].retainLease?.()).toBe(lease);
-    // Without Host operation resources there is no generation to retain.
-    await h.send('/health', { role: 'trusted' });
-    expect(h.dispatches[1]!.retainLease).toBeUndefined();
   });
 
-  it('answers people only: another bot gets no reply and nothing runs (#1250 第 83 批)', async () => {
+  it('takes only a dispatch lease this Host instance issued: a look-alike or another issuer\'s port gets the direct-send request (#1250 第 84 批)', async () => {
+    // What a plugin's own `operation` factory can hand out: the lease token (its id is readable)
+    // answered with a port of the right shape that the Host never issued, or a port a second issuer
+    // (a plugin's own `createHostOperationResources`) did issue.
+    const retain = vi.fn(() => ({ release() {} }) as unknown as SnapshotLease);
+    const forged = { has: (token: unknown) => (token as { id?: string } | undefined)?.id === 'zhin.agent.dispatch-lease',
+      use: () => ({ retain, conversationSequence: 1 }) };
+    const minted = leaseResources(retain, createDispatchLeaseIssuer());
+    const h = harness();
+    for (const resources of [forged, minted]) {
+      for (const [content, role] of [['/models', 'trusted'], ['/reset', 'trusted'], ['/reset', undefined]] as const) {
+        const sent = await h.send(content, { kind: 'private', ...(role ? { role } : {}), resources });
+        expect(sent.reply).toBe(`ℹ️ 该命令不能经插件转发执行，请直接发送 ${content}。`);
+        expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'direct_command_required' }));
+      }
+    }
+    expect(retain).not.toHaveBeenCalled();
+    expect(h.opened).toEqual([]);
+    expect(h.clear).not.toHaveBeenCalled();
+    expect(h.archiveSession).not.toHaveBeenCalled();
+    expect(h.list).not.toHaveBeenCalled();
+  });
+
+  it('says management commands are unavailable without the Host resources, even when sent directly (#1250 第 84 批)', async () => {
+    // No Host operation resources on the message (the embedder did not provide them), or commands
+    // created without `isDispatchLease`: no lease can ever be issued here.
+    const unwired = harness({ host: { isDispatchLease: undefined as never } });
+    for (const [h, resources] of [[harness(), null], [unwired, undefined]] as const) {
+      for (const [content, role, locale] of [['/models', 'trusted', 'zh-CN'], ['/reset', 'trusted', 'en'], ['/reset', undefined, 'zh-CN']] as const) {
+        const sent = await h.send(content, { kind: 'private', locale, ...(role ? { role } : {}), ...(resources === null ? { resources } : {}) });
+        expect(sent.reply).toBe(locale === 'en' ? 'ℹ️ Management commands are not available on this instance.' : 'ℹ️ 管理命令在此实例不可用。');
+        expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'management_unavailable' }));
+      }
+      expect(h.opened).toEqual([]);
+      expect(h.clear).not.toHaveBeenCalled();
+      expect(h.archiveSession).not.toHaveBeenCalled();
+    }
+  });
+
+  it('asks the sender to send a command directly when a plugin forwarded it, without the dispatch lease (#1250 第 84 批)', async () => {
+    // What the Host offers a Root operation a plugin middleware / handler / button callback dispatched.
+    const withheld = { has: (token: unknown) => token === dispatchLeaseWithheldToken, use: (token: unknown) => {
+      if (token !== dispatchLeaseWithheldToken) throw new Error('unexpected token');
+      return true;
+    } };
+    const h = harness();
+    for (const [content, command] of [['/models', '/models'], ['/health', '/health'], ['/tree', '/tree'], ['/tree 1', '/tree'],
+      ['/fork 1', '/fork'], ['/compact', '/compact'], ['/reset', '/reset']] as const) {
+      const sent = await h.send(content, { role: 'trusted', resources: withheld });
+      expect(sent.reply).toBe(`ℹ️ 该命令不能经插件转发执行，请直接发送 ${command}。`);
+      expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'direct_command_required', command: command.slice(1) }));
+      expect(sent.route).not.toHaveBeenCalled();
+    }
+    // `reset` from a sender without a chat role (the clear path) needs the lease just the same.
+    const clear = await h.send('/reset', { kind: 'private', locale: 'en', resources: withheld });
+    expect(clear.reply).toBe('ℹ️ This command cannot run when a plugin forwards it. Send /reset directly.');
+    expect(clear.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'direct_command_required' }));
+    expect(h.opened).toEqual([]);
+    expect(h.clear).not.toHaveBeenCalled();
+    expect(h.archiveSession).not.toHaveBeenCalled();
+    expect(h.list).not.toHaveBeenCalled();
+  });
+
+  it('answers people only: the command dispatch keeps another bot away from every command (#1250 第 83 / 84 批)', async () => {
     const h = harness({ host: { semanticMemory: { active: true, list: vi.fn(async () => []), delete: vi.fn() } as never } });
     for (const origin of ['peer_bot', 'member', 'self']) {
       for (const content of ['/models', '/health', '/tree', '/fork 1', '/compact', '/reset', '/memory', '/memory forget all']) {
         for (const kind of ['private', 'group'] as const) {
-          const sent = await h.send(content, { kind, role: 'owner', metadata: { origin } });
-          expect(sent.reply).toBeUndefined();
-          expect(sent.route).not.toHaveBeenCalled();
-          expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'filtered_by_policy', reason: 'non_human_origin', stage: 'command' }));
+          for (const role of ['owner', undefined] as const) {
+            const sent = await h.send(content, { kind, ...(role ? { role } : {}), metadata: { origin } });
+            expect(sent.reply).toBeUndefined();
+            expect(sent.message.$reply).not.toHaveBeenCalled();
+            expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'command' }));
+            // No permit refusal, no command outcome at all.
+            expect(sent.outcomes.filter(candidate => candidate.stage === 'command')).toHaveLength(1);
+          }
         }
       }
     }
@@ -214,6 +293,19 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
     expect(h.archiveSession).not.toHaveBeenCalled();
     // `human` (or no origin) is a person.
     expect((await h.send('/models', { role: 'owner', metadata: { origin: 'human' } })).reply).toContain('openai/gpt-4o');
+  });
+
+  it('sends no permission refusal to a self-reported bot without a role in a private chat (#1250 第 84 批)', async () => {
+    const h = harness();
+    const bot = await h.send('/models', { kind: 'private', metadata: { origin: 'peer_bot' } });
+    expect(bot.reply).toBeUndefined();
+    expect(bot.message.$reply).not.toHaveBeenCalled();
+    expect(bot.outcomes).not.toContainEqual(expect.objectContaining({ outcome: 'permission_denied' }));
+    expect(bot.outcomes).toContainEqual(expect.objectContaining({ outcome: 'ignored_bot', reason: 'non_human_origin' }));
+    expect(h.list).not.toHaveBeenCalled();
+    // The same message from a person is refused with the reason, as before.
+    const person = await h.send('/models', { kind: 'private' });
+    expect(person.reply).toBe(denial());
   });
 
   it('fails a model-using command when the Host model operation is unavailable', async () => {

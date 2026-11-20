@@ -187,3 +187,20 @@ describe('ADR 0055 conversation-level dispatch gate', () => {
     expect(await dispatcher.dispatch(message('ep:main', 'rss', 'A'), snapshot)).toMatchObject({ matched: true });
   });
 });
+
+describe('MessageDispatcher.routesToCommand (#1250 第 84 批)', () => {
+  it('reports no command route for a message from something other than a person', () => {
+    const { snapshot } = fixture({ configVersion: 2, plugins: {} });
+    const dispatcher = new MessageDispatcher(() => '');
+    const from = (extra: Record<string, unknown>) => ({ ...(message('ep:main', 'rss') as object), ...extra }) as never;
+    expect(dispatcher.routesToCommand(message('ep:main', 'rss'), snapshot)).toBe(true);
+    expect(dispatcher.routesToCommand(from({ origin: 'human' }), snapshot)).toBe(true);
+    for (const origin of ['member', 'peer_bot', 'self', 'bot']) {
+      expect(dispatcher.routesToCommand(from({ origin }), snapshot)).toBe(false);
+      // A self-declared metadata origin (no trusted one) is honoured the same way.
+      expect(dispatcher.routesToCommand(from({ metadata: { origin } }), snapshot)).toBe(false);
+    }
+    // A trusted human origin is never overridden by metadata.
+    expect(dispatcher.routesToCommand(from({ origin: 'human', metadata: { origin: 'peer_bot' } }), snapshot)).toBe(true);
+  });
+});

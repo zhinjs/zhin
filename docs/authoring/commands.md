@@ -690,7 +690,7 @@ flowchart LR
 
 ### 从中间件或按钮回调执行命令 {#dispatch-from-middleware}
 
-按钮回调（或任何入站消息）想"转成一条命令执行"时，在中间件 / handler 里用当前上下文取命令表，把**这条消息本身**作为 `source` 传进去，不要自己传 `snapshot`：
+按钮回调（或任何入站消息）想"转成一条命令执行"时，在中间件 / handler 里用当前上下文取命令表，把**这条消息本身**作为 `source` 传进去；`snapshot`、`commandPrefix`、`operation` 都不用传，默认取这条消息自己的：
 
 ```ts
 // middlewares/vote-buttons/index.ts
@@ -702,16 +702,21 @@ export default defineMiddleware({
     const payload = context.input.content;
     if (!payload.startsWith('vote ')) return next();
     const result = await context.project<CommandIndex>(commandFeatureId).dispatch({ input: payload, source: context.input });
+    if (!result.matched) return next();
     if (result.status === 'denied') return result.denial?.reason ?? '你不能执行这个操作';
     if (result.status === 'invalid') return result.help;
-    return undefined; // 命令自己已经 $reply
+    return result.value; // 命令的回复，含拒绝提示（UserFacingError）；命令自己 $reply 时为 undefined
   },
 });
 ```
 
 - 命令以这条消息的**真实发送者**执行：`permit`、执行策略照常检查，命令里的 `input.sender` 和回复归属都来自原消息，中间件无法替换成别人。
 - 命令表绑定到这条消息所在操作的 generation 快照。自己缓存一份命令表跨热重载使用，或传入别的 `snapshot`，会被拒绝（`Message author binding belongs to another generation operation` / `not the command projection of the message's generation`）——每次都在当前中间件 / handler 里调用 `context.project()`。
-- 按 endpoint / 会话关掉的插件（ADR 0050）在这里同样不存在：`dispatch` 按这条消息的 endpoint 过滤掉被关插件的命令，返回 `unmatched`，和用户直接发命令文本一致。
+- 按 endpoint / 会话关掉的插件（ADR 0050）在这里同样不存在：`dispatch` 按这条消息的 endpoint 过滤掉被关插件的命令，返回 `unmatched`，和用户直接发命令文本一致（显式传入这条消息自己的 `snapshot` 也一样）。
+- 帮助文本和命令里的 `formatCommand()` 用这条消息的命令前缀（例如 `/`），不传 `commandPrefix` 也带前缀。
+- `dispatch` 返回的 `value` 就是给用户的回复：中间件必须把它回复出去（如上例 `return result.value`），否则用户收不到。命令以 UserFacingError 拒绝时（`refused: true`），这条消息的结局记为 `refused`（原因为命令的拒绝码），由 `dispatch` 记录，与用户直接发送时一致。
+- 可以分发任何插件的命令，也可以分发 Root 命令（项目自己 `commands/` 下的命令，以及 `bind` / `claim` / `config` / `restart` / `role` 等宿主命令）：照常执行，拿到的操作资源（例如推理客户端）和用户直接发送时一样；装不装 Agent 都一样。
+- 例外是需要**分发租约**的 Agent 管理命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）：经插件转发时 Host 不提供分发租约，命令不执行，`dispatch` 返回 `status: 'executed'`、`refused: true`、`refusalReason: 'direct_command_required'`，`value` 是请用户直接发送该命令的提示（中英文，带命令前缀，如「请直接发送 /reset。」），结局 `refused` / `direct_command_required`。中间件把 `result.value` 回复出去即可（如上例）。租约只认本 Host 实例签发的：自己传 `operation` 并声称提供租约、或用自己调用 `createHostOperationResources()` 签出的端口，同样不执行。`memory` / `memory forget` 不需要租约，照常执行。
 - 这样执行的命令没有 `context.interaction`（多轮追问）；需要追问的流程请让用户直接发命令文本。
 - 不需要改写参数时也可以不经中间件：JSX `<button onClick>` 回调本身带 `permit`（见[按钮](./middleware-components.md#按钮)）；QQ 官方的 `mode: 'command'` 按钮由平台把 `payload` 预填成用户消息，按普通命令走同一条匹配与鉴权链路（其他平台的适配器目前不支持这种按钮）。
 

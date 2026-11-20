@@ -74,7 +74,7 @@ interface InboundRuntimeContext {
   readonly outcomes?: Pick<MessageOutcomeLog, 'record'>;
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
-  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
+  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal; conversationSequence?: number; delegatedFrom?: PluginId }>): OperationResourceView | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** One-time secrets (ADR 0060 §3.3 claim code): handled before anything records, logs or routes them. */
   readonly inboundSecret?: InboundSecretGuard;
@@ -360,6 +360,7 @@ export class InboundRuntime {
       });
       const execute = async (): Promise<MessageDispatchResult> => {
         const segments = input.segments ? Object.freeze([...input.segments]) : undefined;
+        const recorded: { sequence?: number } = {};
         const message = new RuntimeMessage(
           {
             conversation,
@@ -414,7 +415,10 @@ export class InboundRuntime {
             captureInteraction: owner => this.context.captureOperation({ target: conversation,
               client: source.client, requester: owner, signal: boundEndpoint.signal }),
             registerOperationView: commandOperation?.bind,
-            createOperationResources: request => this.context.createOperationResources?.({ ...request, lease }),
+            // #1250 第 84 批: the message's own conversation sequence (recorded below, before any
+            // command runs), so a command's operation resources can fold scene events up to it.
+            createOperationResources: request => this.context.createOperationResources?.({ ...request, lease,
+              ...(recorded.sequence !== undefined ? { conversationSequence: recorded.sequence } : {}) }),
             assertActive: () => {
               if (!active) throw new Error('Message author binding scope has ended');
               boundEndpoint.assertActive();
@@ -432,6 +436,7 @@ export class InboundRuntime {
           // ADR 0067 D8: original-text evidence only where the adapter vouches for its text segments.
           textAuthoredBySender: adapterDeclaresInboundTextAuthoredBySender(adapter, lease.value, conversation),
         });
+        recorded.sequence = conversationSequence;
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
         ledger.markAddressed(isAddressedMessage(message));

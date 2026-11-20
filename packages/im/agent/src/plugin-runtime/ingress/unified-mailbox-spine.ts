@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { InferenceOperationScope } from '@zhin.js/ai/provider';
 import { readOperationSession, type AITriggerConfig, type VenueProjector, type VenueRegistry } from '@zhin.js/core';
-import { reportInboundOutcome } from '@zhin.js/core/runtime';
+import { isNonHumanOrigin, reportInboundOutcome } from '@zhin.js/core/runtime';
 import type {
   GroupRuleDefaultOutcome,
   GroupRuleViolationOutcome,
@@ -31,7 +31,7 @@ import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
 import { answerClearCommand, ClearConfirmCooldown, clearSessionContext, matchClearCommand, sendFixedReply } from './clear-command.js';
-import { inboundVoiceSegmentsFromPlatform, isNonHumanOrigin } from './request-capabilities.js';
+import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
@@ -582,13 +582,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /**
    * #1250 第 83 批: runs an Agent management Root command (`createRuntimeManagementCommands`) for
    * `message` against the session its AI turn would use, holding a lease on the generation that
-   * dispatched the command (`dispatch.retainLease`) meanwhile.
+   * dispatched the command (`dispatch.retainLease`) meanwhile. #1250 第 84 批: the retained lease must
+   * belong to this Root's real SnapshotStore ({@link retainOwnedLease}); any other lease is refused.
    */
   runManagementOperation<T>(message: Message, dispatch: RuntimeManagementDispatch, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
     const options = this.options;
+    const retainLease = dispatch.retainLease;
     return runManagementOperation({
       message, signal: dispatch.signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
-      ...(dispatch.retainLease ? { retainLease: dispatch.retainLease } : {}),
+      ...(retainLease ? { retainLease: () => this.#retainOwnedLease(retainLease) } : {}),
       ...(options.withInferenceScope ? { withInferenceScope: options.withInferenceScope } : {}),
       ...(options.withModelScope ? { withModelScope: options.withModelScope } : {}),
     }, run);
@@ -600,18 +602,37 @@ export class AgentTurnIngressRoute implements IngressRoute {
    * observation, control-plane and speaking gates, the AI trigger and mention requirements, the clear
    * of the sender's own session and its confirmation cooldown — on the dispatching generation, and
    * nothing else: no AI turn, no ambient judgement, never a clear in a live room. `true` when it
-   * cleared.
+   * cleared. When it did not clear, the route reports why (`not_addressed` / `clear_command`, in a
+   * live room `not_addressed` / `live_room_clear`, a stopped outbound `filtered_by_policy` /
+   * `outbound_stopped`) and that stays the message's outcome: the command returned nothing and sent
+   * nothing, so the dispatch adds no `command_replied` (#1250 第 84 批). The message's conversation
+   * sequence (`dispatch.conversationSequence`) lets the speaking gate fold scene events up to it.
    */
   async clearAsCommand(message: Message, dispatch: RuntimeManagementDispatch): Promise<boolean> {
     if (!dispatch.retainLease) throw new Error('The dispatching generation is unavailable');
-    const lease = dispatch.retainLease();
+    const lease = this.#retainOwnedLease(dispatch.retainLease);
     try {
       let cleared = false;
-      await this.#route(message, lease, lease.value.root, undefined, () => { cleared = true; });
+      await this.#route(message, lease, lease.value.root, dispatch.conversationSequence, () => { cleared = true; });
       return cleared;
     } finally {
       lease.release();
     }
+  }
+
+  /**
+   * #1250 第 84 批: the dispatch lease a management command hands over, checked against the real
+   * SnapshotStore (`AgentRuntime.ownsLease`). The command already accepts only ports this Host instance
+   * issued; this second check refuses a lease that store did not issue whatever port carried it. A
+   * foreign lease is not released here: it is not ours.
+   */
+  #retainOwnedLease(retain: () => SnapshotLease): SnapshotLease {
+    const lease = retain();
+    const runtime = this.options.runtime as Partial<Pick<AgentRuntime, 'ownsLease'>>;
+    if (typeof runtime.ownsLease !== 'function' || !runtime.ownsLease(lease) || !lease.active) {
+      throw new Error('The dispatch lease does not belong to this Root');
+    }
+    return lease;
   }
 
   #noteSpoke(key: string): void {
@@ -788,19 +809,28 @@ export class AgentTurnIngressRoute implements IngressRoute {
       // a sender without a chat role (`asClear`) stops here either way: no ambient judgement.
       ...(liveRoom && !asClear ? {} : {
         onUnmatched: async (outboundBlocked: (stage: string) => boolean) => {
-          if (liveRoom) return true;
+          if (liveRoom) {
+            // #1250 第 84 批: a live room's session is the shared scene task — no clear, no AI turn.
+            reportInboundOutcome(message, { outcome: 'not_addressed', reason: 'live_room_clear', stage: 'agent_gate' });
+            return true;
+          }
+          let stopped = false;
           const cleared = await answerClearCommand({
             message,
             policy: { trigger },
             recognized: asClear,
-            outboundBlocked: () => outboundBlocked('clear_command'),
+            outboundBlocked: () => (stopped = outboundBlocked('clear_command')),
             archive: () => zhinAgent.archiveSession(initialSessionKey),
             cooldown: this.#clearConfirmCooldown,
             cooldownKey: clearCooldownKey,
             send: text => replyFixed(initialSessionKey, text),
           });
           if (cleared) clearCommand?.();
-          else if (asClear) reportInboundOutcome(message, { outcome: 'not_addressed', reason: 'clear_command', stage: 'agent_gate' });
+          else if (asClear) {
+            reportInboundOutcome(message, stopped
+              ? { outcome: 'filtered_by_policy', reason: 'outbound_stopped', stage: 'agent_gate' }
+              : { outcome: 'not_addressed', reason: 'clear_command', stage: 'agent_gate' });
+          }
           return cleared || asClear;
         },
       }),
@@ -824,11 +854,18 @@ export class AgentTurnIngressRoute implements IngressRoute {
     // clears the sender's own session. Never in a live room or an ambient interjection — their session
     // is the shared scene task — and not while the control plane stops outbound messages (no clear, no
     // reply, like the untriggered spelling): the message then goes on like any other.
+    let clearStopped = false;
     const clearRequested = !liveRoom && !ambient
       && (asClear || isClearCommand(matched.content) || matchClearCommand(message))
-      && !outboundBlocked('clear_command');
-    // The `reset` command of a sender without a chat role is a clear or nothing (live room, outbound stopped).
-    if (asClear && !clearRequested) return true;
+      && !(clearStopped = outboundBlocked('clear_command'));
+    // The `reset` command of a sender without a chat role is a clear or nothing (live room, outbound
+    // stopped); the outcome says which (#1250 第 84 批), and nothing reaches an AI turn.
+    if (asClear && !clearRequested) {
+      reportInboundOutcome(message, clearStopped
+        ? { outcome: 'filtered_by_policy', reason: 'outbound_stopped', stage: 'agent_gate' }
+        : { outcome: 'not_addressed', reason: liveRoom ? 'live_room_clear' : 'clear_command', stage: 'agent_gate' });
+      return true;
+    }
     const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !clearRequested;
     if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
     audit({
