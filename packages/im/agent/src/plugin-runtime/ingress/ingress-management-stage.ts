@@ -1,4 +1,5 @@
 import type { InferenceOperationScope } from '@zhin.js/ai/provider';
+import { hostChatRole } from '@zhin.js/core';
 import type { Message, SendContent } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { SnapshotLease } from '@zhin.js/plugin-runtime';
@@ -104,6 +105,8 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         senderChatRole: message.sender?.chatRole,
         endpoint: effectiveEndpoint,
         commandText: managementCommandText(message.content, message.commandPrefix),
+        ...(message.locale ? { locale: message.locale } : {}),
+        ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
       })
     : null;
   if (groupRuleReply != null) {
@@ -120,6 +123,8 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         sceneId: turnAccess.origin.sceneId,
         senderId: turnAccess.principal.subjectId,
         commandText: managementCommandText(message.content, message.commandPrefix),
+        senderIsGlobalOwner: hostChatRole(message.sender) === 'owner',
+        ...(message.locale ? { locale: message.locale } : {}),
       }) ?? null
     : null;
   if (toolApprovalReply != null) {
@@ -134,6 +139,8 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
           endpoint: message.conversation.endpoint,
           ownerId,
           subjectId: turnAccess.principal.subjectId,
+          // ADR 0056 §2: any global owner, not only the first one the account resolves to.
+          senderIsGlobalOwner: hostChatRole(message.sender) === 'owner',
           scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : 'private',
           locale: message.locale,
           commandPrefix: message.commandPrefix,

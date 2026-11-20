@@ -1,9 +1,10 @@
 import { AMBIENT_FEATURE_ID } from '@zhin.js/core/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  applyConfigPatches, childPluginId, featureId, rootPluginId,
-  type PluginId, type RuntimeConfigDocument, type RuntimeSnapshot,
+  applyConfigPatches, childPluginId, createCapabilitySlot, featureId, rootPluginId,
+  type CapabilitySlot, type PluginId, type RuntimeConfigDocument, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
+import { CommandIndex, type CommandDefinition } from '@zhin.js/command';
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { FeatureOverrideStore } from '../../src/instance/console/feature-override-store.js';
@@ -14,11 +15,11 @@ import {
 } from '../../src/instance/chat-roles.js';
 import {
   DEFAULT_FEATURE_SELF_SERVICE, executeFeatureChat, executeRoleChat, featureChatActor, featureChatActorFailureText, featureChatTokens,
-  FeatureChatRefusal, readFeatureSelfServiceConfig, resolveFeatureChatActor, runFeatureChat, runRoleChat,
+  FeatureChatRefusal, installFeatureSelfService, readFeatureSelfServiceConfig, resolveFeatureChatActor, runFeatureChat, runRoleChat,
   type FeatureChatActor, type FeatureSelfServiceConfig,
 } from '../../src/instance/feature-self-service.js';
 import { executeOwnerClaim, ChatOwnerClaim } from '../../src/instance/chat-owner-claim.js';
-import { executeIdentityBind } from '../../src/instance/chat-identity-bind.js';
+import { executeIdentityBind, installChatIdentityBind } from '../../src/instance/chat-identity-bind.js';
 
 const root = rootPluginId();
 const repeater = childPluginId(root, 'repeater');
@@ -683,4 +684,58 @@ describe('Sandbox group conversation (#1250 self-service-unknown-conversation-op
       .toBe(featureChatActorFailureText('unknown-endpoint', 'zh-CN'));
     expect(await executeIdentityBind({ code: 'X', actor: 'simulated-sender', adapterKind: 'platform', locale: 'zh-CN' }, codes)).toContain('不接受绑定');
   });
+});
+
+// #1250: usage hints and follow-ups name the installed command the way this conversation sends it.
+describe('command spellings carry the real prefix', () => {
+  async function installed() {
+    const { deps } = await harness(on, { 'qq/bot-1': 'boss' }, [], new FeatureOverrideStore(), 20);
+    const slots: CapabilitySlot<CommandDefinition>[] = [];
+    const context = {
+      hasFeature: () => true,
+      addFeature: (feature: string, localName: string, definition: CommandDefinition) => {
+        slots.push(createCapabilitySlot({ owner: root, feature, localName, source: `/project/${localName}.ts`, definition }) as CapabilitySlot<CommandDefinition>);
+      },
+    };
+    installFeatureSelfService({ ...deps, snapshots: deps.context.snapshots } as never)(context as never);
+    installChatIdentityBind({ codes: { redeem: vi.fn() } as never, snapshots: deps.context.snapshots as never })(context as never);
+    const state = { ...current, capabilities: new Map(slots.map(slot => [slot.id, slot])),
+      resources: new Map([[root, new Map()]]) } as unknown as RuntimeSnapshot;
+    const index = new CommandIndex(slots, state, {});
+    const group = { conversation: { kind: 'group' as const, id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } };
+    const dm = { conversation: { kind: 'private' as const, id: 'boss', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } };
+    const say = async (input: string, prefix: string, source: object = group, locale: 'zh-CN' | 'en' = 'zh-CN') =>
+      (await index.dispatch({ input, source: { ...source, locale }, commandPrefix: prefix })).value as string;
+    return { say, dm };
+  }
+
+  const escape = (text: string) => text.replace(/\//gu, '\\/');
+
+  for (const prefix of ['', '#', '/']) {
+    it(`prefix ${JSON.stringify(prefix)}: 绑定 / 功能 / 角色 usage and follow-ups`, async () => {
+      const { say, dm } = await installed();
+      // The command's Chinese display name (`preferredAliasI18n`), as the Chinese command menu lists it.
+      expect(await say('绑定', prefix, dm)).toBe(`用法：${prefix}绑定 <绑定码>（在 Console「把聊天身份绑定到我」获取，只接受私聊）`);
+      expect(await say('功能 乱写', prefix)).toMatch(new RegExp(`^用法：${escape(prefix)}功能 列表 \\[页码\\] \\| 开启`, 'u'));
+      const first = await say('功能 列表', prefix);
+      expect(first).toContain(`下一页：${prefix}功能 列表 2`);
+      // Sent back as hinted, the follow-up is the same command (the dispatcher strips the same prefix).
+      const hinted = first.split('\n').find(line => line.startsWith('下一页：'))!.slice('下一页：'.length);
+      expect(hinted.startsWith(prefix)).toBe(true);
+      expect(await say(hinted.slice(prefix.length), prefix)).toContain('第 2/2 页');
+      expect(await say('功能 列表 9', prefix)).toBe(`页码超出范围：共 2 页。请使用「${prefix}功能 列表 <页码>」。`);
+      expect(await say('角色 乱写', prefix)).toMatch(new RegExp(`^用法：${escape(prefix)}角色 列表 \\|`, 'u'));
+    });
+  }
+
+  it('English: bind / feature usage with the prefix', async () => {
+    const { say, dm } = await installed();
+    expect(await say('bind', '!', dm, 'en')).toBe('Usage: !bind <code> (get it from the Console, "Bind my chat identity"; private chat only)');
+    expect(await say('feature nonsense', '!', group(), 'en')).toMatch(/^Usage: !feature list \[page\] \| enable/u);
+    expect(await say('feature list', '!', group(), 'en')).toContain('Next page: !feature list 2');
+  });
+
+  function group() {
+    return { conversation: { kind: 'group' as const, id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } };
+  }
 });

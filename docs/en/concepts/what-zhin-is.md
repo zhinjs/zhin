@@ -49,7 +49,7 @@ By default, Zhin installs only the IM core (under 10MB in production `node_modul
 
 - **Multi-model routing (`ai.plan.yml`)**: Route `chat`, `compaction`, `ambient` group listening, and media `perception` to different model profiles (OpenAI, DeepSeek, Qwen/DashScope, SiliconFlow, Volcengine, Anthropic, or local Ollama).
 - **Progressive tool & skill disclosure**: Tools and `SKILL.md` instructions are tiered by scene and loaded on demand, keeping the system prompt prefix byte-stable to maximize LLM prompt cache hits.
-- **Trust tiers & dangerous-action hard gates**: Group members, trusted users, and bot owners get strictly separated tool permissions. High-risk actions (kicking, muting, group announcements, self-change) require fresh human approval via Console cards or owner `/approve` commands.
+- **Trust tiers & dangerous-action hard gates**: Group members, trusted users, and bot owners get strictly separated tool permissions. High-risk actions (kicking, muting, group announcements, self-change) require fresh human approval via Console cards or owner `approve` commands (with this account's command prefix).
 
 See [AI Capabilities Overview](../ai/index.md) and [Agent Deep Dive](../ai/agent.md).
 
