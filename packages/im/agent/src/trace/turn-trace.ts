@@ -15,6 +15,7 @@ export { scrubSecrets } from './trace-redaction.js';
 import { renderAgentOutput } from '../outbound/agent-output.js';
 import { claimWithoutToolCall } from './lookup-claim.js';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
+import { snapshotOrigin } from './turn-origin-label.js';
 import { captureRequestBody, DEFAULT_TRACE_MAX_BYTES, RequestBodyTooLargeError, type TurnTraceRequest, type TurnTraceRequestStart } from './request-trace.js';
 
 export const TURN_TRACE_VERSION = 1;
@@ -735,30 +736,6 @@ export class TurnTraceCollector {
       ...(this.#principal.trust_level ? { trustLevel: this.#principal.trust_level } : {}),
     };
   }
-}
-
-function snapshotOrigin(origin: ToolInvocationOrigin): ToolInvocationOrigin {
-  if (origin.kind !== 'im') {
-    switch (origin.kind) {
-      case 'http': return Object.freeze({ kind: origin.kind, sessionId: origin.sessionId });
-      case 'a2a': return Object.freeze({ kind: origin.kind, taskId: origin.taskId });
-      case 'schedule': return Object.freeze({ kind: origin.kind, jobId: origin.jobId });
-      case 'internal': return Object.freeze({ kind: origin.kind, source: origin.source });
-      case 'mcp': return Object.freeze({ kind: origin.kind, requestId: origin.requestId });
-    }
-  }
-  const conversation = origin.conversation;
-  return Object.freeze({ kind: origin.kind, platform: origin.platform, endpoint: origin.endpoint,
-    scope: origin.scope, sceneId: origin.sceneId,
-    ...(origin.messageId === undefined ? {} : { messageId: origin.messageId }),
-    ...(origin.threadId === undefined ? {} : { threadId: origin.threadId }),
-    ...(conversation ? { conversation: Object.freeze({
-      endpoint: Object.freeze({ adapter: conversation.endpoint.adapter, id: conversation.endpoint.id }),
-      kind: conversation.kind, id: conversation.id,
-      ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
-      ...(conversation.threadId === undefined ? {} : { threadId: conversation.threadId }),
-    }) } : {}),
-  });
 }
 
 /** Redacted, single-line, length-bounded summary of tool arguments. */

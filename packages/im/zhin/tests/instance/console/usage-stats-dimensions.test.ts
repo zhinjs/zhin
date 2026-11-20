@@ -138,6 +138,19 @@ describe('usage-stats labels through AssistantStatus (#1250 第 58 批)', () => 
     expect(row('e')).not.toHaveProperty('accountLabel');
   });
 
+  it('names schedule sessions after the job label when the instance knows it (#1250 b63)', async () => {
+    const status = new AssistantStatus({ now: () => NOON + DAY });
+    const job = (key: string, jobId: string) => ({ version: 1, session_key: key, started_at: NOON, origin: { kind: 'schedule', jobId }, model_calls: [{ provider: 'gemini', model: 'flash', prompt_tokens: 3, completion_tokens: 1 }] });
+    const dir = traces({ '2026-10-28.jsonl': [job('schedule:sched_1', 'sched_1'), job('schedule:sched_gone', 'sched_gone')] });
+    status.bindUsageTraces(() => dir);
+    status.bindUsageScheduleJobs(async () => new Map([['sched_1', '每日早报']]));
+    const out = (await status.consoleRpc.methods.get('usage-stats')!.handler({ since: NOON - DAY, until: NOON + DAY } as never, { signal })) as Record<string, any>;
+    const row = (key: string) => out.bySession.find((r: { sessionKey: string }) => r.sessionKey === key);
+    expect(row('schedule:sched_1')).toMatchObject({ scopeKind: 'schedule', sceneLabel: '每日早报', displayName: '定时任务 每日早报' });
+    // A deleted job keeps its id.
+    expect(row('schedule:sched_gone')).toMatchObject({ scopeKind: 'schedule', sceneLabel: 'sched_gone', displayName: '定时任务 sched_gone' });
+  });
+
   it('never shows a raw service id as the service label', () => {
     const bare = createProviderDisplayIndex({ ...(graph as object), services: { [SVC]: { ...(graph as any).services[SVC], label: undefined, driver: undefined } } } as never);
     expect(bare.resolveProvider(ACC)).toEqual({ key: SVC });

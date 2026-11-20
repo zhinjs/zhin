@@ -45,13 +45,21 @@ export {
   defaultTurnTraceDir,
   redactStrings,
   resolveTraceArchiveOptions,
+  sessionLabelFields,
+  summarizeTraceSessions,
+  withSessionScheduleLabels,
+  TURN_TRACE_SESSION_CONVERSATION_LIMIT,
 } from './turn-trace-archive.js';
 export type {
   TurnTraceArchive,
   TurnTraceArchiveOptions,
   TurnTraceQuery,
+  TurnTraceSessionConversation,
+  TurnTraceSessionLabelFields,
   TurnTraceSessionSummary,
 } from './turn-trace-archive.js';
+export { ORIGIN_TEXT_MAX_CODE_POINTS, sanitizeOriginText, turnOriginDisplayName, turnOriginKey, turnOriginLabelOf, withScheduleJobLabel } from './turn-origin-label.js';
+export type { TurnOriginLabel } from './turn-origin-label.js';
 export { formatTurnTrace, formatTurnTraceList } from './turn-trace-format.js';
 export type { FormatTurnTraceListOptions, FormatTurnTraceOptions } from './turn-trace-format.js';
 export {

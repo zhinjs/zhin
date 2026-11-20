@@ -197,6 +197,9 @@ describe('TurnToolRuntime hard gate', () => {
     await expect(first.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
     const [card] = queue.list({ status: 'pending' });
     expect(card).toMatchObject({ toolName: 'group_kick', category: 'member', args: { user_id: 1 } });
+    // #1250 b63: the card names the chat the request came from, in the trace session summary's shape.
+    expect(card!.turnOrigin).toEqual({ kind: 'im', platform: 'icqq', endpoint: '10001', scope: 'group', sceneId: '42' });
+    expect(card!.turnOriginLabel).toEqual({ platform: 'icqq', scopeKind: 'group', sceneLabel: '42', displayName: 'icqq · 群 42' });
     expect(audit.codes()).toEqual([
       'tool_approval:defer:tool_approval_requested',
       'tool_hard_gate:deny:tool_dangerous_no_approval',
@@ -966,6 +969,38 @@ describe('self: writing the host configuration (#1030 P0)', () => {
     await expect(hardGate.check({ name: 'write_file' }, { file_path: '/ws/notes.md', content: 'hi' }, 'tu-1'))
       .resolves.toMatchObject({ status: 'safe' });
     expect(port.requests).toHaveLength(0);
+  });
+});
+
+describe('approval cards name the requester only for their own turn (#1250 b63 A-7)', () => {
+  async function card(requesterId?: string) {
+    const queue = new ToolApprovalQueue();
+    const hardGate = new ToolHardGate(undefined, {
+      turnId: 'turn-m',
+      sessionKey: 'icqq:bot:private:u1',
+      signal: new AbortController().signal,
+      location: { instanceId: '*', platform: 'icqq', sceneId: 'private:u1' },
+      audit: auditSink(),
+      queue,
+      requesterId: 'u1',
+      requesterName: 'Dev\u001b[31meloper',
+      turnOrigin: { kind: 'im', platform: 'icqq', endpoint: '10001', scope: 'private', sceneId: 'u1' },
+    });
+    await hardGate.check({ name: 'group_kick' }, { user_id: 1 }, 'tu-1', requesterId ? { requesterId } : {});
+    const [entry] = queue.list({ status: 'pending' });
+    queue.dispose();
+    return entry;
+  }
+
+  it('uses the cleaned initiator name on the initiator\'s card', async () => {
+    expect((await card())?.turnOriginLabel).toMatchObject({ sceneLabel: 'Dev\\u001b[31meloper', displayName: 'icqq · 私聊 Dev\\u001b[31meloper' });
+  });
+
+  it('leaves the name out of a merged turn acting for another sender', async () => {
+    const entry = await card('u2');
+    expect(entry).toMatchObject({ requesterId: 'u2' });
+    expect(entry!.turnOriginLabel).toEqual({ platform: 'icqq', scopeKind: 'private', sceneLabel: 'u1', displayName: 'icqq · 私聊 u1' });
+    expect(JSON.stringify(entry)).not.toContain('Dev');
   });
 });
 

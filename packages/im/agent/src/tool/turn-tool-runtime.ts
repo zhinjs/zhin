@@ -130,6 +130,8 @@ export class TurnToolRuntime {
       signal: turn.signal,
       location: hardGateLocation(turn),
       ...hardGateOrigin(turn),
+      turnOrigin: turn.origin,
+      ...(turn.principal.displayName ? { requesterName: turn.principal.displayName } : {}),
       ...(turn.hostProtectedPaths ? { protectedPaths: turn.hostProtectedPaths } : {}),
       ...(options.decisionAudit ? { audit: options.decisionAudit } : {}),
       ...(options.approvalQueue ? { queue: options.approvalQueue } : {}),

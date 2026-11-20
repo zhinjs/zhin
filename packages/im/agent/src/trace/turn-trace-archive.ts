@@ -15,6 +15,8 @@ import { randomUUID } from 'node:crypto';
 import { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
 import { projectProviderDiagnostics } from '@zhin.js/ai';
 import type { TurnTraceStore } from './turn-trace-store.js';
+import type { ToolInvocationOrigin } from '@zhin.js/tool';
+import { sanitizeOriginText, turnOriginKey, turnOriginLabelOf, withScheduleJobLabel, type TurnOriginLabel } from './turn-origin-label.js';
 
 export const DEFAULT_TRACE_RETENTION_DAYS = 7;
 export { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
@@ -32,13 +34,88 @@ export interface TurnTraceQuery {
   readonly limit?: number;
 }
 
-export interface TurnTraceSessionSummary {
+/** At most this many chats in {@link TurnTraceSessionSummary.conversations} (most recent first). */
+export const TURN_TRACE_SESSION_CONVERSATION_LIMIT = 10;
+
+/**
+ * Readable name of a session or chat in the session summary's snake_case style (#1250 b63): the
+ * parts of {@link TurnOriginLabel}. All absent without a recorded origin (older traces).
+ */
+export interface TurnTraceSessionLabelFields {
+  /** IM platform (client adapter) of the chat. */
+  readonly platform?: string;
+  /** `private` / `group` / `channel`; otherwise the origin kind (`schedule`, `http`, `a2a`, `mcp`, `internal`). */
+  readonly scope_kind?: string;
+  /** Group / channel name, the private peer's display name, else the raw id; a schedule job's label or id. */
+  readonly scene_label?: string;
+  /** Pre-built Chinese name, the gateway usage stats' `displayName` format: `sandbox · 私聊 Developer`, `定时任务 每日早报`. */
+  readonly display_name?: string;
+}
+
+/** One chat a session's turns came from (#1250 b63). */
+export interface TurnTraceSessionConversation extends TurnTraceSessionLabelFields {
+  /** Origin recorded by the chat's latest turn. */
+  readonly origin: ToolInvocationOrigin;
+  readonly turns: number;
+  readonly last_started_at: number;
+}
+
+export interface TurnTraceSessionSummary extends TurnTraceSessionLabelFields {
   readonly session_key: string;
   readonly turns: number;
   readonly first_started_at: number;
   readonly last_started_at: number;
   readonly last_status: string;
   readonly total_tokens: number;
+  /**
+   * Origin of the session's latest turn that recorded one (#1250 b63), same shape as a trace's
+   * `origin`; absent when no turn in range did (older traces).
+   */
+  readonly origin?: ToolInvocationOrigin;
+  /**
+   * Only when the session's turns came from more than one chat: each chat, most recent first, at
+   * most {@link TURN_TRACE_SESSION_CONVERSATION_LIMIT}.
+   */
+  readonly conversations?: readonly TurnTraceSessionConversation[];
+  /** Number of chats when {@link conversations} was cut to its limit. */
+  readonly conversations_total?: number;
+}
+
+/** {@link TurnOriginLabel} as the session summary's snake_case fields. */
+export function sessionLabelFields(label: TurnOriginLabel): TurnTraceSessionLabelFields {
+  return {
+    ...(label.platform ? { platform: label.platform } : {}),
+    ...(label.scopeKind ? { scope_kind: label.scopeKind } : {}),
+    ...(label.sceneLabel ? { scene_label: label.sceneLabel } : {}),
+    ...(label.displayName ? { display_name: label.displayName } : {}),
+  };
+}
+
+function labelOfSessionFields(row: TurnTraceSessionLabelFields): TurnOriginLabel {
+  return {
+    ...(row.platform ? { platform: row.platform } : {}),
+    ...(row.scope_kind ? { scopeKind: row.scope_kind } : {}),
+    ...(row.scene_label ? { sceneLabel: row.scene_label } : {}),
+    ...(row.display_name ? { displayName: row.display_name } : {}),
+  };
+}
+
+/**
+ * Names schedule sessions (and their chats) after the job's label; `resolve` maps a job id to it
+ * (undefined: the job is gone or unlabelled, the id stays).
+ */
+export function withSessionScheduleLabels(
+  sessions: readonly TurnTraceSessionSummary[], resolve: (jobId: string) => string | undefined,
+): TurnTraceSessionSummary[] {
+  const relabel = <T extends TurnTraceSessionLabelFields & { readonly origin?: ToolInvocationOrigin }>(row: T): T => {
+    if (row.scope_kind !== 'schedule') return row;
+    const { platform: _p, scope_kind: _k, scene_label: _s, display_name: _d, ...rest } = row;
+    return { ...rest, ...sessionLabelFields(withScheduleJobLabel(labelOfSessionFields(row), row.origin, resolve)) } as T;
+  };
+  return sessions.map(session => {
+    const named = relabel(session);
+    return session.conversations ? { ...named, conversations: session.conversations.map(relabel) } : named;
+  });
 }
 
 export interface TurnTraceArchive extends TurnTraceStore {
@@ -251,22 +328,65 @@ export function createTurnTraceArchive(dir: string, options: TurnTraceArchiveOpt
     },
     query,
     async sessions(q = {}) {
-      const bySession = new Map<string, TurnTraceSessionSummary>();
-      for (const trace of await query(q)) {
-        const previous = bySession.get(trace.session_key);
-        bySession.set(trace.session_key, {
-          session_key: trace.session_key,
-          turns: (previous?.turns ?? 0) + 1,
-          first_started_at: previous?.first_started_at ?? trace.started_at,
-          last_started_at: trace.started_at,
-          last_status: trace.termination?.status ?? 'unknown',
-          total_tokens: (previous?.total_tokens ?? 0) + (trace.usage?.total_tokens ?? 0),
-        });
-      }
-      return [...bySession.values()].sort((a, b) => b.last_started_at - a.last_started_at);
+      return summarizeTraceSessions(await query(q));
     },
     prune,
   });
+}
+
+type MutableSessionConversation = { origin: ToolInvocationOrigin; label: TurnOriginLabel; turns: number; last_started_at: number };
+type MutableSessionSummary = {
+  -readonly [K in keyof Omit<TurnTraceSessionSummary, 'conversations' | 'conversations_total' | keyof TurnTraceSessionLabelFields>]: TurnTraceSessionSummary[K]
+} & { label?: TurnOriginLabel; chats: Map<string, MutableSessionConversation> };
+
+/**
+ * A recorded origin whose conversation name is cleaned ({@link sanitizeOriginText}): traces written
+ * before names were cleaned at record time may hold control or bidi characters.
+ */
+function withCleanConversationName<T>(origin: T): T {
+  const conversation = (origin as { conversation?: { name?: unknown } } | undefined)?.conversation;
+  if (!conversation || typeof conversation !== 'object' || conversation.name === undefined) return origin;
+  const name = sanitizeOriginText(conversation.name);
+  if (name === conversation.name) return origin;
+  const { name: _raw, ...rest } = conversation;
+  return { ...origin, conversation: { ...rest, ...(name ? { name } : {}) } };
+}
+
+/** Per-session summaries of traces (oldest first), newest session first. */
+export function summarizeTraceSessions(traces: Iterable<TurnTrace>): TurnTraceSessionSummary[] {
+  const bySession = new Map<string, MutableSessionSummary>();
+  for (const trace of traces) {
+    const summary: MutableSessionSummary = bySession.get(trace.session_key) ?? {
+      session_key: trace.session_key, turns: 0, first_started_at: trace.started_at,
+      last_started_at: trace.started_at, last_status: 'unknown', total_tokens: 0, chats: new Map(),
+    };
+    summary.turns++;
+    summary.last_started_at = trace.started_at;
+    summary.last_status = trace.termination?.status ?? 'unknown';
+    summary.total_tokens += trace.usage?.total_tokens ?? 0;
+    const key = turnOriginKey(trace.origin);
+    if (trace.origin && key) {
+      const label = turnOriginLabelOf(trace.origin, trace.principal?.display_name);
+      // A later trace without an origin keeps the last recorded one.
+      summary.origin = withCleanConversationName(trace.origin);
+      summary.label = label;
+      const chat = summary.chats.get(key);
+      summary.chats.delete(key);
+      summary.chats.set(key, { origin: summary.origin, label, turns: (chat?.turns ?? 0) + 1, last_started_at: trace.started_at });
+    }
+    bySession.set(trace.session_key, summary);
+  }
+  return [...bySession.values()].map(({ chats, label, ...rest }) => {
+    const summary: TurnTraceSessionSummary = { ...rest, ...(label ? sessionLabelFields(label) : {}) };
+    if (chats.size <= 1) return summary;
+    const conversations = [...chats.values()].reverse()
+      .map(({ label: chatLabel, ...chat }) => ({ ...chat, ...sessionLabelFields(chatLabel) }));
+    return {
+      ...summary,
+      conversations: conversations.slice(0, TURN_TRACE_SESSION_CONVERSATION_LIMIT),
+      ...(conversations.length > TURN_TRACE_SESSION_CONVERSATION_LIMIT ? { conversations_total: conversations.length } : {}),
+    };
+  }).sort((a, b) => b.last_started_at - a.last_started_at);
 }
 
 function lineBytes(trace: TurnTrace): number { return Buffer.byteLength(JSON.stringify(trace)) + 1; }

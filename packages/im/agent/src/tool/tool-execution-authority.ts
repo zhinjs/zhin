@@ -47,6 +47,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
       turnId: `pipeline:${options.sessionId}:${options.generation}:${Date.now().toString(36)}`,
       sessionKey: options.sessionId,
       ...(message.sender?.id ? { requesterId: String(message.sender.id) } : {}),
+      ...(message.sender?.id && message.sender.name ? { requesterName: String(message.sender.name) } : {}),
       ...(conversation?.kind ? { conversationScope: conversation.kind } : {}),
       unattended: options.rejectApproval,
       ...(isApprovalPortAvailable(options.host.approvalPort) ? { approval: options.host.approvalPort } : {}),
