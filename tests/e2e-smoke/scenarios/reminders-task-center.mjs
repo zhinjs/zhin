@@ -71,7 +71,7 @@ try {
     assert.equal(created?.status, 'executed');
     const confirmation = deliveryText(kit.deliveries.at(-1).payload);
     assert.match(confirmation, /^已创建个人提醒$/mu);
-    assert.match(confirmation, /待触发 \| 2026\/10\/20 09:10:00 \(Asia\/Shanghai\)/u);
+    assert.match(confirmation, /待触发 \| 2026-10-20 09:10:00 \(Asia\/Shanghai\)/u);
     reminderConversation = kit.deliveries.at(-1).conversation;
   });
 

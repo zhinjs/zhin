@@ -17,6 +17,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 
 const logger = getLogger('UserRelation');
 
@@ -136,8 +137,9 @@ const CUE_DELTA: Record<AffinityCue, number> = {
   master: 0,
 };
 
+/** 每日正向增长上限的日历日，按进程时区（`TZ`，否则系统时区）在本地零点重置（#1250：之前按 UTC 日）。 */
 export function dayKey(now: number): string {
-  return new Date(now).toISOString().slice(0, 10);
+  return formatDateTime(now, undefined, { part: 'date' });
 }
 
 function clampAffinity(value: number): number {

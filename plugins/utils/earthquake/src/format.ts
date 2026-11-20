@@ -1,3 +1,4 @@
+import { formatDateTime } from 'zhin.js';
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 /** Plain-text rendering, safe for every adapter (no markup, no platform segments). */
@@ -13,19 +14,9 @@ export function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source.toUpperCase();
 }
 
+/** #1250: the repository's `YYYY-MM-DD HH:mm:ss`, in the configured zone. */
 export function formatEventTime(time: number, timezone: string): string {
-  const formatter = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  const parts = Object.fromEntries(formatter.formatToParts(new Date(time)).map((part) => [part.type, part.value]));
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+  return formatDateTime(time, undefined, { timeZone: timezone });
 }
 
 function formatMagnitude(value: number): string {

@@ -5,6 +5,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { chatRoleHeldAt, type Message } from '@zhin.js/core';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import { getDataDir } from './bootstrap.js';
 
 /** 解析文件制长期记忆目录（data/memory），不执行文件系统写入。 */
@@ -77,8 +78,13 @@ export function getSessionMemoryDir(sessionKey: string, workspaceDir?: string): 
   return path.join(getMemoryRoot(workspaceDir), 'sessions', safeSessionKey(sessionKey));
 }
 
-function todayDate(): string {
-  return new Date().toISOString().split('T')[0];
+/**
+ * 今日笔记文件名 `data/memory/global/<YYYY-MM-DD>.md` 用的日历日，按进程时区（`TZ`，否则系统时区）。
+ * #1250：之前取 UTC 日，东八区 0–8 点读写的是前一天的文件。升级当天 0–8 点（东八区）起改读本地日文件，
+ * 此前这段时间写入的笔记留在前一天（UTC 日）的文件里，不会被当作"今日笔记"注入。
+ */
+export function todayDate(now: number | Date = Date.now()): string {
+  return formatDateTime(now, undefined, { part: 'date' });
 }
 
 function readTrimmedFile(filePath: string): string {

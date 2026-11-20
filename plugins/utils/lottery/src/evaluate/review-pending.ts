@@ -1,5 +1,6 @@
 import type { GameId, NormalizedDraw } from '../types.js';
 import { loadDraws, type LotteryDb } from '../db.js';
+import { lotteryDateKey } from '../date-key.js';
 
 import { formatHitSummary } from './hit-rate.js';
 import {
@@ -49,7 +50,7 @@ export async function evaluatePendingPredictions(
   const lines: string[] = [];
   let evaluated = 0;
   let hadPending = false;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = lotteryDateKey();
 
   for (const gameId of gameIds) {
     const pending = (await listPendingPredictions(db, gameId)) as Array<{
@@ -105,7 +106,7 @@ export async function evaluatePendingPredictions(
 
 /** Games that still need a next-period pick (no pending row for today). */
 export async function gamesNeedingPrediction(db: LotteryDb, gameIds: GameId[], date = new Date()): Promise<GameId[]> {
-  const today = date.toISOString().slice(0, 10);
+  const today = lotteryDateKey(date);
   const out: GameId[] = [];
   for (const gid of gameIds) {
     const pending = (await listPendingPredictions(db, gid)) as Array<{ predict_date: string }>;

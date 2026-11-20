@@ -118,6 +118,15 @@ export function formatInZone(date: Date, timeZone: string): string {
 }
 
 /**
+ * Calendar day (`YYYY-MM-DD`) of `date` in `timeZone`, for all-day events. The tools parse an
+ * all-day start as midnight in the configured zone, so `toISOString().slice(0, 10)` (the UTC day)
+ * filed east-of-UTC events under the day before (#1250).
+ */
+export function dateInZone(date: Date, timeZone: string): string {
+  return formatInZone(date, timeZone).slice(0, 10);
+}
+
+/**
  * Parses an ISO-8601 date-time. Without an explicit offset/`Z`, the value is
  * interpreted as wall-clock time in `timeZone`.
  */

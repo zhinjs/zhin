@@ -1,4 +1,5 @@
 /** `bili-login` 命令的文案；扫码与凭据保存仍由 endpoint 负责。 */
+import { formatDateTime } from 'zhin.js';
 import { createMessages, type Locale } from 'zhin.js/i18n';
 import type { BilibiliEndpointDirectory, BilibiliEndpointView } from './endpoint-directory.js';
 
@@ -36,7 +37,7 @@ export function loginStatusLine(endpoint: BilibiliEndpointView, locale?: Locale)
       id,
       name: login.uname ? `${login.uname} (uid ${login.mid})` : `uid ${login.mid}`,
       source: t(locale, login.source === 'config' ? 'sourceConfig' : 'sourceQr'),
-    }) + (login.expiresAt ? t(locale, 'expires', { date: new Date(login.expiresAt).toISOString().slice(0, 10) }) : '')
+    }) + (login.expiresAt ? t(locale, 'expires', { date: formatDateTime(login.expiresAt, locale, { part: 'date' }) }) : '')
     : t(locale, login.state === 'expired' ? 'expired' : 'anonymous', { id });
   return `${base}\n${t(locale, 'drafts', { count: endpoint.drafts.size })}`;
 }

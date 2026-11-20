@@ -4,6 +4,7 @@ import type { GameId } from './types.js';
 
 import { parseGameId } from './games/registry.js';
 import { loadDraws } from './db.js';
+import { lotteryDateKey } from './date-key.js';
 import { recommendGame } from './recommend/game-pick.js';
 import {
   loadGameWeights,
@@ -37,7 +38,7 @@ export async function handleComputeRecommend(runtime: LotteryRuntime, game: stri
   const pick = recommendGame(gid, draws, {
     locale,
     pickCount: gid === 'kl8' ? kl8.pickCount : cfg.pickCount,
-    tieSeed: new Date().toISOString().slice(0, 10),
+    tieSeed: lotteryDateKey(),
     weights: await loadGameWeights(db, gid),
     accuracy: await loadAccuracySnapshot(db, gid),
     kl8: gid === 'kl8' ? kl8 : undefined,
