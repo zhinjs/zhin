@@ -14,6 +14,8 @@ describe('conversation session key', () => {
       { platform: 'sandbox', endpointKey: 'sandbox-bot', kind: 'group', sceneId: 'planning-room' },
       { platform: 'qq', endpointKey: '10001', kind: 'private', sceneId: 'u:1:x' },
       { platform: 'discord', endpointKey: 'bot', kind: 'channel', sceneId: '123/456' },
+      // A scene without an endpoint key: the kernel writes an empty second segment.
+      { platform: 'qq', endpointKey: '', kind: 'private', sceneId: '1' },
     ] as const) {
       const key = resolveIMSessionId(scene);
       const parts = { adapter: scene.platform, endpointKey: scene.endpointKey, kind: scene.kind, id: scene.sceneId };
@@ -23,7 +25,7 @@ describe('conversation session key', () => {
   });
 
   it('refuses hashed identities, short keys and empty segments', () => {
-    for (const key of ['personal-session:v1:' + 'a'.repeat(64), 'a:b:c', 'weird', '', ':bot:group:1', 'qq::group:1', 'qq:bot::1', 'qq:bot:group:']) {
+    for (const key of ['personal-session:v1:' + 'a'.repeat(64), 'a:b:c', 'weird', '', ':bot:group:1', 'qq:bot::1', 'qq:bot:group:']) {
       expect(parseConversationSessionKey(key), key).toBeUndefined();
     }
     expect(isHashedSessionKey('scene-task:v1:' + 'b'.repeat(64))).toBe(true);

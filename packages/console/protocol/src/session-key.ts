@@ -39,14 +39,15 @@ export function formatConversationSessionKey(parts: ConversationSessionKeyParts)
 
 /**
  * Parses a four-segment conversation session key; undefined for hashed identities, keys with fewer
- * segments or an empty segment. Everything after the third `:` is the id.
+ * segments, or an empty adapter, kind or id. The endpoint key may be empty: `resolveIMSceneSessionId`
+ * writes `qq::private:1` for a scene without one. Everything after the third `:` is the id.
  */
 export function parseConversationSessionKey(key: string): ConversationSessionKeyParts | undefined {
   if (typeof key !== 'string' || isHashedSessionKey(key)) return undefined;
   const first = key.indexOf(':');
   const second = key.indexOf(':', first + 1);
   const third = key.indexOf(':', second + 1);
-  if (first <= 0 || second <= first + 1 || third <= second + 1 || third >= key.length - 1) return undefined;
+  if (first <= 0 || second < 0 || third <= second + 1 || third >= key.length - 1) return undefined;
   return Object.freeze({
     adapter: key.slice(0, first),
     endpointKey: key.slice(first + 1, second),

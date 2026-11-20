@@ -29,12 +29,12 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-const DELTA_SECONDS = /^\d+(?:\.\d+)?$/u;
+const DELTA_SECONDS = /^\+?(?:\d+(?:\.\d*)?|\.\d+)$/u;
 
 /**
- * Parses an HTTP `Retry-After` value into milliseconds: delta-seconds (`120`, fractional `1.5`
- * accepted) or an HTTP date (a date in the past is `0`). Absent, empty, negative or otherwise
- * malformed values (`-5`, `1e3`, `0x10`, `soon`) are `undefined`.
+ * Parses an HTTP `Retry-After` value into milliseconds: delta-seconds (`120`; fractional `1.5`,
+ * `.5`, `5.` and a leading `+` accepted) or an HTTP date (a date in the past is `0`). Absent, empty,
+ * negative or otherwise malformed values (`-5`, `1e3`, `0x10`, `soon`) are `undefined`.
  */
 export function parseRetryAfterMs(value: string | null | undefined, now: number = Date.now()): number | undefined {
   if (typeof value !== 'string') return undefined;

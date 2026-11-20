@@ -53,13 +53,16 @@ describe('parseRetryAfterMs', () => {
     expect(parseRetryAfterMs(' 5 ', now)).toBe(5_000);
     expect(parseRetryAfterMs('1.5', now)).toBe(1_500);
     expect(parseRetryAfterMs('0', now)).toBe(0);
+    expect(parseRetryAfterMs('.5', now)).toBe(500);
+    expect(parseRetryAfterMs('5.', now)).toBe(5_000);
+    expect(parseRetryAfterMs('+5', now)).toBe(5_000);
     expect(parseRetryAfterMs('Tue, 20 Oct 2026 08:00:07 GMT', now)).toBe(7_000);
     expect(parseRetryAfterMs('Tue, 20 Oct 2026 07:00:00 GMT', now)).toBe(0);
     expect(parseRetryAfterMs(new Date(10_000).toUTCString(), 4_000)).toBe(6_000);
   });
 
   it('refuses absent, negative and malformed values', () => {
-    for (const value of [undefined, null, '', '   ', '-5', '-1.5', '+5', '1e3', '0x10', 'soon', '5s', '2026-10-20']) {
+    for (const value of [undefined, null, '', '   ', '-5', '-1.5', '+', '.', '+-5', '1e3', '0x10', 'soon', '5s', '2026-10-20']) {
       expect(parseRetryAfterMs(value, now), String(value)).toBeUndefined();
     }
   });
