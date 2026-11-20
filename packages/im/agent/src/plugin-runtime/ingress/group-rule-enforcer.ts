@@ -28,7 +28,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { GroupRuleDefaultOutcome, GroupRuleViolationTrigger } from '@zhin.js/core/runtime';
-import { chatRoleIncludes, type ChatRole } from '@zhin.js/core';
+import { chatRoleIncludes, type ChatRole, type SendContent } from '@zhin.js/core';
 import { isPlatformManager, type PlatformStanding } from '@zhin.js/im-contract';
 import {
   DEFAULT_GROUP_RULE_WINDOW_MS,
@@ -65,18 +65,13 @@ import {
 } from '../../security/index.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { Locale } from '@zhin.js/plugin-runtime';
+import { cardLine, cardLiteral, joinCardLines, quotedLines, type CardLine, type CardValues } from '../../init/card-text.js';
 import { managementCommandReference, type AgentCommandPresentation } from '../../init/command-presentation.js';
 import { checkControlAtIngress } from './control-gate.js';
 import { groupRuleMessages as t } from './group-rule-messages.js';
 import { auditOutbound, createDecisionAudit, type DecisionAudit } from './decision-audit.js';
 
 const logger = getLogger('agent');
-
-export const GROUP_RULE_TRIGGER_LABELS: Readonly<Record<GroupRuleTrigger, string>> = Object.freeze({
-  advertising: '发广告',
-  abuse: '辱骂 / 人身攻击',
-  flood: '刷屏复读',
-});
 
 const TRIGGER_KEYS = Object.freeze({
   advertising: 'triggerAdvertising',
@@ -94,6 +89,21 @@ function triggerLabel(trigger: GroupRuleTrigger, locale: Locale | undefined): st
  */
 function ruleCommand(command: string, presentation: AgentCommandPresentation): string {
   return managementCommandReference(command, presentation.commandPrefix) ?? command;
+}
+
+/** The card's reminder line after bare commands: empty when the prefix is known. */
+function prefixHint(presentation: AgentCommandPresentation): string {
+  return presentation.commandPrefix === undefined ? t(presentation.locale, 'cardPrefixUnknown') : '';
+}
+
+/** The same reminder inside a sentence, right after the command (#1250). */
+function inlinePrefixHint(locale: Locale | undefined, prefix: string | undefined): string {
+  return prefix === undefined ? t(locale, 'inlinePrefixHint') : '';
+}
+
+/** One catalog line in `locale`; {@link cardLiteral} values stay literal pieces. */
+function line(locale: Locale | undefined, key: Parameters<typeof t>[1], values?: CardValues): CardLine {
+  return cardLine(plain => t(locale, key, plain), values);
 }
 
 /** 自动禁言交给硬闸评估的工具名：核心名单里的 `member` 类（ADR 0036 §3）。 */
@@ -517,7 +527,7 @@ export class GroupRuleEnforcer {
       target: ctx.violation.memberId,
       ruleId: ctx.rule.id,
       ruleCode: groupRuleHashShort(ctx.rule.contentHash),
-      reason: GROUP_RULE_TRIGGER_LABELS[ctx.rule.trigger],
+      reason: triggerLabel(ctx.rule.trigger, ctx.effects.presentation?.locale),
       ...(ctx.violation.evidence?.length ? { evidence: evidence(ctx.violation.evidence) } : {}),
     };
     // 卡片入队是同步的；等结算在后台进行，不阻塞入站。
@@ -634,7 +644,10 @@ export class GroupRuleEnforcer {
     const presentation = ctx.effects.presentation ?? {};
     const delivered = await this.#send(ctx, [{
       type: 'text',
-      text: t(presentation.locale, 'botNotAdmin', { code, command: ruleCommand(`rule disable ${code}`, presentation) }),
+      text: t(presentation.locale, 'botNotAdmin', {
+        code, command: ruleCommand(`rule disable ${code}`, presentation),
+        hint: inlinePrefixHint(presentation.locale, presentation.commandPrefix),
+      }),
     }]);
     auditOutbound(ctx.audit, delivered, { ...ctx.payload, notice: 'bot_not_admin' });
     if (delivered.status === 'sent') this.#spoke(ctx.target);
@@ -726,19 +739,19 @@ export const GROUP_RULE_MIGRATION_ACTOR = 'content-moderation';
 /** 原 content-moderation 写死的禁言时长。 */
 export const DEFAULT_GROUP_RULE_MUTE_SEC = 600;
 
-const TEMPLATE_CONTENT: Readonly<Record<GroupRuleViolationTrigger, string>> = Object.freeze({
-  advertising: '发广告：第一次提醒，第二次警告，第三次禁言 10 分钟；30 分钟内不再犯则重新计数（由内容审核插件的原有群管迁移而来）',
-  abuse: '辱骂他人：第一次提醒，第二次警告，第三次禁言 10 分钟；30 分钟内不再犯则重新计数（由内容审核插件的原有群管迁移而来）',
-});
+const TEMPLATE_CONTENT_KEYS = Object.freeze({
+  advertising: 'templateAdvertising',
+  abuse: 'templateAbuse',
+} as const satisfies Record<GroupRuleViolationTrigger, Parameters<typeof t>[1]>);
 
-/** 默认模板：与原 content-moderation 写死阶梯一致。 */
-export function defaultGroupRuleTemplate(trigger: GroupRuleViolationTrigger): GroupRuleSpecInput {
+/** 默认模板：与原 content-moderation 写死阶梯一致；说明按项目语言（#1250）。 */
+export function defaultGroupRuleTemplate(trigger: GroupRuleViolationTrigger, locale?: Locale): GroupRuleSpecInput {
   return {
     trigger,
     ladder: [{ action: 'remind' }, { action: 'warn' }, { action: 'mute', durationSec: DEFAULT_GROUP_RULE_MUTE_SEC }],
     windowMs: DEFAULT_GROUP_RULE_WINDOW_MS,
     exempt: { ownerAndAdmins: true, userIds: [] },
-    content: TEMPLATE_CONTENT[trigger],
+    content: t(locale, TEMPLATE_CONTENT_KEYS[trigger]),
   };
 }
 
@@ -748,6 +761,8 @@ export interface EnsureDefaultGroupRuleInput {
   /** 平台原生群号（不带 `group:` 前缀）。 */
   readonly groupId: string;
   readonly trigger: GroupRuleViolationTrigger;
+  /** 规则说明的语言：群里公开，用项目语言（#1250）；缺省为默认语言。 */
+  readonly locale?: Locale;
 }
 
 /** 生成默认规则并送审；同群同类型并发调用串行。 */
@@ -775,7 +790,7 @@ export class GroupRuleDefaults {
     const existing = await store.list({ platform: input.platform, sceneId, trigger: input.trigger });
     if (existing.length > 0) return 'exists';
     const drafted = await store.create({
-      ...defaultGroupRuleTemplate(input.trigger),
+      ...defaultGroupRuleTemplate(input.trigger, input.locale),
       platform: input.platform,
       sceneId,
       createdBy: GROUP_RULE_MIGRATION_ACTOR,
@@ -804,7 +819,8 @@ export interface GroupRuleImDeps {
   readonly controlPlane?: () => AiControlPlane | undefined;
   /** 读最新配置：审批人名单与 G6 共用 `toolHardGate.imApproval.approverIds`。 */
   readonly imApproval?: () => ToolHardGateImApprovalSettings | undefined;
-  readonly send: (target: GroupRuleCardTarget, text: string) => Promise<void>;
+  /** The card mixes framework text with literal pieces (`untrustedContent`) for the rule's own notes. */
+  readonly send: (target: GroupRuleCardTarget, content: SendContent) => Promise<void>;
   /**
    * #1250: the group's command presentation (the group Endpoint's real command prefix and language), so
    * the card spells `rule approve <code>` the way the ingress parses it. Absent or unresolved: the bare
@@ -859,10 +875,8 @@ function formatLadder(rule: GroupRuleRecord, locale: Locale | undefined): string
 export function formatGroupRuleCard(
   rule: GroupRuleRecord,
   approvalTtlMs: number,
-  presentationOrPrefix: AgentCommandPresentation | string = {},
-): string {
-  // A bare string is the command prefix (the earlier signature).
-  const presentation = typeof presentationOrPrefix === 'string' ? { commandPrefix: presentationOrPrefix } : presentationOrPrefix;
+  presentation: AgentCommandPresentation = {},
+): SendContent {
   const locale = presentation.locale;
   const code = groupRuleHashShort(rule.contentHash);
   const extraExempt = rule.exempt.userIds.length;
@@ -870,18 +884,20 @@ export function formatGroupRuleCard(
     rule.exempt.ownerAndAdmins ? t(locale, 'exemptOwners') : undefined,
     extraExempt ? t(locale, 'exemptExtra', { count: extraExempt }) : undefined,
   ].filter(Boolean).join(t(locale, 'listSeparator')) || t(locale, 'exemptNone');
-  return [
+  // The rule's notes are user / model text: a quoted, literal block under the header, never compiled and
+  // never a line of its own that could read like the card's command lines.
+  return joinCardLines([
     t(locale, 'cardTitle', { code }),
     t(locale, 'cardTrigger', { label: triggerLabel(rule.trigger, locale) }),
     ...rule.ladder.map((stage, index) => t(locale, 'cardStage', { index: index + 1, stage: formatGroupRuleStage(stage, locale) })),
     t(locale, 'cardWindow', { duration: formatDuration(Math.round(rule.windowMs / 1000), locale) }),
     t(locale, 'cardExempt', { exempt }),
-    rule.content ? t(locale, 'cardContent', { content: rule.content }) : undefined,
+    ...(rule.content ? [t(locale, 'cardContent'), ...quotedLines(rule.content)] : []),
     t(locale, 'cardApprove', { command: ruleCommand(`rule approve ${code}`, presentation) }),
     t(locale, 'cardReject', { command: ruleCommand(`rule reject ${code}`, presentation) }),
-    presentation.commandPrefix === undefined ? t(locale, 'cardPrefixUnknown') : undefined,
+    prefixHint(presentation),
     t(locale, 'cardFooter', { duration: formatDuration(Math.round(approvalTtlMs / 1000), locale) }),
-  ].filter((line): line is string => Boolean(line)).join('\n');
+  ]);
 }
 
 function summaryLine(rule: GroupRuleRecord, locale: Locale | undefined): string {
@@ -926,7 +942,7 @@ export class GroupRuleImChannel {
 
   #onTransition(transition: GroupRuleTransition, approvalTtlMs: number): Promise<void> | undefined {
     const rule = transition.record;
-    let format: ((presentation: AgentCommandPresentation) => string) | undefined;
+    let format: ((presentation: AgentCommandPresentation) => SendContent) | undefined;
     if (transition.reasonCode === 'rule_submitted') format = presentation => formatGroupRuleCard(rule, approvalTtlMs, presentation);
     else if (transition.reasonCode === 'rule_approved' && rule.approvedVia === 'console') {
       format = presentation => t(presentation.locale, 'consoleApproved', { summary: summaryLine(rule, presentation.locale) });
@@ -943,7 +959,7 @@ export class GroupRuleImChannel {
     }
   }
 
-  async #sendToGroup(rule: GroupRuleRecord, endpoint: string | null, format: (presentation: AgentCommandPresentation) => string): Promise<void> {
+  async #sendToGroup(rule: GroupRuleRecord, endpoint: string | null, format: (presentation: AgentCommandPresentation) => SendContent): Promise<void> {
     const groupId = parseGroupScene(rule.sceneId);
     if (!groupId) return;
     const verdict = checkControlAtIngress(this.#deps.controlPlane?.(), { platform: rule.platform, scope: 'group', sceneId: groupId }, true);
@@ -965,8 +981,11 @@ export class GroupRuleImChannel {
     return settings ? imApproversFor(settings, input.platform).includes(input.senderId.trim()) : false;
   }
 
-  /** 处理 `rule …` / `rules`；不是这类命令返回 null。 */
-  async handleCommand(input: GroupRuleCommandInput): Promise<string | null> {
+  /**
+   * 处理 `rule …` / `rules`；不是这类命令返回 null。回显的用户键（`{key}`）是字面片段（#1250），
+   * 出站模板不会展开其中的 `${…}`。
+   */
+  async handleCommand(input: GroupRuleCommandInput): Promise<SendContent | null> {
     const match = input.commandText ? RULE_COMMAND.exec(input.commandText) : null;
     if (!match) return null;
     const locale = input.locale;
@@ -990,12 +1009,12 @@ export class GroupRuleImChannel {
         const target = isRuleTrigger(key)
           ? open.find((rule) => rule.status === 'active' && rule.trigger === key)
           : open.find((rule) => groupRuleHashShort(rule.contentHash) === key);
-        if (!target) return t(locale, 'disableMissing', { key });
+        if (!target) return line(locale, 'disableMissing', { key: cardLiteral(key) });
         await store.disable({ id: target.id, expectedRevision: target.revision, ...common, reason: 'disabled in group' });
         return t(locale, 'disabled', { code: groupRuleHashShort(target.contentHash), label: triggerLabel(target.trigger, locale) });
       }
       const target = open.find((rule) => rule.status === 'pending' && groupRuleHashShort(rule.contentHash) === key);
-      if (!target) return t(locale, 'pendingMissing', { key });
+      if (!target) return line(locale, 'pendingMissing', { key: cardLiteral(key) });
       if (verb === 'reject') {
         await store.reject({ id: target.id, expectedRevision: target.revision, ...common, reason: 'rejected in group' });
         return t(locale, 'rejected', { key });
@@ -1013,7 +1032,10 @@ export class GroupRuleImChannel {
       const name = error instanceof Error ? error.name : '';
       if (name === 'GroupRuleRevisionConflictError' || name === 'GroupRuleStateError' || name === 'GroupRuleHashMismatchError') {
         // The sender's own prefix: this reply answers a command that just arrived with it.
-        return t(locale, 'conflict', { command: managementCommandReference('rules', input.commandPrefix) ?? 'rules' });
+        return t(locale, 'conflict', {
+          command: managementCommandReference('rules', input.commandPrefix) ?? 'rules',
+          hint: inlinePrefixHint(locale, input.commandPrefix),
+        });
       }
       logger.warn(formatCompact({ op: 'group_rule_command_failed', error: error instanceof Error ? error.message : String(error) }));
       return t(locale, 'failed');

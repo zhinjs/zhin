@@ -859,12 +859,12 @@ export function installFeatureSelfService(options: InstallFeatureSelfServiceOpti
     };
     context.addFeature(commandFeatureId, 'feature', defineCommand({
       description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },
-      alias: ['功能'], options: {},
+      alias: ['功能'], preferredAliasI18n: { 'zh-CN': '功能' }, options: {},
       execute: (command: CommandContext) => run(command, runFeatureChat, 'feature'),
     }));
     context.addFeature(commandFeatureId, 'role', defineCommand({
       description: messages('zh-CN', 'roleDescription'), descriptionI18n: { en: messages('en', 'roleDescription') },
-      alias: ['角色'], options: {},
+      alias: ['角色'], preferredAliasI18n: { 'zh-CN': '角色' }, options: {},
       execute: (command: CommandContext) => run(command, runRoleChat, 'role'),
     }));
   };

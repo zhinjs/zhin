@@ -47,6 +47,11 @@ export interface ImApprovalCommandInput {
   readonly sceneId: string;
   readonly senderId: string;
   readonly commandText: string | undefined;
+  /**
+   * Whether the sender is a global chat owner (ADR 0056 §2): any global owner may settle a self-change
+   * card in a private chat, not only the owner the card was delivered to.
+   */
+  readonly senderIsGlobalOwner?: boolean;
   /** The sender's display language for the reply (#1250); absent: the default language. */
   readonly locale?: Locale;
 }

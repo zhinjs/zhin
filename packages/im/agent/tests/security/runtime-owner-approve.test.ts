@@ -31,12 +31,13 @@ describe('OwnerApprovalRuntime commands', () => {
     });
   }
 
-  function ownerContext(subjectId = '1659488338') {
+  function ownerContext(subjectId = '1659488338', senderIsGlobalOwner = subjectId === '1659488338') {
     return {
       commandPrefix: '/',
       endpoint: { adapter: 'icqq', id: '8596238' },
       ownerId: '1659488338',
       subjectId,
+      senderIsGlobalOwner,
       scope: 'private' as const,
     };
   }
@@ -59,11 +60,24 @@ describe('OwnerApprovalRuntime commands', () => {
 
   it('rejects non-owner private chat', () => {
     const denied = runtime.handleCommand(ownerContext('other'), '/approve always bash');
-    expect(denied).toMatch(/仅本账号的聊天主人（owner）/);
-    // #1250: the chat-role model (ADR 0056 / 0060), not a plugin config field.
+    expect(denied).toMatch(/仅全局聊天主人（global owner）/);
+    // #1250: the chat-role model (ADR 0056 / 0060), not a plugin config field; binding comes first.
+    expect(denied).toContain('「绑定 <码>」');
     expect(denied).toContain('Console「聊天角色」里给自己授予全局 owner');
     expect(denied).toContain('「认领 <码>」');
-    expect(denied).not.toMatch(/master|插件配置/);
+    expect(denied).not.toMatch(/master|插件配置|本账号的聊天主人/);
+    const deniedEn = runtime.handleCommand({ ...ownerContext('other'), locale: 'en' }, '/approve always bash');
+    expect(deniedEn).toContain('Only a global chat owner');
+    expect(deniedEn).toContain('「bind <code>」');
+  });
+
+  it('accepts any global owner, not only the first one the account resolves to', () => {
+    // A second global owner: the address (ownerId) stays the account's canonical owner key.
+    const reply = runtime.handleCommand(ownerContext('second-owner', true), '/approve always bash');
+    expect(reply).toMatch(/永久放行/);
+    expect(runtime.has(ownerApprovalAddressFromMessage(ownerMessage())!, OWNER_APPROVE_ALWAYS_TOOL)).toBe(true);
+    // The canonical owner id alone is not enough: the sender must be a global owner.
+    expect(runtime.handleCommand(ownerContext('1659488338', false), '/approve list')).toMatch(/仅全局聊天主人/);
   });
 
   it('sets bash always and persists', () => {
@@ -112,15 +126,15 @@ it('uses the operation prefix and language without changing owner-only private a
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-approval-locale-'));
   try {
     const runtime = new OwnerApprovalRuntime(workspace);
-    const context = { endpoint: { adapter: 'fixture', id: 'bot' }, ownerId: 'owner', subjectId: 'owner',
+    const context = { endpoint: { adapter: 'fixture', id: 'bot' }, ownerId: 'owner', subjectId: 'owner', senderIsGlobalOwner: true,
       scope: 'private' as const, locale: 'en' as const, commandPrefix: '!' };
     expect(runtime.handleCommand(context, '!approve')).toContain('!approve always bash');
     expect(runtime.handleCommand(context, '/approve always bash')).toBeNull();
     expect(runtime.handleCommand({ ...context, commandPrefix: undefined }, '/approve always bash')).toBeNull();
-    expect(runtime.handleCommand({ ...context, scope: 'group' }, '!approve always bash')).toContain('Only this account\'s chat owner');
-    const denied = runtime.handleCommand({ ...context, subjectId: 'other' }, '!approve always bash');
-    expect(denied).toContain('Only this account\'s chat owner');
-    expect(denied).toContain('Grant yourself global owner under Chat roles in the Console');
+    expect(runtime.handleCommand({ ...context, scope: 'group' }, '!approve always bash')).toContain('Only a global chat owner');
+    const denied = runtime.handleCommand({ ...context, subjectId: 'other', senderIsGlobalOwner: false }, '!approve always bash');
+    expect(denied).toContain('Only a global chat owner');
+    expect(denied).toContain('grant yourself global owner under Chat roles in the Console');
     expect(denied).toContain('「claim <code>」');
     expect(denied).not.toMatch(/master|plugin configuration/);
     expect(runtime.handleCommand(context, '!approve rule [')).toContain('Invalid regular expression');

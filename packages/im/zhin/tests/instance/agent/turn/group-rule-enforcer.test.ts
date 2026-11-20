@@ -232,6 +232,29 @@ describe('GroupRuleEnforcer (ADR 0039 slice C)', () => {
     expect(texts.join('')).not.toMatch(/[\u4e00-\u9fff]/u);
   });
 
+  it('asks for this account\'s prefix in the bot-not-admin notice when the prefix is unknown (#1250)', async () => {
+    const { store, hit, send } = harness({ canModerate: false });
+    const rule = await activate(store, { ...remindThenMute, ladder: [{ action: 'mute', durationSec: 600 }] });
+    await hit();
+    const text = (send.mock.calls[0] as unknown as [unknown, Array<{ text?: string }>])[1][0]!.text!;
+    expect(text).toContain(`或发 rule disable ${groupRuleHashShort(rule.contentHash)}（加上本账号的命令前缀） 停用该规则`);
+  });
+
+  it('the conflict reply also asks for the prefix when it is unknown (#1250)', async () => {
+    const { store } = harness();
+    const rule = await activate(store, { ...remindThenMute });
+    const conflicting = Object.assign(Object.create(store) as AiGroupRules, {
+      list: async () => [{ ...rule, status: 'pending' }],
+      reject: async () => { throw Object.assign(new Error('changed'), { name: 'GroupRuleRevisionConflictError' }); },
+    });
+    const channel = new GroupRuleImChannel({ rules: () => conflicting, send: async () => undefined });
+    const reply = await channel.handleCommand({
+      platform: 'icqq', scope: 'group', sceneId: '123', senderId: 'owner-1', senderChatRole: 'owner',
+      commandText: `rule reject ${groupRuleHashShort(rule.contentHash)}`,
+    });
+    expect(reply).toBe('这条群规刚被别人处理过或已过期，请发 rules（加上本账号的命令前缀） 查看最新状态。');
+  });
+
   it('suggest_kick raises one fresh human card, kicks only after approval, dedups via ops_cooldown (acceptance 4)', async () => {
     const { store, queue, hit, advance, kick, enforcer, codes } = harness();
     await activate(store, { ...remindThenMute, ladder: [{ action: 'suggest_kick' }] });

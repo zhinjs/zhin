@@ -263,7 +263,7 @@ export function installChatIdentityBind(options: Readonly<{ codes: ChatIdentityB
     if (!context.hasFeature?.(commandFeatureId)) return;
     context.addFeature(commandFeatureId, 'bind', defineCommand({
       description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },
-      alias: ['绑定'], options: {},
+      alias: ['绑定'], preferredAliasI18n: { 'zh-CN': '绑定' }, options: {},
       execute: (command: CommandContext) => {
         const lease = options.snapshots.acquire();
         let resolved: ReturnType<typeof resolveFeatureChatActor>;

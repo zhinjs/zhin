@@ -33,6 +33,7 @@ import {
   createVenueProjector,
   createVenueRegistry,
   venueProjectorToken,
+  untrustedContent,
   venueRegistryToken,
 } from '@zhin.js/core';
 import {
@@ -290,11 +291,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         protectedPaths: hostProtectedPaths,
         pluginRoots: selfChangePluginRoots,
         ports: selfChangeApplyHost.ports(createSelfChangeGenerationPorts({
+          // #1250: a report quotes the change's summary and paths (model text): sent literal, never
+          // template-compiled.
           send: (target, text) => options.im.endpoints.send({
             adapter: target.adapter,
             endpointKey: target.endpointKey,
             conversation: target.conversation,
-            content: text,
+            content: untrustedContent(text, { source: 'agent:self-change-report' }),
           }),
           resolveOwner: options.resolveEndpointOwner,
           control: () => zhinAgent.controlPlane,
@@ -328,12 +331,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         conversation: target.conversation,
         ...(target.conversation.kind === 'private' ? { recipientId: target.conversation.id } : {}),
       }),
-      send: async (target, text) => {
+      // The card keeps every user / model / plugin value as a literal piece (#1250).
+      send: async (target, content) => {
         await options.im.endpoints.send({
           adapter: target.platform,
           endpointKey: target.endpointKey,
           conversation: target.conversation,
-          content: text,
+          content,
         });
       },
       onDeliveryError: (error, target) => {

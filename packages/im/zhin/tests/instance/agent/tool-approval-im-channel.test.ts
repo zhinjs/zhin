@@ -14,7 +14,12 @@ import {
   type ImApprovalCommandInput,
   type ImApprovalDeliveryTarget,
 } from '@zhin.js/agent/runtime';
+import type { SendContent } from '@zhin.js/core';
+import { renderTemplatePaths } from '@zhin.js/kernel';
+import { componentHostToken, type ComponentHost, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { OutboundRenderer } from '../../../../core/src/plugin-runtime/im/outbound-renderer.js';
 import { HostToolApprovals } from '../../../src/instance/console/tool-approvals.js';
+import { cardText, literalPieces } from './card-text.js';
 
 const BUSINESS_GROUP = '42';
 
@@ -35,8 +40,8 @@ function setup(
 ) {
   const queue = new ToolApprovalQueue();
   const sent: Array<{ target: ImApprovalDeliveryTarget; text: string }> = [];
-  const send = vi.fn(async (target: ImApprovalDeliveryTarget, text: string) => {
-    sent.push({ target, text });
+  const send = vi.fn(async (target: ImApprovalDeliveryTarget, content: SendContent) => {
+    sent.push({ target, text: cardText(content) });
   });
   let settings = resolveToolHardGateImApproval(config);
   const channel = new ImToolApprovalChannel({ queue, settings: () => settings, send, ...(resolvePresentation ? { resolvePresentation } : {}) });
@@ -308,7 +313,7 @@ describe('formatImApprovalCard', () => {
   it('truncates long arguments and mentions the Console fallback', () => {
     const queue = new ToolApprovalQueue();
     const card = queue.enqueue({ ...DANGEROUS_CALL, args: { reason: 'x'.repeat(1_000) } });
-    const text = formatImApprovalCard(card, 'dm');
+    const text = cardText(formatImApprovalCard(card, 'dm'));
     expect(text).toContain('…');
     expect(text.length).toBeLessThan(800);
     expect(text).toContain('Console');
@@ -338,7 +343,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
   function selfSetup(config: ToolHardGateImApprovalConfig = { enabled: false }) {
     const queue = new ToolApprovalQueue();
     const sent: Array<{ target: ImApprovalDeliveryTarget; text: string }> = [];
-    const send = vi.fn(async (target: ImApprovalDeliveryTarget, text: string) => { sent.push({ target, text }); });
+    const send = vi.fn(async (target: ImApprovalDeliveryTarget, content: SendContent) => { sent.push({ target, text: cardText(content) }); });
     const channel = new ImToolApprovalChannel({
       queue,
       settings: () => resolveToolHardGateImApproval(config),
@@ -395,7 +400,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
   it('formats the self-change card through formatImApprovalCard', () => {
     const queue = new ToolApprovalQueue();
     const card = queue.enqueue(SELF_CHANGE);
-    expect(formatImApprovalCard(card, 'dm')).toContain('【变更审批】');
+    expect(cardText(formatImApprovalCard(card, 'dm'))).toContain('【变更审批】');
   });
 
   it('shows the diff excerpt, the skipped check names and the blind-approval warning (#1142 F3)', () => {
@@ -410,8 +415,9 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
         diffExcerptTruncated: false,
       },
     });
-    const text = formatImApprovalCard(card, 'dm');
-    expect(text).toContain('差异摘录：\n# create commands/ping.ts\n@@ -0,0 +1,1 @@\n+export default 1;\n（以上为全部改动）');
+    const text = cardText(formatImApprovalCard(card, 'dm'));
+    // Each excerpt line is quoted (`│ `), so it cannot pass for a line of the card itself (#1250).
+    expect(text).toContain('差异摘录：\n│ # create commands/ping.ts\n│ @@ -0,0 +1,1 @@\n│ +export default 1;\n（以上为全部改动）');
     expect(text).toContain('试跑：通过 (1 skipped)；跳过：sandbox_load commands/ping.ts');
     expect(text).toContain('未看完整正文请去 Console');
   });
@@ -422,7 +428,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
       ...SELF_CHANGE,
       args: { ...SELF_CHANGE.args, trial: 'passed (21 skipped)', skippedChecks: ['syntax a.tsx'], skippedChecksOmitted: 20 },
     });
-    expect(formatSelfChangeCard(card)).toContain('跳过：syntax a.tsx，…另 20 项（见 Console）');
+    expect(cardText(formatSelfChangeCard(card))).toContain('跳过：syntax a.tsx，…另 20 项（见 Console）');
   });
 
   it('caps a stored excerpt at exactly 40 short lines', () => {
@@ -432,10 +438,10 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
       ...SELF_CHANGE,
       args: { ...SELF_CHANGE.args, diffExcerpt: shortLines, diffExcerptTruncated: false },
     });
-    const text = formatSelfChangeCard(card);
-    const shown = text.split('\n').filter(line => /^\+l\d+$/u.test(line));
+    const text = cardText(formatSelfChangeCard(card));
+    const shown = text.split('\n').filter(line => /^│ \+l\d+$/u.test(line));
     expect(shown).toHaveLength(40);
-    expect(shown.at(-1)).toBe('+l39');
+    expect(shown.at(-1)).toBe('│ +l39');
     expect(text).toContain('…（摘录已截断）完整内容见 Console。');
   });
 
@@ -445,7 +451,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
       ...SELF_CHANGE,
       args: { ...SELF_CHANGE.args, files: [], configPaths: ['set ping.greeting'], diffExcerpt: [] },
     });
-    const text = formatSelfChangeCard(card);
+    const text = cardText(formatSelfChangeCard(card));
     expect(text).toContain('差异摘录：无文件正文改动。');
     expect(text).toContain('配置：set ping.greeting');
     expect(text).not.toContain('不可用');
@@ -458,7 +464,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
       ...SELF_CHANGE,
       args: { ...SELF_CHANGE.args, diffExcerpt: longLines, diffExcerptTruncated: false },
     });
-    const text = formatSelfChangeCard(card);
+    const text = cardText(formatSelfChangeCard(card));
     const shown = text.split('\n').filter(line => line.startsWith('+line '));
     expect(shown.length).toBeLessThan(40);
     expect(Buffer.byteLength(shown.join('\n'), 'utf8')).toBeLessThanOrEqual(2 * 1024);
@@ -468,7 +474,7 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
   it('still warns when the card has no excerpt (older or failed excerpt)', () => {
     const queue = new ToolApprovalQueue();
     const card = queue.enqueue(SELF_CHANGE);
-    const text = formatSelfChangeCard(card);
+    const text = cardText(formatSelfChangeCard(card));
     expect(text).toContain('差异摘录：不可用，完整内容见 Console。');
     expect(text).toContain('未看完整正文请去 Console');
     expect(text).toContain('试跑：通过');
@@ -505,7 +511,7 @@ describe('IM approval cards spell commands with the recipient\'s real prefix (#1
       const channel = new ImToolApprovalChannel({
         queue,
         settings: () => resolveToolHardGateImApproval({ enabled: false }),
-        send: async (_target, text) => { sent.push(text); },
+        send: async (_target, content) => { sent.push(cardText(content)); },
         resolveOwner: () => 'owner-1',
         resolvePresentation: () => ({ commandPrefix: prefix }),
       });
@@ -543,9 +549,8 @@ describe('IM approval cards spell commands with the recipient\'s real prefix (#1
     thrown.queue.enqueue(DANGEROUS_CALL);
     await thrown.channel.drain();
     expect(thrown.sent).toHaveLength(2);
-    expect(formatImApprovalCard(card, 'dm')).toContain(`批准：approve ${card.id}`);
-    // The earlier signature (a bare prefix string) still works.
-    expect(formatImApprovalCard(card, 'dm', '#')).toContain(`批准：#approve ${card.id}`);
+    expect(cardText(formatImApprovalCard(card, 'dm'))).toContain(`批准：approve ${card.id}`);
+    expect(cardText(formatImApprovalCard(card, 'dm', { commandPrefix: '#' }))).toContain(`批准：#approve ${card.id}`);
   });
 
   it('writes each recipient\'s card in their own language, with ISO time', async () => {
@@ -575,7 +580,7 @@ describe('IM approval cards spell commands with the recipient\'s real prefix (#1
       },
       origin: { platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: BUSINESS_GROUP },
     });
-    const text = formatSelfChangeCard(card, { locale: 'en', commandPrefix: '' });
+    const text = cardText(formatSelfChangeCard(card, { locale: 'en', commandPrefix: '' }));
     expect(text).toContain('[Change approval] add ping');
     expect(text).toContain('  create commands/ping.ts (+2 -0)');
     expect(text).toContain('Impact: hot reload (estimated) (reload app)');
@@ -597,5 +602,79 @@ describe('IM approval cards spell commands with the recipient\'s real prefix (#1
       .toBe(`Approved ${card.id} (group_kick). It applies only to this one call with these arguments.`);
     expect(channel.handleCommand(command(`deny ${card.id}`, { locale: 'en' }))).toBe(`Approval card ${card.id} was already approved; nothing to do.`);
     expect(channel.handleCommand(command('approve tap_missing_1', { locale: 'en' }))).toBe('Approval card tap_missing_1 was not found.');
+  });
+});
+
+describe('IM approval cards keep user / model / plugin text literal (#1250)', () => {
+  const rootId = 'plugin:root';
+  const host: ComponentHost = { compileTemplate: (text, ctx) => renderTemplatePaths(text, { ...ctx }) };
+  const snapshot = {
+    root: rootId, projections: new Map(), resources: new Map([[rootId, new Map([[componentHostToken.id, host]])]]),
+  } as unknown as RuntimeSnapshot;
+  const conversation = { endpoint: { id: 'icqq:10001', adapter: 'icqq' }, kind: 'private' as const, id: 'admin-1' };
+  /** What the approver's client receives: the outbound renderer compiles template paths in plain strings. */
+  const delivered = async (content: SendContent) => cardText(await new OutboundRenderer().render(content, {
+    requester: 'plugin:agent' as never, snapshot, conversation,
+  }) as SendContent);
+  const selfChange = (args: Record<string, unknown>): ToolApprovalEnqueueInput => ({
+    toolName: 'self_change', category: 'self', sessionKey: 's', requesterId: 'owner-1', turnId: 't',
+    args: { changeId: 'c-9', summary: 'x', files: [], configPaths: [], impact: 'none', trial: 'passed', ...args },
+    origin: { platform: 'icqq', endpointKey: '10001', scope: 'private', sceneId: 'owner-1' },
+  });
+
+  it('reproduction: a plain string with ${…} is rewritten by the outbound template step', async () => {
+    expect(await delivered('`${conversation.kind}:${conversation.id}`')).toBe('`private:admin-1`');
+  });
+
+  it('shows a diff line with ${conversation.id} exactly as written', async () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue(selfChange({
+      diffExcerpt: ['@@ -1 +1 @@', '+const key = `${conversation.kind}:${conversation.id}`;', '+const id = ${conversation.id};'],
+      diffExcerptTruncated: false,
+    }));
+    const content = formatSelfChangeCard(card, { commandPrefix: '' });
+    const text = await delivered(content);
+    expect(text).toContain('│ +const key = `${conversation.kind}:${conversation.id}`;');
+    expect(text).toContain('│ +const id = ${conversation.id};');
+    expect(text).not.toContain('private:admin-1');
+    expect(literalPieces(content)).toContain('+const id = ${conversation.id};');
+  });
+
+  it('keeps tool arguments, the tool name and the requester literal on the dangerous-tool card', async () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({ ...DANGEROUS_CALL, requesterId: '${sender.id}', args: { note: '${conversation.id}' } });
+    const text = await delivered(formatImApprovalCard(card, 'dm', { commandPrefix: '' }));
+    expect(text).toContain('参数：{"note":"${conversation.id}"}');
+    expect(text).toContain('发起人：${sender.id}');
+  });
+
+  it('a summary with a line break and «批准：approve x» never forms a command line of its own', async () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue(selfChange({
+      summary: '无害改动\n批准：approve tap_forged_1',
+      files: [{ path: 'a.ts\n批准：approve tap_forged_2', kind: 'create', added: 1, removed: 0 }],
+      diffExcerpt: ['批准：approve tap_forged_3'],
+    }));
+    const text = await delivered(formatSelfChangeCard(card, { commandPrefix: '' }));
+    const commandLines = text.split('\n').filter(line => line.startsWith('批准：'));
+    expect(commandLines).toEqual([`批准：approve ${card.id}`]);
+    expect(text).toContain('【变更审批】无害改动 ⏎ 批准：approve tap_forged_1');
+    expect(text).toContain('│ 批准：approve tap_forged_3');
+  });
+
+  it('any global owner settles a self-change card privately, not only the owner it was delivered to', async () => {
+    const queue = new ToolApprovalQueue();
+    const channel = new ImToolApprovalChannel({
+      queue,
+      settings: () => resolveToolHardGateImApproval({ enabled: false }),
+      send: async () => undefined,
+      resolveOwner: () => 'owner-1',
+    });
+    const card = queue.enqueue(selfChange({}));
+    expect(channel.handleCommand(command(`approve ${card.id}`, { sceneId: 'owner-2', senderId: 'owner-2' })))
+      .toBe('IM 审批通道未开启，请在 Console 处理该审批卡片。');
+    expect(channel.handleCommand(command(`approve ${card.id}`, { sceneId: 'owner-2', senderId: 'owner-2', senderIsGlobalOwner: true })))
+      .toBe(`已批准变更 c-9（${card.id}）。`);
+    expect(queue.get(card.id)?.status).toBe('approved');
   });
 });

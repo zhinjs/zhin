@@ -4,7 +4,9 @@ import {
   SELF_CHANGE_APPROVAL_TOOL,
   type SelfChangeApprovalArgs,
 } from '../../index.js';
+import type { SendContent } from '@zhin.js/core';
 import { formatDateTime, type Locale } from '@zhin.js/plugin-runtime';
+import { cardLine, cardLiteral, joinCardLines, type CardLine, type CardValues } from '../../init/card-text.js';
 import { managementCommandReference, type AgentCommandPresentation } from '../../init/command-presentation.js';
 import {
   imApproversFor,
@@ -50,7 +52,11 @@ export interface ImApprovalDeliveryTarget {
   readonly conversation: Readonly<{ kind: 'private' | 'group'; id: string }>;
 }
 
-export type ImApprovalSender = (target: ImApprovalDeliveryTarget, text: string) => Promise<void>;
+/**
+ * Sends one card. The content mixes framework text with literal pieces (`untrustedContent`) for every
+ * user / model / plugin value, so the outbound template step cannot rewrite what the approver reads.
+ */
+export type ImApprovalSender = (target: ImApprovalDeliveryTarget, content: SendContent) => Promise<void>;
 
 export interface ImApprovalDeliveryReport {
   readonly status: 'delivered' | 'partial' | 'failed' | 'unavailable';
@@ -120,8 +126,8 @@ export class ImToolApprovalChannel {
     let delivered = 0;
     for (const target of targets) {
       try {
-        const text = formatImApprovalCard(entry, settings.delivery, await this.#presentation(target));
-        await this.#options.send(target, text);
+        const card = formatImApprovalCard(entry, settings.delivery, await this.#presentation(target));
+        await this.#options.send(target, card);
         delivered += 1;
       } catch (error) {
         this.#options.onDeliveryError?.(error, target);
@@ -143,8 +149,10 @@ export class ImToolApprovalChannel {
     const queue = this.#options.queue;
     const current = queue.get(approvalId);
     const selfChange = current !== undefined && isSelfChangeCard(current);
+    // Any global owner settles a self-change card (ADR 0056 §2), not only the owner it was delivered to.
     const ownerSettles = selfChange && current.origin !== null && current.origin.platform === input.platform
-      && this.#owner(current.origin.platform, current.origin.endpointKey) === input.senderId.trim();
+      && (input.senderIsGlobalOwner === true
+        || this.#owner(current.origin.platform, current.origin.endpointKey) === input.senderId.trim());
     const locale = input.locale;
     if (!settings.enabled && !ownerSettles) {
       return t(locale, selfChange && input.scope !== 'private' ? 'selfPrivateOnly' : 'channelOff');
@@ -200,9 +208,9 @@ function isSelfChangeCard(entry: ToolApprovalEntry): boolean {
 
 type DangerousCategory = NonNullable<ToolApprovalEntry['category']>;
 
-/** A bare string is the command prefix (the earlier signature); the default language applies. */
-function toPresentation(value: AgentCommandPresentation | string): AgentCommandPresentation {
-  return typeof value === 'string' ? { commandPrefix: value } : value;
+/** One catalog line in `locale`; {@link cardLiteral} values stay literal pieces. */
+function line(locale: Locale | undefined, key: Parameters<typeof t>[1], values?: CardValues): CardLine {
+  return cardLine(plain => t(locale, key, plain), values);
 }
 
 const CATEGORY_KEYS: Readonly<Record<DangerousCategory, Parameters<typeof t>[1]>> = Object.freeze({
@@ -238,27 +246,27 @@ function cardCommands(entry: ToolApprovalEntry, presentation: AgentCommandPresen
 export function formatImApprovalCard(
   entry: ToolApprovalEntry,
   delivery: ToolHardGateImApprovalSettings['delivery'],
-  presentationOrPrefix: AgentCommandPresentation | string = {},
-): string {
-  const presentation = toPresentation(presentationOrPrefix);
+  presentation: AgentCommandPresentation = {},
+): SendContent {
   if (isSelfChangeCard(entry)) return formatSelfChangeCard(entry, presentation);
   const locale = presentation.locale;
   const origin = entry.origin;
   const conversation = origin ? `${origin.platform} ${origin.scope ?? 'scene'}:${origin.sceneId}` : entry.sessionKey;
   const category = entry.category ? t(locale, 'cardCategory', { label: t(locale, CATEGORY_KEYS[entry.category]) }) : '';
   const commands = cardCommands(entry, presentation);
-  return [
-    t(locale, 'cardTitle', { tool: entry.toolName, category }),
-    t(locale, 'cardConversation', { conversation }),
-    entry.requesterId ? t(locale, 'cardRequester', { id: entry.requesterId }) : undefined,
-    t(locale, 'cardArgs', { args: previewArgs(entry.args) }),
-    t(locale, 'cardId', { id: entry.id }),
-    t(locale, 'cardExpiryDeny', { time: formatExpiry(entry.expiresAt, locale) }),
-    t(locale, 'cardApprove', { command: commands.approve }),
-    t(locale, 'cardDeny', { command: commands.deny }),
+  // Tool name, conversation, requester and arguments are plugin / platform / model values: literal.
+  return joinCardLines([
+    line(locale, 'cardTitle', { tool: cardLiteral(entry.toolName), category }),
+    line(locale, 'cardConversation', { conversation: cardLiteral(conversation) }),
+    entry.requesterId ? line(locale, 'cardRequester', { id: cardLiteral(entry.requesterId) }) : undefined,
+    line(locale, 'cardArgs', { args: cardLiteral(previewArgs(entry.args)) }),
+    line(locale, 'cardId', { id: entry.id }),
+    line(locale, 'cardExpiryDeny', { time: formatExpiry(entry.expiresAt, locale) }),
+    line(locale, 'cardApprove', { command: commands.approve }),
+    line(locale, 'cardDeny', { command: commands.deny }),
     commands.hint,
-    t(locale, delivery === 'approver_group' ? 'cardFooterGroup' : 'cardFooterDm'),
-  ].filter((line): line is string => Boolean(line)).join('\n');
+    line(locale, delivery === 'approver_group' ? 'cardFooterGroup' : 'cardFooterDm'),
+  ]);
 }
 
 /**
@@ -266,47 +274,48 @@ export function formatImApprovalCard(
  * already cut and redacted when the card was enqueued), impact, trial verdict with the skipped check names, and
  * a reminder not to approve blind. Never full file bodies or config values.
  */
-export function formatSelfChangeCard(entry: ToolApprovalEntry, presentationOrPrefix: AgentCommandPresentation | string = {}): string {
-  const presentation = toPresentation(presentationOrPrefix);
+export function formatSelfChangeCard(entry: ToolApprovalEntry, presentation: AgentCommandPresentation = {}): SendContent {
   const locale = presentation.locale;
   const args = entry.args as Partial<SelfChangeApprovalArgs>;
   const origin = entry.origin;
   const conversation = origin ? `${origin.platform} ${origin.scope ?? 'scene'}:${origin.sceneId}` : entry.sessionKey;
   const files = Array.isArray(args.files) ? args.files : [];
   const configPaths = Array.isArray(args.configPaths) ? args.configPaths : [];
-  const shown = files.slice(0, 10).map(file => t(locale, 'selfFile', {
-    kind: file.kind, path: file.path, added: file.added, removed: file.removed,
+  const shown = files.slice(0, 10).map(file => line(locale, 'selfFile', {
+    kind: cardLiteral(file.kind), path: cardLiteral(file.path), added: Number(file.added) || 0, removed: Number(file.removed) || 0,
   }));
   const impact = impactLabel(args.impact, locale);
   const impactDetail = Array.isArray(args.impactDetail) && args.impactDetail.length > 0
     ? args.impactDetail.join(t(locale, 'detailSeparator'))
     : undefined;
   const commands = cardCommands(entry, presentation);
-  return [
-    t(locale, 'selfTitle', { summary: args.summary || args.changeId || entry.id }),
-    t(locale, 'selfChange', { id: args.changeId ?? '-' }),
+  // Summary, ids, paths, the diff excerpt and the trial details come from the model, the change or the
+  // platform: literal pieces on their own line, so they cannot be compiled or forge a command line.
+  return joinCardLines([
+    line(locale, 'selfTitle', { summary: cardLiteral(args.summary || args.changeId || entry.id) }),
+    line(locale, 'selfChange', { id: cardLiteral(args.changeId ?? '-') }),
     entry.requesterId
-      ? t(locale, 'selfOriginBy', { conversation, requester: entry.requesterId })
-      : t(locale, 'selfOrigin', { conversation }),
-    files.length > 0 ? t(locale, 'selfFiles', { count: files.length }) : undefined,
+      ? line(locale, 'selfOriginBy', { conversation: cardLiteral(conversation), requester: cardLiteral(entry.requesterId) })
+      : line(locale, 'selfOrigin', { conversation: cardLiteral(conversation) }),
+    files.length > 0 ? line(locale, 'selfFiles', { count: files.length }) : undefined,
     ...shown,
-    files.length > shown.length ? t(locale, 'selfMoreFiles', { count: files.length - shown.length }) : undefined,
-    configPaths.length > 0 ? t(locale, 'selfConfig', { paths: configPaths.join(t(locale, 'listSeparator')) }) : undefined,
+    files.length > shown.length ? line(locale, 'selfMoreFiles', { count: files.length - shown.length }) : undefined,
+    configPaths.length > 0 ? line(locale, 'selfConfig', { paths: cardLiteral(configPaths.join(t(locale, 'listSeparator'))) }) : undefined,
     ...diffExcerptLines(args, locale),
     impactDetail === undefined
-      ? t(locale, 'selfImpact', { impact })
-      : t(locale, 'selfImpactDetail', { impact, detail: impactDetail }),
+      ? line(locale, 'selfImpact', { impact })
+      : line(locale, 'selfImpactDetail', { impact, detail: cardLiteral(impactDetail) }),
     trialLine(args, locale),
-    t(locale, 'cardId', { id: entry.id }),
-    t(locale, 'selfExpiry', { time: formatExpiry(entry.expiresAt, locale) }),
-    t(locale, 'cardApprove', { command: commands.approve }),
-    t(locale, 'selfReject', { command: commands.deny }),
+    line(locale, 'cardId', { id: entry.id }),
+    line(locale, 'selfExpiry', { time: formatExpiry(entry.expiresAt, locale) }),
+    line(locale, 'cardApprove', { command: commands.approve }),
+    line(locale, 'selfReject', { command: commands.deny }),
     commands.hint,
-    t(locale, 'selfFooter'),
-  ].filter((line): line is string => Boolean(line)).join('\n');
+    line(locale, 'selfFooter'),
+  ]);
 }
 
-function diffExcerptLines(args: Partial<SelfChangeApprovalArgs>, locale: Locale | undefined): string[] {
+function diffExcerptLines(args: Partial<SelfChangeApprovalArgs>, locale: Locale | undefined): CardLine[] {
   const excerpt = Array.isArray(args.diffExcerpt)
     ? args.diffExcerpt.filter((line): line is string => typeof line === 'string')
     : null;
@@ -327,23 +336,24 @@ function diffExcerptLines(args: Partial<SelfChangeApprovalArgs>, locale: Locale 
     bytes += lineBytes;
   }
   const truncated = args.diffExcerptTruncated === true || kept.length < excerpt.length;
+  // Each excerpt line is quoted (`│ ` is framework text) and literal: `${…}` in a diff stays as written.
   return [
     t(locale, 'diffHeader'),
-    ...kept,
+    ...kept.map(text => cardLine(values => `│ ${values.text}`, { text: cardLiteral(text) })),
     t(locale, truncated ? 'diffTruncated' : 'diffComplete'),
     warning,
   ];
 }
 
-function trialLine(args: Partial<SelfChangeApprovalArgs>, locale: Locale | undefined): string {
-  const verdict = args.trial === undefined ? '-' : String(args.trial).replace(/^passed/u, t(locale, 'trialPassed'));
+function trialLine(args: Partial<SelfChangeApprovalArgs>, locale: Locale | undefined): CardLine {
+  const verdict = cardLiteral(args.trial === undefined ? '-' : String(args.trial).replace(/^passed/u, t(locale, 'trialPassed')));
   const skipped = Array.isArray(args.skippedChecks)
     ? args.skippedChecks.filter((name): name is string => typeof name === 'string' && name.length > 0)
     : [];
-  if (skipped.length === 0) return t(locale, 'selfTrial', { verdict });
+  if (skipped.length === 0) return line(locale, 'selfTrial', { verdict });
   const omitted = typeof args.skippedChecksOmitted === 'number' && args.skippedChecksOmitted > 0 ? args.skippedChecksOmitted : 0;
   const more = omitted > 0 ? t(locale, 'selfTrialMore', { count: omitted }) : '';
-  return t(locale, 'selfTrialSkipped', { verdict, names: skipped.join(t(locale, 'listSeparator')), more });
+  return line(locale, 'selfTrialSkipped', { verdict, names: cardLiteral(skipped.join(t(locale, 'listSeparator'))), more });
 }
 
 function impactLabel(impact: unknown, locale: Locale | undefined): string {

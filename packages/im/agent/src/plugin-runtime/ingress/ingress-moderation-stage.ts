@@ -55,14 +55,14 @@ export function createGroupRuleChannel(input: Readonly<{
     rules: () => agent?.agent?.getGroupRules?.(),
     controlPlane: () => agent.agent.getControlPlane?.(),
     imApproval: () => resolveToolHardGateImApproval(agent.agent.config?.toolHardGate?.imApproval),
-    send: async (target, text) => {
+    send: async (target, content) => {
       const endpointKey = target.endpoint ?? soleOnlineEndpoint(im, target.platform);
       if (!endpointKey) throw new Error('endpoint_unresolved');
       await im.endpoints.send({
         adapter: target.platform,
         endpointKey,
         conversation: { kind: 'group', id: target.groupId },
-        content: text,
+        content,
       });
     },
     ...(resolvePresentation
@@ -164,8 +164,10 @@ export function observeFloodMessage(input: Readonly<{
   message: Message;
   platform: string;
   endpoint: string | undefined;
+  /** The group's presentation: its notices are public, so they use the project language (#1250). */
+  resolvePresentation?: ConversationPresentationResolver;
 }>): void {
-  const { im, enforcer, floodDetector, message, platform, endpoint } = input;
+  const { im, enforcer, floodDetector, message, platform, endpoint, resolvePresentation } = input;
   if (message.conversation.kind !== 'group') return;
   if (message.origin !== undefined && message.origin !== 'human') return;
   const memberId = message.sender?.id;
@@ -182,31 +184,42 @@ export function observeFloodMessage(input: Readonly<{
   if (!verdict.hit) return;
   const session = readOperationSession(message);
   if (!session) return;
-  void executeGroupRule({
-    im,
-    enforcer,
-    conversation: message.conversation,
-    source: { client: session.endpoint, signal: session.signal },
-    // The message's own command environment: the prefix this group's dispatcher strips.
-    presentation: {
-      ...(message.locale ? { locale: message.locale } : {}),
-      ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
-    },
-    violation: {
-      platform,
-      ...(endpoint ? { endpoint } : {}),
-      groupId: message.conversation.id,
-      memberId,
-      ...(message.sender?.name ? { memberName: message.sender.name } : {}),
-      ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
-      ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
-      trigger: 'flood',
-      sentAt: at,
-      ...(message.message?.id ? { messageId: message.message.id } : {}),
-      evidence: verdict.samples,
-      detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
-    },
-  }).then((result) => {
+  void (async () => {
+    // Public group notices use the project language, never the offender's own preference (#1250); the
+    // prefix is the message's own command environment, the one this group's dispatcher strips.
+    let locale: AgentCommandPresentation['locale'];
+    try {
+      locale = (await resolvePresentation?.({
+        platform,
+        endpoint: message.conversation.endpoint.id,
+        conversation: { kind: 'group', id: message.conversation.id },
+      }))?.locale;
+    } catch { /* default language */ }
+    return executeGroupRule({
+      im,
+      enforcer,
+      conversation: message.conversation,
+      source: { client: session.endpoint, signal: session.signal },
+      presentation: {
+        ...(locale ? { locale } : {}),
+        ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
+      },
+      violation: {
+        platform,
+        ...(endpoint ? { endpoint } : {}),
+        groupId: message.conversation.id,
+        memberId,
+        ...(message.sender?.name ? { memberName: message.sender.name } : {}),
+        ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
+        ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
+        trigger: 'flood',
+        sentAt: at,
+        ...(message.message?.id ? { messageId: message.message.id } : {}),
+        evidence: verdict.samples,
+        detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
+      },
+    });
+  })().then((result) => {
     if (result.kind !== 'no_rule') logger.info(formatCompact({ op: 'group_rule_flood', conv: `${platform}:${message.conversation.id}`, result: result.kind }));
   });
 }

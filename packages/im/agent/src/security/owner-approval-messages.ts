@@ -6,8 +6,8 @@ export const ownerApprovalMessages = createMessages({
   yes: { 'zh-CN': '是', en: 'yes' }, no: { 'zh-CN': '否', en: 'no' },
   // #1250 / ADR 0056, 0060: the owner is a stored chat role, not a plugin config field.
   denied: {
-    'zh-CN': '⚠️ 仅本账号的聊天主人（owner）可在私聊中使用此指令。可在 Console「聊天角色」里给自己授予全局 owner，或私聊机器人发送「认领 <码>」（不需要命令前缀，认领码见 zhin status）。',
-    en: '⚠️ Only this account\'s chat owner can use this command, in a private chat. Grant yourself global owner under Chat roles in the Console, or send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code).',
+    'zh-CN': '⚠️ 仅全局聊天主人（global owner）可在私聊中使用此指令。先私聊机器人发送「绑定 <码>」把聊天身份绑定到你的 Console 账号，再在 Console「聊天角色」里给自己授予全局 owner；或私聊机器人发送「认领 <码>」（不需要命令前缀，认领码见 zhin status）。',
+    en: '⚠️ Only a global chat owner can use this command, in a private chat. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles in the Console; or send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code).',
   },
   always: { 'zh-CN': '✅ 已对 bash 永久放行 Owner 硬确认（本 Bot）。后续 bash 需确认时将不再弹窗。', en: '✅ Permanently approved bash for this Bot. Future bash requests will skip Owner confirmation.' },
   removed: { 'zh-CN': '✅ 已删除该放行规则。', en: '✅ Removed the approval rule.' },

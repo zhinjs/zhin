@@ -530,14 +530,21 @@ export class AgentTurnIngressRoute implements IngressRoute {
   }
 
   /** content-moderation 迁移：原 `groupModeration` 群按默认模板生成一条待确认规则（ADR 0039 §5）。 */
-  ensureDefaultGroupRule(input: Readonly<{ conversation: ConversationRef; trigger: GroupRuleViolationTrigger }>): Promise<GroupRuleDefaultOutcome> {
+  async ensureDefaultGroupRule(input: Readonly<{ conversation: ConversationRef; trigger: GroupRuleViolationTrigger }>): Promise<GroupRuleDefaultOutcome> {
     const { conversation } = input;
-    if (conversation.kind !== 'group') return Promise.resolve('unavailable');
+    if (conversation.kind !== 'group') return 'unavailable';
+    // #1250: the rule's notes are shown in the group, so they are written in the project language.
+    const locale = (await this.#conversationPresentation({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      conversation: { kind: 'group', id: conversation.id },
+    }))?.locale;
     return this.#groupRuleDefaults.ensure({
       platform: conversation.endpoint.adapter,
       endpoint: conversation.endpoint.id,
       groupId: conversation.id,
       trigger: input.trigger,
+      ...(locale ? { locale } : {}),
     });
   }
 
@@ -678,6 +685,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       observeFloodMessage({
         im: options.im, enforcer: this.#groupRuleEnforcer, floodDetector: this.#floodDetector,
         message, platform: turnAccess.origin.platform, endpoint: effectiveEndpoint,
+        resolvePresentation: target => this.#conversationPresentation(target),
       });
     }
 

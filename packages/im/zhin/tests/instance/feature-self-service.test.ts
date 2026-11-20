@@ -697,17 +697,17 @@ describe('command spellings carry the real prefix', () => {
   for (const prefix of ['', '#', '/']) {
     it(`prefix ${JSON.stringify(prefix)}: 绑定 / 功能 / 角色 usage and follow-ups`, async () => {
       const { say, dm } = await installed();
-      // The command's own display name (`command.formatCommand`), as the command menu lists it.
-      expect(await say('绑定', prefix, dm)).toBe(`用法：${prefix}bind <绑定码>（在 Console「把聊天身份绑定到我」获取，只接受私聊）`);
-      expect(await say('功能 乱写', prefix)).toMatch(new RegExp(`^用法：${escape(prefix)}feature 列表 \\[页码\\] \\| 开启`, 'u'));
+      // The command's Chinese display name (`preferredAliasI18n`), as the Chinese command menu lists it.
+      expect(await say('绑定', prefix, dm)).toBe(`用法：${prefix}绑定 <绑定码>（在 Console「把聊天身份绑定到我」获取，只接受私聊）`);
+      expect(await say('功能 乱写', prefix)).toMatch(new RegExp(`^用法：${escape(prefix)}功能 列表 \\[页码\\] \\| 开启`, 'u'));
       const first = await say('功能 列表', prefix);
-      expect(first).toContain(`下一页：${prefix}feature 列表 2`);
+      expect(first).toContain(`下一页：${prefix}功能 列表 2`);
       // Sent back as hinted, the follow-up is the same command (the dispatcher strips the same prefix).
       const hinted = first.split('\n').find(line => line.startsWith('下一页：'))!.slice('下一页：'.length);
       expect(hinted.startsWith(prefix)).toBe(true);
       expect(await say(hinted.slice(prefix.length), prefix)).toContain('第 2/2 页');
-      expect(await say('功能 列表 9', prefix)).toBe(`页码超出范围：共 2 页。请使用「${prefix}feature 列表 <页码>」。`);
-      expect(await say('角色 乱写', prefix)).toMatch(new RegExp(`^用法：${escape(prefix)}role 列表 \\|`, 'u'));
+      expect(await say('功能 列表 9', prefix)).toBe(`页码超出范围：共 2 页。请使用「${prefix}功能 列表 <页码>」。`);
+      expect(await say('角色 乱写', prefix)).toMatch(new RegExp(`^用法：${escape(prefix)}角色 列表 \\|`, 'u'));
     });
   }
 

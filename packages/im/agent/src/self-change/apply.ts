@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { DecisionReasonCode } from '../decision-events.js';
+import { singleLine } from '../init/card-text.js';
 import type { HostProtectedPaths } from '../security/host-config-paths.js';
 import {
   DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS,
@@ -683,7 +684,8 @@ function isOrigin(value: unknown): value is SelfChangeOrigin {
 /** 回报里的变更摘要：预览 summary，否则文件 / 配置路径。不含正文与配置值。 */
 function describeChange(record: SelfChangeRecord): string {
   const summary = (record.plan as { summary?: unknown } | null)?.summary;
-  if (typeof summary === 'string' && summary.trim()) return summary.trim();
+  // One line: a summary's own line breaks must not add lines to the report (#1250).
+  if (typeof summary === 'string' && summary.trim()) return singleLine(summary.trim());
   const parts = [
     ...record.files.map(file => `${file.op === 'delete' ? '删除' : '写入'} ${file.path}`),
     ...(record.configPatch?.patches.map(patch => `配置 ${patch.path.join('.')}`) ?? []),

@@ -26,10 +26,11 @@ export const groupRuleMessages = createMessages({
   exemptExtra: { 'zh-CN': '另加 {count} 人', en: '{count} more people' },
   exemptNone: { 'zh-CN': '无', en: 'none' },
   listSeparator: { 'zh-CN': '，', en: ', ' },
-  cardContent: { 'zh-CN': '说明：{content}', en: 'Notes: {content}' },
+  cardContent: { 'zh-CN': '说明：', en: 'Notes:' },
   cardApprove: { 'zh-CN': '批准：{command}', en: 'Approve: {command}' },
   cardReject: { 'zh-CN': '驳回：{command}', en: 'Reject: {command}' },
   cardPrefixUnknown: { 'zh-CN': '（发送时加上本账号的命令前缀）', en: '(send it with this account\'s command prefix)' },
+  inlinePrefixHint: { 'zh-CN': '（加上本账号的命令前缀）', en: ' (with this account\'s command prefix)' },
   cardFooter: {
     'zh-CN': '仅本群群主 / 管理员可审批；{duration}内未批自动作废。批准后禁言档自动执行，踢人仍每次审批。',
     en: 'Only this group\'s owner / admins can approve; it is voided if not approved within {duration}. Once approved, mutes run automatically; each removal still needs an approval.',
@@ -47,8 +48,8 @@ export const groupRuleMessages = createMessages({
     en: ' Repeated {label}: the group owner / admins have been asked to approve a removal from this group (group rule {code}).',
   },
   botNotAdmin: {
-    'zh-CN': '我在本群不是管理员（或无权管理该成员），群规 {code} 的禁言 / 踢人档暂时无法执行。请群主把我设为管理员，或发 {command} 停用该规则。',
-    en: 'I am not an admin in this group (or cannot manage this member), so the mute / removal steps of group rule {code} cannot run. Ask the group owner to make me an admin, or send {command} to turn the rule off.',
+    'zh-CN': '我在本群不是管理员（或无权管理该成员），群规 {code} 的禁言 / 踢人档暂时无法执行。请群主把我设为管理员，或发 {command}{hint} 停用该规则。',
+    en: 'I am not an admin in this group (or cannot manage this member), so the mute / removal steps of group rule {code} cannot run. Ask the group owner to make me an admin, or send {command}{hint} to turn the rule off.',
   },
 
   groupOnly: { 'zh-CN': '群规命令只能在对应的群里使用。', en: 'Group rule commands only work in the rule\'s own group.' },
@@ -65,6 +66,17 @@ export const groupRuleMessages = createMessages({
   rejected: { 'zh-CN': '已驳回群规 {key}。', en: 'Rejected group rule {key}.' },
   approved: { 'zh-CN': '群规 {key} 已生效：{label}，{ladder}{replaced}。', en: 'Group rule {key} is active: {label}, {ladder}{replaced}.' },
   replaced: { 'zh-CN': '，原同类规则已停用', en: '; the previous rule of this kind was turned off' },
-  conflict: { 'zh-CN': '这条群规刚被别人处理过或已过期，请发 {command} 查看最新状态。', en: 'Someone just handled this group rule or it expired. Send {command} to see the latest state.' },
+  conflict: {
+    'zh-CN': '这条群规刚被别人处理过或已过期，请发 {command}{hint} 查看最新状态。',
+    en: 'Someone just handled this group rule or it expired. Send {command}{hint} to see the latest state.',
+  },
+  templateAdvertising: {
+    'zh-CN': '发广告：第一次提醒，第二次警告，第三次禁言 10 分钟；30 分钟内不再犯则重新计数（由内容审核插件的原有群管迁移而来）',
+    en: 'Advertising: a reminder the first time, a warning the second time, a 10-minute mute the third time; the count resets after 30 minutes without another offense (migrated from the content moderation plugin\'s earlier group management).',
+  },
+  templateAbuse: {
+    'zh-CN': '辱骂他人：第一次提醒，第二次警告，第三次禁言 10 分钟；30 分钟内不再犯则重新计数（由内容审核插件的原有群管迁移而来）',
+    en: 'Abuse: a reminder the first time, a warning the second time, a 10-minute mute the third time; the count resets after 30 minutes without another offense (migrated from the content moderation plugin\'s earlier group management).',
+  },
   failed: { 'zh-CN': '群规操作失败，未生效，请稍后再试。', en: 'The group rule operation failed and did not take effect. Try again later.' },
 });
