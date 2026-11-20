@@ -4,6 +4,7 @@ import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js
 import type { TurnContextState, TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
+import { formatReplyLanguageLine, userSetReplyLocale } from '../prompt/rules/reply-language.js';
 import { formatMergedTurnBlock } from '../turn/merged-turn-context.js';
 import { formatLiveDanmakuBlock } from '../turn/live-turn-context.js';
 import { SELF_PROFILE_FIELDS, type SelfProfileSnapshot } from '@zhin.js/im-contract';
@@ -147,7 +148,9 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
     } else {
       blocks.push(createPromptContextBlock('session-identity', formatSessionContextLine(input.turn)));
     }
-    if (isLocale(display?.locale)) current.push(`Reply language fallback: ${display.locale}.`);
+    const language = isLocale(display?.locale)
+      ? formatReplyLanguageLine(display.locale, userSetReplyLocale(display) !== undefined) : undefined;
+    if (language) current.push(language);
     const self = display?.contextState?.bot;
     if (origin.kind === 'im' && (self?.profile || self?.name?.trim() || input.fallbackNickname?.trim() || self?.profileError)) {
       const profile: SelfProfileSnapshot = self?.profile ?? { values: {}, sources: {}, writableFields: [], platformStatus: 'unsupported' };

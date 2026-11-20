@@ -244,8 +244,8 @@ export class UserProfileStore {
   }
 
   /**
-   * Build user profile summary for system prompt. Keys like "language" or "preferred_language"
-   * define the reply language preference; persona instructions use this for "Reply in the language specified in [User profile]".
+   * Build user profile summary for the per-turn context. A "language" entry is reference only: the
+   * reply language follows the user's own `/language` setting (#1250 b69, see REPLY_LANGUAGE_RULE).
    */
   async buildProfileSummary(userId: string): Promise<string> {
     const profile = await this.getAll(userId);
