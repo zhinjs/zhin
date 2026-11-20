@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { OutboundRenderer } from '@zhin.js/core/runtime';
+import { componentHostToken, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { renderTemplatePaths } from '@zhin.js/kernel';
 import {
   AI_SESSION_OPS_ROW_ID,
   AiSessionOps,
@@ -11,6 +14,7 @@ import {
   parseSessionOpsDocument,
   renderWelcomeTemplate,
   unknownTemplateVars,
+  welcomePartsContent,
   type SessionOpsModel,
 } from '../src/session-ops.js';
 
@@ -57,7 +61,12 @@ describe('renderWelcomeTemplate (ADR 0037 §1.1)', () => {
       { type: 'mention', id: 'u1', name: '阿强' },
       { type: 'text', text: ' ' },
       { type: 'mention', id: 'u2' },
-      { type: 'text', text: '（阿强、u2）加入 测试社团，群规：https://example.com/rules' },
+      { type: 'text', text: '（' },
+      { type: 'text', text: '阿强、u2', literal: true },
+      { type: 'text', text: '）加入 ' },
+      { type: 'text', text: '测试社团', literal: true },
+      { type: 'text', text: '，群规：' },
+      { type: 'text', text: 'https://example.com/rules', literal: true },
     ]);
     expect(out.text).toBe('欢迎 @阿强 @u2（阿强、u2）加入 测试社团，群规：https://example.com/rules');
     expect(out.unknownVars).toEqual([]);
@@ -68,6 +77,24 @@ describe('renderWelcomeTemplate (ADR 0037 §1.1)', () => {
     expect(out.text).toBe('Hi A {foo} {foo} {bar_1} ');
     expect(out.unknownVars).toEqual(['foo', 'bar_1']);
     expect(unknownTemplateVars('{members}{x}{group}')).toEqual(['x']);
+  });
+
+  it('fills variables as data: a nickname or group name holding ${bot.menu} is sent as written (#1250)', async () => {
+    const out = renderWelcomeTemplate('欢迎 {nickname} 加入 {group}，你的 id ${sender.id}', {
+      members: [{ id: 'u1', name: '${bot.menu}' }], group: '${sender.id}',
+    });
+    const snapshot = { root: 'root', projections: new Map(), capabilities: new Map(), config: new Map(),
+      resources: new Map([['root', new Map([[componentHostToken.id, {
+        compileTemplate: (text: string, ctx: object) => renderTemplatePaths(text, { ...ctx }),
+      }]])]]),
+    } as unknown as RuntimeSnapshot;
+    const conversation = { endpoint: { adapter: 'icqq', id: 'bot' }, kind: 'group', id: 'g1' } as const;
+    const rendered = await new OutboundRenderer().render(welcomePartsContent(out.parts), {
+      requester: 'root' as never, snapshot, conversation: conversation as never,
+      incoming: { sender: { id: 'u1', name: 'x' }, content: '', timestamp: 1 },
+    }) as { data: { text: string } }[];
+    // The operator's text is templated; the nickname and group name are not.
+    expect(rendered.map(item => item.data.text).join('')).toBe('欢迎 ${bot.menu} 加入 ${sender.id}，你的 id u1');
   });
 
   it('renders the built-in default template', () => {

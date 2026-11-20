@@ -5,7 +5,7 @@ export interface GroupSuiteConfig {
   keywordReply: boolean;
   /** Explicitly volatile keywords for demos without a persistent Database Host. */
   ephemeralKeywords: boolean;
-  /** Empty disables group member welcomes. {name} and {id} are literal placeholders. */
+  /** Empty disables group member welcomes. An outbound template: `${sender.name}` is the new member, `${bot.menu}` the account's menu entry. */
   welcomeMessage: string;
   /** Omitted preserves all groups; [] disables welcomes. Each address matches exactly. */
   welcomeConversations?: readonly DeliveryTarget[];

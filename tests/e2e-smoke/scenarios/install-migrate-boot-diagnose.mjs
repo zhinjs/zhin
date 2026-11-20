@@ -17,7 +17,7 @@ const legacyConfiguration = [
   'plugins:',
   '  suite: # group operations',
   '    commandNamespace: suite',
-  '    welcomeMessage: "欢迎 {name}"',
+  '    welcomeMessage: "欢迎 ${sender.name}"',
   '',
 ].join('\n');
 
@@ -79,7 +79,7 @@ try {
     const migrated = await createConfigDocument(project.path('zhin.config.yml')).read();
     assert.equal(migrated.document.configVersion, 2);
     assert.deepEqual(migrated.document.plugins, { suite: './plugins/group-suite' });
-    assert.deepEqual(migrated.document.suite, { commandNamespace: 'suite', welcomeMessage: '欢迎 {name}' });
+    assert.deepEqual(migrated.document.suite, { commandNamespace: 'suite', welcomeMessage: '欢迎 ${sender.name}' });
     const migratedPackage = JSON.parse(await project.read('package.json'));
     assert.deepEqual(migratedPackage.zhin.plugins, []);
   });

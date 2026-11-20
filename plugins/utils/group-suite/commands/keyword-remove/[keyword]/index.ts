@@ -1,10 +1,11 @@
 import { messages as t } from '../../../src/i18n.js';
 import { defineCommand } from 'zhin.js/command';
-import type { Message } from '@zhin.js/core/runtime';
+import type { Message, SendContent } from '@zhin.js/core/runtime';
 import type { GroupSuiteConfig } from '../../../src/config.js';
 import { keywordsForCommand } from '../../../src/keywords.js';
+import { echoReply } from '../../../src/echo.js';
 
-export default defineCommand<GroupSuiteConfig, string, Message>({
+export default defineCommand<GroupSuiteConfig, SendContent, Message>({
   permit: ['group()', 'trusted'],
   description: '删除当前群关键词自动回复（teach 问答用 forget 删除）', descriptionI18n: { en: "Delete a keyword reply in this group (use forget for teach Q&A pairs)" },
   alias: ['keyword remove'],
@@ -15,8 +16,8 @@ export default defineCommand<GroupSuiteConfig, string, Message>({
     if (!keyword) return t(context.locale, 'keywordRemoveRequired');
     const repository = keywordsForCommand(context.input, context);
     if (typeof repository === 'string') return repository;
-    if (!(await repository.read()).some(([entry]) => entry === keyword)) return t(context.locale, 'keywordMissing', { keyword });
+    if (!(await repository.read()).some(([entry]) => entry === keyword)) return echoReply(mark => t(context.locale, 'keywordMissing', { keyword: mark(keyword) }));
     await repository.update(store => { store.delete(keyword); });
-    return t(context.locale, 'keywordRemoved', { keyword });
+    return echoReply(mark => t(context.locale, 'keywordRemoved', { keyword: mark(keyword) }));
   },
 });

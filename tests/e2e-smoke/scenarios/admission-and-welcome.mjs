@@ -86,7 +86,7 @@ try {
     config: {
       configVersion: 2,
       plugins: { suite: suitePackage },
-      suite: { commandNamespace: 'suite', welcomeMessage: '欢迎 {name}' },
+      suite: { commandNamespace: 'suite', welcomeMessage: '欢迎 ${sender.name}' },
     },
     installResources: ({ resources }) => {
       resources.provide(scheduleRootHostToken, schedules);

@@ -48,7 +48,7 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
     id: 'group-welcome', title: '配置新成员欢迎', summary: '为上报群成员增加事件的适配器配置欢迎文案。',
     packageName: '@zhin.js/plugin-group-suite', mode: 'plugin-configuration',
     steps: ['安装群运营套件并选择明确的插件实例；多实例时不能只凭包名修改。',
-      '在该实例的配置表单填写 welcomeMessage，使用 {name} 和 {id} 表示新成员。',
+      '在该实例的配置表单填写 welcomeMessage，使用 ${sender.name} 和 ${sender.id} 表示新成员（占位符见文档「消息模板占位符」）。',
       '在 welcomeConversations 选择精确账号与群；父容器和话题如有也须填写。核对范围后保存并应用。',
       '等待真实且已授权的成员加入事件验证，查看投递结果，不能用启动成功代替。'],
     limitations: ['适配器须提供标准群成员增加通知，缺少该事件时不会发送。',
@@ -99,7 +99,7 @@ const englishUseCases: Readonly<Record<string, Pick<PluginUseCase, 'title' | 'su
   'group-welcome': {
     title: 'Welcome new group members', summary: 'Configure welcome content for adapters that report group member additions.',
     steps: ['Install the group suite and select an exact plugin instance. A package name is insufficient when multiple instances exist.',
-      'Set welcomeMessage in the instance form. Use {name} and {id} for the new member.',
+      'Set welcomeMessage in the instance form. Use ${sender.name} and ${sender.id} for the new member (see "Message Template Placeholders" in the docs).',
       'Select exact accounts and groups in welcomeConversations, including parent containers and threads when present. Check the scope, save and apply.',
       'Verify an authorized real member-addition event and its delivery result. Successful startup is not business verification.'],
     limitations: ['The adapter must report a standard group-member-addition notice. Without it, no welcome is sent.',
