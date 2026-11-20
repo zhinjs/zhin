@@ -24,15 +24,19 @@
  * 必须配合 Host 资源：`createRuntimeManagementCommands` 要和同一个 `createHostOperationResources` 实例一起用——
  * 它的 `im` 端口提供给 `imOperationResourcesToken`，它的 `isDispatchLease` 传给本函数。缺了任何一样（嵌入方没接
  * Host 资源），需要租约的命令即使用户直接发送也不执行，回复「管理命令在此实例不可用」（原因
- * `management_unavailable`）。实例装了 Host 资源（Root 提供 `imOperationResourcesToken`），但调用方自传的
- * `operation` 什么资源都没给时，仍是「请直接发送」（`direct_command_required`，第 85 批）。
+ * `management_unavailable`）。Host 接好资源后应同时传 `hostResourcesInstalled: true`（第 85 批）：这样调用方自传的
+ * `operation` 什么资源都没给时，结局是「请直接发送」（`direct_command_required`），而不是误报
+ * `management_unavailable`。`imOperationResourcesToken` 是 Root 私有 token，不在运行时快照的公开资源里，
+ * 命令无法从快照判断 Host 是否已接线，所以由 Host 显式声明。
  *
  * 第 85 批：Host 侧（`AgentTurnIngressRoute`）只认本 Host 签发的端口 `retain()` 交出的租约；不是的（例如直接从
- * SnapshotStore `acquire()` 来的）不执行，以 UserFacingError（原因 `dispatch_lease_rejected`）拒绝。
+ * SnapshotStore `acquire()` 来的）不执行，以 UserFacingError（原因 `dispatch_lease_rejected`）拒绝。嵌入方必须把
+ * 同一个 `createHostOperationResources` 实例的 `holdsDispatchLease` 传给 `AgentTurnIngressRoute`
+ * （`new AgentTurnIngressRoute({ …, holdsDispatchLease })`）；不传时需要租约的管理命令一律以
+ * `dispatch_lease_rejected` 拒绝（这是第 85 批的行为变化）。
  */
 import { defineCommand, UserFacingError, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
-import { imOperationResourcesToken, type Message } from '@zhin.js/core/runtime';
-import { readOperationInputSnapshot } from '@zhin.js/feature-kit';
+import type { Message } from '@zhin.js/core/runtime';
 import type { InferenceClient } from '@zhin.js/ai/provider';
 import type { Locale, SnapshotLease } from '@zhin.js/plugin-runtime';
 import { managementMessages as t } from './management-messages.js';
@@ -88,6 +92,15 @@ export interface RuntimeManagementCommandHost {
    * `management_unavailable` even when sent directly.
    */
   readonly isDispatchLease: (port: unknown) => boolean;
+  /**
+   * #1250 第 85 批: the Host declares that it wired its operation resources (the `im` port of the same
+   * `createHostOperationResources` instance is the Root's `imOperationResourcesToken`). That token is
+   * Root-private, so it is not in the run-time snapshot's public resources and the commands cannot see
+   * it there. With it, an operation that carries neither the dispatch lease nor the withheld marker
+   * (a caller's own `operation` factory opening no resources) answers `direct_command_required`;
+   * without it, such an operation answers `management_unavailable` as on an unwired instance.
+   */
+  readonly hostResourcesInstalled?: boolean;
   /**
    * Enables `memory` and `memory forget` (#734): anyone can view or forget the semantic memory
    * stored about themselves (their own `user` scope). Without it neither command is registered.
@@ -187,8 +200,9 @@ export const DISPATCH_LEASE_REJECTED = 'dispatch_lease_rejected';
 
 /**
  * #1250 第 85 批: the Host side (`AgentTurnIngressRoute`) refused the lease a management command handed
- * it — not one a port this Host issued retained, or not from the Root's real SnapshotStore. The
- * command does not run; the sender reads a request to send it directly.
+ * it — not one a port this Host issued retained, or not from the Root's real SnapshotStore (or the
+ * command brought no lease at all). The command does not run; the sender reads that it failed this
+ * instance's check — sending it again directly does not help when the Host is not wired.
  */
 export class DispatchLeaseRejectedError extends UserFacingError {
   constructor() {
@@ -200,16 +214,6 @@ export class DispatchLeaseRejectedError extends UserFacingError {
 }
 
 /**
- * #1250 第 85 批: whether the Root of the operation `input` runs in provides IM operation resources
- * (`imOperationResourcesToken`, the Agent Host's `im` port). With them, a Root operation that carries
- * neither the dispatch lease nor the withheld marker was opened by a caller's own `operation` factory.
- */
-function rootHasOperationResources(input: unknown): boolean {
-  const snapshot = readOperationInputSnapshot(input);
-  return snapshot?.resources.get(snapshot.root)?.has(imOperationResourcesToken.id) === true;
-}
-
-/**
  * The dispatch of `command`: its signal and the dispatching generation (`name` is its path, for the
  * reply). Only a dispatch lease this Host instance issued counts (#1250 第 84 批, `isDispatchLease`):
  * - a plugin-dispatched Root operation has the Host resources without it (`dispatchLeaseWithheldToken`),
@@ -218,17 +222,17 @@ function rootHasOperationResources(input: unknown): boolean {
  *   no lease of this Host either: the command does not run and the sender reads a request to send it
  *   directly (`direct_command_required`);
  * - with no Host resources at all (no `isDispatchLease`, or neither the lease nor the withheld marker
- *   on an instance whose Root provides no IM operation resources: the embedder did not wire
+ *   while the Host did not declare `hostResourcesInstalled`: the embedder did not wire
  *   `createHostOperationResources`), the command does not run and the sender reads that management
- *   commands are unavailable here (`management_unavailable`). With the Host wired (#1250 第 85 批), an
- *   operation without either marker came from a caller's own `operation` factory (one opening no
- *   resources, say): `direct_command_required`, as above.
+ *   commands are unavailable here (`management_unavailable`). With the Host wired and declared
+ *   (#1250 第 85 批, `hostResourcesInstalled`), an operation without either marker came from a caller's
+ *   own `operation` factory (one opening no resources, say): `direct_command_required`, as above.
  */
 function dispatchOf(host: RuntimeManagementCommandHost, command: CommandRun & Pick<CommandContext, 'formatCommand'>, name: string): RuntimeManagementDispatch {
   const withheld = command.has(dispatchLeaseWithheldToken);
   const offered = !withheld && command.has(dispatchLeaseToken);
   if (typeof host.isDispatchLease !== 'function') throw new ManagementUnavailableError();
-  if (!withheld && !offered && !rootHasOperationResources(command.input)) throw new ManagementUnavailableError();
+  if (!withheld && !offered && host.hostResourcesInstalled !== true) throw new ManagementUnavailableError();
   const port = offered ? command.use(dispatchLeaseToken) : undefined;
   if (!offered || !host.isDispatchLease(port)) throw new DirectCommandRequiredError(command.formatCommand(name) ?? name);
   const issued = port as DispatchLeasePort;
@@ -255,9 +259,11 @@ function withModelScope<T>(operation: RuntimeManagementOperation, run: () => Pro
  *
  * Must be used with the Host's operation resources (#1250 第 84 批): one `createHostOperationResources`
  * instance whose `im` port the Root provides as `imOperationResourcesToken` and whose `isDispatchLease`
- * is passed here as `host.isDispatchLease`. Without them the commands that need the dispatch lease
- * (`models` / `health` / `tree` / `fork` / `compact` / `reset`) never run and answer
- * `management_unavailable`, even when sent directly.
+ * is passed here as `host.isDispatchLease` (with `host.hostResourcesInstalled: true`, #1250 第 85 批).
+ * Without them the commands that need the dispatch lease (`models` / `health` / `tree` / `fork` /
+ * `compact` / `reset`) never run and answer `management_unavailable`, even when sent directly. The
+ * Host side (`AgentTurnIngressRoute`) must also get that instance's `holdsDispatchLease`; without it
+ * those commands answer `dispatch_lease_rejected`.
  */
 export function createRuntimeManagementCommands(host: RuntimeManagementCommandHost): readonly RuntimeManagementCommand[] {
   const agent = () => asPrivate(host.zhinAgent);

@@ -220,7 +220,7 @@ An `update` callback may run several times (up to 64 retries, then it errors und
 
 ## Internal tokens
 
-The AI fallback reply is not a plugin-modifiable API. The composition root provides an internal `ingressRouteToken` to root resources at startup, and `ImRuntime.receive` reads it only from the snapshot the current message holds. Regular plugins must not register or replace it.
+The AI fallback reply is not a plugin-modifiable API. The composition root provides an internal `ingressRouteToken` to root resources at startup (a Root-private token, #1250 batch 85: plugin scopes cannot `use` / `has` it, and the run-time snapshot's public resources do not carry it), and `ImRuntime.receive` reads it only through the Root's real snapshot store, for the lease the current message holds (`resolveIngressRoute(snapshots, lease)`). Regular plugins cannot register, replace or read it.
 
 ## Next steps
 

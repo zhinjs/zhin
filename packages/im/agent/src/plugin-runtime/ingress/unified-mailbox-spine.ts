@@ -597,13 +597,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
    * `message` against the session its AI turn would use, holding a lease on the generation that
    * dispatched the command (`dispatch.retainLease`) meanwhile. #1250 第 84 批: the retained lease must
    * belong to this Root's real SnapshotStore ({@link retainOwnedLease}); any other lease is refused.
+   * #1250 第 85 批: a dispatch without `retainLease` is refused the same way as in `clearAsCommand`
+   * (`DispatchLeaseRejectedError`); the management commands always hand one over.
    */
   runManagementOperation<T>(message: Message, dispatch: RuntimeManagementDispatch, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
     const options = this.#options;
     const retainLease = dispatch.retainLease;
+    if (!retainLease) return Promise.reject(new DispatchLeaseRejectedError());
     return runManagementOperation({
       message, signal: dispatch.signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
-      ...(retainLease ? { retainLease: () => this.#retainOwnedLease(retainLease) } : {}),
+      retainLease: () => this.#retainOwnedLease(retainLease),
       ...(options.withInferenceScope ? { withInferenceScope: options.withInferenceScope } : {}),
       ...(options.withModelScope ? { withModelScope: options.withModelScope } : {}),
     }, run);
@@ -640,18 +643,41 @@ export class AgentTurnIngressRoute implements IngressRoute {
    * #1250 第 85 批: and the lease must be one the Host's own dispatch handed out
    * (`holdsDispatchLease`), so a lease acquired from the store directly is refused as well. A refusal
    * is the sender-facing `DispatchLeaseRejectedError` (`refused` / `dispatch_lease_rejected`), not a
-   * failure. A lease that does not pass is released only when the store issued it (a retained lease
-   * is then ours to end); a foreign one is not ours.
+   * failure.
+   *
+   * `retain` must return a lease it newly retained for this call (a dispatch lease port's `retain()`
+   * does): the lease is then ours to end. A lease that does not pass is released here — also when
+   * `ownsLease` or `holdsDispatchLease` throws (the error propagates after the release) — except one
+   * `ownsLease` cleanly reported as foreign: that one is not from our store and not ours to end.
    */
   #retainOwnedLease(retain: () => SnapshotLease): SnapshotLease {
     const lease = retain();
     const runtime = this.#options.runtime as Partial<Pick<AgentRuntime, 'ownsLease'>>;
-    const owned = typeof runtime.ownsLease === 'function' && runtime.ownsLease(lease);
-    if (!owned || this.#options.holdsDispatchLease?.(lease) !== true || !lease.active) {
-      if (owned && lease.active) lease.release();
-      throw new DispatchLeaseRejectedError();
+    let foreign = false;
+    let accepted = false;
+    try {
+      foreign = typeof runtime.ownsLease !== 'function' || runtime.ownsLease(lease) !== true;
+      accepted = !foreign && this.#options.holdsDispatchLease?.(lease) === true && lease.active;
+    } finally {
+      if (!accepted && !foreign && lease.active) lease.release();
     }
+    if (!accepted) throw new DispatchLeaseRejectedError();
     return lease;
+  }
+
+  /**
+   * #1250 第 85 批 (defence in depth): the ingress hooks run only on an active lease this Root's real
+   * SnapshotStore issued (`AgentRuntime.ownsLease`), as the IM runtime's own lease for the message is.
+   * Anything else (a look-alike `{ value, active, release }` object, another Root's lease, a released
+   * one) is not routed: the hook answers `false` and nothing reaches the sender.
+   */
+  #routesOn(lease: SnapshotLease): boolean {
+    const runtime = this.#options.runtime as Partial<Pick<AgentRuntime, 'ownsLease'>>;
+    try {
+      return typeof runtime.ownsLease === 'function' && runtime.ownsLease(lease) === true && lease.active === true;
+    } catch {
+      return false;
+    }
   }
 
   #noteSpoke(key: string): void {
@@ -715,10 +741,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   async preRoute(
     _message: Message,
-    _lease: SnapshotLease,
+    lease: SnapshotLease,
     _requester: PluginId,
     _conversationSequence: number | undefined,
   ): Promise<boolean> {
+    // Nothing is pre-routed today; the lease check keeps a future pre-route behind the same gate as `route`.
+    if (!this.#routesOn(lease)) return false;
     return false;
   }
 
@@ -732,6 +760,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
+    if (!this.#routesOn(lease)) {
+      logger.warn(formatCompact({ op: 'ingress_route_lease_rejected', messageId: message.id }));
+      return Promise.resolve(false);
+    }
     return this.#route(message, lease, requester, conversationSequence);
   }
 

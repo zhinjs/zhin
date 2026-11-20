@@ -10,7 +10,7 @@ export const managementMessages = createMessages({
   // #1250 第 84 批: the embedder registered the commands without the Agent Host's operation resources.
   managementUnavailable: { 'zh-CN': 'ℹ️ 管理命令在此实例不可用。', en: 'ℹ️ Management commands are not available on this instance.' },
   // #1250 第 85 批: the Host refused the dispatch lease the command handed it (not one this Host's dispatch handed out).
-  dispatchLeaseRejected: { 'zh-CN': 'ℹ️ 这条管理命令没有通过本实例的校验，没有执行，请直接发送该命令。', en: 'ℹ️ This management command failed this instance\'s check and was not run. Send the command directly.' },
+  dispatchLeaseRejected: { 'zh-CN': 'ℹ️ 这条管理命令没有通过本实例 Agent Host 的分发校验，没有执行。', en: 'ℹ️ This management command failed the Agent Host\'s dispatch check on this instance and was not run.' },
   health: { 'zh-CN': '🏥 AI 服务健康状态:', en: '🏥 AI service health:' },
   memoryUnavailable: { 'zh-CN': 'ℹ️ 未启用长期记忆。', en: 'ℹ️ Long-term memory is not enabled.' },
   memoryIdentity: { 'zh-CN': 'ℹ️ 请在有真实发送者身份的聊天中查看你的记忆。', en: 'ℹ️ View your memories from a chat with a sender identity.' },

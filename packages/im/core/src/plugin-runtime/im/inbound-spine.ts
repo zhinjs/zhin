@@ -11,14 +11,17 @@ import {
   type InboundTerminalControl,
 } from '@zhin.js/middleware';
 import {
+  createRootPrivateToken,
   createToken,
   projectLocale,
+  readLeasedRootResource,
   userLocalePreferencesToken,
   type GenerationAdmissionGate,
   type Locale,
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotLease,
+  type SnapshotReader,
   type UserLocalePreferences,
 } from '@zhin.js/plugin-runtime';
 import { HandlerIndex, handlerFeatureId, isHandlerIndex } from '../../feature/handler.js';
@@ -91,15 +94,17 @@ export function readIngressRouteResult(message: Message, result: boolean | Ingre
 }
 
 /**
- * The generation's ingress route, as the IM runtime calls it. #1250 第 85 批: the resource provided
- * under this token must be the narrow {@link createIngressRouteFacade} of the route, never the route
- * object itself — the token is readable from plugin scopes, and a full route object (its fields,
- * TS-`private` or not, and its Host-only methods) is reachable at run time by whoever reads it.
+ * The generation's ingress route, as the IM runtime calls it. #1250 第 85 批: a Root-private token —
+ * only the Root scope that provided it (the composition root's Agent Host) reads it back; plugin
+ * scopes cannot `use` / `has` it, and it is not in the run-time snapshot's public resources. The IM
+ * runtime reads it through the Root's real SnapshotStore ({@link resolveIngressRoute}). The resource
+ * provided under it should still be the narrow {@link createIngressRouteFacade} of the route, never
+ * the route object itself (defence in depth: its fields and Host-only methods stay out of reach).
  */
-export const ingressRouteToken = createToken<IngressRoute>('zhin.im.ingress-route');
+export const ingressRouteToken = createRootPrivateToken<IngressRoute>('zhin.im.ingress-route');
 
 /**
- * #1250 第 85 批: what {@link ingressRouteToken} exposes — exactly the {@link IngressRoute} hooks the IM
+ * #1250 第 85 批: what {@link ingressRouteToken} carries — exactly the {@link IngressRoute} hooks the IM
  * runtime calls (`preRoute`, `shouldRouteBeforeDispatch`, `route`), bound to `route` and frozen. The
  * route object stays inside the closure: no field, prototype or other method of it is reachable from
  * the facade.
@@ -121,8 +126,12 @@ export function createIngressRouteFacade(route: IngressRoute): IngressRoute {
   });
 }
 
-export function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefined {
-  const candidate = snapshot.resources.get(snapshot.root)?.get(ingressRouteToken.id);
+/**
+ * The ingress route of the generation `lease` holds, read as a Root-private resource through the
+ * Root's real SnapshotStore (`reader` must own `lease`, and the lease must be active).
+ */
+export function resolveIngressRoute(reader: SnapshotReader, lease: SnapshotLease): IngressRoute | undefined {
+  const candidate: unknown = readLeasedRootResource(reader, lease, ingressRouteToken);
   return candidate
     && typeof candidate === 'object'
     && typeof (candidate as IngressRoute).route === 'function'
@@ -277,6 +286,11 @@ export interface InboundTurnEnvelope {
   readonly admission?: GenerationAdmissionGate;
   readonly signal?: AbortSignal;
   readonly interactionFactory?: UserInteractionFactory;
+  /**
+   * The generation's ingress route (the IM runtime resolves it with {@link resolveIngressRoute}).
+   * #1250 第 85 批: absent, no ingress route runs — the spine no longer reads it from the snapshot's
+   * public resources, where the Root-private {@link ingressRouteToken} is not.
+   */
   readonly ingressRoute?: IngressRoute;
   readonly diagnostics?: Pick<RuntimeMessageDiagnostics, 'route' | 'step'>;
   readonly onTurnComplete?: (record: InboundTurnRecord) => void | Promise<void>;
@@ -331,7 +345,7 @@ export async function executeInboundTurnSpine(
       ...(reply ? { reply } : {}),
     };
   };
-  const ingressRoute = envelope.ingressRoute ?? resolveIngressRoute(lease.value);
+  const ingressRoute = envelope.ingressRoute;
 
   if (ingressRoute?.preRoute) enterInboundOutcomeStage(message, 'agent_gate');
   const preRouted = readIngressRouteResult(message, await ingressRoute?.preRoute?.(

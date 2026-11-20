@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec,
   type EndpointDesiredRepository, type EndpointDesiredSnapshot, type Endpoint as EndpointContract } from '@zhin.js/adapter';
 import { ImRuntime, ingressRouteToken } from '@zhin.js/core/runtime';
-import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotLease, type SnapshotState } from '@zhin.js/plugin-runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 
@@ -30,7 +30,9 @@ async function fixture() {
   });
   const im = new ImRuntime(), adapter = new LocalAdapter(), root = rootPluginId();
   const route = new AgentTurnIngressRoute({
-    withInferenceScope: ingressInferenceFixture().withInferenceScope, projectRoot: '/host-a', runtime: { executeLeased } as never, im,
+    withInferenceScope: ingressInferenceFixture().withInferenceScope, projectRoot: '/host-a',
+    // The route runs only on a lease the Root's real store issued (the IM runtime's own lease for the message).
+    runtime: { executeLeased, ownsLease: (lease: SnapshotLease) => store.owns(lease) } as never, im,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
       getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),

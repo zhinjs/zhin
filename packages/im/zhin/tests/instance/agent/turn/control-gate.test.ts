@@ -5,7 +5,7 @@ import { RuntimeMessage } from '../../../../../core/src/plugin-runtime/im/contra
 import { describe, expect, it, vi } from 'vitest';
 import { AiControlPlane, AiSessionOps, DecisionEventLog, SessionProfileStore, type TurnRequest } from '@zhin.js/agent';
 import { MemoryConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
-import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type RuntimeSnapshot, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 import { SceneEventIngress } from '@zhin.js/agent/runtime';
 import {
@@ -73,9 +73,11 @@ function ingressHarness(options: { plane: AiControlPlane; log: DecisionEventLog;
   const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) =>
     options.execute ? options.execute(request) : { status: 'completed', output: [] });
   const observeInbound = vi.fn(async () => ({ blocked: null }));
+  // The IM runtime's lease for the message: the route runs only on a lease the Root's store issued.
+  const lease = { value: snapshot, active: true } as unknown as SnapshotLease;
   const route = new AgentTurnIngressRoute({
     withInferenceScope: ingressInferenceFixture().withInferenceScope,
-    projectRoot: process.cwd(), runtime: { executeLeased } as never,
+    projectRoot: process.cwd(), runtime: { executeLeased, ownsLease: (candidate: SnapshotLease) => candidate === lease } as never,
     im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: {
@@ -92,7 +94,7 @@ function ingressHarness(options: { plane: AiControlPlane; log: DecisionEventLog;
       },
     } as never,
   });
-  return { run: () => route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined), reply, executeLeased, observeInbound };
+  return { run: () => route.route(message, lease, rootPluginId(), undefined), reply, executeLeased, observeInbound };
 }
 
 describe('IM ingress with the control plane', () => {

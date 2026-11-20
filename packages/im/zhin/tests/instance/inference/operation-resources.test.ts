@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SnapshotStore, rootPluginId, childPluginId, createCapabilitySlot, createRootPrivateToken, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { Scope, SnapshotStore, rootPluginId, childPluginId, createCapabilitySlot, createRootPrivateToken, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { RuntimeMessage, imOperationResourcesToken } from '@zhin.js/core/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import {
@@ -251,15 +251,21 @@ it('answers an Agent management command a plugin dispatched with a request to se
 
 it('answers a caller\'s own operation without resources on a Host-wired instance with the direct-send request (#1250 第 85 批)', async () => {
   const f = await fixture(), lease = f.snapshots.acquire();
-  // This instance's Root provides the Host's IM operation resources, as the Agent Host installs them.
-  const rootResources = new Map(lease.value.resources.get(f.root)).set(imOperationResourcesToken.id, f.ports.im);
-  const wired = { ...lease.value, resources: new Map(lease.value.resources).set(f.root, rootResources) } as typeof lease.value;
+  // `imOperationResourcesToken` is Root-private: a real Root Scope that provides it (as the Agent Host
+  // does) keeps it out of the run-time snapshot's public resources, so the commands cannot see it there.
+  const rootScope = new Scope(f.root);
+  rootScope.provide(imOperationResourcesToken, f.ports.im);
+  rootScope.seal();
+  expect(rootScope.snapshot().has(imOperationResourcesToken.id)).toBe(false);
+  const snapshot = { ...lease.value, resources: new Map(lease.value.resources).set(f.root, rootScope.snapshot()) } as typeof lease.value;
   const open = vi.fn(), clear = vi.fn();
-  const definitions = createRuntimeManagementCommands({ zhinAgent: {} as never, isDispatchLease: f.ports.isDispatchLease, open, clear });
   // An explicit factory that opens no resources at all (`resources: undefined`).
   const operation = { signal: f.signal, create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources: undefined }) };
   try {
-    for (const [snapshot, expected] of [[wired, 'direct_command_required'], [lease.value, 'management_unavailable']] as const) {
+    // The Host declares it wired its resources (`hostResourcesInstalled`); an embedder that did not answers `management_unavailable`.
+    for (const [installed, expected] of [[true, 'direct_command_required'], [undefined, 'management_unavailable']] as const) {
+      const definitions = createRuntimeManagementCommands({ zhinAgent: {} as never, isDispatchLease: f.ports.isDispatchLease,
+        ...(installed ? { hostResourcesInstalled: installed } : {}), open, clear });
       const slots = definitions.map(command => createCapabilitySlot({
         owner: f.root, feature: commandFeatureId, localName: command.name, source: `/agent/${command.name}`, definition: command.definition }));
       const message = new RuntimeMessage({ conversation: f.message.conversation, content: 'reset', endpointId: 'account',

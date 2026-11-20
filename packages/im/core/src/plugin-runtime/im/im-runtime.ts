@@ -67,7 +67,7 @@ import {
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
 import { outboundCommandEnvironmentToken } from './outbound-command-environment.js';
-import { messageLocale } from './inbound-spine.js';
+import { messageLocale, resolveIngressRoute } from './inbound-spine.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { createInboundOriginClassifier, OutboundLedger, ledgerScopeOf } from './inbound-origin.js';
 import { RuntimeMessageDiagnostics, type RuntimeMessageDiagnosticsReader } from './message-diagnostics.js';
@@ -188,6 +188,12 @@ export class ImRuntime implements OutboundMessageService {
         const snapshots = this.#snapshots;
         if (!snapshots || !snapshots.owns(input.lease) || !input.lease.active) throw new Error('IM operation lease is not active');
         return readLeasedRootResource(snapshots, input.lease, imOperationResourcesToken)?.open({ ...input, snapshots });
+      },
+      // #1250 第 85 批: the ingress route is a Root-private resource, read through the Root's real store.
+      resolveIngressRoute: lease => {
+        const snapshots = this.#snapshots;
+        if (!snapshots || !snapshots.owns(lease) || !lease.active) return undefined;
+        return resolveIngressRoute(snapshots, lease);
       },
       inboundClaim: options.inboundClaim,
       ...(options.inboundSecret ? { inboundSecret: options.inboundSecret } : {}),
