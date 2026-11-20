@@ -24,6 +24,9 @@ export default defineAdapter<OneBot11EndpointConfig>({
           interactive: 'text',
         },
         quote: true,
+        // ADR 0067 D8：入站文本段只来自消息数组里的 text 段（或剥掉 CQ 码的字符串），引用是 reply 段 / replyTo，
+        // 合并转发、卡片（json / xml）、@、表情、媒体都保留为非文本段，私聊原文证据可信。
+        inboundTextAuthoredBySender: true,
         recall: {},
       },
       actions: {

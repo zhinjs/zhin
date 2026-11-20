@@ -243,7 +243,8 @@ export type ProvenanceSource =
   | Readonly<{ kind: 'tool_result'; toolName: string; trusted?: boolean }>
   /**
    * Background messages / scene events of the conversation that arrived since the last turn,
-   * excluding the agent's own replies delivered in this session (#1250). `scene` only picks the
+   * excluding the agent's own replies delivered in this session (#1250, ADR 0067 D7) and, in a private
+   * chat, the initiator's own original messages there (ADR 0067 D8). `scene` only picks the
    * wording of the approval card; it is not part of the source key.
    */
   | Readonly<{ kind: 'conversation_context'; scene?: 'private' | 'group' | 'channel' }>
@@ -375,6 +376,7 @@ function describeSource(source: ProvenanceSource): string {
 /** #1250: a private chat has no group; a stored key does not keep the scene. */
 function describeConversationContext(scene: 'private' | 'group' | 'channel' | undefined): string {
   switch (scene) {
+    // ADR 0067 D8: the initiator's own original messages never count, so this is someone else's or rewritten content.
     case 'private': return '私聊里的背景消息';
     case 'group':
     case 'channel': return '群聊背景消息';

@@ -11,6 +11,13 @@ export interface ConversationMessage {
   readonly replyTo?: MessageRef;
   /** SHA-256 of the exact final plain-text outbound payload; absent when content is unverified/rich. */
   readonly outboundTextDigest?: string;
+  /**
+   * #1250 (ADR 0067 D8): SHA-256 of the plain text of `segments`, set only by the runtime's inbound
+   * path when it stores a human message exactly as the endpoint delivered it, before any middleware
+   * or plugin sees it: every segment is text, the message quotes nothing (`replyTo`) and nothing was
+   * redacted. Absent means "no evidence that this is the sender's original text".
+   */
+  readonly inboundTextDigest?: string;
   /** Confirmed content revision; messages written before versioning have revision zero. */
   readonly revision?: number;
   /** A recall is permanent for this message identity; later updates cannot revive it. */
@@ -66,4 +73,12 @@ export interface ConversationContextBlock {
   /** Canonical source of a created message, retained separately from its display text. */
   readonly message?: MessageRef;
   readonly messageTextDigest?: string;
+  /**
+   * #1250 (ADR 0067 D8): present only on a `message.created` block of an inbound message whose stored
+   * text still matches its {@link ConversationMessage.inboundTextDigest}: the stable sender id the
+   * runtime recorded with it. Together with `message.conversation` (platform, endpoint, conversation)
+   * it identifies who wrote the text; absent means no such evidence.
+   */
+  readonly inboundActorId?: string;
+  readonly inboundTextDigest?: string;
 }

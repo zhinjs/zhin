@@ -1,3 +1,4 @@
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   MemoryConversationEventStore,
   conversationRefKey,
@@ -40,14 +41,34 @@ function redactClaimSegment<T extends { readonly type: unknown; readonly data?: 
   return text === data.text ? segment : { ...segment, data: { ...data, text } };
 }
 
+/** ADR 0067 D8: what the inbound path knows about the message's authorship when it stores it. */
+export interface RecordIncomingOptions {
+  /**
+   * The adapter declares `messaging.inboundTextAuthoredBySender` for this conversation kind. Without
+   * it the message never gets original-text evidence (fail closed).
+   */
+  readonly textAuthoredBySender?: boolean;
+}
+
+export interface ConversationRuntimeOptions {
+  /**
+   * ADR 0067 D8: key of the original-inbound-text evidence (HMAC-SHA256). Defaults to 32 random bytes
+   * per runtime: evidence written before a restart no longer verifies (fail closed), and nobody who can
+   * only write the event store can mint it.
+   */
+  readonly evidenceKey?: Uint8Array;
+}
+
 /** Owns one ImRuntime's conversation fact store, projections, and consumer cursors. */
 export class ConversationRuntime {
   #events: ConversationEventStore;
   /** Messages consumed as answers to an interaction prompt (e.g. an approval reply). */
   readonly #interactionAnswers = new Set<string>();
+  readonly #evidence: InboundTextEvidence;
 
-  constructor(events: ConversationEventStore = new MemoryConversationEventStore()) {
+  constructor(events: ConversationEventStore = new MemoryConversationEventStore(), options: ConversationRuntimeOptions = {}) {
     this.#events = events;
+    this.#evidence = new InboundTextEvidence(options.evidenceKey ?? randomBytes(32));
   }
 
   get reader(): ConversationEventReader {
@@ -101,7 +122,7 @@ export class ConversationRuntime {
       relevant.push(entry);
     }
     return Object.freeze({
-      blocks: aggregateConversationContext(relevant, excluded),
+      blocks: aggregateConversationContext(relevant, excluded, this.#evidence),
       cursor: Math.max(cursor, throughSequence),
     });
   }
@@ -138,9 +159,18 @@ export class ConversationRuntime {
   async recordIncoming(
     input: IncomingMessage,
     sender: MessageSenderRef | undefined,
+    options: RecordIncomingOptions = {},
   ): Promise<number | undefined> {
     if (!input.message?.id) return undefined;
     const timestamp = Date.now();
+    const segments = Object.freeze(input.segments?.length
+      ? input.segments.map(redactClaimSegment)
+      : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]);
+    // ADR 0067 D8: the stored actor id is trimmed like the turn principal's `subjectId`.
+    const actorId = typeof sender?.id === 'string' ? sender.id.trim() : '';
+    const text = actorId && options.textAuthoredBySender === true ? originalInboundText(input, segments) : undefined;
+    const inboundTextDigest = text === undefined ? undefined
+      : this.#evidence.sign(input.message, actorId, text);
     const appended = await this.#events.append(Object.freeze({
       eventId: `message:${messageRefKey(input.message)}`,
       conversation: input.conversation,
@@ -149,13 +179,12 @@ export class ConversationRuntime {
       message: Object.freeze({
         ref: input.message,
         // An actor-less message means the bot's own outbound; never leave an inbound one without.
-        actor: sender
-          ? Object.freeze({ id: sender.id, ...(sender.name ? { displayName: sender.name } : {}) })
+        actor: sender && actorId
+          ? Object.freeze({ id: actorId, ...(sender.name ? { displayName: sender.name } : {}) })
           : UNKNOWN_SENDER,
         // Backstop (ADR 0060 §3.3): an open chat-owner claim code is stored as `***`.
-        segments: Object.freeze(input.segments?.length
-          ? input.segments.map(redactClaimSegment)
-          : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]),
+        segments,
+        ...(inboundTextDigest ? { inboundTextDigest } : {}),
         timestamp,
         ...(input.replyTo
           ? { replyTo: Object.freeze({ conversation: input.conversation, id: input.replyTo.id }) }
@@ -191,7 +220,7 @@ export class ConversationRuntime {
     if (receipt.status !== 'sent' || !receipt.message?.id) return undefined;
     const original = await this.#events.getMessage(receipt.message);
     if (!original) throw new Error('Cannot record an update before its original message');
-    const { contentStatus: _status, outboundTextDigest: _digest, ...identity } = original;
+    const { contentStatus: _status, outboundTextDigest: _digest, inboundTextDigest: _inbound, ...identity } = original;
     const appended = await this.#events.append(Object.freeze({
       eventId: `message:${messageRefKey(receipt.message)}:revision:${revision}`,
       conversation: request.conversation, timestamp: Date.now(), type: 'message.updated',
@@ -366,6 +395,7 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
 function aggregateConversationContext(
   events: readonly SequencedConversationEvent[],
   excluded: ReadonlySet<string>,
+  evidence: InboundTextEvidence,
 ): readonly ConversationContextBlock[] {
   const ordinary: ConversationContextBlock[] = [];
   const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
@@ -396,6 +426,7 @@ function aggregateConversationContext(
         text,
         message: event.message.ref,
         ...(event.message.outboundTextDigest ? { messageTextDigest: event.message.outboundTextDigest } : {}),
+        ...(event.type === 'message.created' ? evidence.verify(event.message) : {}),
       }));
       continue;
     }
@@ -481,6 +512,72 @@ function describeConversationMessage(message: ConversationMessage): string {
     : '';
   return `${actor} [message_id=${JSON.stringify(message.ref.id)}]: ${message.contentStatus === 'unavailable'
     ? '[Message content unavailable; inspect its reference.]' : text || '(no plain-text content)'}${attachmentNote}`;
+}
+
+/** Plain text of a text-only body; `undefined` when any segment is not text (media, mention, forward, …). */
+function textOnlyBody(segments: readonly { readonly type: unknown; readonly data?: unknown }[]): string | undefined {
+  if (!segments.length) return undefined;
+  let text = '';
+  for (const segment of segments) {
+    const value = (segment.data as { text?: unknown } | undefined)?.text;
+    if (segment.type !== 'text' || typeof value !== 'string') return undefined;
+    text += value;
+  }
+  return text;
+}
+
+/**
+ * #1250 (ADR 0067 D8): the sender's original text, taken before any middleware or plugin runs, when
+ * the message may carry evidence of it: not marked `forwarded`, quoting nothing, every segment text,
+ * the plain-text view the adapter gave equal to the segments (an adapter that appends embed titles,
+ * sticker names or other placeholders to the view does not match), non-blank, and unchanged by the
+ * claim-code redaction. `undefined` otherwise (it then counts as background).
+ */
+function originalInboundText(input: IncomingMessage, stored: readonly Segment[]): string | undefined {
+  if (input.replyTo || input.forwarded === true) return undefined;
+  let original: string | undefined;
+  if (input.segments === undefined) original = input.content;
+  else {
+    original = textOnlyBody(input.segments);
+    if (original !== input.content) return undefined;
+  }
+  const kept = textOnlyBody(stored);
+  if (original === undefined || kept === undefined || original !== kept || !kept.trim()) return undefined;
+  return kept;
+}
+
+/**
+ * ADR 0067 D8: original-inbound-text evidence, an HMAC bound to the conversation, the message, the
+ * sender id and the exact text. Only this runtime holds the key, so a row written (or edited) by
+ * anything else — a plugin with store access, a database writer, an older process — never verifies.
+ */
+class InboundTextEvidence {
+  readonly #key: Uint8Array;
+
+  constructor(key: Uint8Array) {
+    if (!(key instanceof Uint8Array) || key.byteLength < 16) {
+      throw new TypeError('Conversation evidence key must be at least 16 bytes');
+    }
+    this.#key = Uint8Array.from(key);
+  }
+
+  sign(message: MessageRef, actorId: string, text: string): string {
+    return createHmac('sha256', this.#key)
+      .update(JSON.stringify(['zhin.inbound-text.v1', conversationRefKey(message.conversation), messageRefKey(message), actorId, text]))
+      .digest('hex');
+  }
+
+  /** Re-checks the evidence against the body this block shows; a stale, moved or forged digest is dropped. */
+  verify(message: ConversationMessage): Partial<Pick<ConversationContextBlock, 'inboundActorId' | 'inboundTextDigest'>> {
+    const digest = message.inboundTextDigest;
+    if (typeof digest !== 'string' || !/^[0-9a-f]{64}$/u.test(digest) || !message.actor?.id || message.replyTo
+      || message.contentStatus || message.recalled || message.outboundTextDigest || (message.revision ?? 0) !== 0) return {};
+    const text = textOnlyBody(message.segments);
+    if (text === undefined || !text.trim()) return {};
+    const expected = Buffer.from(this.sign(message.ref, message.actor.id, text), 'hex');
+    if (!timingSafeEqual(expected, Buffer.from(digest, 'hex'))) return {};
+    return { inboundActorId: message.actor.id, inboundTextDigest: digest };
+  }
 }
 
 function segmentsFromContent(content: unknown): readonly Segment[] {

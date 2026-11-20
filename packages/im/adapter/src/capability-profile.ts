@@ -117,6 +117,15 @@ export interface MessagingCapabilities {
    * carries. The Endpoint spec still performs the streaming; this makes it answerable statically.
    */
   readonly streaming?: Readonly<{ mode: ProfileStreamingMode; formats?: readonly ('text' | 'markdown')[] }> | false;
+  /**
+   * ADR 0067 D8: every inbound `text` segment this adapter emits for the conversation kind is text the
+   * sender wrote themselves. Forwards, quotes, cards, merged forwards, inline-bot results and
+   * adapter-generated placeholders (`[file: name]`, `[sticker]`, …) are never delivered as plain text
+   * segments: they become non-text segments, a `replyTo`, or the message-level `forwarded` marker.
+   * Only then may the IM runtime keep "original inbound text" evidence for a private chat message.
+   * Not declared = no such guarantee (fail closed).
+   */
+  readonly inboundTextAuthoredBySender?: boolean;
 }
 
 /** ADR 0064 §5: how a platform streams a reply (`none` = it does not). */
@@ -363,6 +372,7 @@ const SECTION_NODE: Node = obj({
       mode: { t: 'enum', values: PROFILE_STREAMING_MODES, off: 'none' },
       formats: { t: 'set', nonEmpty: true },
     }, { toggle: true, required: ['mode'] }),
+    inboundTextAuthoredBySender: FLAG,
   }),
   scene: obj({
     groupInfo: FLAG,

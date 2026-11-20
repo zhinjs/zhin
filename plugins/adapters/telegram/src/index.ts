@@ -9,6 +9,7 @@ export {
 export {
   botApiUrl,
   formatCallbackContent,
+  isTelegramRelayedMessage,
   formatInboundContent,
   formatOutboundActions,
   formatOutboundPlan,

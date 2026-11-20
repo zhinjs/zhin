@@ -14,7 +14,7 @@ import type {
   RuntimeSceneEventSignal,
   SendContent,
 } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { conversationRefKey, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createMessages, type Locale, type PluginId, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { HostMailbox } from '../../collaboration/host-mailbox.js';
@@ -30,6 +30,7 @@ import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
+import { answerResetSpelling, ResetHintCooldown, sendFixedReply } from './reset-hint.js';
 import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
@@ -410,6 +411,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #groupRuleEnforcer: GroupRuleEnforcer;
   /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
   readonly #floodDetector = new GroupFloodDetector();
+  readonly #resetHintCooldown = new ResetHintCooldown();
   /** Per-session reaction pacing (memory only, bounded); lives and dies with this route generation. */
   readonly #reactionPacer = new ReactionPacer({ config: () => this.options.agent.service.getAgentConfig()?.reactions });
   readonly #groupRuleDefaults: GroupRuleDefaults;
@@ -531,6 +533,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopGroupRules();
     this.#groupRuleEnforcer.dispose();
     this.#floodDetector.clear();
+    this.#resetHintCooldown.clear();
     this.#reactionPacer.clear();
     this.#sceneEvents.dispose();
     this.#sceneFactRefresher.dispose();
@@ -633,6 +636,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
       return receipt;
     };
 
+    // #1250 (ADR 0067 D8): fixed runtime replies are this session's own delivery, not background.
+    const replyFixed = (key: string, text: string) => sendFixedReply({ reply, toldLedger: zhinAgent.toldLedger, sessionKey: key, text });
+
     if (turnAccess.origin.kind === 'im') {
       observeFloodMessage({
         im: options.im, enforcer: this.#groupRuleEnforcer, floodDetector: this.#floodDetector,
@@ -646,6 +652,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       toolApprovalIm: options.toolApprovalIm,
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
       withModelScope: options.withModelScope, reply,
+      replyFixed: text => replyFixed(initialSessionKey, text),
     })) {
       reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'agent_gate', command: 'agent' });
       return true;
@@ -667,6 +674,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
       assistantStatus: options.assistantStatus, ambientEngagement: this.#ambientEngagement(),
       coldField: this.#coldField, audit,
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
+      // #1250: `/clear`-style spellings nobody handled get the actual reset ways instead of silence —
+      // only after every ingress gate passed, never when outbound is stopped, once per cooldown.
+      onUnmatched: outboundBlocked => answerResetSpelling({
+        message,
+        policy: { trigger, access: service.getAccessConfig?.() },
+        cooldown: this.#resetHintCooldown,
+        cooldownKey: `${conversationRefKey(message.conversation)}\u0000${turnAccess.principal.subjectId}`,
+        isOperator: senderRoles.isMaster || senderRoles.isTrusted,
+        outboundBlocked: () => outboundBlocked('reset_hint'),
+        send: text => replyFixed(initialSessionKey, text),
+      }),
     });
     if (gateEvaluation.kind === 'halt') {
       return gateEvaluation.handled;
@@ -699,7 +717,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     if (isClearCommand(matched.content)) {
       await zhinAgent.archiveSession(sessionKey);
       reportInboundOutcome(message, { outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate', turnId });
-      await reply(t(message.locale, 'cleared'));
+      await replyFixed(sessionKey, t(message.locale, 'cleared'));
       return true;
     }
 
