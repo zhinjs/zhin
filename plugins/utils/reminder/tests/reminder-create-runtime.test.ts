@@ -198,6 +198,8 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       expect(f.added).toHaveBeenCalledTimes(1);
       const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
       expect(tasks).toHaveLength(1); expect(tasks[0]).toMatchObject({ text: '交周报', nextRunAt: 1_800_000_600_000 });
+      // #1250: the created task is dated like the preview, in the configured zone.
+      expect(rendered(f.sent)).toContain('2027-01-15 08:10:00 (UTC)');
       await f.receive('确认'); expect(f.added).toHaveBeenCalledTimes(1); expect(f.outbound.sendTarget).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });

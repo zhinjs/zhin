@@ -1,3 +1,4 @@
+import { formatDateTime } from 'zhin.js';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 /**
@@ -40,8 +41,7 @@ function partsIn(instantMs: number, timeZone: string): Record<string, string> {
 
 /** Local calendar date `YYYY-MM-DD` of an instant in a timezone. */
 export function localDateKey(instantMs: number, timeZone: string): string {
-  const parts = partsIn(instantMs, timeZone);
-  return `${parts.year}-${parts.month}-${parts.day}`;
+  return formatDateTime(instantMs, undefined, { part: 'date', timeZone });
 }
 
 /** Local wall-clock time `HH:MM` of an instant in a timezone. */

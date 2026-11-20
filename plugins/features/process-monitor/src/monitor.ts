@@ -3,7 +3,7 @@ import { messages as t } from './i18n.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { definePluginStore } from 'zhin.js';
+import { definePluginStore, formatDateTime } from 'zhin.js';
 
 export interface NotifyChannel {
   type: 'webhook';
@@ -145,10 +145,9 @@ function isStartupEvent(value: unknown): value is ProcessStartupEvent {
   return (event.reason === 'crash' || event.reason === 'restart') && typeof event.at === 'number' && Number.isFinite(event.at);
 }
 
+/** `YYYY-MM-DD` in the process zone, by the repository's date format (#1250). */
 function formatDay(epochMs: number): string {
-  const date = new Date(epochMs);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return formatDateTime(epochMs, undefined, { part: 'date' });
 }
 
 /** One plugin owner's process statistics, persistence, notifications, and signal lifecycle. */
