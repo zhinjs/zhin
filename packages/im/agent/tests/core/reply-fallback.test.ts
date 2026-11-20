@@ -13,7 +13,7 @@ const WEATHER = 'api60s__skill__60s-life__weather';
 
 describe('reply fallback (#1250 b33)', () => {
   it('keeps the interactive empty-reply text when nothing else is known', () => {
-    expect(formatToolCallsForUser([])).toBe('模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /reset 后重试，或换用非推理模型。');
+    expect(formatToolCallsForUser([])).toBe('模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /clear 清空本会话上下文后重试，或换用非推理模型。');
   });
 
   it('names "no tools" for a scheduled job, with its name, id and trace, and no /reset', () => {
