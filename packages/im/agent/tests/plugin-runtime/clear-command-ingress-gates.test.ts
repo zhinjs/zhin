@@ -4,10 +4,10 @@ import { ColdFieldMonitor } from '../../src/plugin-runtime/ingress/cold-field.js
 import { NO_DECISION_AUDIT } from '../../src/plugin-runtime/ingress/decision-audit.js';
 
 /**
- * #1250 (ADR 0067 D8): the reset hint (`onUnmatched`) runs only after the control-plane gate and the
+ * #1250 (ADR 0067 D8): the untriggered clear command (`onUnmatched`) runs only after the control-plane gate and the
  * speaking gate passed, and only for a message no trigger matched.
  */
-describe('reset hint placement in the ingress gates (#1250)', () => {
+describe('untriggered clear command placement in the ingress gates (#1250)', () => {
   const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private', id: 'user' } as const;
 
   function evaluate(options: {
@@ -84,7 +84,7 @@ describe('reset hint placement in the ingress gates (#1250)', () => {
     let blocked: boolean | undefined;
     await evaluate({
       control: { gate: () => ({ blocked: false }), outboundGate: () => stopped },
-      onUnmatched: async outboundBlocked => { blocked = outboundBlocked('reset_hint'); return false; },
+      onUnmatched: async outboundBlocked => { blocked = outboundBlocked('clear_command'); return false; },
     });
     expect(blocked).toBe(true);
   });

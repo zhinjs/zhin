@@ -30,7 +30,7 @@ import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
-import { answerResetSpelling, ResetHintCooldown, sendFixedReply } from './reset-hint.js';
+import { answerClearCommand, ClearConfirmCooldown, clearSessionContext, matchClearCommand, sendFixedReply } from './clear-command.js';
 import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
@@ -107,12 +107,10 @@ import { SessionEventDispatcher } from './session-event-dispatch.js';
 const logger = getLogger('agent');
 
 export const ingressMessages = createMessages({
-  cleared: { 'zh-CN': '已清空本会话的 AI 多轮上下文。', en: 'Cleared the AI conversation context for this session.' },
   stopped: { 'zh-CN': '好的，已停止当前回复。', en: 'OK, stopped the current reply.' },
   queue_full: { 'zh-CN': '前面还有几条消息在处理，请稍后再发。', en: 'Other messages are still being processed. Please try again shortly.' },
   expired: { 'zh-CN': '这条消息排队太久，已跳过，需要的话请重新发送。', en: 'This message waited too long and was skipped. Please send it again if needed.' },
 });
-const t = ingressMessages;
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
 const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
@@ -411,7 +409,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #groupRuleEnforcer: GroupRuleEnforcer;
   /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
   readonly #floodDetector = new GroupFloodDetector();
-  readonly #resetHintCooldown = new ResetHintCooldown();
+  /** #1250: at most one repeated clear confirmation per conversation and sender within the cooldown. */
+  readonly #clearConfirmCooldown = new ClearConfirmCooldown();
   /** Per-session reaction pacing (memory only, bounded); lives and dies with this route generation. */
   readonly #reactionPacer = new ReactionPacer({ config: () => this.options.agent.service.getAgentConfig()?.reactions });
   readonly #groupRuleDefaults: GroupRuleDefaults;
@@ -533,7 +532,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopGroupRules();
     this.#groupRuleEnforcer.dispose();
     this.#floodDetector.clear();
-    this.#resetHintCooldown.clear();
+    this.#clearConfirmCooldown.clear();
     this.#reactionPacer.clear();
     this.#sceneEvents.dispose();
     this.#sceneFactRefresher.dispose();
@@ -659,6 +658,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     }
 
     const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
+    const clearCooldownKey = `${conversationRefKey(message.conversation)}\u0000${turnAccess.principal.subjectId}`;
     const turnId = randomUUID();
     const audit = turnAccess.origin.kind === 'im'
       ? createDecisionAudit(zhinAgent.getDecisionEvents?.(), decisionScopeOf({
@@ -674,16 +674,19 @@ export class AgentTurnIngressRoute implements IngressRoute {
       assistantStatus: options.assistantStatus, ambientEngagement: this.#ambientEngagement(),
       coldField: this.#coldField, audit,
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
-      // #1250: `/clear`-style spellings nobody handled get the actual reset ways instead of silence —
-      // only after every ingress gate passed, never when outbound is stopped, once per cooldown.
-      onUnmatched: outboundBlocked => answerResetSpelling({
-        message,
-        policy: { trigger, access: service.getAccessConfig?.() },
-        cooldown: this.#resetHintCooldown,
-        cooldownKey: `${conversationRefKey(message.conversation)}\u0000${turnAccess.principal.subjectId}`,
-        isOperator: senderRoles.isMaster || senderRoles.isTrusted,
-        outboundBlocked: () => outboundBlocked('reset_hint'),
-        send: text => replyFixed(initialSessionKey, text),
+      // #1250: `/clear`, `/reset`, `/new` that no command handled clear the sender's own session
+      // context like a triggered `清空` — only after every ingress gate passed, never when outbound is
+      // stopped, and not in a live room (its session is the shared scene task).
+      ...(liveRoom ? {} : {
+        onUnmatched: (outboundBlocked: (stage: string) => boolean) => answerClearCommand({
+          message,
+          policy: { trigger, access: service.getAccessConfig?.() },
+          outboundBlocked: () => outboundBlocked('clear_command'),
+          archive: () => zhinAgent.archiveSession(initialSessionKey),
+          cooldown: this.#clearConfirmCooldown,
+          cooldownKey: clearCooldownKey,
+          send: text => replyFixed(initialSessionKey, text),
+        }),
       }),
     });
     if (gateEvaluation.kind === 'halt') {
@@ -701,7 +704,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
       message, trigger, plainText, isMaster: senderRoles.isMaster, content: matched.content,
     });
-    const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !isClearCommand(matched.content);
+    // #1250: the triggered text (`清空`, `#clear`) or the addressed message itself (`@bot /clear`).
+    const clearRequested = isClearCommand(matched.content) || (!ambient && matchClearCommand(message));
+    const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !clearRequested;
     if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
     audit({
       kind: 'inbound_wake',
@@ -714,10 +719,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
       sceneEvents: this.#sceneEvents, turnAccess, sessionKey, message, platform, effectiveEndpoint, conversationSequence,
     });
 
-    if (isClearCommand(matched.content)) {
-      await zhinAgent.archiveSession(sessionKey);
-      reportInboundOutcome(message, { outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate', turnId });
-      await replyFixed(sessionKey, t(message.locale, 'cleared'));
+    if (clearRequested) {
+      await clearSessionContext({
+        message, turnId, cooldown: this.#clearConfirmCooldown, cooldownKey: clearCooldownKey,
+        archive: () => zhinAgent.archiveSession(sessionKey),
+        // The control plane stopped outbound messages here: the clear stands, the confirmation is not sent.
+        send: async text => { if (!outboundBlocked('clear_command')) await replyFixed(sessionKey, text); },
+      });
       return true;
     }
 

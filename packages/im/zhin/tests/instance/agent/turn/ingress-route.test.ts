@@ -12,6 +12,7 @@ import type { CoreReplyStream, Message, OpenReplyStreamOptions } from '@zhin.js/
 import { InboundOutcomeLedger, inboundOutcomeSink } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../core/src/plugin-runtime/im/conversation-runtime.js';
+import { executeInboundTurnSpine } from '../../../../../core/src/plugin-runtime/im/inbound-spine.js';
 import { rootPluginId, SnapshotStore, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '@zhin.js/agent/runtime';
@@ -951,6 +952,196 @@ describe('inbound message outcomes from the Agent ingress (ADR 0061 P2)', () => 
       expect(handled).toBe(true);
       expect(record).toMatchObject({ outcome: 'model_silent', reason: 'empty_output', stage: 'model' });
       expect(record.turnId).toEqual(expect.any(String));
+    } finally { await f.close(); }
+  });
+});
+
+describe('chat clear command through the Agent ingress (#1250)', () => {
+  const endpoint = { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' };
+  const privateChat: ConversationRef = { endpoint, kind: 'private', id: 'alice' };
+  const groupChat: ConversationRef = { endpoint, kind: 'group', id: 'room' };
+  const stopped = { blocked: true, switch: 'emergency_stop', level: 'instance', reasonCode: 'control_emergency_stop', outcome: 'deny' };
+
+  function clearFixture(options: { control?: unknown; cannotSpeak?: boolean; access?: Record<string, unknown>; trigger?: Record<string, unknown> } = {}) {
+    const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
+    const snapshots = new SnapshotStore(snapshot);
+    const executeLeased = vi.fn(async () => ({ status: 'completed', output: [] }));
+    const archiveSession = vi.fn(async (_key: string) => true);
+    const route = new AgentTurnIngressRoute({
+      withInferenceScope: ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":false,"confidence":0.1,"reason":"no"}') }).withInferenceScope,
+      projectRoot: '/host-a', runtime: { executeLeased } as never,
+      im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext: async () => ({ blocks: [], cursor: 5 }),
+        commitConversationContext: async () => undefined, inboundMediaOrigins: () => [] } as never,
+      ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
+      agent: {
+        service: {
+          getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
+          getTriggerConfig: () => ({ enabled: true, ...options.trigger }),
+          getAccessConfig: () => options.access ?? {},
+          getAgentConfig: () => ({ mailbox: { merge: { enabled: false, quietMs: 0, maxWaitMs: 0 } } }),
+        },
+        agent: {
+          archiveSession, appendSessionEvents: vi.fn(async () => true),
+          ...(options.control ? { getControlPlane: () => options.control } : {}),
+          ...(options.cannotSpeak ? { getUserProfiles: () => ({ sessions: { observeInbound: vi.fn(async () => ({ blocked: 'muted' })) } }) } : {}),
+        },
+      } as never,
+    });
+    const run = async (text: string, extra: { conversation?: ConversationRef; mentioned?: boolean; owner?: boolean; sender?: string } = {}) => {
+      const conversation = extra.conversation ?? privateChat;
+      const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
+      const $reply = vi.fn(async (_content: unknown) => ({ status: 'sent' }));
+      const message = {
+        conversation, content: text, endpointId: 'account-a', commandPrefix: '/', locale: 'zh-CN',
+        sender: { id: extra.sender ?? 'alice', ...(extra.owner ? { chatRole: 'owner' as const, chatRoleLevels: { owner: 'global' as const } } : {}) },
+        ...(extra.mentioned !== undefined ? { mentioned: extra.mentioned } : {}),
+        message: { conversation, id: `message-${text}` }, $reply,
+        [inboundOutcomeSink]: () => ledger,
+      } as unknown as Message;
+      const lease = snapshots.acquire();
+      try { return { handled: await route.route(message, lease, rootPluginId(), 5), record: ledger.settle(), $reply }; }
+      finally { lease.release(); }
+    };
+    return { run, route, snapshots, executeLeased, archiveSession, async close() { route.dispose(); await snapshots.close(); } };
+  }
+
+  it('clears the sender’s private session on /clear and confirms once, without a model turn', async () => {
+    const f = clearFixture();
+    try {
+      const { handled, record, $reply } = await f.run('/clear');
+      expect(handled).toBe(true);
+      expect(record).toMatchObject({ outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate' });
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+      expect(f.executeLeased).not.toHaveBeenCalled();
+      expect($reply).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('已清空本会话的 AI 多轮上下文'));
+      // The same personal session a triggered `清空` clears.
+      await f.run('清空');
+      expect(f.archiveSession).toHaveBeenCalledTimes(2);
+      expect(f.archiveSession.mock.calls[1]![0]).toBe(f.archiveSession.mock.calls[0]![0]);
+      // Another sender's private chat is another session.
+      await f.run('/clear', { conversation: { endpoint, kind: 'private', id: 'bob' }, sender: 'bob' });
+      expect(f.archiveSession.mock.calls[2]![0]).not.toBe(f.archiveSession.mock.calls[0]![0]);
+    } finally { await f.close(); }
+  });
+
+  it('accepts a full-width slash and any letter case for /clear, /reset and /new', async () => {
+    const f = clearFixture();
+    try {
+      for (const text of ['／CLEAR', '/New', '／ｒｅｓｅｔ']) {
+        expect((await f.run(text)).record).toMatchObject({ outcome: 'cleared' });
+      }
+      expect(f.archiveSession).toHaveBeenCalledTimes(3);
+      expect((await f.run('/clear all')).record.outcome).not.toBe('cleared');
+      expect(f.archiveSession).toHaveBeenCalledTimes(3);
+    } finally { await f.close(); }
+  });
+
+  it('does not repeat the confirmation for a quick repeat with nothing left to clear', async () => {
+    const f = clearFixture();
+    f.archiveSession.mockResolvedValueOnce(true).mockResolvedValue(false);
+    try {
+      const first = await f.run('/clear');
+      const second = await f.run('/clear');
+      expect(first.$reply).toHaveBeenCalledOnce();
+      expect(second.handled).toBe(true);
+      expect(second.$reply).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
+
+  it('in a group, clears only when the bot is mentioned, and only the sender’s own session', async () => {
+    const f = clearFixture();
+    try {
+      const unmentioned = await f.run('/clear', { conversation: groupChat });
+      expect(unmentioned.$reply).not.toHaveBeenCalled();
+      expect(f.archiveSession).not.toHaveBeenCalled();
+      const mentioned = await f.run('@zhin /clear', { conversation: groupChat, mentioned: true });
+      expect(mentioned.record).toMatchObject({ outcome: 'cleared' });
+      // The mention as a segment leaves `/clear` alone (an ignored trigger prefix): the untriggered path.
+      await f.run('/clear', { conversation: groupChat, mentioned: true, sender: 'bob' });
+      expect(f.archiveSession).toHaveBeenCalledTimes(2);
+      expect(f.archiveSession.mock.calls[0]![0]).not.toBe(f.archiveSession.mock.calls[1]![0]);
+    } finally { await f.close(); }
+  });
+
+  it('neither clears nor answers when the control plane stops the conversation or outbound, or the bot cannot speak', async () => {
+    for (const options of [
+      { control: { gate: () => stopped, outboundGate: () => stopped } },
+      { control: { gate: () => ({ blocked: false }), outboundGate: () => stopped } },
+      { cannotSpeak: true },
+    ]) {
+      const f = clearFixture(options);
+      try {
+        const { $reply } = await f.run('/clear');
+        expect(f.archiveSession).not.toHaveBeenCalled();
+        expect($reply).not.toHaveBeenCalled();
+      } finally { await f.close(); }
+    }
+  });
+
+  it('a triggered 清空 still clears while outbound is stopped, but sends no confirmation', async () => {
+    const f = clearFixture({ control: { gate: () => ({ blocked: false }), outboundGate: () => stopped } });
+    try {
+      const { record, $reply } = await f.run('清空');
+      expect(record).toMatchObject({ outcome: 'cleared' });
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+      expect($reply).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
+
+  it('keeps the existing behaviour without permission: access closed or not listed stays silent', async () => {
+    for (const access of [{ mode: 'closed' }, { mode: 'whitelist', users: ['someone-else'] }]) {
+      const f = clearFixture({ access });
+      try {
+        const { $reply, record } = await f.run('/clear');
+        expect(f.archiveSession).not.toHaveBeenCalled();
+        expect($reply).not.toHaveBeenCalled();
+        expect(record.outcome).not.toBe('cleared');
+      } finally { await f.close(); }
+    }
+    const f = clearFixture({ access: { mode: 'whitelist', users: ['alice'] } });
+    try {
+      expect((await f.run('/clear')).record).toMatchObject({ outcome: 'cleared' });
+    } finally { await f.close(); }
+  });
+
+  it('leaves /reset to the management command when the command prefix claims it (command first)', async () => {
+    const f = clearFixture();
+    try {
+      // Operator: the management command archives the session once (no second clear, no clear confirmation).
+      const owner = await f.run('/reset', { owner: true });
+      expect(owner.record).toMatchObject({ outcome: 'command_replied' });
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+      expect(owner.$reply).toHaveBeenCalledOnce();
+      expect(owner.$reply.mock.calls[0]![0]).not.toContain('已清空本会话的 AI 多轮上下文');
+      // Member: the management command's permission answer stands; nothing is cleared.
+      const member = await f.run('/reset');
+      expect(member.record).toMatchObject({ outcome: 'command_replied' });
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+    } finally { await f.close(); }
+  });
+
+  it('is never reached when a plugin command already handled /clear (command first)', async () => {
+    const f = clearFixture();
+    try {
+      const spine = (matched: boolean) => {
+        const message = { conversation: privateChat, content: '/clear', endpointId: 'account-a', commandPrefix: '/', locale: 'zh-CN', sender: { id: 'alice' },
+          message: { conversation: privateChat, id: 'm-1' }, $reply: vi.fn(async () => ({ status: 'sent' })) } as unknown as Message;
+        const lease = f.snapshots.acquire();
+        return executeInboundTurnSpine({
+          message, lease, requester: rootPluginId(), conversationSequence: 5, ingressRoute: f.route,
+          runHandlers: async () => undefined,
+          dispatchInteractive: async () => undefined,
+          dispatchCommand: async () => ({ dispatch: matched ? { matched: true, command: 'clear' } : { matched: false } }) as never,
+          hasReplied: () => false,
+        }).finally(() => lease.release());
+      };
+      const handled = await spine(true);
+      expect(handled.stage).toBe('command');
+      expect(f.archiveSession).not.toHaveBeenCalled();
+      // Without a command for it, the same message reaches the Agent ingress and clears.
+      const unhandled = await spine(false);
+      expect(unhandled.stage).toBe('agent-ingress');
+      expect(f.archiveSession).toHaveBeenCalledOnce();
     } finally { await f.close(); }
   });
 });
