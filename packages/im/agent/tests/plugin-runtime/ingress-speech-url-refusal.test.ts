@@ -30,7 +30,7 @@ describe('admitIngressMailTurn with a refused voice address', () => {
       turnId: 'turn-1',
       senderId: 'u-1',
       entryActorName: 'main',
-      senderRoles: { isMaster: false } as never,
+      senderRoles: {} as never,
       plainText: true,
       liveRoom: false,
       mergeable: false,

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { describeCommandDenial } from '@zhin.js/permission';
 import { handleRuntimeManagementCommand } from '../../src/init/runtime-management-commands.js';
 
 describe('handleRuntimeManagementCommand', () => {
-  const senderRoles = { isMaster: true, isTrusted: false };
+  const senderRoles = { hostRole: 'owner' } as const;
 
   it('returns null for unrelated content', async () => {
     const reply = await handleRuntimeManagementCommand({
@@ -24,23 +25,25 @@ describe('handleRuntimeManagementCommand', () => {
       sessionKey: 'test:session',
       commandPrefix: '/',
       content: '/models',
-      senderRoles: { isMaster: false, isTrusted: false },
+      senderRoles: {},
       onUnauthorized,
     });
-    expect(reply).toContain('owner / admin / trusted');
+    expect(reply).toBe(describeCommandDenial('trusted', 'zh-CN'));
     // #1250: the refusal is flagged so the ingress can stay silent in a group.
     expect(onUnauthorized).toHaveBeenCalledWith('not_operator');
   });
 
   it('flags every operator-only refusal and nothing an operator sends (#1250)', async () => {
+    const denial = describeCommandDenial('trusted', 'zh-CN');
+    const resetDenial = `${denial}要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。`;
     for (const content of ['/models', '/tree', '/tree 2', '/fork 2', '/compact', '/reset', 'ai.health']) {
       const onUnauthorized = vi.fn();
       const archiveSession = vi.fn();
       const compactSession = vi.fn();
       expect(await handleRuntimeManagementCommand({
         service: {} as never, zhinAgent: { archiveSession, compactSession } as never, sessionKey: 'test:session',
-        commandPrefix: '/', content, senderRoles: { isMaster: false, isTrusted: false }, onUnauthorized,
-      })).toContain('owner / admin / trusted');
+        commandPrefix: '/', content, senderRoles: {}, onUnauthorized,
+      })).toBe(content === '/reset' ? resetDenial : denial);
       expect(onUnauthorized).toHaveBeenCalledWith('not_operator');
       expect(archiveSession).not.toHaveBeenCalled();
       expect(compactSession).not.toHaveBeenCalled();
@@ -65,14 +68,18 @@ describe('handleRuntimeManagementCommand', () => {
       sessionKey: 'test:session',
       commandPrefix: '/',
       content: '/reset',
-      senderRoles: { isMaster: false, isTrusted: false },
+      senderRoles: {},
     });
-    expect(reply).toBe('⚠️ /reset 是管理指令，仅聊天角色 owner / admin / trusted 可用。要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。');
+    expect(reply).toBe('没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。要清空你自己的 AI 对话上下文，请发 /clear 或「清空」（群里先 @ 机器人）。');
+    expect(await handleRuntimeManagementCommand({
+      service: {} as never, zhinAgent: { archiveSession } as never, sessionKey: 'test:session',
+      commandPrefix: '/', content: '/reset', senderRoles: {}, locale: 'en',
+    })).toBe(`${describeCommandDenial('trusted', 'en')} To clear your own AI conversation context, send /clear or 清空 (mention the bot first in a group).`);
     expect(archiveSession).not.toHaveBeenCalled();
     const archive = vi.fn().mockResolvedValue(true);
     const operator = await handleRuntimeManagementCommand({
       service: {} as never, zhinAgent: { archiveSession: archive } as never, sessionKey: 'test:session',
-      commandPrefix: '/', content: '/reset', senderRoles: { isMaster: false, isTrusted: true }, locale: 'en',
+      commandPrefix: '/', content: '/reset', senderRoles: { hostRole: 'trusted' }, locale: 'en',
     });
     expect(archive).toHaveBeenCalledWith('test:session');
     expect(operator).toContain('archived');
@@ -102,7 +109,7 @@ describe('handleRuntimeManagementCommand', () => {
       sessionKey: 'test:session',
       commandPrefix: '/',
       content: 'ai.health',
-      senderRoles: { isMaster: false, isTrusted: true },
+      senderRoles: { hostRole: 'trusted' },
     });
     expect(reply).toContain('1 configured language profiles');
     expect(list).toHaveBeenCalledWith({ kind: 'language' });
@@ -112,12 +119,12 @@ describe('handleRuntimeManagementCommand', () => {
 it.each(['!', '', '/'])('uses the actual %j prefix and keeps plugin namespaces distinct', async commandPrefix => {
   const list = vi.fn().mockResolvedValue([{ label: 'custom', model: '中文模型名' }]);
   const base = { service: {} as never, inference: { list } as never, zhinAgent: {} as never, sessionKey: 's',
-    senderRoles: { isMaster: true, isTrusted: false }, commandPrefix, locale: 'en' as const };
+    senderRoles: { hostRole: 'owner' as const }, commandPrefix, locale: 'en' as const };
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('Available models');
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('中文模型名');
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}plugin/models` })).toBeNull();
   expect(await handleRuntimeManagementCommand({ ...base, commandPrefix: undefined, content: '/models' })).toBeNull();
-  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: { isMaster: false, isTrusted: false } })).toContain('Only chat roles owner / admin / trusted');
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: {} })).toBe(describeCommandDenial('trusted', 'en'));
 });
 
 it('uses immutable per-invocation presentation for concurrent locales', async () => {
@@ -125,7 +132,7 @@ it('uses immutable per-invocation presentation for concurrent locales', async ()
   const ready = new Promise<void>(resolve => { release = resolve; });
   const base = { service: {} as never, inference: { list: async () => { await ready; return []; } } as never,
     zhinAgent: {} as never, sessionKey: 's', content: '!models', commandPrefix: '!',
-    senderRoles: { isMaster: true, isTrusted: false } };
+    senderRoles: { hostRole: 'owner' } };
   const en = handleRuntimeManagementCommand({ ...base, locale: 'en' });
   const zh = handleRuntimeManagementCommand({ ...base, locale: 'zh-CN' });
   release();

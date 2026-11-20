@@ -72,7 +72,7 @@ describe('/memory and /forget', () => {
     service: {} as never,
     zhinAgent: {} as never,
     sessionKey: 'im:qq:bot:private:alice',
-    senderRoles: { isMaster: false, isTrusted: false },
+    senderRoles: {},
     senderId: 'alice',
   };
 

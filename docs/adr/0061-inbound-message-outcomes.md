@@ -114,7 +114,7 @@ sidebar: false
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
 | `invalid_input` | `invalid`（命令参数）| 发起人 | 指令参数不对，已回复用法。 / Wrong arguments; usage was sent. | 校验问题：{issues}。 / Validation: {issues}. |
-| `permission_denied` | `denied:<permit 类别>`（`zhin_role` / `platform` / `bot` / `conversation`）| 发起人 | 你没有权限执行这条指令。 / You are not allowed to run this command. | 缺少 `{permit}`。 / Missing `{permit}`. |
+| `permission_denied` | `denied:<permit 类别>`（`zhin_role` / `platform` / `bot` / `conversation`）| 发起人 | 没有权限执行此指令。 / You do not have permission to run this command.（与命令拒绝同源：`describeCommandDenial()`，`@zhin.js/permission`）| 缺少 `{permit}`。 / Missing `{permit}`. |
 | `rate_limited` | `cooldown` / `busy` / `capacity` / `identity`（命令 `limited`）、`queue_full` / `expired`（Mailbox 拒绝）| 发起人 | 太频繁或正忙，这次没有处理，请稍后再试。 / Too frequent or busy; not processed this time. | {reason}，约 {retryAfter} 秒后可重试。 / {reason}; retry after ~{retryAfter}s. |
 | `approval_denied` | `tool_approval_denied` | 发起人 | 需要确认的操作被拒绝了，{tool} 没有执行。 / The action needing approval was declined; {tool} did not run. | 审批人 `{approver}`，策略 `{policy}`。 / Declined by `{approver}`, policy `{policy}`. |
 | `approval_timeout` | `tool_approval_timeout` | 发起人 | 等确认超时了，{tool} 没有执行。 / Approval timed out; {tool} did not run. | 等待 {seconds} 秒。 / Waited {seconds}s. |

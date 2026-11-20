@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChatRoleService, isChatIdentity, type ChatRoleEntry } from '../../src/built/roles.js';
 import { chatRolesToken, createChatRoleReader, hasChatRole, implicitChatPrincipalId, isOwner } from '../../src/built/chat-role-reader.js';
 import { commandFeedbackToken, renderCommandFeedback } from '../../src/plugin-runtime/im/command-feedback.js';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 
 const grant = (entry: Omit<ChatRoleEntry, 'source'>): ChatRoleEntry => ({ ...entry, source: 'grant' });
 
@@ -130,10 +131,17 @@ describe('command denial text (ADR 0060 §5.3)', () => {
   it('points zhin role denials at the owner / Console, and tells group owners their standing is not a role', async () => {
     expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).toContain('Console「聊天角色」');
     expect((await renderCommandFeedback(denied('role(admin)'), message('owner'), snapshot))?.content).toContain('群主 / 群管理员的平台身份不等于 zhin 角色');
-    // Never names the missing role or who holds it.
-    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).not.toContain('owner');
+    // A role below the host-wide owner is never named, nor who holds it.
+    expect((await renderCommandFeedback(denied('role(admin)'), message(), snapshot))?.content).not.toContain('admin');
+    // `owner@global` (host-wide abilities) is the shared global-owner refusal, with where it is granted (#1250 第 78 批).
+    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).toBe(describeGlobalOwnerRequired('zh-CN'));
+    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).toContain('认领 <码>');
+    // The dispatcher passes the Root `bind` invocation as it is sent here (prefix included).
+    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot, '!!绑定'))?.content)
+      .toBe(describeGlobalOwnerRequired('zh-CN', { bindCommand: '!!绑定' }));
+    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot, '!!绑定'))?.content).toContain('「!!绑定 <码>」');
     // Platform conditions keep their own explanation; other conditions stay generic.
-    expect((await renderCommandFeedback(denied('platform:admin'), message(), snapshot))?.content).toBe('无法执行此指令：r');
+    expect((await renderCommandFeedback(denied('platform:admin'), message(), snapshot))?.content).toBe('无法执行此指令。r');
     expect((await renderCommandFeedback(denied('group'), message(), snapshot))?.content).toBe('没有权限执行此指令。');
   });
 
@@ -142,8 +150,9 @@ describe('command denial text (ADR 0060 §5.3)', () => {
       for (const permit of ['owner@global', 'trusted', 'role(admin)', 'platform:admin', 'platform-role:r1', 'user(u9)', 'custom.permit']) {
         expect(await renderCommandFeedback(denied(permit), message(undefined, kind), snapshot)).toBeUndefined();
       }
-      expect((await renderCommandFeedback(denied('private()'), message(undefined, kind), snapshot))?.content).toBe('没有权限执行此指令。');
-      expect((await renderCommandFeedback(denied('bot:admin'), message(undefined, kind), snapshot))?.content).toBe('无法执行此指令：r');
+      expect((await renderCommandFeedback(denied('private()'), message(undefined, kind), snapshot))?.content).toBe('此指令只能在私聊中使用，请私聊机器人发送。');
+      expect((await renderCommandFeedback(denied('group()'), message(undefined, kind), snapshot))?.content).toBe('没有权限执行此指令。');
+      expect((await renderCommandFeedback(denied('bot:admin'), message(undefined, kind), snapshot))?.content).toBe('无法执行此指令。r');
     }
     // A Root renderer is not asked either.
     const renderer = vi.fn(() => 'custom');

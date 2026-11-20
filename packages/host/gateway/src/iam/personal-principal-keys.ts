@@ -8,13 +8,14 @@
  * username is never accepted as a key — usernames are free again once a user is deleted, so a
  * username key could later point at somebody else; user ids are random and never reused.
  */
+import { hasGlobalOwnerGrant } from '@zhin.js/console-protocol';
 import type { ConsoleUserView } from './service.js';
 
 const USER_KEY = /^user:(.{1,128})$/u;
 
 /** Holds the built-in `owner` role globally and is enabled. */
 function isGlobalOwner(user: ConsoleUserView): boolean {
-  return !user.disabled && user.bindings.some(binding => binding.role === 'owner' && binding.scope.kind === 'global');
+  return !user.disabled && hasGlobalOwnerGrant(user.bindings);
 }
 
 const nameOf = (user: ConsoleUserView) => user.displayName && user.displayName !== user.username ? `${user.username}（${user.displayName}）` : user.username;

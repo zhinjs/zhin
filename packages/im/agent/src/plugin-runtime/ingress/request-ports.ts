@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { resolve } from 'node:path';
 import { personalSessionIdentity, type PersonalSessionAddress } from '../../personal-session/index.js';
-import { chatRoleHeldAt, expandChatRole, hostChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
+import { chatRoleHeldAt, expandChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import {
   approvalOutcomeToDecision,
@@ -588,9 +588,7 @@ export function createRuntimeTurnAccess(
   // stays on `sender.platform` and never becomes an authorization role. `roles` carry host-wide
   // trust: `owner` only for a global owner (a lower-level owner counts as admin here); the chain
   // role itself (permits such as `owner`) is kept on `principal.chatRole`.
-  const hostRole = message.sender?.id ? hostChatRole(message.sender) : undefined;
-  const chatRoles = roles.isMaster ? expandChatRole('owner')
-    : hostRole ? expandChatRole(hostRole) : roles.isTrusted ? expandChatRole('trusted') : [];
+  const chatRoles = expandChatRole(roles.hostRole);
   const chainRole = message.sender?.id ? message.sender.chatRole : undefined;
   const chainLevels = chainRole ? normalizeChatRoleLevels(message.sender?.chatRoleLevels) : undefined;
   const principalRoles: string[] = chatRoles.length ? [...chatRoles] : ['user'];

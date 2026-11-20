@@ -14,9 +14,9 @@ import {
   SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId,
   type CapabilityId, type CapabilitySlot, type FeatureId, type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
+import { ChatRoleService, ChatRoleStore, hasGlobalOwner, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 import {
-  CHAT_OWNER_CLAIM_NATIVE_LIMITS, CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS, ChatOwnerClaim, createChatOwnerClaimGuard, hasGlobalOwner, inspectNativeClaimPayload,
+  CHAT_OWNER_CLAIM_NATIVE_LIMITS, CHAT_OWNER_CLAIM_NATIVE_WARN_INTERVAL_MS, ChatOwnerClaim, createChatOwnerClaimGuard, inspectNativeClaimPayload,
 } from '../../src/instance/chat-owner-claim.js';
 
 const CODE = 'AAAA2222';

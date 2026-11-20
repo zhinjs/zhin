@@ -36,7 +36,7 @@ export const interactionMessages = createMessages({
   exited: { 'zh-CN': '已退出上一个选择。', en: 'Left the previous question.' },
   cancelled: { 'zh-CN': '已取消。', en: 'Cancelled.' },
   ended: { 'zh-CN': '交互已结束', en: 'Interaction ended' },
-  denied: { 'zh-CN': '你不能使用这个按钮：{reason}', en: 'You cannot use this button: {reason}' },
+  denied: { 'zh-CN': '你不能使用这个按钮。{reason}', en: 'You cannot use this button. {reason}' },
   expired: { 'zh-CN': '交互已过期或不可用，请重新发起。', en: 'This interaction has expired or is unavailable. Start a new one.' },
   timeout: { 'zh-CN': '输入超时', en: 'Input timed out' },
 });

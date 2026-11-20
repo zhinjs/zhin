@@ -1,5 +1,5 @@
 import { messages as t } from '../../../src/i18n.js';
-import { canManageConversation, defineCommand } from 'zhin.js/command';
+import { canManageConversation, defineCommand, describeConversationManagerDenial } from 'zhin.js/command';
 import { formatList } from 'zhin.js/i18n';
 import { conversationError, extractConversation } from '../../../src/conversation.js';
 import { earthquakeServiceToken } from '../../../src/runtime.js';
@@ -17,7 +17,7 @@ export default defineCommand({
     const service = use(earthquakeServiceToken);
     const target = extractConversation(input);
     if (!target) return conversationError(input, locale);
-    if (!canManageConversation({ adapter, scene, sender })) return t(locale, 'denied');
+    if (!canManageConversation({ adapter, scene, sender })) return describeConversationManagerDenial(locale);
     const parsed = parseSubscribeArgs(params.filters ?? [], locale);
     if ('error' in parsed) return parsed.error;
 

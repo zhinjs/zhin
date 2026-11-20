@@ -1,10 +1,14 @@
+import type { ChatRole } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core/runtime';
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { TurnIntent } from '../turn/turn-ingress.js';
 
+/**
+ * The sender's host-wide chat role (ADR 0056 §2): `owner` only for a global owner, a lower-level
+ * owner counts as `admin`; absent without a role.
+ */
 export interface TurnIntentSenderRoles {
-  readonly isMaster: boolean;
-  readonly isTrusted: boolean;
+  readonly hostRole?: ChatRole;
 }
 
 /** Trusted adapter/plugin policy input at the outer IM ingress boundary. */

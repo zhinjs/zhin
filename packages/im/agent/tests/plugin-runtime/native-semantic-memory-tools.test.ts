@@ -71,7 +71,7 @@ describe('native semantic-memory tools', () => {
 
     const forgotten = await handleRuntimeManagementCommand({
       commandPrefix: '/', content: '/forget preference:drink', service: {} as never,
-      zhinAgent: {} as never, senderRoles: { isMaster: false, isTrusted: false },
+      zhinAgent: {} as never, senderRoles: {},
       senderId: view.subjectId, sessionKey: view.sessionKey, semanticMemory: reader,
     });
     expect(forgotten).toContain('已遗忘 1 条');
