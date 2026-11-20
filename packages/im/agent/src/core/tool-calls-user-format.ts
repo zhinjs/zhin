@@ -67,7 +67,7 @@ function formatGenericToolResult(tool: string, result: unknown): string {
 export interface ReplyFallbackContext {
   /** The turn offered the model at least one tool. Absent: unknown (treated as available). */
   readonly toolsAvailable?: boolean;
-  /** A scheduled job's run: named in the text with `zhin trace`; `/reset` is never suggested. */
+  /** A scheduled job's run: named in the text with `zhin trace`; `/clear` is never suggested. */
   readonly schedule?: Readonly<{ jobId: string; label?: string; turnId?: string }>;
 }
 
@@ -80,7 +80,7 @@ export function inlineToolName(name: string): string {
 /**
  * #1250 b33: the fallback text for a turn whose model wrote no visible reply, stating the actual cause.
  * Interactive turns get a next step; a scheduled job gets its name / id and `zhin trace <turnId>` instead
- * of `/reset` (the job's own session is not the chat the owner would reset).
+ * of `/clear` (the job's own session is not the chat the owner would reset).
  */
 export function formatReplyFallback(fallback: ReplyFallback, context: ReplyFallbackContext = {}): string {
   const tools = fallback.tools?.length ? fallback.tools.map(inlineToolName).join('、') : '';
@@ -102,7 +102,7 @@ export function formatReplyFallback(fallback: ReplyFallback, context: ReplyFallb
   }
   if (fallback.cause === 'no_tools') return `${cause}，所以没能完成这个请求。可以换一种说法再试。`;
   if (fallback.cause === 'tool_denied') return `${cause}，所以没能完成这个请求。需要有权限的人批准后再试。`;
-  return `${cause}。可发送 /reset 后重试，或换用非推理模型。`;
+  return `${cause}。可发送 /clear 清空本会话上下文后重试，或换用非推理模型。`;
 }
 
 /**

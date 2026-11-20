@@ -16,7 +16,7 @@ import { deliveredMessageContextRef, deliveredTextDigest } from '../../src/sessi
 
 /**
  * #1250 `own-unhandled-message-counts-as-background` (ADR 0067 D8): in a private chat the initiator's
- * own earlier message (e.g. an unhandled `/clear`), stored as the endpoint delivered it, comes back as a
+ * own earlier message (e.g. an unhandled `/weather`), stored as the endpoint delivered it, comes back as a
  * background block. It is the initiator's own words, not lower-trust content; everything else counts.
  */
 describe('FullAgentTurnEngine own private message provenance (#1250 D8)', () => {
@@ -214,10 +214,10 @@ describe('FullAgentTurnEngine own private message provenance (#1250 D8)', () => 
     expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
   });
 
-  it("does not count a fixed runtime reply the ingress recorded under the session key (reset hint)", async () => {
+  it("does not count a fixed runtime reply the ingress recorded under the session key (clear confirmation)", async () => {
     const ledger = new SessionToldLedger();
     const { run, initiatorBlock, ownBlock, conversation } = harness('private', { toldLedger: ledger });
-    const hint = '没有 /clear 这个指令。';
+    const hint = '已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。';
     ledger.recordDelivered(sessionKeyLedgerId('session-key'), [deliveredMessageContextRef({ conversation, id: 'hint-1' }, deliveredTextDigest(hint))]);
     const sources = recorded();
     await run('turn-1', [initiatorBlock(), ownBlock('hint-1', hint)]);
@@ -228,7 +228,7 @@ describe('FullAgentTurnEngine own private message provenance (#1250 D8)', () => 
   it("does not match a session key recorded without the `key:` namespace (no key / session id collision)", async () => {
     const ledger = new SessionToldLedger();
     const { run, ownBlock, conversation } = harness('private', { toldLedger: ledger });
-    const hint = '没有 /clear 这个指令。';
+    const hint = '已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。';
     ledger.recordDelivered('session-key', [deliveredMessageContextRef({ conversation, id: 'hint-1' }, deliveredTextDigest(hint))]);
     const sources = recorded();
     await run('turn-1', [ownBlock('hint-1', hint)]);
