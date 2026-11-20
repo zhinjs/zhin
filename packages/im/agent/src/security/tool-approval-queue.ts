@@ -12,6 +12,8 @@
  */
 import { redactDecisionPayload, type DecisionPayload } from '../decision-events.js';
 import type { DangerousToolCategory } from './tool-hard-gate.js';
+import type { ToolInvocationOrigin } from '@zhin.js/tool';
+import { sanitizeOriginText, snapshotOrigin, turnOriginLabelOf, type TurnOriginLabel } from '../trace/turn-origin-label.js';
 
 export type ToolApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'consumed';
 export type ToolApprovalSettlement = 'approved' | 'denied' | 'expired';
@@ -56,6 +58,15 @@ export interface ToolApprovalEntry {
   readonly channel: ToolApprovalChannel | null;
   /** 触发调用的会话；缺省表示来源不可投递（IM 通道不可用，仅 Console）。 */
   readonly origin: ToolApprovalOrigin | null;
+  /**
+   * 发起回合记录的来源（与 trace 的 `origin` 同形状，#1250 b63）；没有回合来源（如自我修改卡片）时缺省。
+   */
+  readonly turnOrigin?: ToolInvocationOrigin;
+  /**
+   * 来源的可读名（`平台 · 私聊 名称`，与用量统计 `displayName` 同格式），与 trace 会话摘要的 `label` 同形状；
+   * 由 {@link turnOrigin}，否则由 {@link origin} 推出，两者都没有时缺省。
+   */
+  readonly turnOriginLabel?: TurnOriginLabel;
 }
 
 export interface ToolApprovalEnqueueInput {
@@ -68,6 +79,10 @@ export interface ToolApprovalEnqueueInput {
   /** 覆盖默认 ttl（毫秒）。 */
   readonly ttlMs?: number;
   readonly origin?: ToolApprovalOrigin | null;
+  /** 发起回合的来源（`TurnIngress.origin`）；卡片据此显示来自哪个聊天。 */
+  readonly turnOrigin?: ToolInvocationOrigin | null;
+  /** 发起人的显示名；私聊没有会话名时用作可读名。 */
+  readonly requesterName?: string | null;
 }
 
 export interface ToolApprovalResolveOptions {
@@ -101,6 +116,8 @@ interface MutableEntry {
   decidedBy: string | null;
   channel: ToolApprovalChannel | null;
   origin: ToolApprovalOrigin | null;
+  turnOrigin?: ToolInvocationOrigin;
+  turnOriginLabel?: TurnOriginLabel;
   waiters: Array<(settlement: ToolApprovalSettlement) => void>;
   timer?: ReturnType<typeof setTimeout>;
 }
@@ -162,6 +179,7 @@ export class ToolApprovalQueue {
       decidedBy: null,
       channel: null,
       origin: input.origin ? freezeOrigin(input.origin) : null,
+      ...originLabelFields(input),
       waiters: [],
     };
     entry.timer = setTimeout(() => this.#settle(entry, 'expired', null, null), ttl);
@@ -334,7 +352,24 @@ function snapshot(entry: MutableEntry): ToolApprovalEntry {
     decidedBy: entry.decidedBy,
     channel: entry.channel,
     origin: entry.origin,
+    ...(entry.turnOrigin ? { turnOrigin: entry.turnOrigin } : {}),
+    ...(entry.turnOriginLabel ? { turnOriginLabel: entry.turnOriginLabel } : {}),
   });
+}
+
+/** `turnOrigin` and its readable label; the card's IM origin stands in for a turn without one. */
+function originLabelFields(input: ToolApprovalEnqueueInput): { turnOrigin?: ToolInvocationOrigin; turnOriginLabel?: TurnOriginLabel } {
+  const turnOrigin = input.turnOrigin ? snapshotOrigin(input.turnOrigin) : undefined;
+  const fallback = input.origin
+    ? { kind: 'im', platform: input.origin.platform, endpoint: input.origin.endpointKey, scope: input.origin.scope, sceneId: input.origin.sceneId }
+    : undefined;
+  // `turnOriginLabelOf` cleans every platform-given part (names, ids) before it is shown.
+  const label = turnOriginLabelOf(turnOrigin ?? fallback, sanitizeOriginText(input.requesterName));
+  const hasLabel = Object.keys(label).length > 0;
+  return {
+    ...(turnOrigin ? { turnOrigin } : {}),
+    ...(hasLabel ? { turnOriginLabel: Object.freeze(label) } : {}),
+  };
 }
 
 function freezeOrigin(origin: ToolApprovalOrigin): ToolApprovalOrigin {
