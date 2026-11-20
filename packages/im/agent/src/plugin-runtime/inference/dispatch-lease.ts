@@ -6,7 +6,10 @@
  *
  * Internal module: deliberately not re-exported. The resource view checks token identity, and
  * (#1250 第 84 批) offers it only to operations whose owner is the Root plugin, so a plugin that
- * deep-imports this module still cannot retain (and pin) a dispatching generation.
+ * deep-imports this module still cannot retain (and pin) a dispatching generation. A Root operation a
+ * plugin dispatched (its message view was bound from a plugin author, `delegatedFrom`) does not get it
+ * either; it gets {@link dispatchLeaseWithheldToken} instead, so a command that needs the lease can
+ * tell the sender to send it directly.
  */
 import { createRootPrivateToken, type SnapshotLease } from '@zhin.js/plugin-runtime';
 
@@ -22,4 +25,13 @@ export interface DispatchLeasePort {
 
 export const dispatchLeaseToken = createRootPrivateToken<DispatchLeasePort>(
   'zhin.agent.dispatch-lease', 'The generation one IM command operation was dispatched in',
+);
+
+/**
+ * #1250 第 84 批: marks a Root IM operation that a plugin dispatched (middleware / handler / button
+ * callback through `CommandIndex.dispatch`): every other Host resource is there, the dispatch lease
+ * is withheld. Absent together with the lease: the operation has no Host resources at all.
+ */
+export const dispatchLeaseWithheldToken = createRootPrivateToken<true>(
+  'zhin.agent.dispatch-lease-withheld', 'The dispatch lease was withheld from a plugin-dispatched Root operation',
 );

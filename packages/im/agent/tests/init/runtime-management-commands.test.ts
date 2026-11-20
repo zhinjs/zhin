@@ -9,7 +9,7 @@ import {
   type RuntimeManagementDispatch,
   type RuntimeManagementOperation,
 } from '../../src/init/runtime-management-commands.js';
-import { dispatchLeaseToken } from '../../src/plugin-runtime/inference/dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken } from '../../src/plugin-runtime/inference/dispatch-lease.js';
 
 /** `@zhin.js/feature-kit`'s operation hook: the IM runtime's per-message operation resources. */
 const operationInputResources = Symbol.for('zhin.operation-input-resources/1');
@@ -195,6 +195,30 @@ describe('Agent management Root commands (#1250 第 83 批)', () => {
     // Without Host operation resources there is no generation to retain.
     await h.send('/health', { role: 'trusted' });
     expect(h.dispatches[1]!.retainLease).toBeUndefined();
+  });
+
+  it('asks the sender to send a command directly when a plugin forwarded it, without the dispatch lease (#1250 第 84 批)', async () => {
+    // What the Host offers a Root operation a plugin middleware / handler / button callback dispatched.
+    const withheld = { has: (token: unknown) => token === dispatchLeaseWithheldToken, use: (token: unknown) => {
+      if (token !== dispatchLeaseWithheldToken) throw new Error('unexpected token');
+      return true;
+    } };
+    const h = harness();
+    for (const [content, command] of [['/models', '/models'], ['/health', '/health'], ['/tree', '/tree'], ['/tree 1', '/tree'],
+      ['/fork 1', '/fork'], ['/compact', '/compact'], ['/reset', '/reset']] as const) {
+      const sent = await h.send(content, { role: 'trusted', resources: withheld });
+      expect(sent.reply).toBe(`ℹ️ 该命令不能经插件转发执行，请直接发送 ${command}。`);
+      expect(sent.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'direct_command_required', command: command.slice(1) }));
+      expect(sent.route).not.toHaveBeenCalled();
+    }
+    // `reset` from a sender without a chat role (the clear path) needs the lease just the same.
+    const clear = await h.send('/reset', { kind: 'private', locale: 'en', resources: withheld });
+    expect(clear.reply).toBe('ℹ️ This command cannot run when a plugin forwards it. Send /reset directly.');
+    expect(clear.outcomes).toContainEqual(expect.objectContaining({ outcome: 'refused', reason: 'direct_command_required' }));
+    expect(h.opened).toEqual([]);
+    expect(h.clear).not.toHaveBeenCalled();
+    expect(h.archiveSession).not.toHaveBeenCalled();
+    expect(h.list).not.toHaveBeenCalled();
   });
 
   it('answers people only: the command dispatch keeps another bot away from every command (#1250 第 83 / 84 批)', async () => {

@@ -74,7 +74,7 @@ interface InboundRuntimeContext {
   readonly outcomes?: Pick<MessageOutcomeLog, 'record'>;
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
-  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal; conversationSequence?: number }>): OperationResourceView | undefined;
+  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal; conversationSequence?: number; delegatedFrom?: PluginId }>): OperationResourceView | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** One-time secrets (ADR 0060 §3.3 claim code): handled before anything records, logs or routes them. */
   readonly inboundSecret?: InboundSecretGuard;

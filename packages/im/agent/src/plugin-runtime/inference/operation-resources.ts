@@ -19,7 +19,7 @@ import {
 import { getLogger } from '@zhin.js/logger';
 import type { HostInference } from './host.js';
 import { resolveInferenceMessageContext, resolveInferenceTurnContext } from './turn-context.js';
-import { dispatchLeaseToken, type DispatchLeasePort } from './dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken, type DispatchLeasePort } from './dispatch-lease.js';
 
 interface OperationResourcesOptions {
   readonly host: HostInference;
@@ -40,6 +40,8 @@ interface OpenOperationInput {
    * never released would pin a retired generation and keep hot reload from draining.
    */
   readonly dispatchLease?: boolean;
+  /** A Root IM operation a plugin dispatched: the lease is withheld and {@link dispatchLeaseWithheldToken} says so. */
+  readonly dispatchLeaseWithheld?: boolean;
   /** The dispatched message's conversation sequence, offered with the dispatch lease. */
   readonly conversationSequence?: number;
 }
@@ -109,10 +111,14 @@ export function createHostOperationResources(options: OperationResourcesOptions)
         ...(input.conversationSequence !== undefined ? { conversationSequence: input.conversationSequence } : {}),
       })
       : undefined;
+    const withheld = dispatchLease === undefined && input.dispatchLeaseWithheld === true;
     return Object.freeze({
-      has: (token: Token<unknown>) => token === aiInferenceClientToken || (dispatchLease !== undefined && token === dispatchLeaseToken),
+      has: (token: Token<unknown>) => token === aiInferenceClientToken
+        || (dispatchLease !== undefined && token === dispatchLeaseToken)
+        || (withheld && token === dispatchLeaseWithheldToken),
       use<T>(token: Token<T>): T {
         if (dispatchLease && token === dispatchLeaseToken) return dispatchLease as T;
+        if (withheld && token === dispatchLeaseWithheldToken) return true as T;
         if (token !== aiInferenceClientToken)
           throw new Error('Resource is not available in this operation');
         return client as T;
@@ -131,7 +137,10 @@ export function createHostOperationResources(options: OperationResourcesOptions)
           alreadyAdmitted: false,
           // #1250 第 84 批: only an operation owned by the Root (the Agent management commands the
           // zhin instance registers) sees the dispatch lease; token secrecy alone is not the guard.
-          dispatchLease: input.owner === input.lease.value.root,
+          // A Root operation a plugin dispatched (`delegatedFrom`: its message view was bound from a
+          // plugin author) keeps every other resource, as a direct dispatch would, but not the lease.
+          dispatchLease: input.owner === input.lease.value.root && input.delegatedFrom === undefined,
+          dispatchLeaseWithheld: input.owner === input.lease.value.root && input.delegatedFrom !== undefined,
           subject: usageSubjectFromMessage(input.message),
           context: () =>
             resolveInferenceMessageContext(contextOptions, input.message, randomUUID()),

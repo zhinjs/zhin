@@ -5,6 +5,8 @@ export const managementMessages = createMessages({
   more: { 'zh-CN': '  ... 还有 {count} 个', en: '  ... {count} more' },
   archived: { 'zh-CN': '✅ 已归档当前会话，下次 @ 将使用新上下文', en: '✅ The current session was archived. The next mention will start a new context.' },
   noSession: { 'zh-CN': 'ℹ️ 无活跃会话可归档', en: 'ℹ️ No active session to archive.' },
+  // `{command}`: the command as the sender would send it (prefix included). #1250 第 84 批: a plugin forwarded it.
+  directCommandRequired: { 'zh-CN': 'ℹ️ 该命令不能经插件转发执行，请直接发送 {command}。', en: 'ℹ️ This command cannot run when a plugin forwards it. Send {command} directly.' },
   health: { 'zh-CN': '🏥 AI 服务健康状态:', en: '🏥 AI service health:' },
   memoryUnavailable: { 'zh-CN': 'ℹ️ 未启用长期记忆。', en: 'ℹ️ Long-term memory is not enabled.' },
   memoryIdentity: { 'zh-CN': 'ℹ️ 请在有真实发送者身份的聊天中查看你的记忆。', en: 'ℹ️ View your memories from a chat with a sender identity.' },

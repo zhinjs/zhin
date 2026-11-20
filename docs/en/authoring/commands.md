@@ -686,6 +686,36 @@ Matching uses a fixed priority: static commands before dynamic ones, and more sp
 
 Programmatic `CommandIndex.dispatch({ input, source, snapshot })` returns `status: unmatched | invalid | denied | executed`: `unmatched` has `matched: false`; `invalid` carries `issues: { field, message }[]` and `help`; `denied` means permission refused; only `executed` has a business return value. A Host can pass a real `PermissionSubject` for authorization.
 
+### Run a command from middleware or a button callback {#dispatch-from-middleware}
+
+To turn a button callback (or any inbound message) into a command, take the command table from the current context inside a middleware / handler and pass **the message itself** as `source`; do not pass a `snapshot` of your own:
+
+```ts
+// middlewares/vote-buttons/index.ts
+import { defineMiddleware } from 'zhin.js/middleware';
+import { commandFeatureId, type CommandIndex } from '@zhin.js/command';
+
+export default defineMiddleware({
+  async handle(context, next) {
+    const payload = context.input.content;
+    if (!payload.startsWith('vote ')) return next();
+    const result = await context.project<CommandIndex>(commandFeatureId).dispatch({ input: payload, source: context.input });
+    if (result.status === 'denied') return result.denial?.reason ?? 'You cannot do that';
+    if (result.status === 'invalid') return result.help;
+    if (result.refused) return result.value; // the command's refusal text (UserFacingError)
+    return undefined; // the command already replied with $reply
+  },
+});
+```
+
+- The command runs as the message's **real sender**: `permit` and execution policies are checked as usual, and `input.sender` and reply ownership come from the original message; the middleware cannot substitute someone else.
+- The command table is bound to the generation snapshot of the message's operation. Caching a command table across hot reloads, or passing another `snapshot`, is refused (`Message author binding belongs to another generation operation` / `not the command projection of the message's generation`): call `context.project()` in the current middleware / handler every time.
+- Plugins switched off per endpoint / conversation (ADR 0050) do not exist here either: `dispatch` filters out their commands for the message's endpoint and returns `unmatched`, exactly as if the user had sent the command text.
+- Any plugin's command can be dispatched, and so can Root commands (the project's own `commands/` and host commands such as `bind` / `claim` / `config` / `restart` / `role`): they run as usual with the same operation resources (for example the inference client) as when the user sends them directly, with or without the Agent installed.
+- The exception is the Agent management commands that need the **dispatch lease** (`models` / `health` / `tree` / `fork` / `compact` / `reset`): forwarded by a plugin, the Host withholds the lease and the command does not run; `dispatch` returns `status: 'executed'`, `refused: true`, `refusalReason: 'direct_command_required'`, and `value` asks the user (in their language) to send the command directly. Reply with `result.value`, as above. `memory` / `memory forget` need no lease and run as usual.
+- A command run this way has no `context.interaction` (multi-turn prompts); for flows that ask follow-up questions, let the user send the command text directly.
+- You do not always need middleware: a JSX `<button onClick>` callback carries its own `permit` (see [Buttons](./middleware-components.md#buttons)); QQ official `mode: 'command'` buttons have the platform prefill `payload` as the user's message, which goes through the normal command matching and authorization chain (other platforms' adapters do not support this kind of button yet).
+
 ### Endpoint management commands for adapters
 
 ::: details Generate list / add / remove commands for an adapter

@@ -11,18 +11,22 @@
  *
  * 只接受人类来源：由命令分发统一过滤（第 84 批，`@zhin.js/core` 的 `isNonHumanOrigin`）——消息 `origin`
  * （或无可信来源时的 `metadata.origin`）不是 `human` 时不进任何命令，结局 `ignored_bot` / `non_human_origin`。
+ *
+ * 需要分发租约的命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）由插件中间件 / handler /
+ * 按钮回调经 `CommandIndex.dispatch` 转发时，Host 不给租约（第 84 批，`dispatchLeaseWithheldToken`）：命令
+ * 不执行，回复可读提示请用户直接发送该命令，结局 `refused` / `direct_command_required`。`memory` 不需要租约，照常执行。
  */
-import { defineCommand, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
+import { defineCommand, UserFacingError, type CommandContext, type CommandDefinition } from '@zhin.js/core/feature/command';
 import type { Message } from '@zhin.js/core/runtime';
 import type { InferenceClient } from '@zhin.js/ai/provider';
-import type { SnapshotLease } from '@zhin.js/plugin-runtime';
+import type { Locale, SnapshotLease } from '@zhin.js/plugin-runtime';
 import { managementMessages as t } from './management-messages.js';
 import { asPrivate } from '../internal/as-private.js';
 import { jumpSessionTree, listSessionTree } from '../session/session-tree-commands.js';
 import type { ZhinAgent } from '../zhin-agent/index.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import { resolveRuntimeSenderRoles } from '../plugin-runtime/ingress/request-capabilities.js';
-import { dispatchLeaseToken } from '../plugin-runtime/inference/dispatch-lease.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken } from '../plugin-runtime/inference/dispatch-lease.js';
 
 /** Management commands need any zhin chat role (`trusted` or higher) on the conversation's chain. */
 export const RUNTIME_MANAGEMENT_PERMIT = 'trusted';
@@ -119,8 +123,31 @@ function inputOf(command: CommandInput): Message {
   return command.input as unknown as Message;
 }
 
-/** The dispatch of `command`: its signal and, with Host resources, the dispatching generation. */
-function dispatchOf(command: CommandRun): RuntimeManagementDispatch {
+/** Refusal code (ADR 0061 `refused` reason) of a management command a plugin forwarded. */
+export const DIRECT_COMMAND_REQUIRED = 'direct_command_required';
+
+/**
+ * #1250 第 84 批: a plugin (middleware / handler / button callback) dispatched this command, so the Host
+ * withheld the dispatch lease it needs. The sender reads a request to send the command directly.
+ */
+class DirectCommandRequiredError extends UserFacingError {
+  readonly #command: string;
+  constructor(command: string) {
+    super(`Send ${command} directly`, { reason: DIRECT_COMMAND_REQUIRED });
+    this.#command = command;
+  }
+  override format(locale?: Locale): string {
+    return t(locale, 'directCommandRequired', { command: this.#command });
+  }
+}
+
+/**
+ * The dispatch of `command`: its signal and, with Host resources, the dispatching generation. A Root
+ * operation a plugin dispatched has Host resources but no lease: the command does not run (`name` is
+ * its path, for the reply).
+ */
+function dispatchOf(command: CommandRun & Pick<CommandContext, 'formatCommand'>, name: string): RuntimeManagementDispatch {
+  if (command.has(dispatchLeaseWithheldToken)) throw new DirectCommandRequiredError(command.formatCommand(name) ?? name);
   if (!command.has(dispatchLeaseToken)) return { signal: command.signal };
   const port = command.use(dispatchLeaseToken);
   return { signal: command.signal, retainLease: () => port.retain(),
@@ -146,14 +173,14 @@ function withModelScope<T>(operation: RuntimeManagementOperation, run: () => Pro
  */
 export function createRuntimeManagementCommands(host: RuntimeManagementCommandHost): readonly RuntimeManagementCommand[] {
   const agent = () => asPrivate(host.zhinAgent);
-  const open = <T>(command: CommandRun, run: (operation: RuntimeManagementOperation) => Promise<T>) =>
-    host.open(inputOf(command), dispatchOf(command), run);
+  const open = <T>(name: string, command: CommandRun & Pick<CommandContext, 'formatCommand'>, run: (operation: RuntimeManagementOperation) => Promise<T>) =>
+    host.open(inputOf(command), dispatchOf(command, name), run);
   const commands: RuntimeManagementCommand[] = [
     {
       name: 'models',
       definition: define({
         ...described('models'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
-        execute: command => open(command, async operation => {
+        execute: command => open('models', command, async operation => {
           const profiles = await listLanguageProfiles(operation);
           return [t(command.locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
         }),
@@ -163,7 +190,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       name: 'health',
       definition: define({
         ...described('health'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
-        execute: command => open(command, async operation => {
+        execute: command => open('health', command, async operation => {
           const profiles = await listLanguageProfiles(operation);
           return `${t(command.locale, 'health')}\n${profiles.length} configured language profiles`;
         }),
@@ -174,7 +201,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       definition: define({
         ...described('tree'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         params: { index: { type: 'integer', optional: true, min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
-        execute: command => open(command, async operation => {
+        execute: command => open('tree', command, async operation => {
           const index = command.params.index;
           if (typeof index === 'number') {
             return withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, index, command.locale));
@@ -191,7 +218,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       definition: define({
         ...described('fork'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
         params: { index: { type: 'integer', min: 1, description: '分支点编号', descriptionI18n: { en: 'Branch point number' } } },
-        execute: command => open(command, operation =>
+        execute: command => open('fork', command, operation =>
           // `index` is a required `integer` param: the command module parses it before `execute` runs.
           withModelScope(operation, () => jumpSessionTree(agent(), operation.sessionKey, command.params.index as number, command.locale))),
       }),
@@ -200,7 +227,7 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
       name: 'compact',
       definition: define({
         ...described('compact'), permit: [RUNTIME_MANAGEMENT_PERMIT], options: {},
-        execute: command => open(command, async operation => {
+        execute: command => open('compact', command, async operation => {
           const result = await withModelScope(operation, () => host.zhinAgent.compactSession(operation.sessionKey, command.locale));
           return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
         }),
@@ -217,10 +244,10 @@ export function createRuntimeManagementCommands(host: RuntimeManagementCommandHo
         execute: async command => {
           const message = inputOf(command);
           if (resolveRuntimeSenderRoles(message).hostRole === undefined) {
-            await host.clear(message, dispatchOf(command));
+            await host.clear(message, dispatchOf(command, 'reset'));
             return undefined;
           }
-          return open(command, async operation => {
+          return open('reset', command, async operation => {
             const text = t(command.locale, await host.zhinAgent.archiveSession(operation.sessionKey) ? 'archived' : 'noSession');
             if (!operation.replyFixed) return text;
             await operation.replyFixed(text);

@@ -82,6 +82,14 @@ export interface ImOperationResourcesInput {
   readonly signal: AbortSignal;
   /** #1250 第 84 批: the message's conversation sequence, when it was recorded (not for a secret). */
   readonly conversationSequence?: number;
+  /**
+   * #1250 第 84 批: the first plugin author the operation's message view was bound from before it was
+   * bound to `owner` (a plugin middleware / handler / command dispatched it, possibly over several
+   * hops: P → Q → Root and Root → P → Root both name P). The Host offers the same resources as for a
+   * direct dispatch except dispatch-scoped authority reserved for messages the Root dispatches itself
+   * (the Agent's dispatch lease).
+   */
+  readonly delegatedFrom?: PluginId;
 }
 export interface ImOperationResourcesPort {
   open(input: ImOperationResourcesInput): OperationResourceView | undefined;
@@ -407,12 +415,13 @@ export interface RuntimeMessageOperation {
   readonly signal?: AbortSignal;
   readonly captureInteraction?: (owner: PluginId) => CapturedEndpointOperation;
   readonly session?: RuntimeMessageSessionBinding;
-  readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>) => OperationResourceView | undefined;
+  readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal; delegatedFrom?: PluginId }>) => OperationResourceView | undefined;
   readonly registerOperationView?: (view: object, owner: PluginId) => void;
   /**
-   * @internal #1250 第 84 批: the first non-Root author this view was (re)bound from. A Root-owned
-   * operation is created only from a view whose binding chain never passed through a plugin author,
-   * so a plugin cannot rebind its message to the Root to obtain Root-only operation resources.
+   * @internal #1250 第 84 批: the first non-Root author this view was (re)bound from. An operation
+   * created from such a view is delegated (see {@link ImOperationResourcesInput.delegatedFrom}): a
+   * plugin dispatching a Root command (or rebinding its message to the Root) runs it normally, but
+   * without the Root-only dispatch authority.
    */
   readonly delegatedFrom?: PluginId;
   readonly presentation?: RuntimeMessagePresentation;
@@ -568,10 +577,12 @@ export class RuntimeMessage implements MessageBase {
    * @internal Metadata fields cannot replace this actual leased operation factory.
    *
    * #1250 第 84 批: the operation owner is the author the framework bound this view to, never one the
-   * caller names. An author-bound view creates operations only for its own author (the command /
-   * middleware / handler executor binds the view before handing it out); a Root-owned operation also
-   * requires that the view was never bound to a plugin author first. Only the framework's unbound view
-   * (held by Core's dispatcher, which picks the matched command's owner) creates for any owner.
+   * caller names. An author-bound view opens Host resources only for its own author (the command /
+   * middleware / handler executor binds the view before handing it out); for any other owner the
+   * operation has no resources (never an error: the command still runs, like one without Host
+   * resources). A view whose binding chain passed through a plugin author opens them delegated, so
+   * the Host withholds Root-only dispatch authority. Only the framework's unbound view (held by Core's
+   * dispatcher, which picks the matched command's owner) opens them for any owner.
    */
   [operationInputResources](snapshot: RuntimeSnapshot): CapabilityOperationFactory | undefined {
     this.#operation.assertActive?.();
@@ -584,15 +595,11 @@ export class RuntimeMessage implements MessageBase {
       this.#operation.assertActive?.();
       if (!snapshot.tree.has(input.owner)) throw new Error(`Unknown operation owner: ${input.owner}`);
       const author = this.#operation.requester;
-      if (author !== undefined && input.owner !== author) {
-        throw new Error(`Operation owner ${input.owner} is not this message view's author ${author}`);
-      }
-      if (input.owner === snapshot.root && this.#operation.delegatedFrom !== undefined) {
-        throw new Error(`Root operation refused: this message view was bound from plugin ${this.#operation.delegatedFrom}`);
-      }
       const actualSignal = input.signal === signal ? signal : AbortSignal.any([signal, input.signal]);
+      if (author !== undefined && input.owner !== author) return Object.freeze({ signal: actualSignal, resources: undefined });
       return Object.freeze({ signal: actualSignal, resources: this.#operation.createOperationResources?.({
         message: this, owner: input.owner, signal: actualSignal,
+        ...(this.#operation.delegatedFrom !== undefined ? { delegatedFrom: this.#operation.delegatedFrom } : {}),
       }) });
     } });
   }

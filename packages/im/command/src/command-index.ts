@@ -618,22 +618,27 @@ export class CommandIndex {
 
   async dispatch(request: CommandDispatchRequest): Promise<CommandDispatchResult> {
     const sourceSnapshot = request.snapshot === undefined ? this.#sourceSnapshot(request.source) : undefined;
+    // Without an explicit factory, a source that carries its own operation (a framework Message) brings
+    // that operation's resources — also with an explicit `snapshot` that is the source's own, so both
+    // ways of dispatching a message give the command the same resources (#1250 第 84 批).
+    const sourceResources = request.operation ? undefined
+      : sourceSnapshot ?? (request.snapshot !== undefined && readOperationInputSnapshot(request.source) === request.snapshot
+        ? request.snapshot : undefined);
     if (sourceSnapshot) {
       // ADR 0050: a Plugin switched off for this message's endpoint has no commands there, also when a
       // middleware/handler dispatches through the raw projection (Core's dispatcher passes a gated index).
       const gated = this.#gatedForEndpoint(request.source, sourceSnapshot);
-      if (gated !== this) {
-        return gated.#dispatch({ ...request, snapshot: sourceSnapshot }, request.operation ? undefined : sourceSnapshot);
-      }
+      if (gated !== this) return gated.#dispatch({ ...request, snapshot: sourceSnapshot }, sourceResources);
     }
-    return this.#dispatch(sourceSnapshot ? { ...request, snapshot: sourceSnapshot } : request,
-      request.operation ? undefined : sourceSnapshot);
+    return this.#dispatch(sourceSnapshot ? { ...request, snapshot: sourceSnapshot } : request, sourceResources);
   }
 
   /**
    * `sourceResources`: the snapshot of the source's own operation when its resources are read from the
    * source (no explicit factory). They are read from the author-bound view of the source (#1250 第 84
-   * 批), whose factory only creates operations for that very author.
+   * 批): its factory opens Host resources only for that very author, and delegated (`delegatedFrom`) when the view was
+   * bound from a plugin author (a plugin dispatching a Root command), so the Host withholds Root-only
+   * dispatch authority — the command still runs. Nothing here refuses the dispatch.
    */
   async #dispatch(request: CommandDispatchRequest, sourceResources: RuntimeSnapshot | undefined): Promise<CommandDispatchResult> {
     const { input, source, interactionFactory, commandPrefix, locale: localeOverride } = request;
@@ -687,12 +692,13 @@ export class CommandIndex {
     const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource), locale);
     if (parsed.issues.length > 0) return Object.freeze({ matched: true, status: 'invalid', command: match.command.name,
       owner: match.command.slot.owner, issues: parsed.issues, help });
-    const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
-    if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
     // A source that carries its own operation (a framework Message) also brings that operation's
     // resources, read from the command author's view; an explicit factory from the caller is used as given.
+    // Read before admission: whatever could fail here does so before the command's budget is spent.
     const operationFactory = request.operation
       ?? (sourceResources ? readOperationInputResources(authorSource, sourceResources) : undefined);
+    const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
+    if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
     const operation = operationFactory?.create({ owner: match.command.slot.owner, signal: operationFactory.signal });
     try {
       const value = await definition.execute(createCommandContext({
