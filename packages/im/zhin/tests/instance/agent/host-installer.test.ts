@@ -163,6 +163,27 @@ describe('installAgentHost', () => {
     expect(resources.has(ingressRouteToken)).toBe(true);
   });
 
+  it('publishes only the ingress hooks under ingressRouteToken: no route object, options, SnapshotStore or management path (#1250 第 85 批)', async () => {
+    const resources = new Scope(rootPluginId());
+    await install()(context(resources));
+    // What any plugin scope reading the token gets.
+    const published = resources.use(ingressRouteToken) as unknown as Record<PropertyKey, unknown>;
+    expect(Object.isFrozen(published)).toBe(true);
+    expect(Object.getPrototypeOf(published)).toBe(Object.prototype);
+    expect(Reflect.ownKeys(published).sort()).toEqual(['preRoute', 'route', 'shouldRouteBeforeDispatch']);
+    for (const key of ['options', 'runtime', 'snapshots', 'clearAsCommand', 'runManagementOperation', 'hostMailbox', 'dispose']) {
+      expect(published[key]).toBeUndefined();
+    }
+    // The hooks are plain closures: neither they nor their prototype lead back to the route.
+    for (const key of ['preRoute', 'route', 'shouldRouteBeforeDispatch']) {
+      const hook = published[key] as Record<PropertyKey, unknown>;
+      expect(typeof hook).toBe('function');
+      expect(Reflect.ownKeys(hook).filter(own => own !== 'length' && own !== 'name')).toEqual([]);
+    }
+    // Writing a field onto it (to swap a hook, say) does nothing.
+    expect(Reflect.set(published, 'route', () => true)).toBe(false);
+  });
+
   it('registers the Agent management commands as Root commands when the Command Feature is present (#1250 第 83 批)', async () => {
     const withCommands = { ...(context(new Scope(rootPluginId())) as object), hasFeature: (feature: string) => feature === 'zhin.command' };
     await install()(withCommands as never);

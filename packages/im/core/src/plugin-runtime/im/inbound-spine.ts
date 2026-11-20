@@ -90,7 +90,36 @@ export function readIngressRouteResult(message: Message, result: boolean | Ingre
   return result.handled === true;
 }
 
+/**
+ * The generation's ingress route, as the IM runtime calls it. #1250 第 85 批: the resource provided
+ * under this token must be the narrow {@link createIngressRouteFacade} of the route, never the route
+ * object itself — the token is readable from plugin scopes, and a full route object (its fields,
+ * TS-`private` or not, and its Host-only methods) is reachable at run time by whoever reads it.
+ */
 export const ingressRouteToken = createToken<IngressRoute>('zhin.im.ingress-route');
+
+/**
+ * #1250 第 85 批: what {@link ingressRouteToken} exposes — exactly the {@link IngressRoute} hooks the IM
+ * runtime calls (`preRoute`, `shouldRouteBeforeDispatch`, `route`), bound to `route` and frozen. The
+ * route object stays inside the closure: no field, prototype or other method of it is reachable from
+ * the facade.
+ */
+export function createIngressRouteFacade(route: IngressRoute): IngressRoute {
+  const preRoute = route.preRoute;
+  const shouldRouteBeforeDispatch = route.shouldRouteBeforeDispatch;
+  const routeMessage = route.route;
+  return Object.freeze({
+    ...(preRoute ? {
+      preRoute: (message: Message, lease: SnapshotLease, requester: PluginId, conversationSequence: number | undefined) =>
+        preRoute.call(route, message, lease, requester, conversationSequence),
+    } : {}),
+    ...(shouldRouteBeforeDispatch ? {
+      shouldRouteBeforeDispatch: (message: Message) => shouldRouteBeforeDispatch.call(route, message),
+    } : {}),
+    route: (message: Message, lease: SnapshotLease, requester: PluginId, conversationSequence: number | undefined) =>
+      routeMessage.call(route, message, lease, requester, conversationSequence),
+  });
+}
 
 export function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefined {
   const candidate = snapshot.resources.get(snapshot.root)?.get(ingressRouteToken.id);
