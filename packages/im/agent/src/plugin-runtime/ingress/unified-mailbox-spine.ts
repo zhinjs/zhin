@@ -30,7 +30,7 @@ import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
-import { answerClearCommand, ClearConfirmCooldown, clearSessionContext, matchClearCommand, sendFixedReply } from './clear-command.js';
+import { answerClearCommand, CLEARED_MESSAGE, ClearConfirmCooldown, clearSessionContext, matchClearCommand, sendFixedReply } from './clear-command.js';
 import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
@@ -107,6 +107,8 @@ import { SessionEventDispatcher } from './session-event-dispatch.js';
 const logger = getLogger('agent');
 
 export const ingressMessages = createMessages({
+  /** Kept for callers of this table (compatibility); the same text the clear command confirms with. */
+  cleared: CLEARED_MESSAGE,
   stopped: { 'zh-CN': '好的，已停止当前回复。', en: 'OK, stopped the current reply.' },
   queue_full: { 'zh-CN': '前面还有几条消息在处理，请稍后再发。', en: 'Other messages are still being processed. Please try again shortly.' },
   expired: { 'zh-CN': '这条消息排队太久，已跳过，需要的话请重新发送。', en: 'This message waited too long and was skipped. Please send it again if needed.' },
@@ -680,7 +682,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       ...(liveRoom ? {} : {
         onUnmatched: (outboundBlocked: (stage: string) => boolean) => answerClearCommand({
           message,
-          policy: { trigger, access: service.getAccessConfig?.() },
+          policy: { trigger },
           outboundBlocked: () => outboundBlocked('clear_command'),
           archive: () => zhinAgent.archiveSession(initialSessionKey),
           cooldown: this.#clearConfirmCooldown,
@@ -704,8 +706,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
       message, trigger, plainText, isMaster: senderRoles.isMaster, content: matched.content,
     });
-    // #1250: the triggered text (`清空`, `#clear`) or the addressed message itself (`@bot /clear`).
-    const clearRequested = isClearCommand(matched.content) || (!ambient && matchClearCommand(message));
+    // #1250: the triggered text (`清空`, `#clear`) or the addressed message itself (`@bot /clear`)
+    // clears the sender's own session. Never in a live room or an ambient interjection — their session
+    // is the shared scene task — and not while the control plane stops outbound messages (no clear, no
+    // reply, like the untriggered spelling): the message then goes on like any other.
+    const clearRequested = !liveRoom && !ambient
+      && (isClearCommand(matched.content) || matchClearCommand(message))
+      && !outboundBlocked('clear_command');
     const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !clearRequested;
     if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
     audit({
@@ -723,8 +730,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       await clearSessionContext({
         message, turnId, cooldown: this.#clearConfirmCooldown, cooldownKey: clearCooldownKey,
         archive: () => zhinAgent.archiveSession(sessionKey),
-        // The control plane stopped outbound messages here: the clear stands, the confirmation is not sent.
-        send: async text => { if (!outboundBlocked('clear_command')) await replyFixed(sessionKey, text); },
+        send: text => replyFixed(sessionKey, text),
       });
       return true;
     }

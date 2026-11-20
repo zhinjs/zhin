@@ -17,12 +17,13 @@ const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const privateChat = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private', id: 'user' } as const;
 const groupChat = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'group', id: 'g1' } as const;
 
-function message(content: string, options: { group?: boolean; mentioned?: boolean; locale?: string; commandPrefix?: string; sender?: string } = {}) {
+function message(content: string, options: { group?: boolean; mentioned?: boolean; locale?: string; commandPrefix?: string; sender?: string; metadata?: Record<string, unknown> } = {}) {
   return {
     content,
     conversation: options.group ? groupChat : privateChat,
     sender: { id: options.sender ?? 'user' },
     ...(options.mentioned !== undefined ? { mentioned: options.mentioned } : {}),
+    metadata: options.metadata ?? {},
     locale: options.locale ?? 'zh-CN',
     commandPrefix: options.commandPrefix ?? '/',
   } as never;
@@ -60,6 +61,25 @@ describe('chat clear command (#1250)', () => {
     expect(matchClearCommand(message('/clear', { group: true, mentioned: false }))).toBe(false);
     expect(matchClearCommand(message('@bot /clear', { group: true, mentioned: true }))).toBe(true);
     expect(matchClearCommand(message('[CQ:at,qq=1] /reset', { group: true, mentioned: true }))).toBe(true);
+    // The same mention test as the AI trigger: `metadata.mentioned` counts too.
+    expect(matchClearCommand(message('/clear', { group: true, metadata: { mentioned: true } }))).toBe(true);
+    expect(clearCommandAllowed(message('/clear', { group: true, metadata: { mentioned: true } }), {})).toBe(true);
+  });
+
+  it('accepts /clear@<this bot> (adapter-reported handle) and never /clear@<another account>', () => {
+    const own = { metadata: { botUsername: 'ZhinBot' } };
+    for (const text of ['/clear@ZhinBot', '/RESET@zhinbot', '／new@ZhinBot']) {
+      expect(matchClearCommand(message(text, { group: true, ...own }))).toBe(true);
+      expect(clearCommandAllowed(message(text, { group: true, ...own }), {})).toBe(true);
+      expect(matchClearCommand(message(text, own))).toBe(true);
+    }
+    expect(matchClearCommand(message('@ZhinBot /clear@ZhinBot', { group: true, mentioned: true, ...own }))).toBe(true);
+    for (const options of [{ group: true, ...own }, { group: true, mentioned: true, ...own }, own, { group: true }, {}]) {
+      expect(matchClearCommand(message('/clear@OtherBot', options))).toBe(false);
+    }
+    expect(matchClearCommand(message('/clear@ZhinBot', { group: true }))).toBe(false);
+    expect(matchClearCommand(message('/weather@ZhinBot', { group: true, ...own }))).toBe(false);
+    expect(clearCommandAllowed(message('/clear@ZhinBot', { group: true, ...own }), { trigger: { respondToAt: false } })).toBe(false);
   });
 
   it('confirms what was cleared and what was not; localized', () => {
@@ -133,7 +153,7 @@ describe('chat clear command (#1250)', () => {
     expect(send).toHaveBeenCalledTimes(4);
   });
 
-  it('neither clears nor answers where the AI would not answer: trigger off, private or mentions disabled, access closed or not listed, outbound stopped', async () => {
+  it('neither clears nor answers where the AI would not answer: trigger off, private or mentions disabled, outbound stopped', async () => {
     const send = vi.fn(async () => undefined);
     const archive = vi.fn(async () => true);
     const ask = (msg: never, policy: Parameters<typeof clearCommandAllowed>[1], outboundBlocked?: () => boolean) =>
@@ -143,16 +163,27 @@ describe('chat clear command (#1250)', () => {
     expect(await ask(message('/clear'), { trigger: { respondToPrivate: false } })).toBe(false);
     expect(await ask(message('/clear', { group: true, mentioned: true }), { trigger: { respondToAt: false } })).toBe(false);
     expect(await ask(message('/clear', { group: true }), {})).toBe(false);
-    expect(await ask(message('/clear'), { access: { mode: 'closed' } })).toBe(false);
-    expect(await ask(message('/clear'), { access: { mode: 'whitelist', users: ['someone-else'] } })).toBe(false);
-    expect(await ask(message('/clear'), { access: { mode: 'unknown-mode' } })).toBe(false);
     expect(await ask(message('/clear'), {}, () => true)).toBe(false);
     expect(archive).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
-    expect(await ask(message('/clear'), { access: { mode: 'whitelist', users: ['user'] } })).toBe(true);
-    expect(await ask(message('/clear', { group: true, mentioned: true, sender: 'x' }), { access: { mode: 'whitelist', groups: ['g1'] } })).toBe(true);
+    // `ai.access` is not part of the policy (no IM ingress path enforces it).
+    expect(await ask(message('/clear'), {})).toBe(true);
+    expect(await ask(message('/clear', { group: true, mentioned: true, sender: 'x' }), {})).toBe(true);
     expect(archive).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes the confirmation cooldown only when a confirmation is sent', async () => {
+    let now = 0;
+    const cooldown = new ClearConfirmCooldown(60_000, () => now);
+    const send = vi.fn(async () => undefined);
+    const archive = vi.fn(async () => false);
+    // Outbound stopped: nothing is cleared or sent, and the window is not started.
+    expect(await answerClearCommand({ message: message('/clear'), policy: {}, cooldown, cooldownKey: 'k', archive, send, outboundBlocked: () => true })).toBe(false);
+    expect(await answerClearCommand({ message: message('/clear'), policy: {}, cooldown, cooldownKey: 'k', archive, send })).toBe(true);
+    expect(send).toHaveBeenCalledOnce();
+    now += 1;
+    expect(cooldown.take('k')).toBe(false);
   });
 
   it('records a fixed reply as delivered only with exact plain-text evidence', async () => {

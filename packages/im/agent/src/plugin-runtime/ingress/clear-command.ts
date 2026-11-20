@@ -13,12 +13,12 @@ type ReplyReceipt = Awaited<ReturnType<Message['$reply']>>;
  * archive the sender's session context through `ZhinAgent.archiveSession` — the one reset path, also
  * used by the operator `<prefix>reset` management command — and answer with a short fixed confirmation.
  */
-export const clearCommandMessages = createMessages({
-  cleared: {
-    'zh-CN': '已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。',
-    en: 'Cleared the AI conversation context for this session. Long-term memory and scheduled tasks are not affected.',
-  },
+export const CLEARED_MESSAGE = Object.freeze({
+  'zh-CN': '已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。',
+  en: 'Cleared the AI conversation context for this session. Long-term memory and scheduled tasks are not affected.',
 });
+
+export const clearCommandMessages = createMessages({ cleared: CLEARED_MESSAGE });
 
 /** The fixed confirmation sent after a clear. */
 export function clearedText(locale: Locale | undefined): string {
@@ -33,14 +33,56 @@ function withoutLeadingMentions(text: string): string {
 }
 
 /**
- * `true` when `message` is a clear command (see {@link isClearCommand}) sent in a private chat, or
- * addressed to the bot with a mention in a group. Used for messages no AI trigger matched (a leading
- * `/` is an ignored trigger prefix), so `/clear` reaches the same clear as a triggered `清空`.
+ * `true` when the message addressed the bot by mention — the same test the AI trigger applies
+ * (`message.mentioned`, or `metadata.mentioned` from adapters that report mentions there).
  */
-export function matchClearCommand(message: Pick<Message, 'content' | 'conversation' | 'mentioned'>): boolean {
+function mentionedBot(message: Pick<Message, 'mentioned' | 'metadata'>): boolean {
+  return message.mentioned === true || message.metadata?.mentioned === true;
+}
+
+/** The bot's own account handle, when the adapter reports it (`metadata.botUsername`, e.g. Telegram). */
+function botUsernameOf(message: Pick<Message, 'metadata'>): string | undefined {
+  const value = message.metadata?.botUsername;
+  if (typeof value !== 'string') return undefined;
+  const handle = value.trim().replace(/^@/u, '').toLowerCase();
+  return handle || undefined;
+}
+
+type CommandText = Readonly<{ text: string; addressed: boolean }>;
+
+/**
+ * Resolves a Telegram-style `/clear@<bot>` suffix: with the bot's own handle (case-insensitive) the
+ * suffix is dropped and the command counts as addressed to the bot; a suffix naming another account,
+ * or any suffix when the handle is unknown, never matches (`undefined`). Text without a suffix is
+ * returned trimmed.
+ */
+function withoutOwnCommandSuffix(text: string, botUsername: string | undefined): CommandText | undefined {
+  const trimmed = text.normalize('NFKC').trim();
+  const suffixed = /^(\/\s*[a-z]+)@([a-z0-9_]+)$/iu.exec(trimmed);
+  if (!suffixed) return { text: trimmed, addressed: false };
+  return botUsername !== undefined && suffixed[2]!.toLowerCase() === botUsername
+    ? { text: suffixed[1]!, addressed: true }
+    : undefined;
+}
+
+/** The clear command a message carries: `addressed` when it was sent to the bot (private, mention, `/clear@<bot>`). */
+function clearCommandOf(message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>): CommandText | undefined {
   const isPrivate = message.conversation.kind === 'private';
-  if (!isPrivate && message.mentioned !== true) return false;
-  return isClearCommand(isPrivate ? message.content : withoutLeadingMentions(message.content));
+  const mentioned = !isPrivate && mentionedBot(message);
+  const command = withoutOwnCommandSuffix(mentioned ? withoutLeadingMentions(message.content) : message.content, botUsernameOf(message));
+  if (!command || !isClearCommand(command.text)) return undefined;
+  return { text: command.text, addressed: isPrivate || mentioned || command.addressed };
+}
+
+/**
+ * `true` when `message` is a clear command (see {@link isClearCommand}) sent in a private chat, or
+ * addressed to the bot in a group — by mention, or as `/clear@<bot>` when the adapter reports the
+ * bot's handle (`metadata.botUsername`); `/clear@<another account>` never matches. Used for messages
+ * no AI trigger matched (a leading `/` is an ignored trigger prefix), so `/clear` reaches the same
+ * clear as a triggered `清空`.
+ */
+export function matchClearCommand(message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>): boolean {
+  return clearCommandOf(message)?.addressed === true;
 }
 
 /**
@@ -98,28 +140,25 @@ export class ClearConfirmCooldown {
   }
 }
 
-/** The trigger and access settings an untriggered clear command must respect (subset of the Agent config). */
+/** The trigger settings an untriggered clear command must respect (subset of the Agent config). */
 export interface ClearCommandPolicy {
   readonly trigger?: Readonly<{ enabled?: boolean; respondToAt?: boolean; respondToPrivate?: boolean }>;
-  readonly access?: Readonly<{ mode?: string; users?: readonly string[]; groups?: readonly string[] }>;
 }
 
 /**
- * #1250: an untriggered clear command only acts where the AI would have answered a normal message
- * from this sender: the trigger is on, private chats (or mentions in a group) are answered, and the AI
- * access gate is open for this sender / group. Anything else stays silent (fail closed).
+ * #1250: an untriggered clear command only acts where the bot answers this sender: the AI trigger is
+ * on and answers private chats, or mentions in a group (`/clear@<bot>` counts as one). The
+ * control-plane and speaking gates already ran. `ai.access` is not consulted: no IM ingress path
+ * enforces it, so it does not narrow clearing either.
  */
-export function clearCommandAllowed(message: Pick<Message, 'conversation' | 'mentioned' | 'sender'>, policy: ClearCommandPolicy): boolean {
-  const { trigger, access } = policy;
+export function clearCommandAllowed(
+  message: Pick<Message, 'content' | 'conversation' | 'mentioned' | 'metadata'>,
+  policy: ClearCommandPolicy,
+): boolean {
+  const { trigger } = policy;
   if (trigger?.enabled === false) return false;
-  const isPrivate = message.conversation.kind === 'private';
-  if (isPrivate ? trigger?.respondToPrivate === false : (message.mentioned !== true || trigger?.respondToAt === false)) return false;
-  const mode = access?.mode ?? 'open';
-  if (mode === 'open') return true;
-  if (mode !== 'whitelist') return false;
-  const senderId = message.sender?.id?.trim();
-  if (senderId && access?.users?.includes(senderId)) return true;
-  return !isPrivate && (access?.groups?.includes(message.conversation.id) ?? false);
+  if (message.conversation.kind === 'private') return trigger?.respondToPrivate !== false;
+  return trigger?.respondToAt !== false && clearCommandOf(message)?.addressed === true;
 }
 
 /**
@@ -137,6 +176,8 @@ export async function clearSessionContext(input: Readonly<{
   turnId?: string;
 }>): Promise<void> {
   const archived = await input.archive();
+  // The confirmation is always sent from here (callers check the outbound stop first), so taking the
+  // cooldown only ever consumes it for a confirmation that goes out.
   const fresh = input.cooldown.take(input.cooldownKey);
   reportInboundOutcome(input.message, {
     outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate',

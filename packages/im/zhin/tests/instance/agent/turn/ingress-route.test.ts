@@ -751,6 +751,40 @@ describe('personal Session IM ingress', () => {
     } finally { await f.close(); vi.useRealTimers(); }
   });
 
+  it('never clears the shared live-room scene task: 清空, #/new and @bot /reset go on as live messages (#1250)', async () => {
+    vi.useFakeTimers();
+    const f = fixture({ live: true });
+    try {
+      const runs = [
+        f.run('alice', '清空'),
+        f.run('bob', '#/new'),
+        f.run('carol', '@zhin /reset', conversation, 'account-a', { mentioned: true }),
+      ];
+      await vi.advanceTimersByTimeAsync(50);
+      await Promise.all(runs);
+      expect(f.archiveSession).not.toHaveBeenCalled();
+      expect(f.executeLeased).toHaveBeenCalled();
+      expect(f.requests.every(request => request.session.key.startsWith('scene-task:'))).toBe(true);
+    } finally { await f.close(); vi.useRealTimers(); }
+  });
+
+  it('an ambient interjection never clears the shared scene task; an @ to the bot clears only the sender’s session (#1250)', async () => {
+    const f = fixture({ ambient: true });
+    try {
+      await f.run('alice', '清空');
+      expect(f.archiveSession).not.toHaveBeenCalled();
+      // The interjection went on as a normal ambient turn in the shared scene Session.
+      expect(f.requests).toHaveLength(1);
+      expect(f.requests[0]!.session.key).toMatch(/^scene-task:v1:[a-f0-9]{64}$/);
+      await mention(f, 'bob', '清空');
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+      const cleared = (f.archiveSession.mock.calls[0] as unknown[])[0] as string;
+      expect(cleared).not.toMatch(/^scene-task:/);
+      expect(cleared).not.toBe(f.requests[0]!.session.key);
+      expect(f.requests).toHaveLength(1);
+    } finally { await f.close(); }
+  });
+
   it('uses a shared system Session for ambient participation without a personal owner', async () => {
     const f = fixture({ ambient: true });
     try {
@@ -987,7 +1021,7 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
         },
       } as never,
     });
-    const run = async (text: string, extra: { conversation?: ConversationRef; mentioned?: boolean; owner?: boolean; sender?: string } = {}) => {
+    const run = async (text: string, extra: { conversation?: ConversationRef; mentioned?: boolean; owner?: boolean; sender?: string; metadata?: Record<string, unknown> } = {}) => {
       const conversation = extra.conversation ?? privateChat;
       const ledger = new InboundOutcomeLedger({ conversation, receivedAt: 1 });
       const $reply = vi.fn(async (_content: unknown) => ({ status: 'sent' }));
@@ -995,6 +1029,7 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
         conversation, content: text, endpointId: 'account-a', commandPrefix: '/', locale: 'zh-CN',
         sender: { id: extra.sender ?? 'alice', ...(extra.owner ? { chatRole: 'owner' as const, chatRoleLevels: { owner: 'global' as const } } : {}) },
         ...(extra.mentioned !== undefined ? { mentioned: extra.mentioned } : {}),
+        ...(extra.metadata ? { metadata: extra.metadata } : {}),
         message: { conversation, id: `message-${text}` }, $reply,
         [inboundOutcomeSink]: () => ledger,
       } as unknown as Message;
@@ -1078,29 +1113,50 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
     }
   });
 
-  it('a triggered 清空 still clears while outbound is stopped, but sends no confirmation', async () => {
+  it('a triggered 清空 neither clears nor answers while outbound is stopped, like the slash spelling', async () => {
     const f = clearFixture({ control: { gate: () => ({ blocked: false }), outboundGate: () => stopped } });
     try {
-      const { record, $reply } = await f.run('清空');
-      expect(record).toMatchObject({ outcome: 'cleared' });
-      expect(f.archiveSession).toHaveBeenCalledOnce();
-      expect($reply).not.toHaveBeenCalled();
+      for (const text of ['清空', '#/clear']) {
+        const { record, $reply } = await f.run(text);
+        expect(record.outcome).not.toBe('cleared');
+        expect($reply).not.toHaveBeenCalled();
+      }
+      expect(f.archiveSession).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });
 
-  it('keeps the existing behaviour without permission: access closed or not listed stays silent', async () => {
-    for (const access of [{ mode: 'closed' }, { mode: 'whitelist', users: ['someone-else'] }]) {
+  it('does not consult ai.access (no IM ingress path enforces it): the clear acts wherever the bot answers you', async () => {
+    for (const access of [{ mode: 'closed' }, { mode: 'whitelist', users: ['someone-else'] }, { mode: 'whitelist', users: ['alice'] }]) {
       const f = clearFixture({ access });
       try {
-        const { $reply, record } = await f.run('/clear');
-        expect(f.archiveSession).not.toHaveBeenCalled();
-        expect($reply).not.toHaveBeenCalled();
-        expect(record.outcome).not.toBe('cleared');
+        expect((await f.run('/clear')).record).toMatchObject({ outcome: 'cleared' });
+        expect(f.archiveSession).toHaveBeenCalledOnce();
       } finally { await f.close(); }
     }
-    const f = clearFixture({ access: { mode: 'whitelist', users: ['alice'] } });
+  });
+
+  it('accepts a mention reported as metadata.mentioned, like the AI trigger', async () => {
+    const f = clearFixture();
     try {
-      expect((await f.run('/clear')).record).toMatchObject({ outcome: 'cleared' });
+      const { record } = await f.run('/clear', { conversation: groupChat, metadata: { mentioned: true } });
+      expect(record).toMatchObject({ outcome: 'cleared' });
+      expect(f.archiveSession).toHaveBeenCalledOnce();
+    } finally { await f.close(); }
+  });
+
+  it('accepts Telegram-style /clear@<bot> in a group only for this bot’s own handle', async () => {
+    const f = clearFixture();
+    try {
+      for (const text of ['/clear@ZhinBot', '/reset@zhinbot', '/new@ZHINBOT']) {
+        expect((await f.run(text, { conversation: groupChat, metadata: { botUsername: 'ZhinBot' } })).record).toMatchObject({ outcome: 'cleared' });
+      }
+      expect(f.archiveSession).toHaveBeenCalledTimes(3);
+      for (const extra of [{ metadata: { botUsername: 'ZhinBot' } }, { metadata: {} }]) {
+        const other = await f.run('/clear@OtherBot', { conversation: groupChat, ...extra });
+        expect(other.record.outcome).not.toBe('cleared');
+        expect(other.$reply).not.toHaveBeenCalled();
+      }
+      expect(f.archiveSession).toHaveBeenCalledTimes(3);
     } finally { await f.close(); }
   });
 
@@ -1117,6 +1173,8 @@ describe('chat clear command through the Agent ingress (#1250)', () => {
       const member = await f.run('/reset');
       expect(member.record).toMatchObject({ outcome: 'command_replied' });
       expect(f.archiveSession).toHaveBeenCalledOnce();
+      // ...and points the member at /clear, which clears their own session.
+      expect(member.$reply.mock.calls[0]![0]).toContain('/clear');
     } finally { await f.close(); }
   });
 
