@@ -44,6 +44,19 @@ describe('chat role attention items (ADR 0060 §3 / §4)', () => {
     }
   });
 
+  it('#1250: with only simulation adapters the no-owner item points at the Sandbox, not at claims or bind codes', async () => {
+    const list = await collectAttention({ chatRoles: async () => state({ imported: undefined, simulationOnly: true }) }, { allows: allowsFor(globalIam), now: () => 10 });
+    const noOwner = list.items.find(item => item.kind === 'chat-roles.no-owner')!;
+    expect(noOwner.detail).toContain('以我的聊天身份发言');
+    expect(noOwner.detail).not.toContain('认领 <码>');
+    expect(noOwner.detail).not.toContain('绑定 <码>');
+    const en = await collectAttention({ chatRoles: async () => state({ imported: undefined, simulationOnly: true }) }, { allows: allowsFor(globalIam), now: () => 10, locale: 'en' } as never);
+    expect(en.items.find(item => item.kind === 'chat-roles.no-owner')!.detail).toContain('Speak as my chat identity');
+    // Otherwise the bind hint says no prefix is needed.
+    const usual = await collectAttention({ chatRoles: async () => state({ imported: undefined }) }, { allows: allowsFor(globalIam), now: () => 10 });
+    expect(usual.items.find(item => item.kind === 'chat-roles.no-owner')!.detail).toContain('「绑定 <码>」，不需要命令前缀');
+  });
+
   it('says nothing once there is a global owner and the import was read', async () => {
     const list = await collectAttention({ chatRoles: async () => state({ hasGlobalOwner: true, imported: undefined }) }, { allows: allowsFor(globalIam) });
     expect(list.items).toEqual([]);

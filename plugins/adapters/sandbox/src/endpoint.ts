@@ -212,7 +212,7 @@ export function sandboxSenderRoleFacts(reader: ChatRoleReader | undefined, conve
 }
 
 /** Why 「以我的聊天身份发言」 was not used for a message (`asMeUnavailable` on the echo). */
-export type SandboxAsMeUnavailableReason = 'no-console-user' | 'no-identity' | 'needs-global-iam';
+export type SandboxAsMeUnavailableReason = 'no-console-user' | 'no-identity' | 'needs-global-iam' | 'identity-failed';
 
 interface SandboxConsoleUser {
   readonly userId: string;
@@ -486,9 +486,12 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     };
     const placeholder = this.connectionRecords.get(this.#options.defaults.id);
     if (placeholder?.placeholder) this.connectionRecords.delete(this.#options.defaults.id);
+    // #1250 sandbox-speak-as-me: the first 「以我的聊天身份发言」 message may wait for its identity to be
+    // created; later frames of this socket wait their turn so messages keep their order.
+    let inbox: Promise<unknown> = Promise.resolve();
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
-        void this[endpointSpec].events.run(() => {
+        inbox = inbox.then(() => this[endpointSpec].events.run(async () => {
           if (!canExecute) {
             socket.send(JSON.stringify({
               type: 'error',
@@ -541,7 +544,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             type: parsed.type,
             id: sceneId,
           }), endpoint: this[endpointSpec].identity };
-          const speaker = this.#speaker(parsed.asMe === true, consoleUser, conversation);
+          const speaker = await this.#speaker(parsed.asMe === true, consoleUser, conversation);
           // The id the page chose (shown as typed); the Runtime only ever sees the speaker's real
           // identity or the reserved simulated id, never a client-chosen id that could hold a role.
           const clientSenderId = parsed.senderId || owner;
@@ -563,6 +566,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             displaySenderId: speaker.identity ? speaker.identity.userId : clientSenderId,
             simulated: !speaker.identity,
             ...(speaker.unavailable ? { asMeUnavailable: speaker.unavailable } : {}),
+            ...(speaker.error ? { asMeError: speaker.error } : {}),
             ...(speaker.identity || parsed.senderName ? { senderName } : {}),
             ...(parsed.senderRole ? { senderRole: parsed.senderRole } : {}),
             ...sandboxSenderRoleFacts(this.#options.chatRoles, conversation, senderId),
@@ -613,7 +617,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
               }));
             } catch { /* silent-ok: the socket is gone; the run log keeps the failure */ }
           });
-        }).catch((error: unknown) => {
+        })).catch((error: unknown) => {
           this.#logger.debug(formatCompact({ op: 'sandbox_receive_failed', error: error instanceof Error ? error.message : String(error) }));
         });
       },
@@ -673,21 +677,38 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   /**
    * ADR 0060 §5.4: the identity a message speaks as. Only on request, only for a signed-in Console
    * user, and only an identity of the person linked to that user on this adapter (`consoleSpeaker`).
+   * #1250 sandbox-speak-as-me: when the user has none yet, it is created here
+   * (`ensureConsoleSpeaker`: the person, its Console link and `console-<userId>`, the same write as
+   * `chat-identities.simulated.ensure`), so the page's default 「以我的聊天身份发言」 works on the
+   * first message without a separate request; a failure is reported (`identity-failed` with the
+   * reason) and the message goes out simulated.
    * A person who holds a global grant is spoken as only by a caller with global `iam.manage`;
    * otherwise the message goes out as a simulated, role-less sender (`needs-global-iam`), the
    * same rule `chat-identities.simulated.ensure` applies when it creates the identity.
    */
-  #speaker(asMe: boolean, user: SandboxConsoleUser | undefined, conversation: Parameters<ChatRoleReader['factsOf']>[0]):
-    { readonly identity?: { readonly adapter: string; readonly userId: string }; readonly unavailable?: SandboxAsMeUnavailableReason } {
+  async #speaker(asMe: boolean, user: SandboxConsoleUser | undefined, conversation: Parameters<ChatRoleReader['factsOf']>[0]):
+    Promise<{ readonly identity?: { readonly adapter: string; readonly userId: string }; readonly unavailable?: SandboxAsMeUnavailableReason; readonly error?: string }> {
     if (!asMe) return {};
     if (!user) return { unavailable: 'no-console-user' };
+    const roles = this.#options.chatRoles;
     const speaker = (canManageGlobal: boolean) => {
-      try { return this.#options.chatRoles?.consoleSpeaker?.(conversation, user.userId, { canManageGlobal }); } catch { return undefined; }
+      try { return roles?.consoleSpeaker?.(conversation, user.userId, { canManageGlobal }); } catch { return undefined; }
     };
     const identity = speaker(user.canManageGlobal);
     if (identity) return { identity };
-    // Tell 「no identity yet」 apart from 「the person holds global grants」.
-    return { unavailable: !user.canManageGlobal && speaker(true) ? 'needs-global-iam' : 'no-identity' };
+    // Tell 「the person holds global grants」 apart from 「no identity yet」.
+    if (!user.canManageGlobal && speaker(true)) return { unavailable: 'needs-global-iam' };
+    if (!roles?.ensureConsoleSpeaker) return { unavailable: 'no-identity' };
+    try {
+      const created = await roles.ensureConsoleSpeaker(conversation, user.userId,
+        { canManageGlobal: user.canManageGlobal, ...(user.displayName ? { displayName: user.displayName } : {}) });
+      if (created) return { identity: created };
+      return { unavailable: 'no-identity' };
+    } catch (error) {
+      const message = (error instanceof Error ? error.message : String(error)).replace(/[\r\n]+/gu, ' ').slice(0, 200);
+      this.#logger.warn(formatCompact({ op: 'sandbox_console_identity_failed', user: user.userId, error: message }));
+      return { unavailable: 'identity-failed', error: message };
+    }
   }
 
   /** Why a hosted file in an inbound message is refused, or undefined when every one is admitted. */

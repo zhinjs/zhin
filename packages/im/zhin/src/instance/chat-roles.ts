@@ -38,9 +38,43 @@ export {
 /** Resolution over the instance's stored grants. */
 export type InstanceChatRoleService = ChatRoleService<ChatRoleStore>;
 
-/** Whether any global `owner` grant exists (the one check: claims, Console attention, chat hints). */
-export function hasGlobalOwner(roles: Pick<InstanceChatRoleService, 'store'>): boolean {
-  return roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
+/**
+ * ADR 0060 §5.4 (#1250 grant-owner-to-simulated-identity-silent): whether the Sandbox (a local
+ * simulation adapter, `runtime.sandbox`) ever speaks as `identity`. It speaks only as an identity of
+ * a person linked to the signed-in Console user (「以我的聊天身份发言」, `console-<userId>`); every
+ * client-chosen sender id is a reserved simulated id (`~sim:<id>`) that holds no role. So an id on
+ * a simulation adapter whose stored person has no Console link (`sandbox-user`, `dev-user`, …) can
+ * never speak, and a role granted to it does nothing.
+ */
+export function simulatedIdentitySpeaks(store: Pick<ChatRoleStore, 'principals'>, identity: ChatIdentity): boolean {
+  const principals = store.principals as ChatRoleStore['principals'] | undefined;
+  const principalId = principals?.identity(identity)?.principalId;
+  return principalId !== undefined && principals!.linkOf(principalId) !== undefined;
+}
+
+/**
+ * Whether an owner grant can reach anyone (#1250): its person has an identity on an adapter that is
+ * not a local simulation, or is linked to a Console user (who speaks as it in the Sandbox). A
+ * grant held only through ids on simulation adapters that nobody speaks as does not count.
+ */
+function ownerGrantReachable(store: InstanceChatRoleService['store'], entry: ChatRoleEntry, simulated: ReadonlySet<string>): boolean {
+  if (!simulated.has(entry.adapter)) return true;
+  const principals = (store as Partial<Pick<ChatRoleStore, 'principals'>>).principals;
+  if (!principals || !entry.principalId) return false;
+  if (principals.linkOf(entry.principalId)) return true;
+  return principals.identitiesOf(entry.principalId).some(identity => !simulated.has(identity.adapter));
+}
+
+/**
+ * Whether any global `owner` grant exists (the one check: claims, Console attention, chat hints).
+ * `simulatedAdapters` (aliases of the loaded local simulation adapters): a grant that reaches
+ * nobody there (ids nobody speaks as, see {@link simulatedIdentitySpeaks}) does not count, so
+ * 「还没有聊天主人」 stays until a real owner exists (#1250).
+ */
+export function hasGlobalOwner(roles: Pick<InstanceChatRoleService, 'store'>, simulatedAdapters: readonly string[] = []): boolean {
+  const simulated = new Set(simulatedAdapters);
+  return roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner'
+    && (simulated.size === 0 || ownerGrantReachable(roles.store, entry, simulated)));
 }
 
 export const CHAT_ROLE_TABLE = 'chat_roles';

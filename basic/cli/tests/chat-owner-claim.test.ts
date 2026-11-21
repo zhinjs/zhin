@@ -28,6 +28,18 @@ describe('zhin status: chat owner claim (ADR 0060 §3.3)', () => {
     expect(renderChatOwnerClaim({ code: 'ABCD2345', pid: 10, createdAt: 500 }).join('\n')).toContain('认领 ABCD2345');
   });
 
+  it('#1250: with only simulation adapters it points at the Sandbox path first', async () => {
+    const root = await project({ version: 1, code: 'ABCD2345', pid: 10, createdAt: 500, simulationOnly: true });
+    const claim = await readChatOwnerClaim(root, { pid: 10 });
+    expect(claim).toMatchObject({ code: 'ABCD2345', simulationOnly: true });
+    const text = renderChatOwnerClaim(claim!).join('\n');
+    expect(text).toContain('以我的聊天身份发言');
+    expect(text).toContain('聊天角色');
+    expect(text.indexOf('以我的聊天身份发言')).toBeLessThan(text.indexOf('认领 ABCD2345'));
+    // Without the flag: the claim text as before.
+    expect(await readChatOwnerClaim(await project({ version: 1, code: 'ABCD2345', pid: 10, createdAt: 500 }), { pid: 10 })).not.toHaveProperty('simulationOnly');
+  });
+
   it('ignores missing or malformed files', async () => {
     expect(await readChatOwnerClaim(await project(), { pid: 1 })).toBeUndefined();
     expect(await readChatOwnerClaim(await project('{'), { pid: 1 })).toBeUndefined();

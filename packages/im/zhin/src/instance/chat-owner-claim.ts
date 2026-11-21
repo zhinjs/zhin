@@ -120,7 +120,27 @@ export interface ChatOwnerClaimOptions {
   readonly code?: () => string;
   readonly now?: () => number;
   readonly pid?: number;
+  /**
+   * The current generation's adapters (#1250): simulation aliases, where an owner grant nobody
+   * speaks as does not count ({@link hasGlobalOwner}), and whether they are the only adapters —
+   * then the log and `zhin status` point at the Sandbox path instead of a claim that is refused there.
+   */
+  readonly adapters?: () => ChatClaimAdapters;
 }
+
+/** See {@link ChatOwnerClaimOptions.adapters}. */
+export interface ChatClaimAdapters {
+  readonly simulated: readonly string[];
+  readonly simulationOnly: boolean;
+}
+
+/** #1250 owner-hints-dead-end-sandbox-only: how the first owner is made when only simulation adapters are loaded. */
+export const CHAT_OWNER_SANDBOX_PATH = {
+  'zh-CN': '只装了模拟适配器（Sandbox），认领与绑定在这里都不被接受：在 Console 的 Sandbox 打开「以我的聊天身份发言」并发一条消息'
+    + '（会为你的 Console 账号建立 console-<用户 id> 身份），再到 Console「聊天角色」把全局 owner 授予这个身份。',
+  en: 'Only simulation adapters (the Sandbox) are loaded, where claims and bind codes are refused: turn on "Speak as my chat identity" in the Console Sandbox and send a message '
+    + '(it creates the identity console-<user id> for your Console account), then grant that identity global owner under Chat roles in the Console.',
+} as const;
 
 /** Process-wide claim state; {@link refresh} after the role store loaded. */
 export class ChatOwnerClaim {
@@ -142,6 +162,12 @@ export class ChatOwnerClaim {
     return this.#options.projectRoot ? join(this.#options.projectRoot, CHAT_OWNER_CLAIM_FILE) : undefined;
   }
 
+  #adapters(): ChatClaimAdapters {
+    try { return this.#options.adapters?.() ?? { simulated: [], simulationOnly: false }; } catch { return { simulated: [], simulationOnly: false }; }
+  }
+
+  #hasOwner(): boolean { return hasGlobalOwner(this.#options.roles, this.#adapters().simulated); }
+
   /** Opens a claim when no global owner exists (rotating nothing that is already open), closes it otherwise. */
   async refresh(): Promise<void> {
     this.#unsubscribe ??= this.#options.roles.store.subscribe(change => {
@@ -149,7 +175,7 @@ export class ChatOwnerClaim {
       if (!('level' in change) || change.level !== 'global') return;
       void this.refresh().catch(() => undefined);
     });
-    if (hasGlobalOwner(this.#options.roles) || !this.#options.roles.store.persistent) {
+    if (this.#hasOwner() || !this.#options.roles.store.persistent) {
       await this.close();
       return;
     }
@@ -164,17 +190,22 @@ export class ChatOwnerClaim {
     this.#unregisterCode?.();
     this.#unregisterCode = registerChatOwnerClaimCode(code);
     const file = this.#file;
+    const { simulationOnly } = this.#adapters();
     // Never the code itself: the log reaches SystemLog and `GET /logs`.
-    this.#options.logger.warn(`聊天角色：还没有全局 owner（聊天主人）。认领码见 zhin status（或本机 ${CHAT_OWNER_CLAIM_FILE}），`
-      + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀）即成为全局 owner。认领码一次性，实例重启后轮换。`
-      + '也可以在 Console「聊天角色」页授予全局 owner。'
-      + ` (No global chat owner yet: the claim code is shown by zhin status; hash prefix ${chatOwnerClaimCodeHash(code)}.)`);
+    this.#options.logger.warn(simulationOnly
+      ? `聊天角色：还没有全局 owner（聊天主人）。${CHAT_OWNER_SANDBOX_PATH['zh-CN']}`
+        + `接入真实平台后也可以在私聊中发送「认领 <码>」（码见 zhin status，哈希前缀 ${chatOwnerClaimCodeHash(code)}）。`
+        + ` (No global chat owner yet. ${CHAT_OWNER_SANDBOX_PATH.en})`
+      : `聊天角色：还没有全局 owner（聊天主人）。认领码见 zhin status（或本机 ${CHAT_OWNER_CLAIM_FILE}），`
+        + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀）即成为全局 owner。认领码一次性，实例重启后轮换。`
+        + '也可以在 Console「聊天角色」页授予全局 owner。'
+        + ` (No global chat owner yet: the claim code is shown by zhin status; hash prefix ${chatOwnerClaimCodeHash(code)}.)`);
     if (!file) return;
     try {
       await mkdir(dirname(file), { recursive: true });
       const temp = `${file}.${process.pid}.tmp`;
       await writeFile(temp, `${JSON.stringify({ version: 1, code, pid: this.#options.pid ?? process.pid,
-        createdAt: (this.#options.now ?? Date.now)() })}\n`, { encoding: 'utf8', mode: 0o600 });
+        createdAt: (this.#options.now ?? Date.now)(), ...(simulationOnly ? { simulationOnly: true } : {}) })}\n`, { encoding: 'utf8', mode: 0o600 });
       await rename(temp, file);
       if (!this.#exitHook) {
         this.#exitHook = () => { try { rmSync(file, { force: true }); } catch { /* best effort */ } };
@@ -245,7 +276,7 @@ export class ChatOwnerClaim {
 
   async attempt(attempt: ChatOwnerClaimAttempt): Promise<ChatOwnerClaimOutcome> {
     const current = this.#code;
-    if (!current || hasGlobalOwner(this.#options.roles)) return 'inactive';
+    if (!current || this.#hasOwner()) return 'inactive';
     // Only exactly one code grants: one attempt compares one candidate, so the failure limits bound guessing.
     // Text that merely carries the current code (`认领 码 谢谢`, a long word with the code inside) revokes it
     // instead — granting on "contains" would let one message try thousands of candidates (#1289 review).
@@ -308,7 +339,10 @@ const messages = createMessages({
   usage: { 'zh-CN': '用法：在私聊中直接发送「认领 <认领码>」（不需要命令前缀；码见 zhin status）。码不对时回复「认领码不正确」并计入错误次数（同一发送者 10 分钟内最多 2 次，之后暂时锁定）。', en: 'Usage: send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code). A wrong code is answered as wrong and counts as a failed attempt (2 per sender in 10 minutes, then locked for a while).' },
   inactive: { 'zh-CN': '当前不接受认领：本机器人已有主人，或认领未开启。请联系主人在 Console「聊天角色」页授予角色。', en: 'Claims are closed: this bot already has an owner, or claims are not open. Ask the owner to grant you a role in the Console (Chat roles).' },
   notPrivate: { 'zh-CN': '认领只接受私聊：请在私聊中直接向机器人发送「认领 <码>」。若刚才发送的是有效认领码，它已作废，新码见 zhin status。', en: 'Claims are accepted in private chats only: send 「claim <code>」 to the bot privately. If that was a valid code it has been revoked; zhin status shows the new one.' },
-  simulated: { 'zh-CN': '这个适配器上不接受认领（模拟适配器的发言者 id 可由客户端自选）。请在真实平台私聊机器人。', en: 'Claims are not accepted on this adapter (a simulation lets clients choose the sender id). Message the bot privately on a real platform.' },
+  simulated: {
+    'zh-CN': '这个适配器上不接受认领（模拟适配器的发言者 id 可由客户端自选）。请在真实平台私聊机器人；只用 Sandbox 时，在 Sandbox 打开「以我的聊天身份发言」，再到 Console「聊天角色」把全局 owner 授予你的 console-<用户 id> 身份。',
+    en: 'Claims are not accepted on this adapter (a simulation lets clients choose the sender id). Message the bot privately on a real platform; with only the Sandbox, turn on "Speak as my chat identity" there, then grant your console-<user id> identity global owner under Chat roles in the Console.',
+  },
   invalid: { 'zh-CN': '认领码不正确或已失效。', en: 'The claim code is wrong or no longer valid.' },
   revoked: { 'zh-CN': '这条消息含有认领码，但不只是一个认领码（多了别的文字），码已作废。新码见 zhin status，请在私聊中只发送「认领 <码>」。', en: 'That message carried the claim code along with other text, so the code was revoked. zhin status shows the new one; send only 「claim <code>」 privately.' },
   locked: { 'zh-CN': '错误次数过多，请 10 分钟后再试。', en: 'Too many wrong codes; try again in 10 minutes.' },

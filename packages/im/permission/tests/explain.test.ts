@@ -62,16 +62,16 @@ describe('shared refusal texts (#1250 第 78 批)', () => {
     expect(describeDeniedPermit('owner@global', 'zh-CN')).toContain('此功能需要全局聊天主人');
   });
 
-  it('names the bind command with the real prefix when known, else asks for a configured prefix', () => {
-    expect(describeGlobalOwnerRequired('zh-CN', { bindCommand: '!!绑定' })).toContain('先私聊机器人发送「!!绑定 <码>」把聊天身份绑定到 Console 账号');
-    expect(describeGlobalOwnerRequired('zh-CN')).toContain('先私聊机器人发送「绑定 <码>」（配置了命令前缀时带上前缀）把聊天身份绑定到 Console 账号');
-    expect(describeGlobalOwnerRequired('en', { bindCommand: '#bind' })).toContain('first bind your chat identity to a Console account: send 「#bind <code>」 to the bot in a private chat.');
-    expect(describeGlobalOwnerRequired('en')).toContain('send 「bind <code>」 (with the command prefix, if one is configured) to the bot in a private chat.');
-    expect(describeCommandDenial('owner@global', 'en', { bindCommand: '/bind' })).toBe(describeGlobalOwnerRequired('en', { bindCommand: '/bind' }));
-    // Only the prefix at hand: the shared word with that prefix ('' is a known empty prefix).
-    expect(describeGlobalOwnerRequired('zh-CN', { commandPrefix: '#' })).toContain('「#绑定 <码>」把聊天身份');
-    expect(describeGlobalOwnerRequired('en', { commandPrefix: '' })).toContain('send 「bind <code>」 to the bot in a private chat.');
-    expect(describeGlobalOwnerRequired('en', { commandPrefix: '!', bindCommand: '!ns bind' })).toContain('「!ns bind <code>」');
+  it('names the bare bind word: 绑定 <码> needs no command prefix (#1250 bind-hint-omits-command-prefix)', () => {
+    const zh = '先私聊机器人发送「绑定 <码>」（不需要命令前缀）把聊天身份绑定到 Console 账号';
+    expect(describeGlobalOwnerRequired('zh-CN')).toContain(zh);
+    // A known prefix or invocation no longer changes the text: the bare word works everywhere.
+    expect(describeGlobalOwnerRequired('zh-CN', { bindCommand: '!!绑定' })).toContain(zh);
+    expect(describeGlobalOwnerRequired('zh-CN', { commandPrefix: '#' })).toContain(zh);
+    expect(describeGlobalOwnerRequired('en')).toContain('send 「bind <code>」 to the bot in a private chat (no command prefix needed).');
+    expect(describeGlobalOwnerRequired('en', { bindCommand: '#bind' })).toBe(describeGlobalOwnerRequired('en'));
+    expect(describeCommandDenial('owner@global', 'en', { bindCommand: '/bind' })).toBe(describeGlobalOwnerRequired('en'));
+    expect(describeGlobalOwnerRequired('zh-CN')).not.toContain('带上前缀');
   });
 
   it('describeDeniedPermit returns complete sentences; only describeCommandDenial prefixes the command refusal', () => {

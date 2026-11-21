@@ -106,14 +106,14 @@ interface PlatformStanding {
 - **人**（`chat_principals`，id 形如 `cp_…`）持有角色授予；一个**平台身份**（适配器实例别名 + 用户 id，`chat_identities`）至多属于一个人。从未被授予角色、也未绑定的发言者是「隐式单身份人」（id `implicit:<别名>:<用户 id>`），不建行。
 - **全局**授予对这个人的全部平台身份生效；**低于全局**的授予（适配器 / 账号 / 会话层）只对这个人在**该作用范围所属适配器**上的身份生效——在 `qq` 适配器层授予某人 `admin`，他的 Telegram 身份不会因此在 Telegram 上成为 admin。
 - 归并 / 拆分：Console RPC `chat-principals.merge` / `split`（需要涉及的每个适配器上的 `iam.manage`；涉及持有全局角色的人时需要**全局** `iam.manage`）。归并时同一作用范围保留较高的角色，从不降级。
-- **把聊天身份绑定到我**：Console 用户（权限 `self.chat-identity`，所有内置角色默认带）获取一次性绑定码（8 位、10 分钟、单次），在聊天中**私聊**机器人发送 `绑定 <码>`（`bind <code>`）。群聊中发送的正确码立即作废；模拟适配器上不接受；同一身份已属于别人（已链接其他 Console 用户或已有其他身份）时拒绝；绑定会把角色带到另一个身份上时，需要持有全局 `iam.manage` 的 Console 用户生成的码。一个 Console 用户只链接一个人，反之亦然；链接**不传递任何权限**。
+- **把聊天身份绑定到我**：Console 用户（权限 `self.chat-identity`，所有内置角色默认带）获取一次性绑定码（8 位、10 分钟、单次），在聊天中**私聊**机器人发送 `绑定 <码>`（`bind <code>`，**不需要命令前缀**，带前缀也有效）。群聊中发送的正确码立即作废；模拟适配器上不接受；同一身份已属于别人（已链接其他 Console 用户或已有其他身份）时拒绝；绑定会把角色带到另一个身份上时，需要持有全局 `iam.manage` 的 Console 用户生成的码。一个 Console 用户只链接一个人，反之亦然；链接**不传递任何权限**。
 - Console 用户被删除或禁用时，网关通知实例删除其链接（角色不受影响）。授予记录的 `grantedBy` 是已链接的 Console 用户时，Console 显示链接的人名（`grantedByName`）。
 - 入站消息上 Runtime 写入只读的 `sender.chatPrincipal`（人 id）；适配器或插件自带的同名字段被丢弃。最近发言时间与显示名缓存（供 Console 选择器用，不参与鉴权）保留 90 天。
-- **Sandbox 的发言者**：Console Sandbox 默认「以我的聊天身份发言」——服务端按连接上的 Console 用户找到其链接的人在 Sandbox 上的身份，角色按这个人的授予解析（全局 owner 在 Sandbox 里就是 owner）。没有 Sandbox 身份时页面提供「在 Sandbox 上创建我的聊天身份」（`chat-identities.simulated.ensure`，只作用于模拟适配器）。关闭开关后客户端自填的发送者 ID 一律是**模拟身份，无角色**：服务端把它写成保留 id `~sim:<id>`（以 `~` 开头的 id 不是聊天身份，不能持有、被授予或解析任何角色），信任档位最低；填 owner 的 id 也不会成为 owner。没有 Console 用户（未登录的引导令牌、`--standalone`）时全部按模拟身份处理。
+- **Sandbox 的发言者**：Console Sandbox 默认「以我的聊天身份发言」——服务端按连接上的 Console 用户找到其链接的人在 Sandbox 上的身份，角色按这个人的授予解析（全局 owner 在 Sandbox 里就是 owner）。还没有 Sandbox 身份时，第一条消息由服务端直接为你建立 `console-<Console 用户 id>`（同 `chat-identities.simulated.ensure`：没有链接的人时新建并链接；只作用于模拟适配器），并以它发言；建立失败时这条消息按模拟身份发送，页面关闭开关并显示原因。关闭开关后客户端自填的发送者 ID 一律是**模拟身份，无角色**：服务端把它写成保留 id `~sim:<id>`（以 `~` 开头的 id 不是聊天身份，不能持有、被授予或解析任何角色），信任档位最低；填 owner 的 id 也不会成为 owner。所以模拟适配器上**只有** Console Sandbox 身份（其人链接了 Console 用户）能持有角色：给 `sandbox-user`、`dev-user` 这类自填 id 授予角色会被拒绝（`chat-roles.grant` 返回 400 `simulated-identity`，聊天中的 `角色 授予` 同样拒绝），这类授予也不算「已有全局 owner」；它们不出现在「最近发言人」里（`chat-identities.recent` 返回 `simulatedSendersOmitted`），成员列表中标为 `simulatedSender`。没有 Console 用户（未登录的引导令牌、`--standalone`）时全部按模拟身份处理。
 - 聊天中 `角色 授予` 的目标除 `@提及` 与用户 id 外，还可以写 `#<人 id 前缀>`（如 `#cp_ab12cd`，前缀唯一时）引用一个人，便于给多平台的同一人授予全局角色。
 - 导出 / 导入：`zhin chat-roles export [文件]` / `zhin chat-roles import <文件>`（经运行中实例，需要全局 `iam.manage`；导入只新增或提升，不降级、不删除、不改挂已属于他人的身份）。
 
-第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用 `zhin status` 显示的一次性认领码（日志只记哈希前缀），在真实平台的私聊中直接向机器人发送 `认领 <码>`（不需要命令前缀；这类消息不会交给 AI，也不进会话历史，详见[升级指南](../migrations/chat-roles.md#first-owner)）。
+第一位全局 owner：在 Console「聊天角色」中授予；没有 Console 时，用 `zhin status` 显示的一次性认领码（日志只记哈希前缀），在真实平台的私聊中直接向机器人发送 `认领 <码>`（不需要命令前缀；这类消息不会交给 AI，也不进会话历史，详见[升级指南](../migrations/chat-roles.md#first-owner)）。只装了模拟适配器（Sandbox）时认领与绑定都不被接受：在 Sandbox 打开「以我的聊天身份发言」并发一条消息（建立 `console-<用户 id>` 身份），再到「聊天角色」把全局 owner 授予这个身份；`zhin status`、启动日志与「需要你处理」会给出这条路径。
 
 ## 在代码里使用
 

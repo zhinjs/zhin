@@ -197,3 +197,30 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     expect(claim.active).toBe(false);
   });
 });
+
+describe('#1250 owner-hints-dead-end-sandbox-only', () => {
+  it('with only simulation adapters, the log and zhin status point at the Sandbox path; a grant nobody speaks as keeps the claim open', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-claim-'));
+    directories.push(root);
+    const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
+    // An owner grant on a typed Sandbox sender: nobody ever speaks as it.
+    await roles.store.grant({ level: 'global', key: '', adapter: 'sandbox', userId: 'sandbox-user', role: 'owner' });
+    const lines: string[] = [];
+    const claim = new ChatOwnerClaim({ roles, projectRoot: root, logger: { info: line => { lines.push(line); }, warn: line => { lines.push(line); } },
+      code: () => 'AAAA2222', now: () => 42, pid: 4242, adapters: () => ({ simulated: ['sandbox'], simulationOnly: true }) });
+    await claim.refresh();
+    expect(claim.active).toBe(true);
+    expect(lines.join('\n')).toContain('以我的聊天身份发言');
+    expect(lines.join('\n')).not.toContain('AAAA2222');
+    expect(JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'))).toMatchObject({ code: 'AAAA2222', simulationOnly: true });
+    await claim.dispose();
+    // A real platform beside it: the usual claim text, no flag in the file.
+    const other = new ChatOwnerClaim({ roles, projectRoot: root, logger: { info() {}, warn: line => { lines.push(line); } },
+      code: () => 'BBBB3333', now: () => 42, pid: 4242, adapters: () => ({ simulated: ['sandbox'], simulationOnly: false }) });
+    lines.length = 0;
+    await other.refresh();
+    expect(lines.join('\n')).toContain('认领 <码>');
+    expect(JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'))).not.toHaveProperty('simulationOnly');
+    await other.dispose();
+  });
+});

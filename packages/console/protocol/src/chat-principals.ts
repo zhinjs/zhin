@@ -79,6 +79,14 @@ export interface ConsoleChatIdentity {
   readonly lastSeenAt?: number;
   /** Display name cache (cleared after 90 days); never used for authorization. */
   readonly lastDisplayName?: string;
+  /**
+   * #1250 (ADR 0060 §5.4): an id on a local simulation adapter (`runtime.sandbox`) that the Sandbox
+   * never speaks as — senders typed there go out under reserved simulated ids that are neither
+   * recorded nor role-bearing; only a Console Sandbox identity (`console-<userId>`, its person
+   * linked to that Console user) speaks. Show 「模拟发送者，不会发言」 instead of 「90 天内没有发言」;
+   * roles cannot be granted to it (`chat-roles.grant` answers 400 `simulated-identity`).
+   */
+  readonly simulatedSender?: true;
 }
 
 /**
@@ -194,6 +202,13 @@ export interface ConsoleChatRecentIdentity extends ConsoleChatIdentity {
 
 export interface ConsoleChatIdentitiesRecentResult {
   readonly identities: readonly ConsoleChatRecentIdentity[];
+  /**
+   * #1250: aliases of local simulation adapters at this scope (among those the caller manages).
+   * Their simulated senders (ids typed in the Sandbox) are deliberately never recorded, so they never
+   * appear in `identities`: show 「模拟发送者不出现在这里；在 Sandbox 打开「以我的聊天身份发言」后，你的
+   * Sandbox 身份会出现」. Console Sandbox identities that spoke are listed as usual.
+   */
+  readonly simulatedSendersOmitted?: readonly string[];
 }
 
 /**

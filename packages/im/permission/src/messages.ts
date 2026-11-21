@@ -30,14 +30,12 @@ export const permissionMessages = createMessages({
   globalOwnerOnly: { 'zh-CN': '仅全局聊天主人（global owner）可使用此指令。', en: 'Only a global chat owner can use this command.' },
   globalOwnerPrivateOnly: { 'zh-CN': '仅全局聊天主人（global owner）可在私聊中使用此指令。', en: 'Only a global chat owner can use this command, in a private chat.' },
   deniedGlobalOwner: { 'zh-CN': '此功能需要全局聊天主人（global owner）。', en: 'This needs a global chat owner.' },
-  // `{bind}`: the chat invocation of the `bind` command (with the endpoint's command prefix) when the
-  // caller knows it, else `绑定` / `bind` and `{prefixHint}` says to add a configured prefix.
+  // #1250: `绑定 <码>` works without the command prefix (like `认领 <码>`); `{bind}` is the bare word.
   globalOwnerGrant: {
-    'zh-CN': '全局 owner 在 Console「聊天角色」页授予，授予前先私聊机器人发送「{bind} <码>」{prefixHint}把聊天身份绑定到 Console 账号；还没有全局 owner 时，部署者也可私聊机器人发送「认领 <码>」（不需要命令前缀，码见 zhin status）。',
-    en: 'Global owners are granted on the Console "Chat roles" page; first bind your chat identity to a Console account: send 「{bind} <code>」{prefixHint} to the bot in a private chat. While there is no global owner, the deployer can also send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code).',
+    'zh-CN': '全局 owner 在 Console「聊天角色」页授予，授予前先私聊机器人发送「{bind} <码>」（不需要命令前缀）把聊天身份绑定到 Console 账号；还没有全局 owner 时，部署者也可私聊机器人发送「认领 <码>」（不需要命令前缀，码见 zhin status）。',
+    en: 'Global owners are granted on the Console "Chat roles" page; first bind your chat identity to a Console account: send 「{bind} <code>」 to the bot in a private chat (no command prefix needed). While there is no global owner, the deployer can also send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code).',
   },
   bindWord: { 'zh-CN': '绑定', en: 'bind' },
-  bindPrefixHint: { 'zh-CN': '（配置了命令前缀时带上前缀）', en: ' (with the command prefix, if one is configured)' },
   deniedConversationManager: {
     'zh-CN': '群聊和频道里需要本会话的 zhin 聊天角色 admin（或 owner）；私聊中可以直接管理本会话。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
     en: 'In a group or channel this needs the zhin chat role admin (or owner) of this conversation; in a private chat you manage your own conversation. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',

@@ -19,6 +19,7 @@ import type {
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { hasGlobalOwner } from '../chat-roles.js';
+import { chatAdapterLandscape } from '../chat-role-migration.js';
 import { personalPrincipalEndpointOf, personalPrincipalPending } from '../chat-personal-principals.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';
@@ -213,9 +214,17 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
               return { consoleUserId: entry.consoleUserId, adapter: entry.adapter!, ...(endpoint ? { endpoint } : {}), userId: entry.subjectId, at: entry.at };
             })
           : [];
+        // #1250: simulation adapters of this generation — an owner grant nobody speaks as there does
+        // not count, and a Sandbox-only project is pointed at 「以我的聊天身份发言」 (claims are refused there).
+        let landscape: ReturnType<typeof chatAdapterLandscape> = { simulated: [], simulationOnly: false };
+        if (snapshots) {
+          const lease = snapshots.acquire();
+          try { landscape = chatAdapterLandscape(lease.value); } finally { lease.release(); }
+        }
         return {
-          hasGlobalOwner: hasGlobalOwner(roles),
+          hasGlobalOwner: hasGlobalOwner(roles, landscape.simulated),
           claimOpen: featureStores.claim?.active === true,
+          ...(landscape.simulationOnly ? { simulationOnly: true } : {}),
           ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
           pending: state?.pending ?? [],
           ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),

@@ -24,7 +24,8 @@ import {
   chatRoleIncludes, chatScopeChain, isChatIdentity, isChatRole, isConfirmWord, resolveChatRoleMessageContext,
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleSubjectFailure,
 } from '@zhin.js/core';
-import { ChatRoleStorageUnavailableError, hasGlobalOwner, type InstanceChatRoleService } from './chat-roles.js';
+import { ChatRoleStorageUnavailableError, hasGlobalOwner, simulatedIdentitySpeaks, type InstanceChatRoleService } from './chat-roles.js';
+import { simulatedAdapterAliases } from './chat-role-migration.js';
 import { unauthorizedCommandReply } from './unauthorized-command-reply.js';
 
 export interface FeatureSelfServiceConfig {
@@ -173,6 +174,15 @@ const messages = createMessages({
   // ADR 0060 §5.3: platform standing is not a zhin role; say where roles come from.
   deniedStanding: { 'zh-CN': '你是本群群主 / 管理员，但平台身份不等于 zhin 角色；该范围需要 zhin 的 admin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。', en: 'You are a group owner / admin on the platform, but that is not a zhin role; this scope needs the zhin admin role. Ask the owner of this bot to grant it, in chat or on the Console "Chat roles" page.' },
   noOwnerHint: { 'zh-CN': '本机器人还没有主人：部署者可在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀；码见 zhin status）。', en: 'This bot has no owner yet: the deployer can send 「claim <code>」 to it in a private chat (no command prefix needed; zhin status shows the code).' },
+  // #1250 owner-hints-dead-end-sandbox-only: claims and bind codes are refused on a simulation adapter.
+  noOwnerHintSandbox: {
+    'zh-CN': '本机器人还没有主人：在 Sandbox 打开「以我的聊天身份发言」并发一条消息（会为你的 Console 账号建立 console-<用户 id> 身份），再到 Console「聊天角色」把全局 owner 授予这个身份。',
+    en: 'This bot has no owner yet: turn on "Speak as my chat identity" in the Sandbox and send a message (it creates the identity console-<user id> for your Console account), then grant that identity global owner under Chat roles in the Console.',
+  },
+  simulatedTarget: {
+    'zh-CN': '不能把角色授予模拟发送者 {user}：Sandbox 里手填的发送者以保留 id 发言、从不解析 zhin 角色。请让对方在 Sandbox 打开「以我的聊天身份发言」，再把角色授予其 console-<用户 id> 身份。',
+    en: 'Roles cannot be granted to the simulated sender {user}: senders typed in the Sandbox speak under reserved ids and never hold zhin roles. Ask them to turn on "Speak as my chat identity" in the Sandbox, then grant the role to their console-<user id> identity.',
+  },
   roleDenied: { 'zh-CN': '你在该范围的角色不足以授予或撤销 {role}。', en: 'Your role at that scope cannot grant or revoke {role}.' },
   ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销；全局 owner 在 Console「聊天角色」页授予。', en: 'Only an owner at a higher level can grant or revoke owner; global owners are granted on the Console "Chat roles" page.' },
   peerDenied: {
@@ -372,8 +382,17 @@ function holdsAdminAnywhere(deps: FeatureSelfServiceDeps, actor: FeatureChatActo
 function deniedReply(deps: FeatureSelfServiceDeps, actor: FeatureChatActor, locale: Locale): string {
   const standing = actor.context.platform?.standing;
   const reply = messages(locale, standing === 'owner' || standing === 'admin' ? 'deniedStanding' : 'denied');
-  const ownerless = !hasGlobalOwner(deps.roles);
-  return refuse('not-admin', ownerless ? `${reply}\n${messages(locale, 'noOwnerHint')}` : reply);
+  const simulated = currentSimulatedAdapters(deps);
+  const ownerless = !hasGlobalOwner(deps.roles, simulated);
+  const hint = simulated.includes(actor.identity.adapter) ? 'noOwnerHintSandbox' : 'noOwnerHint';
+  return refuse('not-admin', ownerless ? `${reply}\n${messages(locale, hint)}` : reply);
+}
+
+/** Aliases of the current generation's local simulation adapters (`runtime.sandbox`). */
+function currentSimulatedAdapters(deps: FeatureSelfServiceDeps): readonly string[] {
+  const lease = deps.context.snapshots?.acquire();
+  if (!lease) return [];
+  try { return simulatedAdapterAliases(lease.value); } finally { lease.release(); }
 }
 
 /** One `feature.list` row as the chat list reads it. */
@@ -758,6 +777,10 @@ export async function runRoleChat(input: FeatureChatInput, deps: FeatureSelfServ
     target = { adapter: chosen.adapter, userId: chosen.userId };
   }
   if (!isChatIdentity(target)) return refuse('usage', messages(locale, 'userMissing'));
+  // #1250: a role on an id the Sandbox never speaks as would be saved in vain (ADR 0060 §5.4).
+  if (sub === 'grant' && currentSimulatedAdapters(deps).includes(target.adapter) && !simulatedIdentitySpeaks(deps.roles.store, target)) {
+    return refuse('simulated-target', messages(locale, 'simulatedTarget', { user: `${target.adapter}:${target.userId}` }));
+  }
   const current = deps.roles.store.get(level, scope, target);
   // A revoke with nothing stored is checked like handling the named role (no silent "unchanged" for outsiders).
   const denial = sub === 'revoke' && !current

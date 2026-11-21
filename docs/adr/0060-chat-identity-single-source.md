@@ -100,7 +100,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
   2. Sandbox 中以「我的聊天身份」发言（§5.4）；
   3. Console 显示「我是谁」、我的聊天角色。
 - 建立链接的两种方式：
-  - **自助（推荐，需证明）**：Console 用户点「把聊天身份绑定到我」，得到一次性绑定码（8 位、10 分钟、单次）；在聊天里私聊机器人发送 `绑定 <码>`（`bind <code>`），该平台身份即归入此 Console 用户的人；
+  - **自助（推荐，需证明）**：Console 用户点「把聊天身份绑定到我」，得到一次性绑定码（8 位、10 分钟、单次）；在聊天里私聊机器人发送 `绑定 <码>`（`bind <code>`，与 `认领 <码>` 一样不需要命令前缀，#1250），该平台身份即归入此 Console 用户的人；
   - **运营者代绑**：持有全局 `iam.manage` 的 Console 用户可直接链接任意人与任意 Console 用户（审计记为 `manual`）。
 - Console 用户被删除 / 禁用时：网关在用户生命周期事件中通知实例删除链接（实例侧只按值失效，聊天角色不受影响）。
 
@@ -108,9 +108,9 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 新部署（数据库中没有任何全局 `owner` 绑定时）提供三条路，任一条完成即关闭引导：
 
-1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
+1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」（不需要命令前缀；只装了模拟适配器时改为指向 Sandbox 的「以我的聊天身份发言」，见 §5.4）。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
 2. **配置种子导入**（§4）：首次启动导入适配器 owner / master、`ai.trigger.masters`、`ai.personalPrincipals`。
-3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；在私聊中直接向机器人发送 `认领 <码>`（`claim <code>`，不需要命令前缀，见下文「认领码的入站处理」）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
+3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；在私聊中直接向机器人发送 `认领 <码>`（`claim <code>`，不需要命令前缀，见下文「认领码的入站处理」）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领；只装了这类适配器时，`zhin status` 与启动日志改为指引 §5.4 的路径（#1250）。
 
 ### 4. 迁移与兼容
 
@@ -181,6 +181,10 @@ ADR 0057 §3 对种子「再次出现」的处理是「已忽略，数据库为�
 - 客户端自填的 `senderId` 仍可用于模拟「别人」，但这类发言**一律不解析 zhin 角色**（视为隐式陌生人，`chatRole` 为空），界面明确标注「模拟身份，无角色」。否则任何持有 `endpoint.operate` 的 Console 用户都能填 owner 的 id 冒充 owner。
 - 平台身份预设改名：「Master」→「群主（平台身份）」，徽章同时显示服务端回报的 zhin 角色与信任档位，消除 MASTER / `group_member` 的错位。
 - 仅限本机 / 开发？不需要额外限制：映射依赖 Console 认证与链接，与部署形态无关；但 `--standalone`（无网关，ADR 0054）下没有 Console 主体，sandbox 一律按「模拟身份，无角色」处理。
+- **第一条消息即建立身份（#1250 sandbox-speak-as-me）**：已登录的 Console 用户请求「以我的聊天身份发言」而还没有 Sandbox 身份时，服务端在处理这条消息前直接建立 `console-<Console 用户 id>`（`ChatRoleReader.ensureConsoleSpeaker`，与 `chat-identities.simulated.ensure` 同一次写入与同一门槛：链接的人持有全局授予时需要全局 `iam.manage`），并以它发言；不依赖页面先发 RPC。建立失败时这条消息按模拟身份发送，回显带 `asMeUnavailable: 'identity-failed'` 与原因 `asMeError`，页面关闭开关并显示原因。同一连接上的消息按到达顺序处理。
+- **只有 Console Sandbox 身份能持有角色（#1250 grant-owner-to-simulated-identity-silent）**：模拟适配器上，服务端只以「其人链接了 Console 用户」的身份发言（`console-<用户 id>`）；其他 id（`sandbox-user`、`dev-user` 等自填 id）永远不会发言。因此给这类 id 授予角色**在授予前拒绝**（Console `chat-roles.grant` 400 `simulated-identity`，聊天 `角色 授予` 同样拒绝，撤销照常），提示改用「以我的聊天身份发言」；「是否已有全局 owner」（认领、「需要你处理」、`zhin status`、`suggestGlobalOwner`）不把只落在这类 id 上的 owner 授予算作有效（其人另有真实平台身份或链接了 Console 用户时才算）。
+- **最近发言人（#1250 chat-recent-speakers-empty）**：模拟发送者（`~sim:<id>`）按设计不记录；`chat-identities.recent` 在作用范围含模拟适配器时返回 `simulatedSendersOmitted`（别名列表），Console 显示「模拟发送者不出现在这里」；成员视图中模拟适配器上永不发言的 id 带 `simulatedSender: true`，代替「90 天内没有发言」。以 Console Sandbox 身份发过言的照常出现在最近发言人中。
+- **只装了模拟适配器时的第一位 owner（#1250 owner-hints-dead-end-sandbox-only）**：认领码与绑定码在模拟适配器上都被拒绝，所以 `zhin status`、启动日志、「需要你处理」的 `chat-roles.no-owner`（`state.simulationOnly`）与聊天中的无主提示改为：在 Sandbox 打开「以我的聊天身份发言」并发一条消息，再到「聊天角色」把全局 owner 授予这个 `console-<用户 id>` 身份。
 
 #### 5.5 审计
 
@@ -397,6 +401,7 @@ export type ChatScopeRef =
   - 原生载荷只检查自有可枚举属性（以及数组、Map、Set 的元素）：`Error.message`（不可枚举）、原型上的 getter、不可枚举属性与 Symbol 键里的文本不检查。
   - 字节缓冲只按 UTF-8 解码：UTF-16（以及其它编码）的缓冲里的码识别不到。
 - **保留不变**：只接受真实平台私聊、sandbox 不接受、同一码连错 5 次轮换且同一发送者窗口内至多计 2 次、码只用一次。
+- **绑定码同样免前缀（#1250 bind-hint-omits-command-prefix）**：`绑定 <码>` / `bind <码>` 也由入站最早处的守卫接手（`createChatIdentityBindGuard`，与认领守卫经 `combineInboundSecretGuards` 组合成一个 `inboundSecret`），带不带命令前缀都行；带前缀的 `bind` 命令照常可用。只接手绑定形态（关键词是第一个词、后面恰好一个词）且该词是**当前有效的绑定码**或**形如绑定码**（规范化后 8 位绑定码字母表）的消息：私聊照常兑换（错码计数同命令），群聊只接手有效码（作废并提示改私聊），其余照常交给命令或 Agent。拒绝文案与「需要你处理」中的绑定提示改为「`绑定 <码>`（不需要命令前缀）」。
 
 ## 落盘位置（计划）
 

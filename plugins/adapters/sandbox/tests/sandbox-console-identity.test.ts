@@ -71,13 +71,13 @@ function roles(): ChatRoleReader {
   });
 }
 
-async function fixture() {
+async function fixture(reader: ChatRoleReader = roles()) {
   const { http, connect } = fakeHttp();
   const receive = vi.fn(async (_input: unknown) => Object.freeze({ matched: true }));
   const events = vi.fn(async (event: EndpointEvent) => event.name === 'message.receive' ? receive(event.payload) : undefined);
   const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'),
-    http: http as never, defaults: resolveSandboxEndpoint({ id: 'shared-bot', owner: 'dev-user' }), chatRoles: roles(),
+    http: http as never, defaults: resolveSandboxEndpoint({ id: 'shared-bot', owner: 'dev-user' }), chatRoles: reader,
   }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEndpointEventGateway({ receive: events }) });
   await endpoint.start();
   endpoint.open();
@@ -150,6 +150,58 @@ describe('Sandbox speaker identity (ADR 0060 §5.4)', () => {
     }
   });
 
+  it('#1250 sandbox-speak-as-me: the first asMe message creates console-<userId> and speaks as it', async () => {
+    const ensured: unknown[] = [];
+    const created = new Set<string>();
+    const base = roles();
+    const reader: ChatRoleReader = {
+      ...base,
+      consoleSpeaker: (conversation, userId, options) => created.has(userId)
+        ? { adapter: 'sandbox', userId: `console-${userId}` } : base.consoleSpeaker!(conversation, userId, options),
+      ensureConsoleSpeaker: async (_conversation, userId, options) => {
+        ensured.push({ userId, ...options });
+        // Slow on purpose: a second message sent meanwhile must not overtake the first.
+        await new Promise(resolve => setTimeout(resolve, 20));
+        created.add(userId);
+        return { adapter: 'sandbox', userId: `console-${userId}` };
+      },
+    };
+    const { connect, sent } = await fixture(reader);
+    const client = await connect(user('u-new', 'Newbie'));
+    const { sender, echo } = await sent(client, { asMe: true, senderId: 'sandbox-user', senderName: 'Developer' });
+    expect(ensured).toEqual([{ userId: 'u-new', canManageGlobal: false, displayName: 'Newbie' }]);
+    expect(sender).toMatchObject({ id: 'console-u-new', name: 'Newbie' });
+    expect(echo).toMatchObject({ senderId: 'console-u-new', simulated: false });
+    expect(echo.asMeUnavailable).toBeUndefined();
+    // Once created it is used directly.
+    await sent(client, { asMe: true });
+    expect(ensured).toHaveLength(1);
+  });
+
+  it('#1250: a failed identity creation sends the message simulated with the reason (identity-failed)', async () => {
+    const reader: ChatRoleReader = { ...roles(), ensureConsoleSpeaker: async () => { throw new Error('未保存：聊天身份需要关系型项目数据库\n(sqlite)'); } };
+    const { connect, sent } = await fixture(reader);
+    const client = await connect(user('u-new'));
+    const { sender, echo } = await sent(client, { asMe: true, senderId: 'sandbox-user' });
+    expect(sender.id).toBe('~sim:sandbox-user');
+    expect(echo).toMatchObject({ simulated: true, asMeUnavailable: 'identity-failed', asMeError: '未保存：聊天身份需要关系型项目数据库 (sqlite)', senderTrustLevel: 'group_member' });
+  });
+
+  it('keeps the order of a socket\'s messages while an identity is being created', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const reader: ChatRoleReader = { ...roles(), ensureConsoleSpeaker: async () => { await gate; return undefined; } };
+    const { connect } = await fixture(reader);
+    const client = await connect(user('u-new'));
+    client.send({ type: 'private', id: 'room', content: 'first', asMe: true, messageId: 'm1' });
+    client.send({ type: 'private', id: 'room', content: 'second', messageId: 'm2' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(client.frames.filter(frame => frame.direction === 'inbound')).toEqual([]);
+    release();
+    await vi.waitFor(() => expect(client.frames.filter(frame => frame.direction === 'inbound').map(frame => frame.messageId)).toEqual(['m1', 'm2']));
+    expect(client.frames.find(frame => frame.messageId === 'm1')).toMatchObject({ asMeUnavailable: 'no-identity' });
+  });
+
   it('parses asMe only as a literal true and namespaces simulated ids once', () => {
     const parse = (payload: unknown) => (parseSandboxWsFrame(JSON.stringify(payload)) as { message: { asMe?: boolean } }).message;
     expect(parse({ type: 'private', id: 'r', content: 'x', asMe: true }).asMe).toBe(true);
@@ -172,5 +224,17 @@ describe('Sandbox page speaker helpers', () => {
     expect(wantsAsMe('me', true)).toBe(true);
     expect(wantsAsMe('me', false)).toBe(false);
     expect(wantsAsMe('simulated', true)).toBe(false);
+  });
+
+  it('#1250: turns the switch off with the reason only when the server could not speak as me', async () => {
+    const { asMeFallbackNotice, readServerSpeaker } = await import('../pages/index/chatIdentity.js');
+    const failed = readServerSpeaker({ senderId: '~sim:dev-user', simulated: true, senderTrustLevel: 'group_member', asMeUnavailable: 'identity-failed', asMeError: 'no db' })!;
+    expect(failed).toMatchObject({ asMeUnavailable: 'identity-failed', asMeError: 'no db' });
+    expect(asMeFallbackNotice(failed)).toEqual({ reason: 'identity-failed', error: 'no db' });
+    expect(asMeFallbackNotice(readServerSpeaker({ senderId: '~sim:x', simulated: true, senderTrustLevel: 'group_member', asMeUnavailable: 'needs-global-iam' })!))
+      .toEqual({ reason: 'needs-global-iam' });
+    // An older Host that cannot create the identity keeps the manual button; speaking as me needs nothing.
+    expect(asMeFallbackNotice(readServerSpeaker({ senderId: '~sim:x', simulated: true, senderTrustLevel: 'group_member', asMeUnavailable: 'no-identity' })!)).toBeNull();
+    expect(asMeFallbackNotice(readServerSpeaker({ senderId: 'console-u1', simulated: false, senderTrustLevel: 'owner' })!)).toBeNull();
   });
 });

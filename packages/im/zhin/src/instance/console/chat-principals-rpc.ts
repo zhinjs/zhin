@@ -29,7 +29,7 @@ import {
 } from '@zhin.js/core';
 import { ChatPeopleError, type ChatPeople, type ChatPrincipalRef } from '../chat-people.js';
 import { CHAT_IDENTITY_RETENTION_MS, isChatPrincipalId, type StoredChatIdentity } from '../chat-principals.js';
-import { ChatRoleStorageUnavailableError, hasGlobalOwner } from '../chat-roles.js';
+import { ChatRoleStorageUnavailableError, hasGlobalOwner, simulatedIdentitySpeaks } from '../chat-roles.js';
 import type { ChatIdentityBindCodes } from '../chat-identity-bind.js';
 import { chatRoleView } from './chat-roles-rpc.js';
 import { FeatureRpcError, readScope, type FeatureRpcReply } from './console-feature-rpc.js';
@@ -80,13 +80,20 @@ function redactedView(entry: ChatRoleEntry): ConsoleChatRoleEntry {
 /** Link methods that tell an identity was bound to a Console user (shown to global managers only). */
 const CONSOLE_LINK_METHODS: ReadonlySet<string> = new Set(['code', 'console']);
 
-function identityView(identity: StoredChatIdentity | ChatIdentity, now: number, showConsoleLinks = true): ConsoleChatIdentity {
+/**
+ * `neverSpeaks`: the identity is an id on a local simulation adapter the Sandbox never speaks as
+ * (#1250 chat-recent-speakers-empty: client-chosen senders use reserved simulated ids that are
+ * neither recorded nor role-bearing), shown as `simulatedSender` instead of 「90 天内没有发言」.
+ */
+function identityView(identity: StoredChatIdentity | ChatIdentity, now: number, showConsoleLinks = true,
+  neverSpeaks?: (identity: ChatIdentity) => boolean): ConsoleChatIdentity {
   const stored = identity as StoredChatIdentity;
   const recent = stored.lastSeenAt !== undefined && now - stored.lastSeenAt < CHAT_IDENTITY_RETENTION_MS;
   const linkMethod = stored.linkMethod && (showConsoleLinks || !CONSOLE_LINK_METHODS.has(stored.linkMethod)) ? stored.linkMethod : undefined;
   return Object.freeze({ adapter: identity.adapter, userId: identity.userId,
     ...(linkMethod ? { linkMethod } : {}), ...(linkMethod && stored.linkedAt ? { linkedAt: stored.linkedAt } : {}),
-    ...(recent ? { lastSeenAt: stored.lastSeenAt! } : {}), ...(recent && stored.lastDisplayName ? { lastDisplayName: stored.lastDisplayName } : {}) });
+    ...(recent ? { lastSeenAt: stored.lastSeenAt! } : {}), ...(recent && stored.lastDisplayName ? { lastDisplayName: stored.lastDisplayName } : {}),
+    ...(neverSpeaks?.(identity) ? { simulatedSender: true as const } : {}) });
 }
 
 function readIdentityInput(input: Record_): ChatIdentity {
@@ -135,6 +142,8 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
       }
     };
     const grantorName = (grantedBy: string) => chatGrantorName(people, grantedBy);
+    const simulatedAliases: readonly string[] = context.simulatedAdapters?.() ?? [];
+    const neverSpeaks = (identity: ChatIdentity) => simulatedAliases.includes(identity.adapter) && !simulatedIdentitySpeaks(store, identity);
 
     /** View of a person (stored id) or of an identity's implicit person. */
     const view = async (principalId: string | undefined, implicit?: ChatIdentity, scopeAdapter?: string): Promise<ConsoleChatPrincipal | undefined> => {
@@ -162,7 +171,7 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
         ...(stored?.displayName ? { displayName: stored.displayName } : {}),
         ...(createdBy ? { createdBy } : {}),
         ...(stored?.createdAt ? { createdAt: stored.createdAt } : {}),
-        identities: Object.freeze(visible.map(identity => identityView(identity, now, global))),
+        identities: Object.freeze(visible.map(identity => identityView(identity, now, global, neverSpeaks))),
         ...(identities.length > visible.length ? { hiddenIdentities: identities.length - visible.length } : {}),
         roles: Object.freeze(roles),
         ...(link && global ? { consoleLink: Object.freeze({ consoleUserId: link.consoleUserId,
@@ -307,7 +316,15 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
           if (!(await managesAdapter(identity.adapter))) continue;
           rows.push(Object.freeze({ ...identityView(identity, now, await allowed('global')), principalId: identity.principalId ?? implicitChatPrincipalId(identity) }));
         }
-        data = Object.freeze({ identities: Object.freeze(rows) });
+        // #1250 chat-recent-speakers-empty: simulated senders (ids typed in the Sandbox) are never
+        // recorded, on purpose — they hold no role, so they would be no one to grant a role to. Say so
+        // for the simulation adapters at this scope instead of an unexplained empty list.
+        const scopeAlias = chatScopeAdapter(scope);
+        const omitted: string[] = [];
+        for (const alias of simulatedAliases) {
+          if ((scopeAlias === undefined || scopeAlias === alias) && await managesAdapter(alias)) omitted.push(alias);
+        }
+        data = Object.freeze({ identities: Object.freeze(rows), ...(omitted.length ? { simulatedSendersOmitted: Object.freeze(omitted) } : {}) });
         break;
       }
       case CHAT_PRINCIPALS_RPC.BIND_CODE_CREATE: {
@@ -332,13 +349,13 @@ export async function dispatchChatPrincipalsConsoleRpc(message: Record_, context
         if (stored) {
           // The caller's own person: every identity and grant, whatever their Console scopes.
           principal = Object.freeze({ id: stored.id, ...(stored.displayName ? { displayName: stored.displayName } : {}),
-            identities: Object.freeze(principals.identitiesOf(stored.id).map(identity => identityView(identity, now))),
+            identities: Object.freeze(principals.identitiesOf(stored.id).map(identity => identityView(identity, now, true, neverSpeaks))),
             roles: Object.freeze(store.grantsOf(stored.id).map(entry => chatRoleView(entry, { grantorName }))),
             consoleLink: Object.freeze({ consoleUserId: link!.consoleUserId, ...(link!.consoleDisplayName ? { consoleDisplayName: link!.consoleDisplayName } : {}),
               linkedAt: link!.linkedAt, linkedVia: link!.linkedVia }) });
         }
         data = Object.freeze({ ...(principal ? { principal } : {}), ...(pending ? { pendingCode: Object.freeze({ expiresAt: pending }) } : {}),
-          ...(principal && global && !hasGlobalOwner({ store }) ? { suggestGlobalOwner: true } : {}) });
+          ...(principal && global && !hasGlobalOwner({ store }, context.simulatedAdapters?.() ?? []) ? { suggestGlobalOwner: true } : {}) });
         break;
       }
       case CHAT_PRINCIPALS_RPC.SIMULATED_ENSURE: {

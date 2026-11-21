@@ -19,7 +19,7 @@ import { defineChatPrincipalTables } from './chat-principals.js';
 import { ChatPeople } from './chat-people.js';
 import { ChatIdentityBindCodes, installChatIdentityBind } from './chat-identity-bind.js';
 import { ChatOwnerClaim, installChatOwnerClaim } from './chat-owner-claim.js';
-import { ChatRoleImportBook, chatRoleMigrationAdapterKinds, type ChatRoleAudit } from './chat-role-migration.js';
+import { ChatRoleImportBook, chatAdapterLandscape, chatRoleMigrationAdapterKinds, type ChatRoleAudit } from './chat-role-migration.js';
 import {
   defineFeatureOverrideTable, FeatureOverrideStore, readWorkspaceConversationNames,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
@@ -140,8 +140,15 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   const chatRoleImports = options.projectRoot
     ? new ChatRoleImportBook({ projectRoot: options.projectRoot, roles: () => roles, adapterKind, audit: entry => audit?.(entry) })
     : undefined;
+  // While a generation activates, its candidate snapshot (the current one is the previous generation).
+  let activating: RuntimeSnapshot | undefined;
+  const adapterLandscape = () => {
+    if (activating) return chatAdapterLandscape(activating);
+    const lease = options.snapshots().acquire();
+    try { return chatAdapterLandscape(lease.value); } finally { lease.release(); }
+  };
   const claim = new ChatOwnerClaim({ roles, ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
-    logger: getLogger('chat-roles'), audit: () => audit });
+    logger: getLogger('chat-roles'), audit: () => audit, adapters: adapterLandscape });
   const people = new ChatPeople({ store: roles.store, audit: () => audit });
   const bindCodes = new ChatIdentityBindCodes({ people });
   options.gatewayMessages?.onMessage(message => {
@@ -163,6 +170,15 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     subscribe: listener => roles.store.subscribe(listener),
     // ADR 0060 §5.4: the Sandbox speaks as the person linked to the authenticated Console user.
     consolePrincipal: consoleUserId => people.store.principals.linkOfConsoleUser(consoleUserId)?.principalId,
+    // #1250 sandbox-speak-as-me: the Sandbox creates the caller's `console-<userId>` identity on
+    // the first 「以我的聊天身份发言」 message (the same write as `chat-identities.simulated.ensure`),
+    // only on a local simulation adapter of the current generation.
+    ensureConsoleSpeaker: async input => {
+      if (adapterKind()(input.adapter) !== 'simulated') return;
+      const result = await people.ensureSimulatedIdentities({ consoleUserId: input.consoleUserId,
+        ...(input.displayName ? { consoleDisplayName: input.displayName } : {}), aliases: [input.adapter], canManageGlobal: input.canManageGlobal });
+      if (result.status === 'saved') publishEvent?.('chat-principals:updated', {});
+    },
   });
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
   const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, options.snapshots(), keys);
@@ -171,8 +187,10 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     ...(chatRoleImports ? { chatRoleImports } : {}),
     ...(options.personalPrincipalImports ? { personalPrincipalImports: options.personalPrincipalImports } : {}) });
   let loaded = false;
+  let publishEvent: ((type: string, data: unknown) => void) | undefined;
   const install: FeatureHost['install'] = deps => context => {
     if (deps.audit) audit = deps.audit;
+    if (deps.context.publishEvent) publishEvent = deps.context.publishEvent;
     context.resources.provide(featureConversationOverridesToken, overrides.reader);
     context.resources.provide(chatRolesToken, reader);
     context.handoff.add({
@@ -185,7 +203,10 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         try { candidate = context.readCandidateSnapshot?.(); } catch { candidate = undefined; }
         await options.afterLoad?.(roles, candidate, overrides, audit);
         loaded = true;
-        await claim.refresh().catch(error => getLogger('chat-roles').warn(`Chat owner claim unavailable: ${(error as Error).message}`));
+        activating = candidate;
+        try {
+          await claim.refresh().catch(error => getLogger('chat-roles').warn(`Chat owner claim unavailable: ${(error as Error).message}`));
+        } finally { activating = undefined; }
         const sweep = () => void people.expireSightings().catch(() => undefined);
         sweep();
         setInterval(sweep, SIGHTING_SWEEP_MS).unref?.();

@@ -18,12 +18,18 @@
  *   tricked into sending someone else's code can tell.
  * - Audited as `chat-identities.bind` (`link_method: code`); logs and the audit carry only the
  *   first 8 hex digits of the code's SHA-256.
+ * - #1250 bind-hint-omits-command-prefix: like `认领 <码>`, `绑定 <码>` / `bind <code>` works without
+ *   the adapter's command prefix ({@link createChatIdentityBindGuard}, taken at the start of inbound;
+ *   the prefixed command still works). Taken only when the text is the bind shape (keyword first,
+ *   then exactly one token) and the token is a currently open code or has the shape of one (8
+ *   symbols of the code alphabet), in a group only when it is an open code (revoked there).
  */
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
 import { createMessages, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ChatIdentity } from '@zhin.js/core';
+import type { InboundSecretGuard, InboundSecretMatch, Message } from '@zhin.js/core/runtime';
 import { chatOwnerClaimCodeHash } from './chat-owner-claim.js';
 import { chatRoleMigrationAdapterKinds, type ChatRoleMigrationAdapterKind } from './chat-role-migration.js';
 import type { ChatBindOutcome, ChatPeople } from './chat-people.js';
@@ -133,6 +139,12 @@ export class ChatIdentityBindCodes {
   observeAuthority(consoleUserId: string, canManageGlobal: boolean): void {
     if (!this.#codes.has(consoleUserId) && !this.#authority.has(consoleUserId)) return;
     this.#authority.set(consoleUserId, canManageGlobal);
+  }
+
+  /** Whether `code` (as typed: case, spaces and `-` ignored) is a currently open code. */
+  isOpen(code: string): boolean {
+    this.#sweep();
+    return this.#find(normalizeCode(code)) !== undefined;
   }
 
   #find(code: string): OpenCode | undefined {
@@ -281,4 +293,75 @@ export function installChatIdentityBind(options: Readonly<{ codes: ChatIdentityB
       },
     }));
   };
+}
+
+/**
+ * The bind shape (#1250): the keyword `绑定` / `bind` (any letter case) as the first word, whitespace,
+ * then exactly one token, and nothing else; up to three punctuation marks before the keyword (a
+ * command prefix such as `#` or `/`, a quote) and around the token (`<码>`) are ignored. `prefix`
+ * (the adapter's command prefix, which may be a word) may precede the keyword.
+ */
+const CHAT_BIND_TEXT = /^[^\p{L}\p{N}\s]{0,3}\s*(绑定|綁定|bind)\s+[^\p{L}\p{N}\s]{0,3}(\S+?)[^\p{L}\p{N}\s]{0,3}$/iu;
+/** What a bind code looks like once normalized: {@link CODE_LENGTH} symbols of {@link ALPHABET}. */
+const CODE_SHAPE = new RegExp(`^[${ALPHABET}]{${CODE_LENGTH}}$`, 'u');
+
+/** Whether `text` is a bind message, and its keyword (as typed) and code. */
+export function matchChatIdentityBindText(text: string, prefix = ''): Readonly<{ keyword: string; code: string }> | undefined {
+  const body = text.trim();
+  const candidates = prefix && body.startsWith(prefix) ? [body.slice(prefix.length).trim(), body] : [body];
+  for (const candidate of candidates) {
+    const match = CHAT_BIND_TEXT.exec(candidate);
+    if (match) return Object.freeze({ keyword: match[1]!, code: match[2]! });
+  }
+  return undefined;
+}
+
+/**
+ * #1250 bind-hint-omits-command-prefix: takes `绑定 <码>` / `bind <code>` at the start of inbound, with
+ * or without the command prefix, so the bind works like `认领 <码>` without one. In a private chat when
+ * the token is an open code or has the shape of one (a wrong or expired code is answered and
+ * counted, as by the command); in a group only an open code (it is revoked, and the sender told to
+ * use a private chat). Anything else passes on (to commands or the Agent).
+ */
+export function createChatIdentityBindGuard(options: Readonly<{ codes: ChatIdentityBindCodes }>): InboundSecretGuard {
+  const { codes } = options;
+  const guard: InboundSecretGuard = {
+    match: ({ text, prefix, conversation, snapshot }) => {
+      const shaped = matchChatIdentityBindText(text, prefix);
+      if (!shaped) return undefined;
+      const open = codes.isOpen(shaped.code);
+      if (!open && (conversation.kind !== 'private' || !CODE_SHAPE.test(normalizeCode(shaped.code)))) return undefined;
+      return Object.freeze({
+        name: 'bind',
+        redacted: `${shaped.keyword} ***`,
+        handle: (message: Message) => {
+          const resolved = resolveFeatureChatActor(snapshot, message);
+          const adapterKind = resolved.ok ? chatRoleMigrationAdapterKinds(snapshot)(resolved.actor.identity.adapter) : undefined;
+          return executeIdentityBind({ code: shaped.code, actor: resolved.ok ? resolved.actor : resolved.reason, adapterKind, locale: message.locale }, codes);
+        },
+      });
+    },
+  };
+  return Object.freeze(guard);
+}
+
+/**
+ * Several {@link InboundSecretGuard}s as one (the Runtime takes one): the first match wins; a native
+ * event is withheld when any guard says it carries a secret, and each guard revokes its own.
+ */
+export function combineInboundSecretGuards(...guards: readonly InboundSecretGuard[]): InboundSecretGuard {
+  const combined: InboundSecretGuard = {
+    match: input => {
+      for (const guard of guards) {
+        const matched: InboundSecretMatch | undefined = guard.match(input);
+        if (matched) return matched;
+      }
+      return undefined;
+    },
+    inspectNative: (payload, event) => guards.some(guard => guard.inspectNative?.(payload, event) === true),
+    discardNative: async (payload, event) => {
+      for (const guard of guards) await guard.discardNative?.(payload, event);
+    },
+  };
+  return Object.freeze(combined);
 }

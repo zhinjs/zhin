@@ -10,7 +10,7 @@ import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMe
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import { isApprovalPrompt, readSandboxCommandHints, type SandboxCommandHints } from './composerCommands.js';
-import { ensureSandboxChatIdentity, readServerSpeaker, wantsAsMe, type SandboxServerSpeaker, type SandboxSpeakerMode } from './chatIdentity.js';
+import { asMeFallbackNotice, ensureSandboxChatIdentity, readServerSpeaker, wantsAsMe, type SandboxAsMeNotice, type SandboxServerSpeaker, type SandboxSpeakerMode } from './chatIdentity.js';
 import { segmentPreviewText } from './segmentFallback.js';
 import {
   User, Bot, Users, Trash2, Send, Hash, MessageSquare,
@@ -146,6 +146,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [consoleUser, setConsoleUser] = useState(false)
     const [identitySetup, setIdentitySetup] = useState<{ status: 'idle' | 'busy' | 'done' | 'unsupported' } | { status: 'failed'; message: string }>({ status: 'idle' })
     const asMe = wantsAsMe(speakerMode, consoleUser)
+    // #1250 sandbox-speak-as-me: messages this page sent asking for 「以我的聊天身份发言」, and why the
+    // server could not use it for the last one (the switch is turned off then, with the reason).
+    const asMeSentRef = useRef(new Set<string>())
+    const [asMeNotice, setAsMeNotice] = useState<SandboxAsMeNotice | null>(null)
     const [showSenderSettings, setShowSenderSettings] = useState(false)
     /** Live binding of the current socket; drives the Host-provided quick commands. */
     const [readyConnectionId, setReadyConnectionId] = useState<string | undefined>(undefined)
@@ -393,6 +397,14 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         const isInput = data.direction === 'inbound'
         const speaker = isInput ? readServerSpeaker(data as Record<string, unknown>) : null
         if (speaker) setServerRole(speaker)
+        // Only this page's own messages turn its switch off (the echo reaches every subscriber).
+        if (speaker && typeof data.messageId === 'string' && asMeSentRef.current.delete(data.messageId)) {
+            const notice = asMeFallbackNotice(speaker)
+            if (notice) {
+                setAsMeNotice(notice)
+                setSpeakerMode('simulated')
+            }
+        }
         // Interactive choices are transport inputs, not another chat turn or an approval result.
         if (isInput && content.every((segment) => segment.type === 'action')) return
         const channelName = channelType === 'private'
@@ -425,6 +437,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     /** Inputs sent by a button click → the card they came from (failure frames name the input). */
     const actionSourcesRef = useRef(new Map<string, { cardId: string; scene: Pick<Channel, 'id' | 'type'> }>())
 
+    const rememberAsMe = (id: string) => {
+        const sent = asMeSentRef.current
+        sent.add(id)
+        if (sent.size > 200) sent.delete(sent.values().next().value!)
+    }
+
     const sendInteractiveAction = (payload: string, messageId?: string, buttonId?: string) => {
         if (!connectionRef.current.canExecute) return false
         const scene = activeChannelRef.current
@@ -434,6 +452,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         const resolvedSenderName = senderName.trim() || sandboxText(localeRef.current, "测试用户")
         const actionId = createSandboxMessageId()
         const clickedAt = Date.now()
+        if (asMe) rememberAsMe(actionId)
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: actionId, content: segments,
             senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(asMe ? { asMe: true } : {}),
@@ -736,6 +755,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             channelName: scene.name, senderId: resolvedSenderId,
             senderName: resolvedSenderName, content: segments, timestamp: Date.now(),
         }
+        if (asMe) rememberAsMe(newMessage.id)
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: newMessage.id, content: segments,
             senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(asMe ? { asMe: true } : {}),
@@ -1133,7 +1153,10 @@ ${sandboxStyles}`}</style>
                         <div className="sandbox-speaker-mode">
                             <label className="sandbox-speaker-toggle">
                                 <Switch checked={speakerMode === 'me'} disabled={!consoleUser}
-                                    onCheckedChange={(checked) => setSpeakerMode(checked ? 'me' : 'simulated')} />
+                                    onCheckedChange={(checked) => {
+                                        setSpeakerMode(checked ? 'me' : 'simulated')
+                                        if (checked) setAsMeNotice(null)
+                                    }} />
                                 <span>{sandboxText(locale, "以我的聊天身份发言")}</span>
                             </label>
                             <p>
@@ -1143,9 +1166,11 @@ ${sandboxStyles}`}</style>
                                     ? sandboxText(locale, "以链接到你 Console 账号的聊天身份发言，角色按你的聊天角色解析。")
                                     : sandboxText(locale, "模拟身份，无角色：自填的发送者 ID 只用于模拟别人，不解析 zhin 角色。")}
                             </p>
-                            {asMe && serverRole?.asMeUnavailable === 'needs-global-iam' && (
+                            {asMeNotice && (
                                 <div className="sandbox-speaker-setup" role="status">
-                                    <span>{sandboxText(locale, "链接到你的聊天身份持有全局角色，以它发言需要全局 iam.manage 权限；上一条消息按模拟身份（无角色）发送。")}</span>
+                                    <span>{asMeNotice.reason === 'needs-global-iam'
+                                        ? sandboxText(locale, "链接到你的聊天身份持有全局角色，以它发言需要全局 iam.manage 权限；上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。")
+                                        : sandboxText(locale, "未能建立你的 Sandbox 聊天身份：{0}。上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。", [asMeNotice.error || '-'])}</span>
                                 </div>
                             )}
                             {asMe && serverRole?.asMeUnavailable === 'no-identity' && (
@@ -1155,6 +1180,11 @@ ${sandboxStyles}`}</style>
                                         setIdentitySetup({ status: 'busy' })
                                         void ensureSandboxChatIdentity(socketRequestContextRef.current ?? undefined).then((result) => {
                                             setIdentitySetup(result.status === 'ok' ? { status: 'done' } : result)
+                                            // Not created: the switch goes off with the reason instead of staying on in vain.
+                                            if (result.status === 'failed') {
+                                                setAsMeNotice({ reason: 'identity-failed', error: result.message })
+                                                setSpeakerMode('simulated')
+                                            }
                                         })
                                     }}>{sandboxText(locale, "在 Sandbox 上创建我的聊天身份")}</Button>
                                     {identitySetup.status === 'done' && <em>{sandboxText(locale, "已创建，下一条消息生效。")}</em>}
