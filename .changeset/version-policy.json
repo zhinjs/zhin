@@ -132,6 +132,12 @@
       "type": "minor",
       "version": "1.2.0",
       "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 82 批——删除 `defineGameCommandAliasMiddleware()` 与类型 `GameCommandAliasRoute`（游戏短口令改走命令 `match`，不留兼容），删除 `isTttAction()`、`isAdvAction()`、`isRpsAction()`、`isGuessAction()`、`isDiceAction()`、`isChainAction()`、`isRiddleAction()`；新增 `gameCommandMatch()`、`gameCommandAction()`、`normalizeBjAction()`、`gameActionWords()` 与类型 `GameActionTableId`；（不兼容）游戏定义 `RuntimeRegisteredGame` 删除 `commandPrefix` 字段（写死 `/` 的旧入口，已无使用者），新增 `routesToGameCommand()`。1.1.35 已发布，本次为 1.2.0，npm 上 1.2.0 未被占用。"
+    },
+    {
+      "package": "@zhin.js/plugin-group-suite",
+      "type": "minor",
+      "version": "1.2.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：第 70 批——（不兼容）入群欢迎语与问答回答的旧占位符（`{name}`、`{id}`、`{sender}`、`{sender.id}`、`{time}`、`{date}` 等）不再展开，插件只告警、不迁移。公开导出 `tryTeachReply` 由 `Promise<string | null>` 变为 `Promise<SendContent | null>`；`teachAdd`、`teachList`、`teachForget`、`myPoints`、`pointsRank`、`statsRankText`、`myStatsText` 由 `Promise<string>` 变为 `Promise<SendContent>`。1.1.35 已发布，本次为 1.2.0，npm 上 1.2.0 未被占用。"
     }
   ]
 }

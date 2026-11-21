@@ -1,7 +1,8 @@
 ---
+"zhin.js": minor
 "@zhin.js/plugin-runtime": minor
 "@zhin.js/core": patch
-"@zhin.js/plugin-group-suite": patch
+"@zhin.js/plugin-group-suite": minor
 "@zhin.js/agent": patch
 "@zhin.js/testing": patch
 "@zhin.js/gateway": patch
