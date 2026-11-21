@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.1.37
+
+### Patch Changes
+
+- 0899424: 私聊里发起人自己按原文存下的消息不再算作外部内容来源（zhinjs/zhin#1250 `own-unhandled-message-counts-as-background`，ADR 0067 D8）。
+
+  - 行为变化：私聊里本回合发起人自己更早发的、没被处理的纯文本消息（例如不是指令的 `/clear`）再以背景消息出现时，不再让回合算作「读过外部内容」，之后建定时任务不再因此要求确认。只认声明了 `messaging.inboundTextAuthoredBySender` 的适配器、同一平台、同一 endpoint、同一会话里与发起人同一 sender id（发起人来源须为 `human`）、带核心入站原文证据的 `message.created`；未声明能力的适配器、带转发标记的消息、群聊、频道、别人发的、带引用 / 转发 / 媒体 / @、被改写或缺少证据的消息照旧计来源。
+  - 行为变化：清空与 `<指令前缀>reset` 的固定回复按原文送达时，以带 `key:` 前缀的会话键记入本会话投递记录，下一回合不把它算作背景来源（`/clear`、`/reset`、`/new` 本身的处理见同批 b67 changeset：直接清空本会话上下文）。
+  - `@zhin.js/adapter`（新增公开能力位）：能力画像 `messaging` 新增 `inboundTextAuthoredBySender`，声明本适配器入站的文本段都是发送者亲笔（转发、引用、卡片表示为非文本段、`replyTo` 或 `forwarded` 标记）；没声明按不保证处理。
+  - `@zhin.js/im-contract`：`ConversationMessage` 新增可选 `inboundTextDigest`，`ConversationContextBlock` 新增可选 `inboundActorId` / `inboundTextDigest`。
+  - `@zhin.js/core`（新增公开字段）：`IncomingMessage` 新增可选 `forwarded`；`ConversationRuntime` 构造参数新增可选 `{ evidenceKey }`，`recordIncoming` 新增可选第三个参数 `{ textAuthoredBySender }`。入站链按适配器画像传入声明；只对声明了能力、有发送者、无转发标记、无引用、纯文本（纯文本视图与文本段一致、非空）且未被认领码脱敏改动的入站消息写原文证据。证据是以实例进程内随机密钥计算的 HMAC-SHA256，绑定会话、消息、发送者 id 与原文；聚合背景块时按存储内容重算核对后才给出，进程重启后旧证据失效。发送者 id 去掉首尾空白后存储。
+  - `@zhin.js/adapter-telegram`：转发（`forward_origin` 与旧版 `forward_*`）、自动转发、inline bot 结果（`via_bot`）、跨会话引用（`external_reply`、`quote`）的入站消息带 `forwarded: true`；新增导出 `isTelegramRelayedMessage`；声明 `inboundTextAuthoredBySender`。
+  - `@zhin.js/adapter-onebot11`、`@zhin.js/adapter-napcat`：CQ 字符串上报格式下，`[CQ:reply,id=…]` 解析为 `replyTo`；串里出现 reply 以外的 CQ 码（at、face、卡片、转发、markdown、媒体等）、不合规的方括号，或 `message` 与 `raw_message` 不一致时，入站消息带 `forwarded: true`，不写原文证据（失败关闭）。NapCat 不再把原始 CQ 串包成单个文本段，纯文本视图改为剥掉 CQ 码后的文本，与 OneBot11 一致（判定见 `src/protocol.ts` 的 `inspectCqString` / `isCqStringRelayed`）。
+  - `@zhin.js/adapter-sandbox`、`@zhin.js/adapter-onebot11`、`@zhin.js/adapter-napcat`、`@zhin.js/adapter-discord`：核实入站转发 / 引用 / 卡片都不以纯文本段出现后声明 `inboundTextAuthoredBySender`。
+
+- ea1195f: #1250：聊天里发 `/clear`、`/reset`、`/new` 直接清空本会话的 AI 上下文，不再回「怎么重置」的提示。
+
+  - 行为变化：没被任何指令处理的 `/clear`、`/reset`、`/new`（任意大小写，半角或全角斜杠，整条只有这个词）在私聊或 @ 机器人时，调用与「清空」、`<指令前缀>reset` 相同的归档（`ZhinAgent.archiveSession`）清空发送者自己的会话上下文（私聊是该发送者的私聊会话，群里是该发送者在这个群的会话），回复「已清空本会话的 AI 多轮上下文。长期记忆和定时任务不受影响。」（英文同义）；入站结局记 `cleared`（`clear_command`），不再记 `suggested`（`reset_hint`）。长期记忆、定时任务、会话设置不受影响。
+  - 生效范围：清空只在机器人会回应你的地方生效——私聊，或群里 @ 机器人（`mentioned` 或 `metadata.mentioned`，与 AI 触发同一判定；Telegram 群里的 `/clear@<本机器人用户名>` 也算，@ 的是别的机器人时不算），且经过控制面入站闸与发言判定、AI 触发开着并会回应这类消息（`respondToPrivate` / `respondToAt`）。`ai.access` 不参与判定（IM 入站各处都不执行它）。不要求主人身份（与发「清空」一致）。
+  - 行为变化（收紧）：直播间和插话（ambient）里一律不触发清空——此时会话是共享的场景任务——「清空」、`#/new`、`@机器人 /reset` 等照旧当普通消息处理；原先直播间里发「清空」会清掉共享场景会话，现在不会。
+  - 控制面拦了出站时不清空、不回复，消息照旧往下走（触发写法「清空」与斜杠写法一致）。
+  - 防刷屏：确认在确实归档了内容时发送，否则同一会话同一发送者 60 秒内只确认一次；冷却只在真正发确认时开始。
+  - 指令先认领：插件命令或管理命令先认领的消息照旧按命令处理。命令前缀为 `/` 时 `/reset` 是管理命令，仍只给主人或受信任用户；其他人得到的无权限回复现在会指引改发 `/clear`（或「清空」）清空自己的上下文。
+  - 公开行为变化：`isClearCommand`（`@zhin.js/agent` 入口导出）的识别范围变宽，除 `clear` / 清空 / 重置外，也识别 `/clear`、`/reset`、`/new`（`NFKC` 归一、不分大小写、半角或全角斜杠）。`ingressMessages` 保留 `cleared` 键（文案与新确认一致）。
+  - `@zhin.js/adapter-telegram`：入站消息的 `metadata` 带本机器人用户名 `botUsername`（来自 `getMe`），供 Agent 区分 `/clear@<本机器人>` 与别的机器人的命令。
+
+- 58ce469: #1250 第 80 批：小型去重，统一多轨实现。
+
+  - **重试、退避与可中断等待**：`@zhin.js/plugin-runtime` 新增 `sleep(ms, signal?)`（中止时清理计时器并以 `signal.reason` 拒绝）、`parseRetryAfterMs()`（解析秒数与 HTTP 日期：接受小数秒、`.5`、`5.` 与前导 `+`；负数、`1e3`、`0x10` 等非法值返回 `undefined`，AI 路径遇到这类值退回普通退避）和 `computeBackoffDelay()`（指数退避，默认等量抖动，可选对称抖动比例），插件经 `zhin.js` 导入。AI Provider 重试、OAuth 刷新冷却、适配器启动重试、地震与网络工具插件的 HTTP 重试、B 站直播 / QQ 扫码 / Telegram 轮询 / 微信 iLink 的等待全部改用它们；`@zhin.js/kernel` 删除不支持中止的 `sleep`，`@zhin.js/ai` 不再导出 `computeBackoffDelay` / `parseRetryAfterMs`，地震、网络工具和微信 iLink 插件不再导出各自的副本。
+  - **HTML 转义**：`@zhin.js/plugin-runtime` 新增 `escapeHtml()`（转义 `& < > " '`），AI 输出、Console 页面外壳、`segment.escape`、链接海报和日历回调页改用它；`@zhin.js/pagemanager` 不再导出自己的 `escapeHtml`。`@zhin.js/jsx` 因只依赖 IM 契约保留同一实现，由契约测试锁定一致。
+  - **`MarkdownView`**：`@zhin.js/components` 的 `Markdown` 组件改名为 `MarkdownView`（`MarkdownProps` → `MarkdownViewProps`，主题组件名同步），与 `zhin.js/jsx` 输出 Markdown 消息段的 `Markdown` 标签区分，不保留旧名。
+  - **会话键**：`@zhin.js/console-protocol` 新增四段会话键 `parseConversationSessionKey()` / `formatConversationSessionKey()` / `isHashedSessionKey()`，网关用量统计（`parseSessionKey` 改名为 `sessionAddressOf`；endpoint 段为空的会话键照常解析，三段键只给出 platform）、实例的聊天记录与收件箱校验、沙盒页面都改用它。功能会话键在 plugin-runtime 与 console-protocol 中各保留一份（两者都是零依赖契约），由契约测试锁定语法、转义与错误文案一致。
+  - **聊天角色导出格式**：`@zhin.js/console-protocol` 新增 `CHAT_ROLES_EXPORT_FORMAT`、`CHAT_ROLES_EXPORT_VERSION`、`CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS`、`chatRolesBackupFileName()` 与 `isConsoleChatRolesExport()`，`zhin chat-roles export|import` 与实例的导出、导入和迁移前备份共用；实例导入现在与 CLI 一样要求四个列表都存在。
+
+- Updated dependencies [0899424]
+- Updated dependencies [7f39b10]
+- Updated dependencies [637383b]
+- Updated dependencies [50b577d]
+- Updated dependencies [49f9042]
+- Updated dependencies [a05eb73]
+- Updated dependencies [ee51324]
+- Updated dependencies [58ce469]
+- Updated dependencies [d3aae4d]
+- Updated dependencies [74eb13a]
+- Updated dependencies [45dcb9e]
+- Updated dependencies [a5ac09e]
+- Updated dependencies [884d827]
+  - @zhin.js/core@1.14.0
+  - @zhin.js/im-contract@1.3.1
+  - @zhin.js/adapter@1.6.0
+  - @zhin.js/console-contract@1.5.0
+  - @zhin.js/page@1.3.0
+  - @zhin.js/host-http@1.8.0
+  - @zhin.js/feature-kit@1.1.21
+  - @zhin.js/tool@1.1.25
+  - @zhin.js/agent-feature@1.1.22
+  - @zhin.js/skill@1.1.22
+
 ## 1.1.36
 
 ### Patch Changes

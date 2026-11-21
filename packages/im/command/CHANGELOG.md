@@ -1,5 +1,67 @@
 # @zhin.js/command
 
+## 1.5.0
+
+### Minor Changes
+
+- a05eb73: #1250 第 78 批：拒绝文案与「是不是全局主人」判定各收成一处。
+
+  - `@zhin.js/permission`：拒绝文案的唯一来源。新增导出 `describeCommandDenial(permit, locale, options)`（命令被 `permit` 拒绝时的回复）、`describeGlobalOwnerRequired(locale, { privateChat, bindCommand, commandPrefix })`（需要全局聊天主人的能力：说明需要全局 owner 以及去哪里授予——Console「聊天角色」页，授予前先私聊发送「绑定 <码>」把聊天身份绑定到 Console 账号；还没有全局 owner 时私聊发送「认领 <码>」）、`describeConversationManagerDenial(locale)`（`canManageConversation` 的标准拒绝）与类型 `PermitDenialOptions`；`describeDeniedPermit` 新增第三个参数。`bind` 是普通命令：调用方给出 `bindCommand`（如 `CommandContext.formatCommand('bind')`）或实际命令前缀 `commandPrefix` 时，文案写出带前缀的「!!绑定 <码>」，都没有时注明「配置了命令前缀时带上前缀」（英文同步，并补「to a Console account」）。（不兼容）`describeDeniedPermit` 一律返回完整句子（如「此功能需要 zhin 角色。……」/ "This needs a zhin role. …"，原为「它需要 zhin 角色……」/ "it needs a zhin role…" 这样的句子片段），它也是 `CommandDispatchResult.denial.reason` 与命令反馈渲染器拿到的 `reason`；只有 `describeCommandDenial` 在前面拼上「没有权限执行此指令。」/「无法执行此指令。」（原为「没有权限执行此指令：……」「无法执行此指令：……」）。zhin 角色条件的拒绝不再点名缺的角色（原「需要你在本会话拥有 zhin 角色 {value}」），`owner@global` 改为全局 owner 说明。
+  - `@zhin.js/command`：再导出 `describeConversationManagerDenial`（`zhin.js/command` 同样可用）。
+  - `@zhin.js/core`：命令拒绝回复改用 `describeCommandDenial`（全局 owner 说明里的「绑定」带上本条消息实际的命令前缀）；`private()` 不满足时回复「此指令只能在私聊中使用，请私聊机器人发送。」（原为通用的「没有权限执行此指令。」）；消息结局 `permission_denied` 的发送者文案与命令拒绝同源（「没有权限执行此指令。」）；按钮 `permit` 不满足的回复改为「你不能使用这个按钮。<原因>」（原因是完整句子）。`usageSubjectFromMessage` 的 `owner` 改用 `isOwner()` 判定（行为不变）。（不兼容）删除 `MessageSender.isMaster` / `isTrusted`（无写入点；角色只读 `sender.chatRole`，判全局主人用 `isOwner()`）。
+  - `@zhin.js/agent`：（不兼容）`RuntimeSenderRoles`、`TurnIntentSenderRoles`、`RuntimeManagementSenderRoles` 的 `{ isMaster, isTrusted }` 改为 `{ hostRole?: 'owner' | 'admin' | 'trusted' }`（宿主信任角色：`owner` 只给全局 owner，低层 owner 记为 `admin`）；删除 `ownerApprovalMessages.denied`、`managementMessages.denied`。主人命令 `approve …` 的拒绝改用全局 owner 共享说明（「绑定」带本账号命令前缀）；管理命令对无角色者回复共享的 `describeCommandDenial('trusted')`；`reset` 的拒绝也以这句开头（原「仅聊天角色 owner / admin / trusted 可用」），后面保留改发 /clear 的引导。主人判定统一走 `isOwner` / `hasChatRole`。
+  - `zhin.js`：`config` 命令的 permit 改为 `owner@global` + `private()`（与命令内部 `senderIsGlobalOwner` 同一身份集合）：群里不是全局 owner 的人发送时不回复（结局 `permission_denied`），私聊里得到全局 owner 说明，全局 owner 在群里发得到「请私聊」提示。执行时授权器拒绝时回复与 permit 拒绝同一段文案（不再是「仅可在私聊中使用」变体），并像 `restart` 一样记 `permission_denied`（原因 `not-global-owner`）、群里静默。`restart` 与 `config` 的拒绝都改用全局 owner 共享说明，「绑定」带上实际命令前缀。「是否已有全局 owner」只剩一处判定（实例内部 `hasGlobalOwner`）。
+  - `@zhin.js/console-protocol`：新增导出 `isGlobalOwnerGrant(grant)`、`hasGlobalOwnerGrant(grants)`；`@zhin.js/host-http`、`@zhin.js/gateway` 判 Console 全局所有者改用它们（行为不变）。
+  - `@zhin.js/plugin-bilibili`、`@zhin.js/plugin-earthquake`：（不兼容）删除未被引用的 `SUBSCRIPTION_PERMISSION_DENIED_MESSAGE` 与 i18n 的 `denied` 键；群里无权订阅时改回复标准拒绝 `describeConversationManagerDenial()`。
+  - `@zhin.js/adapter-icqq`：`icqq login` 的操作者判定改用 `@zhin.js/core` 的 `isOwner()`（行为不变）。
+
+### Patch Changes
+
+- 50b577d: #1250 第 75 批：群里无权限者发确认 / 审批 / 管理类命令时，机器人不回复、不执行，避免旁人乱操作刷屏；私聊照旧回复无权限原因，有权限的人操作出错（确认码过期、格式不对等）照常提示。这些拒绝都记为入站结局 `permission_denied`（群里 `reply: no`，私聊 `reply: yes`），Console「消息结局」可查；原有审计照常写。
+
+  - `@zhin.js/agent`：Agent 管理命令（`models`、`tree`、`fork`、`compact`、`reset`、`ai.health`）对非主人 / 受信任用户、审批卡命令 `approve <id>` / `deny <id>` 对不在审批人名单且不是能结算该自我变更卡的全局主人、主人命令 `approve …` 对非全局主人（全局主人在群里发仍提示改用私聊）、群规命令 `rule approve|reject|disable …` 对非群管理员 / 非审批人：在群聊与频道里不回复，消息在入站管理阶段终止，不会再进入 AI 回合（模型不会代为回答「没有权限」）；私聊回复不变。群规命令在频道等非群会话、或群规不可用时也先判审批人：非审批人静默，只有审批人收到「只能在对应的群里用」「群规不可用」。`rules` 列表、`memory` / `forget` 仍对所有人开放。`RuntimeManagementDeps`、`ImApprovalCommandInput`、`GroupRuleCommandInput`、`OwnerApprovalCommandContext` 新增可选回调 `onUnauthorized(reason)`：处理器在回复是「无权限拒绝」时调用它（返回的文案不变），由入站阶段决定群里静默、私聊回复。
+  - `@zhin.js/agent`（不兼容）：删除只为兼容保留的 `ingressMessages.cleared` 键（清空确认文案只在清空命令里使用）。
+  - `@zhin.js/core`：别人提问的确认 / 选择按钮被旁人点击时，群里不再回复「交互已过期」（提问仍属于被提问的人，结局 `permission_denied`，原因 `interaction_not_own`）；旁人打字回答本来就不会被当成回答，现有测试锁定。带 `permit` 的按钮被不满足条件的人点击时，群里不再回复「你不能使用这个按钮」，私聊照旧说明。提问结束后 10 分钟内（最多记 512 个按钮）仍记得它是问谁的：旁人在群里点已结束提问的按钮也不再回复「交互已过期」，被提问的人自己点仍提示过期，记录过期或被挤掉后按原样提示。插件命令的 `permit` 不满足、且不满足的是对发送者的条件（zhin 角色、`platform:*` / `platform-role:*` / `platform-permission:*`、`user(…)`、插件自定义 permit）时，群聊 / 频道里不再回复「没有权限执行此指令」（也不调用自定义命令反馈渲染器），结局 `permission_denied` 记 `reply: no`；场合条件（`private()`、`group()` 等）与机器人自身条件（`bot:*`）照常回复，例如 `config` 在群里仍对所有人回复。不新增公共导出。
+  - `@zhin.js/command`：命令被拒时，若最先不满足的是场合或机器人条件、而发送者也不满足某个对发送者的条件，拒绝结果改为指名后者（`denial.permit`），使群里对无权限者静默；例如 group-suite 的 `teach`（`group()` + `trusted`）被不受信任的人在私聊里发时，回复改为说明需要 zhin 角色。
+  - `zhin.js`：聊天 `restart` 对非全局主人在群里不回复（审计原因 `not-global-owner`）；另一位全局主人替别人确认他发起的重启时，审计与结局原因记 `confirmation-not-own`，但他有权限，群里照常提示「没有待确认的重启」；主人自己的确认过期或参数不对照常提示。`功能` / `角色` 自助在任何范围都没有 admin 时先按 `not-admin` 拒绝（`角色` 的用法错误、找不到人等格式类拒绝不再在群里回复无权限旁人），该范围没有 admin、角色不足以授予 / 撤销（`not-admin`、`role-denied`、`owner-denied`、`peer-denied`），或确认码属于别人（新拒绝原因 `confirm-not-own`；确认者本身是全局 admin 时照常提示）时，群里不回复，私聊照旧说明；有 admin 的人的用法错误、确认码过期等仍回复。不新增公共导出。
+
+- 49f9042: 统一显示语言类型、语言解析与列表分隔（zhinjs/zhin#1250 第 77 批）。
+
+  - 新增：`@zhin.js/plugin-runtime` 导出 `formatList(locale, items, { separator? })`（`list` 默认 `、` / `, `，`comma` 为 `，` / `, `，`semicolon` 为 `；` / `; `；只拼接，英文不加 `and`），经 `zhin.js` 主入口与 `zhin.js/i18n` 再导出；`queryLocale()` 严格解析 `?locale=`；`projectLocale()` 从 `@zhin.js/core/runtime` 移入（core 不再导出）。
+  - 命令的语言回退改走与消息相同的项目语言（先取 generation 投影的项目语言，再取根配置 `locale`）；之前命令只读根配置。消息自带的语言不合法时回退项目语言，而不是固定的 `zh-CN`。
+  - Console 接口：`/conversations/workspaces/commands`、`/conversations/outcomes`、`/entries`、`/console/api/pages`、Console 首页与插件市场搜索的 `?locale=` 之前把非法值当作中文（或忽略），现在与任务、权限说明接口一样严格：不支持或重复的值返回 400（`invalid_locale`）。缺省行为不变。400 响应由 `@zhin.js/host-http` 新增导出的 `invalidLocaleResponse()` 统一给出（实例路由与插件市场共用，错误文案中英文一致：`locale 只能是 zh-CN 或 en（locale must be zh-CN or en）`；插件市场之前只有英文）。页面标题按 `titleI18n[locale]` 精确取值：`titleI18n` 的键只能是 `zh-CN` / `en`，不再按 `zh` / `en-US` 等前缀或其他键猜测。
+  - 删除别名类型（不留兼容）：`@zhin.js/client` 的 `PluginUiLocale`（改为再导出 `@zhin.js/console-protocol` 新增的 `ConsoleLocale`），`@zhin.js/console-contract` 的 `PageKeywordLocale` 与 `DeclarativeUiLocale`（合并为本包零依赖的 `ConsoleLocale`），`@zhin.js/page` 对这两个类型的再导出；内部别名 `PlatformGuidanceLocale`、`CreateLocale`、`SandboxLocale`、`AdapterConsoleLocale` 一并删除。其余内联的 `'zh-CN' | 'en'` 改用 `Locale` / `ConsoleLocale`。
+  - 语言判定改用 `resolveLocale()`：Agent 未执行工具提示与协作补充文案不再按 `en` 前缀猜测（`en-US` 之类的值回退中文；实际传入的都是已解析的语言）；系统提示的平台说明在缺少语言时改为中文（之前英文）；重启回执、消息结局文案、create-zhin、ICQQ 辅助脚本、成语接龙动作词同样改用统一解析。成语接龙的开局动作词（`chainStartAction`）之前把任何不以 `zh` 开头的值（如 `en-US`、`fr`）当作英文、给出 `pinyin` / `char`；现在只有 `en` 给出英文，其余不支持的值与缺省一样回退中文的「同音」/「同字」（`zh-CN` 与 `en` 不变）。B 站与掘金 Console RPC 删除各自的 `localeOf`。
+  - 列表分隔统一用 `formatList`，输出不变：命令建议、回复兜底的工具列表、工具审批卡、群规豁免、账号命令字段、Console 提醒、地震订阅地区与数据源告警、游戏大厅、轮盘、文字冒险、猜词选项、内容审核动作、网络工具与 RSS 任务详情。`@zhin.js/command` 与 Agent 文案表中的分隔符条目（`suggestionSeparator`、`toolSeparator`、`listSeparator`、`detailSeparator`、猜词 `separator`）删除。
+
+  `@zhin.js/console-ui`：仅补充 `ConsoleUiLocale` 与 `resolveConsoleUiLocale` 的说明注释（本地声明的理由、为何对浏览器语言标签保持宽松），行为不变。
+
+- 45dcb9e: #1250 第 84 批：收尾第 83 批（Agent 管理命令改为 Root 命令）的复审问题。
+
+  - 命令只回应人：命令分发统一过滤非人类来源。消息的可信来源 `origin`（或没有可信来源时适配器自报的 `metadata.origin`）不是 `human` 时，这条消息不进任何命令——不执行、不回复无权限（permit 拒绝）、不给近似指令提示，对所有插件命令都生效；结局 `ignored_bot`（原因 `non_human_origin`，阶段 `command`）。过滤分两层：入站分类器判出的可信来源 `self` / `member` / `peer_bot` 在入站阶段就丢弃（结局 `ignored_self` / `ignored_bot`，阶段 `ingress`），中间件、事件处理器和命令都收不到；命令分发层的过滤是兜底，只对没有可信来源、靠 `metadata.origin` 自报的消息生效，这类消息中间件与事件处理器照常收到。「只回应人」只覆盖 PeerRegistry 里登记过的 zhin 机器人（以及出站台账认得出的本实例消息）：不在 PeerRegistry 里的第三方机器人会被分类器判成 `human`，命令照常响应。Agent 管理命令里各自的来源判断随之删除（结局由 `filtered_by_policy` 改为 `ignored_bot`）。
+  - `@zhin.js/core`：新增导出 `isNonHumanOrigin()`（`@zhin.js/core/runtime`，Agent 入站复用同一判定）；`InboundOutcomeSink` 新增可选 `reportCount()`；`ImOperationResourcesInput` 新增可选 `conversationSequence`（这条消息在会话里的序号）。
+  - 结局如实：指令什么都没返回、什么都没发，且执行期间自己记了结局时，分发层不再追加 `command_replied`（它的优先级会压过静默结局）。没有聊天角色的人发 `reset` 却没有清空时，结局记 `not_addressed`（原因 `clear_command`：群里未 @、AI 不回应他等）、`filtered_by_policy`（原因 `outbound_stopped`：控制面停了出站），直播间里记 `not_addressed`（原因 `live_room_clear`）；清空了但冷却期内没有再发确认时记 `cleared`。新增两条原因级结局说明（ADR 0061 表同步）。
+  - 直播间里没有聊天角色的人发 `reset`：保持静默，不清空也不进 AI 回合（文档写明）。
+  - `reset` 的清空路径带上这条消息的会话序号，发言闸门把截至这条消息的场景事件（如刚被禁言）折叠进来再判断。
+  - 分发租约只给 Root 自己分发的 Root 命令操作（Agent 管理命令）：插件命令 / handler 的操作资源里不再有分发租约，深路径导入内部令牌也拿不到，无法钉住旧快照代。操作的 owner 由框架绑定，不由调用方自报：交给插件的消息视图只为它自己的作者打开 Host 资源，自称 Root（`owner: snapshot.root`）时这次操作没有任何 Host 资源；`CommandIndex.dispatch` 从来源消息读操作资源时改从命令作者的视图读取（在执行策略计数之前读取）。
+  - 插件中间件 / handler / 按钮回调经 `CommandIndex.dispatch({ input, source: context.input })` 分发 Root 命令（项目自己的命令与宿主命令）照常执行，装不装 Agent 都一样，拿到的资源与直接发送一致（例如推理客户端），只是没有分发租约：消息视图经插件作者改绑（含 P → Q → Root、Root → P → Root 等多跳，记为第一个插件作者）时，Host 收到 `ImOperationResourcesInput.delegatedFrom`（新增可选字段）并只去掉分发租约。
+  - 分发租约不靠令牌保密：Agent 管理命令只认**本 Host 实例**签发的租约端口，并由 Host 侧用真实快照存储再校验一次。`createHostOperationResources()`（`@zhin.js/agent/runtime`）返回值新增 `isDispatchLease(port)`，只认这个工厂实例自己签发的端口（登记在实例私有的 WeakSet 里，不再是模块级登记：插件自己调用公开的 `createHostOperationResources()` 签出的端口不算）；`RuntimeManagementCommandHost` 新增必填 `isDispatchLease`，Agent Host 把自己那个实例的判定传给 `createRuntimeManagementCommands()`。`AgentRuntime` 新增 `ownsLease(lease)`，`AgentTurnIngressRoute.runManagementOperation()` / `clearAsCommand()` 用它校验命令交来的租约属于这个 Root 的真实 SnapshotStore，不属于就拒绝。调用方经显式 `operation` 自造资源视图、对租约令牌（id 可读）回答 `has` / `use` 的，拿不到租约；没有 Host 资源时同样不执行。需要分发租约的 Agent 管理命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）经插件转发（或自造 `operation`）时不执行，回复中英文提示请用户直接发送该命令（带这条消息的命令前缀，如「请直接发送 /reset。」）。
+  - `CommandIndex.dispatch`：调用方没传 `commandPrefix` 时用来源消息自身的 `commandPrefix`（帮助文本、命令里的 `formatCommand` 都带前缀）；显式传入消息自身的 `snapshot` 与不传等价——同样校验命令表、按 endpoint 过滤被关插件的命令（ADR 0050，之前显式传入会绕过）、拿到同样的资源；从来源消息读操作资源在执行策略计数之前，读取失败不占冷却额度。
+  - 结局如实：经插件转发（来源为框架消息、未传 `operation`）的命令以 UserFacingError 拒绝时，`CommandIndex.dispatch` 自己记这条消息的结局 `refused`（原因为命令的拒绝码，如 `direct_command_required`，阶段 `command`），不再只剩中间件的 `handler_replied`。`dispatch` 返回的 `value` 就是给用户的回复（含拒绝提示），中间件必须把它回复出去（文档示例改为 `return result.value`）；中间件不回复时用户收不到提示。`@zhin.js/feature-kit` 新增内部钩子 `operationInputOutcome` / `reportOperationInputOutcome()`，由框架消息实现。
+  - `createRuntimeManagementCommands()` 必须配合 Host 资源（同一个 `createHostOperationResources()` 实例的 `im` 端口与 `isDispatchLease`）。没有 Host 资源时（嵌入方没接），需要租约的管理命令即使用户直接发送也不执行，回复「管理命令在此实例不可用。」/「Management commands are not available on this instance.」，结局 `refused`（原因 `management_unavailable`，新增原因级结局说明，ADR 0061 表同步），不再误答「不能经插件转发执行，请直接发送」。
+
+- Updated dependencies [0899424]
+- Updated dependencies [7f39b10]
+- Updated dependencies [49f9042]
+- Updated dependencies [a05eb73]
+- Updated dependencies [ee51324]
+- Updated dependencies [58ce469]
+- Updated dependencies [45dcb9e]
+  - @zhin.js/im-contract@1.3.1
+  - @zhin.js/plugin-runtime@1.5.0
+  - @zhin.js/permission@1.3.0
+  - @zhin.js/feature-kit@1.1.21
+
 ## 1.4.2
 
 ### Patch Changes
