@@ -27,7 +27,7 @@ vi.mock('@zhin.js/gateway/plugin-management', () => ({
 const prompt = vi.hoisted(() => vi.fn(async () => ({ confirmDelete: false })));
 vi.mock('inquirer', () => ({ default: { prompt } }));
 
-import { uninstallCommand } from '../src/commands/uninstall.js';
+import { localPluginDirKeepReason, uninstallCommand } from '../src/commands/uninstall.js';
 
 let tmp: string;
 let prevCwd: string;
@@ -86,4 +86,21 @@ describe('zhin uninstall plugin --remove-dir (#1250)', () => {
     expect(state.uninstalled).toEqual([]);
     expect(fs.existsSync(pluginDir())).toBe(false);
   });
+  it('--remove-dir keeps the directory while package.json still depends on its package', async () => {
+    fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'bot', dependencies: { demo: 'workspace:*' } }));
+    await run('--remove-dir');
+    expect(state.uninstalled).toEqual(['demo']);
+    expect(fs.existsSync(pluginDir())).toBe(true);
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('never resolves a directory outside ./plugins', () => {
+    fs.mkdirSync(path.join(tmp, 'outside'), { recursive: true });
+    expect(localPluginDirKeepReason(tmp, '../outside')).toMatch(/单个目录名/u);
+    expect(localPluginDirKeepReason(tmp, 'a/b')).toMatch(/单个目录名/u);
+    expect(localPluginDirKeepReason(tmp, '..')).toMatch(/单个目录名/u);
+    expect(localPluginDirKeepReason(tmp, '')).toMatch(/单个目录名/u);
+    expect(localPluginDirKeepReason(tmp, 'demo')).toBeUndefined();
+  });
 });
+

@@ -387,7 +387,7 @@ zhin uninstall plugin <name> [--remove-pkg] [--remove-dir]
 zhin uninstall adapter <name> [--remove-pkg]
 ```
 
-`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。卸载插件时若存在本地插件目录 `./plugins/<name>`：加 `--remove-dir` 直接删除、不再询问（交互终端也一样）；不加时在交互终端里询问（默认保留），非交互环境（管道、CI）保留目录。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
+`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。卸载插件时若存在本地插件目录 `./plugins/<name>`：加 `--remove-dir` 直接删除、不再询问（交互终端也一样）；不加时在交互终端里询问（默认保留），非交互环境（管道、CI）保留目录。`package.json` 仍依赖这个本地包（没加 `--remove-pkg`，或还有其他实例在用）时，目录一律保留并给出提示，以免留下指向已删目录的依赖。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
 
 ### enable / disable：启用或停用插件实例 {#enable-disable}
 
