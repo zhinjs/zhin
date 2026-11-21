@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { createChatRoleReader } from '@zhin.js/core';
+import { simulatedConsoleSpeakerToken } from '@zhin.js/adapter';
+import { Scope, childPluginId, featureId, readFeaturePrivateResource, rootPluginId } from '@zhin.js/plugin-runtime';
+import { createSimulatedConsoleSpeakerHost } from '../../src/instance/feature-host-installer.js';
 import { authorizeConsoleRpc, type ConsolePrincipal } from '@zhin.js/host-http';
 import { CHAT_PRINCIPALS_RPC, CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, CHAT_ROLES_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
 import {
@@ -564,33 +567,59 @@ describe('#1250 roles and the Sandbox (ADR 0060 §5.4)', () => {
   const principalsRpc = (type: string, data: Record<string, unknown>, context: ChatPrincipalsRpcContext) =>
     dispatchChatPrincipalsConsoleRpc({ type, data }, context).then(reply => reply!);
 
-  it('ensureConsoleSpeaker creates console-<userId> on a simulation adapter on the first message (sandbox-speak-as-me)', async () => {
+  it('the simulation Adapter port creates console-<userId> on the first message from the socket principal (sandbox-speak-as-me)', async () => {
     const { store, roles, people } = setup();
-    const ensured: unknown[] = [];
-    const reader = createChatRoleReader({ roles: () => roles, conversationKey: c => `${c.endpoint.adapter}/dev/${c.kind}:${c.id}`,
-      consolePrincipal: user => store.principals.linkOfConsoleUser(user)?.principalId,
-      ensureConsoleSpeaker: async input => {
-        ensured.push(input);
-        if (input.adapter !== 'sandbox') return;
-        await people.ensureSimulatedIdentities({ consoleUserId: input.consoleUserId, aliases: [input.adapter], canManageGlobal: input.canManageGlobal,
-          ...(input.displayName ? { consoleDisplayName: input.displayName } : {}) });
-      } });
+    const conversationKey = (c: { endpoint: { adapter: string }; kind: string; id: string }) => `${c.endpoint.adapter}/dev/${c.kind}:${c.id}`;
+    const reader = createChatRoleReader({ roles: () => roles, conversationKey: conversationKey as never,
+      consolePrincipal: user => store.principals.linkOfConsoleUser(user)?.principalId });
+    let saved = 0;
+    const owners: Record<string, { alias: string; simulated: boolean }> = { 'root/sandbox': { alias: 'sandbox', simulated: true }, 'root/qq': { alias: 'qq', simulated: false } };
+    const host = createSimulatedConsoleSpeakerHost({ people, adapterOf: owner => owners[owner], conversationKey: conversationKey as never, onSaved: () => { saved += 1; } });
+    const user = (userId: string, permissions: readonly string[] = ['self.chat-identity'], displayName?: string) =>
+      ({ kind: 'user', userId, ...(displayName ? { displayName } : {}), grants: [{ scope: { kind: 'global' }, permissions }] }) as never;
+    const ensure = (principal: unknown, owner = 'root/sandbox', conversation = room) => host.ensure({ owner: owner as never, conversation, principal });
     expect(reader.consoleSpeaker!(room, 'u1')).toBeUndefined();
-    expect(await reader.ensureConsoleSpeaker!(room, 'u1', { displayName: 'Una' })).toEqual(sandbox('console-u1'));
-    expect(ensured).toEqual([{ adapter: 'sandbox', consoleUserId: 'u1', displayName: 'Una', canManageGlobal: false }]);
-    expect(store.principals.linkOfConsoleUser('u1')).toMatchObject({ linkedVia: 'console' });
-    // Already there: answered from the link, nothing is written again.
-    expect(await reader.ensureConsoleSpeaker!(room, 'u1')).toEqual(sandbox('console-u1'));
-    expect(ensured).toHaveLength(1);
-    // The linked person holds a global grant: the same gate as simulated.ensure (refused with the reason).
+    await ensure(user('u1', ['self.chat-identity'], 'Una'));
+    expect(reader.consoleSpeaker!(room, 'u1')).toEqual(sandbox('console-u1'));
+    expect(saved).toBe(1);
+    expect(store.principals.linkOfConsoleUser('u1')).toMatchObject({ linkedVia: 'console', consoleDisplayName: 'Una' });
+    // Already there: nothing is written again.
+    await ensure(user('u1'));
+    expect(saved).toBe(1);
+    // M3: `self.chat-identity` is required, checked on the principal itself.
+    await expect(ensure(user('u-viewer', ['status.view']))).rejects.toThrow('self.chat-identity');
+    await expect(ensure(undefined)).rejects.toThrow('no signed-in Console user');
+    await expect(ensure({ kind: 'bootstrap', open: true })).rejects.toThrow('no signed-in Console user');
+    expect(store.principals.linkOfConsoleUser('u-viewer')).toBeUndefined();
+    // The linked person holds a global grant: global iam.manage comes from the principal, not the caller.
     await store.grant({ level: 'global', key: '', ...qq('boss'), role: 'owner' });
     await people.linkConsole({ principal: qq('boss'), consoleUserId: 'u-boss', via: 'manual', actor: 'user:root' });
-    await expect(reader.ensureConsoleSpeaker!(room, 'u-boss')).rejects.toThrow('全局 iam.manage');
-    expect(await reader.ensureConsoleSpeaker!(room, 'u-boss', { canManageGlobal: true })).toEqual(sandbox('console-u-boss'));
-    // A real platform is never written by the instance hook (it answers like consoleSpeaker).
+    await expect(ensure(user('u-boss'))).rejects.toThrow('全局 iam.manage');
+    await ensure(user('u-boss', ['self.chat-identity', 'iam.manage']));
+    expect(reader.consoleSpeaker!(room, 'u-boss', { canManageGlobal: true })).toEqual(sandbox('console-u-boss'));
+    // Only a simulation Adapter, and only a conversation on that Adapter.
     const qqRoom = { endpoint: { id: 'x', adapter: 'qq' }, kind: 'private', id: 'r' } as never;
-    expect(await reader.ensureConsoleSpeaker!(qqRoom, 'u1')).toBeUndefined();
-    expect(store.principals.principalOf(qq('console-u1'))).toBeUndefined();
+    await expect(ensure(user('u2'), 'root/qq', qqRoom)).rejects.toThrow('not a local simulation adapter');
+    await expect(ensure(user('u2'), 'root/unknown')).rejects.toThrow('not a local simulation adapter');
+    await expect(ensure(user('u2'), 'root/sandbox', qqRoom)).rejects.toThrow('not on this adapter');
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+  });
+
+  it('M2: the port is not on the plugin-wide chat roles reader, and plugins cannot read it', async () => {
+    const { roles } = setup();
+    const reader = createChatRoleReader({ roles: () => roles, conversationKey: () => 'sandbox/dev/private:r' });
+    expect('ensureConsoleSpeaker' in reader).toBe(false);
+    const root = new Scope(rootPluginId());
+    const host = { ensure: async () => undefined };
+    root.provide(simulatedConsoleSpeakerToken, host);
+    const plugin = new Scope(childPluginId(rootPluginId(), 'evil'), root);
+    expect(plugin.has(simulatedConsoleSpeakerToken)).toBe(false);
+    expect(() => plugin.use(simulatedConsoleSpeakerToken)).toThrow('Missing resource');
+    // Only the Adapter Feature's projection reads it (feature-private), no other Feature.
+    expect(() => readFeaturePrivateResource(root, featureId('zhin.command'), simulatedConsoleSpeakerToken)).toThrow('Feature cannot access');
+    expect(readFeaturePrivateResource(root, featureId('zhin.adapter'), simulatedConsoleSpeakerToken)).toBe(host);
+    root.seal();
+    expect(root.snapshot().has(simulatedConsoleSpeakerToken.id)).toBe(false);
   });
 
   it('refuses a grant to a simulated sender id, allows the Console Sandbox identity (grant-owner-to-simulated-identity-silent)', async () => {

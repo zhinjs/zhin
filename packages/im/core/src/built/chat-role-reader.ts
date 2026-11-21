@@ -144,26 +144,6 @@ export interface ChatRoleReader {
    * `iam.manage`); otherwise undefined — the same rule as `chat-identities.simulated.ensure`.
    */
   consoleSpeaker?(conversation: ConversationRef, consoleUserId: string, options?: ChatConsoleSpeakerOptions): ChatIdentity | undefined;
-  /**
-   * ADR 0060 §5.4 (#1250 sandbox-speak-as-me): like {@link consoleSpeaker}, but first gives the
-   * person linked to `consoleUserId` (created and linked when there is none) the Console Sandbox
-   * identity `console-<consoleUserId>` on `conversation`'s adapter — what
-   * `chat-identities.simulated.ensure` does — so 「以我的聊天身份发言」 works on the first message.
-   * Only on a local simulation adapter (`runtime.sandbox`): elsewhere, and on a reader without the
-   * instance's people store, it only answers like {@link consoleSpeaker}. Rejects with the reason
-   * when the identity cannot be created (no relational database, the linked person holds a global
-   * grant and the caller lacks global `iam.manage`, …). Optional for readers built before 1.9.
-   *
-   * Only for a caller whose Console authentication proves `consoleUserId` (the Sandbox socket's
-   * principal); never with an id taken from a message.
-   */
-  ensureConsoleSpeaker?(conversation: ConversationRef, consoleUserId: string, options?: ChatEnsureConsoleSpeakerOptions): Promise<ChatIdentity | undefined>;
-}
-
-/** What {@link ChatRoleReader.ensureConsoleSpeaker} needs besides {@link ChatConsoleSpeakerOptions}. */
-export interface ChatEnsureConsoleSpeakerOptions extends ChatConsoleSpeakerOptions {
-  /** Shown as the new person's name (the Console user's display name). */
-  readonly displayName?: string;
 }
 
 /** What the Console caller behind {@link ChatRoleReader.consoleSpeaker} may do. */
@@ -185,11 +165,6 @@ export interface ChatRoleReaderOptions {
   readonly subscribe?: (listener: (change: ChatRoleChange) => void) => () => void;
   /** Stored person linked to a Console user id (ADR 0060 §2.4); absent: no Console links. */
   readonly consolePrincipal?: (consoleUserId: string) => string | undefined;
-  /**
-   * ADR 0060 §5.4: creates the Console Sandbox identity of `consoleUserId` on adapter alias
-   * `adapter` when it is a local simulation (the instance checks); absent: nothing is created.
-   */
-  readonly ensureConsoleSpeaker?: (input: Readonly<{ adapter: string; consoleUserId: string; displayName?: string; canManageGlobal: boolean }>) => Promise<void>;
 }
 
 const LEVEL_INDEX = (level: ChatRoleLevel) => CHAT_ROLE_LEVELS.indexOf(level);
@@ -300,17 +275,6 @@ export function createChatRoleReader(options: ChatRoleReaderOptions): ChatRoleRe
         && service.store.list().some(entry => entry.level === 'global' && chatRoleEntryPrincipalId(entry) === principalId)) return undefined;
       const held = service.store.principal?.(principalId)?.identities.find(identity => identity.adapter === adapter && isChatIdentity(identity));
       return held ? Object.freeze({ adapter: held.adapter, userId: held.userId }) : undefined;
-    },
-    async ensureConsoleSpeaker(conversation, consoleUserId, ensureOptions) {
-      const speakerOptions = { canManageGlobal: ensureOptions?.canManageGlobal === true };
-      const existing = api.consoleSpeaker!(conversation, consoleUserId, speakerOptions);
-      if (existing || !options.ensureConsoleSpeaker || typeof consoleUserId !== 'string' || !consoleUserId) return existing;
-      const key = scopeKey({ level: 'conversation', conversation });
-      const adapter = key === undefined ? undefined : chainOf(key)[1];
-      if (!adapter) return undefined;
-      const displayName = typeof ensureOptions?.displayName === 'string' && ensureOptions.displayName ? ensureOptions.displayName : undefined;
-      await options.ensureConsoleSpeaker(Object.freeze({ adapter, consoleUserId, ...(displayName ? { displayName } : {}), canManageGlobal: speakerOptions.canManageGlobal }));
-      return api.consoleSpeaker!(conversation, consoleUserId, speakerOptions);
     },
   };
   return Object.freeze(api);

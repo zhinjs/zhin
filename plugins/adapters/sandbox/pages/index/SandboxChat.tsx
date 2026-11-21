@@ -1170,6 +1170,8 @@ ${sandboxStyles}`}</style>
                                 <div className="sandbox-speaker-setup" role="status">
                                     <span>{asMeNotice.reason === 'needs-global-iam'
                                         ? sandboxText(locale, "链接到你的聊天身份持有全局角色，以它发言需要全局 iam.manage 权限；上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。")
+                                        : asMeNotice.reason === 'needs-self-chat-identity'
+                                        ? sandboxText(locale, "以你的聊天身份发言需要 Console 权限 self.chat-identity；上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。请联系管理员授予。")
                                         : sandboxText(locale, "未能建立你的 Sandbox 聊天身份：{0}。上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。", [asMeNotice.error || '-'])}</span>
                                 </div>
                             )}

@@ -5,6 +5,7 @@ import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contrac
 import type { AdapterCapabilityProfile, AdapterCapabilityResolver } from './capability-profile.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
 import type { AdapterLoginDeclaration } from './login-capability.js';
+import type { ConversationRef } from '@zhin.js/im-contract';
 
 /** Persistent account identity is independent of its reusable display/config name. */
 export interface EndpointDesiredRecord {
@@ -190,4 +191,30 @@ export const endpointConfigSourceToken = createFeaturePrivateToken<import('./end
 );
 export const endpointSecretResolverToken = createFeaturePrivateToken<EndpointSecretResolver>(
   'zhin.adapter.endpoint-secret-resolver', featureId('zhin.adapter'), 'Execution-only endpoint credential resolver',
+);
+
+/**
+ * ADR 0060 §5.4 (#1250 sandbox-speak-as-me): what an Adapter whose capability profile declares a
+ * local simulation (`runtime.sandbox`) gets as {@link AdapterContext.consoleSpeaker}. It gives the
+ * Console user behind `principal` (the Console principal the Host authenticated on the Adapter's own
+ * socket, never an id taken from a message) the Console Sandbox identity `console-<userId>` on this
+ * Adapter, like the Console RPC `chat-identities.simulated.ensure`: the Root checks
+ * `self.chat-identity` and global `iam.manage` on the principal itself. Rejects with the reason when
+ * the identity cannot be created. Other Adapters and plugins never receive it.
+ */
+export interface AdapterConsoleSpeakerPort {
+  ensure(conversation: ConversationRef, principal: unknown): Promise<void>;
+}
+
+/** Root side of {@link AdapterConsoleSpeakerPort}; `owner` is the Adapter's owning plugin. */
+export interface SimulatedConsoleSpeakerHost {
+  ensure(request: Readonly<{ owner: PluginId; conversation: ConversationRef; principal: unknown }>): Promise<void>;
+}
+
+/**
+ * Root-private (readable only while projecting the Adapter Feature): the instance provides it; the
+ * Adapter Feature binds it to each simulation Adapter's owner ({@link AdapterConsoleSpeakerPort}).
+ */
+export const simulatedConsoleSpeakerToken = createFeaturePrivateToken<SimulatedConsoleSpeakerHost>(
+  'zhin.adapter.simulated-console-speaker', featureId('zhin.adapter'), 'Console Sandbox identities for local simulation adapters',
 );

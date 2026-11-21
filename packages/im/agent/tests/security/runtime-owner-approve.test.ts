@@ -69,15 +69,16 @@ describe('OwnerApprovalRuntime commands', () => {
     expect(runtime.handleCommand({ ...ownerContext(), scope: 'group', onUnauthorized: ownerInGroup }, '/approve list')).toMatch(/仅全局聊天主人/);
     expect(ownerInGroup).not.toHaveBeenCalled();
     // #1250: the chat-role model (ADR 0056 / 0060), not a plugin config field; binding comes first.
-    // The bind command is named with this account's actual prefix.
-    expect(denied).toContain('「/绑定 <码>」');
-    expect(denied).toBe(describeGlobalOwnerRequired('zh-CN', { privateChat: true, commandPrefix: '/' }));
+    // #1250 bind-hint-omits-command-prefix: 「绑定 <码>」 needs no command prefix, whatever the account's prefix.
+    expect(denied).toContain('「绑定 <码>」（不需要命令前缀）');
+    expect(denied).not.toContain('「/绑定 <码>」');
+    expect(denied).toBe(describeGlobalOwnerRequired('zh-CN', { privateChat: true }));
     expect(denied).toContain('认领 <码>');
     expect(denied).toContain('「认领 <码>」');
     expect(denied).not.toMatch(/master|插件配置|本账号的聊天主人/);
     const deniedEn = runtime.handleCommand({ ...ownerContext('other'), locale: 'en' }, '/approve always bash');
     expect(deniedEn).toContain('Only a global chat owner');
-    expect(deniedEn).toContain('「/bind <code>」');
+    expect(deniedEn).toContain('「bind <code>」 to the bot in a private chat (no command prefix needed)');
   });
 
   it('accepts any global owner, not only the first one the account resolves to', () => {
@@ -143,8 +144,9 @@ it('uses the operation prefix and language without changing owner-only private a
     expect(runtime.handleCommand({ ...context, scope: 'group' }, '!approve always bash')).toContain('Only a global chat owner');
     const denied = runtime.handleCommand({ ...context, subjectId: 'other', senderIsGlobalOwner: false }, '!approve always bash');
     expect(denied).toContain('Only a global chat owner');
-    expect(denied).toBe(describeGlobalOwnerRequired('en', { privateChat: true, commandPrefix: '!' }));
-    expect(denied).toContain('「!bind <code>」');
+    expect(denied).toBe(describeGlobalOwnerRequired('en', { privateChat: true }));
+    expect(denied).toContain('「bind <code>」');
+    expect(denied).not.toContain('「!bind <code>」');
     expect(denied).toContain('「claim <code>」');
     expect(denied).not.toMatch(/master|plugin configuration/);
     expect(runtime.handleCommand(context, '!approve rule [')).toContain('Invalid regular expression');

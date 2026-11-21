@@ -5,13 +5,15 @@
  * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
  * when `features.selfService.enabled` is true.
  */
-import { ChatRoleService, chatRolesToken, createChatRoleReader, type ChatIdentitySighting, type ChatRoleReader } from '@zhin.js/core';
+import { simulatedConsoleSpeakerToken, type SimulatedConsoleSpeakerHost } from '@zhin.js/adapter';
+import { ChatRoleService, chatRolesToken, chatScopeAdapter, createChatRoleReader, type ChatIdentitySighting, type ChatRoleReader } from '@zhin.js/core';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import type { GatewayToInstanceMessage } from '@zhin.js/host-http/bridge';
-import type { ConsoleAuditEntry } from '@zhin.js/host-http';
+import { principalAllows, type ConsoleAuditEntry, type ConsolePrincipal } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
   decodeStorageIdentity, featureConversationOverridesToken, resolveEndpointFeatureKey,
-  type DatabaseHost, type RuntimeSnapshot, type SnapshotReader,
+  type DatabaseHost, type PluginId, type RuntimeSnapshot, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
@@ -50,6 +52,55 @@ export interface FeatureHostOptions {
   readonly gatewayMessages?: Readonly<{ onMessage(listener: (message: GatewayToInstanceMessage) => void): () => void }>;
   /** ADR 0060 §4.1 (P3): the `ai.personalPrincipals` import record (「需要你处理」 and its acknowledgement). */
   readonly personalPrincipalImports?: import('./chat-personal-principals.js').PersonalPrincipalImportBook;
+}
+
+/** Why {@link SimulatedConsoleSpeakerHost.ensure} refused the caller's Console principal. */
+export class ConsoleSpeakerRefusal extends Error {
+  constructor(readonly reason: 'no-console-user' | 'needs-self-chat-identity', message: string) { super(message); this.name = 'ConsoleSpeakerRefusal'; }
+}
+
+/**
+ * The Console user behind a principal the Host authenticated, with what it may do: only a signed-in
+ * user or a user's API token; `self.chat-identity` is required (like `chat-identities.simulated.ensure`).
+ */
+export function consoleSpeakerUser(principal: unknown): Readonly<{ userId: string; displayName?: string; canManageGlobal: boolean }> {
+  const candidate = principal as ConsolePrincipal | undefined;
+  if (!candidate || typeof candidate !== 'object' || (candidate.kind !== 'user' && candidate.kind !== 'api-token')
+    || typeof candidate.userId !== 'string' || !candidate.userId) {
+    throw new ConsoleSpeakerRefusal('no-console-user', 'no signed-in Console user');
+  }
+  const allows = (permission: string) => { try { return principalAllows(candidate, permission); } catch { return false; } };
+  if (!allows('self.chat-identity')) throw new ConsoleSpeakerRefusal('needs-self-chat-identity', '缺少 Console 权限 self.chat-identity');
+  const displayName = typeof candidate.displayName === 'string' && candidate.displayName ? candidate.displayName : undefined;
+  return Object.freeze({ userId: candidate.userId, ...(displayName ? { displayName } : {}), canManageGlobal: allows('iam.manage') });
+}
+
+/**
+ * #1250 sandbox-speak-as-me (ADR 0060 §5.4): the Root side of `AdapterContext.consoleSpeaker`. Only
+ * for the owner of a local simulation Adapter of the current generation, only for a conversation on
+ * that Adapter, and only for the Console user the principal names, with `self.chat-identity`
+ * required and global `iam.manage` read from the principal ({@link consoleSpeakerUser}).
+ */
+export function createSimulatedConsoleSpeakerHost(options: Readonly<{
+  people: ChatPeople;
+  /** The adapter alias an owning plugin has in the current generation, and whether it is a local simulation. */
+  adapterOf: (owner: PluginId) => Readonly<{ alias: string; simulated: boolean }> | undefined;
+  conversationKey: (conversation: ConversationRef) => string | undefined;
+  onSaved?: () => void;
+}>): SimulatedConsoleSpeakerHost {
+  return Object.freeze({
+    ensure: async ({ owner, conversation, principal }: Parameters<SimulatedConsoleSpeakerHost['ensure']>[0]) => {
+      const user = consoleSpeakerUser(principal);
+      const adapter = options.adapterOf(owner);
+      if (!adapter?.simulated) throw new Error('not a local simulation adapter of the current generation');
+      let key: string | undefined;
+      try { key = options.conversationKey(conversation); } catch { key = undefined; }
+      if (key === undefined || chatScopeAdapter(key) !== adapter.alias) throw new Error('the conversation is not on this adapter');
+      const result = await options.people.ensureSimulatedIdentities({ consoleUserId: user.userId,
+        ...(user.displayName ? { consoleDisplayName: user.displayName } : {}), aliases: [adapter.alias], canManageGlobal: user.canManageGlobal });
+      if (result.status === 'saved') options.onSaved?.();
+    },
+  });
 }
 
 /** Console user lifecycle reasons that end a person ↔ Console link (`ConsoleCredentialRevocationReason`). */
@@ -160,25 +211,34 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     void people.consoleUserRemoved(message.payload.principalId, message.payload.reason!)
       .catch(error => getLogger('chat-roles').warn(`Chat principal link not removed: ${(error as Error).message}`));
   });
+  const conversationKey = (conversation: ConversationRef) => {
+    const lease = options.snapshots().acquire();
+    try { return resolveEndpointFeatureKey(lease.value, conversation.endpoint.id, undefined, conversation); }
+    finally { lease.release(); }
+  };
   const reader = createChatRoleReader({
     roles: () => roles,
-    conversationKey: conversation => {
-      const lease = options.snapshots().acquire();
-      try { return resolveEndpointFeatureKey(lease.value, conversation.endpoint.id, undefined, conversation); }
-      finally { lease.release(); }
-    },
+    conversationKey,
     subscribe: listener => roles.store.subscribe(listener),
     // ADR 0060 §5.4: the Sandbox speaks as the person linked to the authenticated Console user.
     consolePrincipal: consoleUserId => people.store.principals.linkOfConsoleUser(consoleUserId)?.principalId,
-    // #1250 sandbox-speak-as-me: the Sandbox creates the caller's `console-<userId>` identity on
-    // the first 「以我的聊天身份发言」 message (the same write as `chat-identities.simulated.ensure`),
-    // only on a local simulation adapter of the current generation.
-    ensureConsoleSpeaker: async input => {
-      if (adapterKind()(input.adapter) !== 'simulated') return;
-      const result = await people.ensureSimulatedIdentities({ consoleUserId: input.consoleUserId,
-        ...(input.displayName ? { consoleDisplayName: input.displayName } : {}), aliases: [input.adapter], canManageGlobal: input.canManageGlobal });
-      if (result.status === 'saved') publishEvent?.('chat-principals:updated', {});
+  });
+  // #1250 sandbox-speak-as-me: the Sandbox creates the caller's `console-<userId>` identity on the
+  // first 「以我的聊天身份发言」 message (the same write and threshold as `chat-identities.simulated.ensure`).
+  // A Root-private port the Adapter Feature hands only to `runtime.sandbox` Adapters, bound to their
+  // owner — never on the plugin-wide `chatRolesToken`. The authority comes from the Console principal
+  // the Host authenticated on that Adapter's socket, checked here (not reported by the caller).
+  const consoleSpeakerHost = createSimulatedConsoleSpeakerHost({
+    people,
+    adapterOf: owner => {
+      const lease = options.snapshots().acquire();
+      try {
+        const alias = lease.value.tree.get(owner)?.instanceKey;
+        return alias ? Object.freeze({ alias, simulated: chatRoleMigrationAdapterKinds(lease.value)(alias) === 'simulated' }) : undefined;
+      } finally { lease.release(); }
     },
+    conversationKey,
+    onSaved: () => publishEvent?.('chat-principals:updated', {}),
   });
   // Console-given conversation names (Sandbox sessions) so override lists show more than an id (#1250).
   const conversationNames = (keys: readonly string[]) => readWorkspaceConversationNames(options.database, options.snapshots(), keys);
@@ -193,23 +253,27 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     if (deps.context.publishEvent) publishEvent = deps.context.publishEvent;
     context.resources.provide(featureConversationOverridesToken, overrides.reader);
     context.resources.provide(chatRolesToken, reader);
+    context.resources.provide(simulatedConsoleSpeakerToken, consoleSpeakerHost);
     context.handoff.add({
       activateNext: async signal => {
         signal.throwIfAborted();
-        if (loaded) return;
-        await overrides.load(id => getLogger('feature').warn(`Skipped malformed feature override ${id}`));
-        await roles.store.load();
         let candidate: RuntimeSnapshot | undefined;
         try { candidate = context.readCandidateSnapshot?.(); } catch { candidate = undefined; }
-        await options.afterLoad?.(roles, candidate, overrides, audit);
-        loaded = true;
+        if (!loaded) {
+          await overrides.load(id => getLogger('feature').warn(`Skipped malformed feature override ${id}`));
+          await roles.store.load();
+          await options.afterLoad?.(roles, candidate, overrides, audit);
+          loaded = true;
+          const sweep = () => void people.expireSightings().catch(() => undefined);
+          sweep();
+          setInterval(sweep, SIGHTING_SWEEP_MS).unref?.();
+        }
+        // #1250: every generation (adapters may have been added or removed): whether an owner exists
+        // (owners only on simulated ids do not count) and the claim's `simulationOnly` guidance.
         activating = candidate;
         try {
           await claim.refresh().catch(error => getLogger('chat-roles').warn(`Chat owner claim unavailable: ${(error as Error).message}`));
         } finally { activating = undefined; }
-        const sweep = () => void people.expireSightings().catch(() => undefined);
-        sweep();
-        setInterval(sweep, SIGHTING_SWEEP_MS).unref?.();
       },
     });
     installChatOwnerClaim({ claim, snapshots: options.snapshots() })(context);

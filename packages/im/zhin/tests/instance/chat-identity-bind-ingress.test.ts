@@ -100,14 +100,45 @@ describe('bind messages at inbound (#1250 bind-hint-omits-command-prefix)', () =
     expect(JSON.stringify(appended)).not.toContain(CODE);
   });
 
-  it('a wrong or expired code without the prefix is answered (not sent to the Agent); other chat passes', async () => {
-    const { send, agent } = await setup();
-    expect(await send('qq', 'private', '绑定 ZZZZ9999')).toContain('绑定码不正确或已过期');
+  it('with no open code nothing is taken: bind-shaped chat reaches commands / the Agent, uncounted (M1)', async () => {
+    const { send, agent, codes, appended } = await setup();
+    const guard = createChatIdentityBindGuard({ codes });
+    const input = (text: string) => ({ text, prefix: '#', conversation: { endpoint: { id: 'qq', adapter: 'qq' }, kind: 'private', id: 'alice' } as never, snapshot: {} as never });
+    // `USERNAME` and `82345678` have the shape of a code (8 symbols of its alphabet).
+    for (const text of ['bind username', '绑定 82345678', '#绑定 82345678']) expect(guard.match(input(text))).toBeUndefined();
+    expect(await send('qq', 'private', 'bind username')).toBe('');
+    expect(await send('qq', 'private', '绑定 82345678')).toBe('');
+    expect(agent).toHaveBeenCalledTimes(2);
+    // Ordinary messages: recorded as sent (nothing secret in them).
+    expect(JSON.stringify(appended)).toContain('82345678');
+    // Not counted: many of them never lock the sender out of a code created afterwards.
+    for (let attempt = 0; attempt < 6; attempt += 1) await send('qq', 'private', '绑定 ZZZZ9999');
+    codes.create({ consoleUserId: 'u1', canManageGlobal: false });
+    expect(await send('qq', 'private', `绑定 ${CODE}`)).toContain('已绑定');
+  });
+
+  it('while a code is open a mistyped one is answered and counted (5 lock the identity out), never sent to the Agent', async () => {
+    const { send, agent, codes, store } = await setup();
+    codes.create({ consoleUserId: 'u1', canManageGlobal: false });
+    for (let attempt = 0; attempt < 5; attempt += 1) expect(await send('qq', 'private', '绑定 ZZZZ9999')).toContain('绑定码不正确或已过期');
     expect(agent).not.toHaveBeenCalled();
-    // Not the shape of a code, or more than one token: ordinary chat.
+    expect(await send('qq', 'private', `绑定 ${CODE}`)).toContain('错误次数过多');
+    expect(store.principals.linkOfConsoleUser('u1')).toBeUndefined();
+    // Not the shape of a code, or more than one token: ordinary chat even while a code is open.
     expect(await send('qq', 'private', 'bind it')).toBe('');
     expect(await send('qq', 'private', '绑定 手机 号码')).toBe('');
     expect(agent).toHaveBeenCalledTimes(2);
+  });
+
+  it('a bind message dropped before it is handled revokes the open code it carried (L1)', () => {
+    const { codes } = { codes: new ChatIdentityBindCodes({ people: new ChatPeople({ store: new ChatRoleStore() }), code: () => CODE }) };
+    codes.create({ consoleUserId: 'u1', canManageGlobal: false });
+    const guard = createChatIdentityBindGuard({ codes });
+    const matched = guard.match({ text: `绑定 ${CODE}`, prefix: '', conversation: { kind: 'private' } as never, snapshot: {} as never });
+    expect(matched?.redacted).toBe('绑定 ***');
+    void matched!.discard!();
+    expect(codes.isOpen(CODE)).toBe(false);
+    expect(codes.anyOpen).toBe(false);
   });
 
   it('in a group only an open code is taken (revoked, told to use a private chat); the Sandbox refuses', async () => {

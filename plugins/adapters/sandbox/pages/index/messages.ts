@@ -12,6 +12,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "模拟身份，无角色：自填的发送者 ID 只用于模拟别人，不解析 zhin 角色。": "Simulated, no role: a typed sender id only simulates someone else and resolves no zhin role.",
   "你在 Sandbox 上还没有聊天身份，上一条消息按模拟身份发送。": "You have no chat identity on the Sandbox yet; the last message was sent as a simulated sender.",
   "链接到你的聊天身份持有全局角色，以它发言需要全局 iam.manage 权限；上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。": "The chat identity linked to you holds a global role; speaking as it needs global iam.manage, so the last message was sent as a simulated sender without roles and \"Speak as my chat identity\" was turned off.",
+  "以你的聊天身份发言需要 Console 权限 self.chat-identity；上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。请联系管理员授予。": "Speaking as your chat identity needs the Console permission self.chat-identity; the last message was sent as a simulated sender without roles and \"Speak as my chat identity\" was turned off. Ask an administrator to grant it.",
   "未能建立你的 Sandbox 聊天身份：{0}。上一条消息按模拟身份（无角色）发送，已关闭「以我的聊天身份发言」。": "Your Sandbox chat identity could not be created: {0}. The last message was sent as a simulated sender without roles and \"Speak as my chat identity\" was turned off.",
   "在 Sandbox 上创建我的聊天身份": "Create my chat identity on the Sandbox",
   "已创建，下一条消息生效。": "Created; it applies from the next message.",

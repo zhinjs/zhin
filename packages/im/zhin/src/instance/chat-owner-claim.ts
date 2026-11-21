@@ -153,6 +153,9 @@ export class ChatOwnerClaim {
   /** Registration of the current code for the writer-side backstop (`redactChatOwnerClaimText`). */
   #unregisterCode: (() => void) | undefined;
   #exitHook: (() => void) | undefined;
+  /** `simulationOnly` as last logged / written for the open code (#1250: refreshed when adapters change). */
+  #simulationOnly: boolean | undefined;
+  #createdAt = 0;
 
   constructor(options: ChatOwnerClaimOptions) { this.#options = options; }
 
@@ -179,7 +182,14 @@ export class ChatOwnerClaim {
       await this.close();
       return;
     }
-    if (!this.#code) await this.rotate();
+    if (!this.#code) { await this.rotate(); return; }
+    // #1250: a later generation may add or remove adapters; the open code stays, its guidance follows.
+    const { simulationOnly } = this.#adapters();
+    if (simulationOnly !== this.#simulationOnly) {
+      this.#simulationOnly = simulationOnly;
+      this.#logOpen(this.#code, simulationOnly);
+      await this.#writeFile(this.#code, simulationOnly);
+    }
   }
 
   /** A fresh code (logged and written for `zhin status`); the previous one stops working. */
@@ -189,8 +199,14 @@ export class ChatOwnerClaim {
     this.#failures = 0;
     this.#unregisterCode?.();
     this.#unregisterCode = registerChatOwnerClaimCode(code);
-    const file = this.#file;
+    this.#createdAt = (this.#options.now ?? Date.now)();
     const { simulationOnly } = this.#adapters();
+    this.#simulationOnly = simulationOnly;
+    this.#logOpen(code, simulationOnly);
+    await this.#writeFile(code, simulationOnly);
+  }
+
+  #logOpen(code: string, simulationOnly: boolean): void {
     // Never the code itself: the log reaches SystemLog and `GET /logs`.
     this.#options.logger.warn(simulationOnly
       ? `聊天角色：还没有全局 owner（聊天主人）。${CHAT_OWNER_SANDBOX_PATH['zh-CN']}`
@@ -200,12 +216,16 @@ export class ChatOwnerClaim {
         + `哈希前缀 ${chatOwnerClaimCodeHash(code)}；在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀）即成为全局 owner。认领码一次性，实例重启后轮换。`
         + '也可以在 Console「聊天角色」页授予全局 owner。'
         + ` (No global chat owner yet: the claim code is shown by zhin status; hash prefix ${chatOwnerClaimCodeHash(code)}.)`);
+  }
+
+  async #writeFile(code: string, simulationOnly: boolean): Promise<void> {
+    const file = this.#file;
     if (!file) return;
     try {
       await mkdir(dirname(file), { recursive: true });
       const temp = `${file}.${process.pid}.tmp`;
       await writeFile(temp, `${JSON.stringify({ version: 1, code, pid: this.#options.pid ?? process.pid,
-        createdAt: (this.#options.now ?? Date.now)(), ...(simulationOnly ? { simulationOnly: true } : {}) })}\n`, { encoding: 'utf8', mode: 0o600 });
+        createdAt: this.#createdAt, ...(simulationOnly ? { simulationOnly: true } : {}) })}\n`, { encoding: 'utf8', mode: 0o600 });
       await rename(temp, file);
       if (!this.#exitHook) {
         this.#exitHook = () => { try { rmSync(file, { force: true }); } catch { /* best effort */ } };
@@ -220,6 +240,7 @@ export class ChatOwnerClaim {
   /** Ends the claim and removes the local file. */
   async close(): Promise<void> {
     this.#code = undefined;
+    this.#simulationOnly = undefined;
     this.#unregisterCode?.();
     this.#unregisterCode = undefined;
     this.#failures = 0;

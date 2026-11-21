@@ -223,4 +223,30 @@ describe('#1250 owner-hints-dead-end-sandbox-only', () => {
     expect(JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'))).not.toHaveProperty('simulationOnly');
     await other.dispose();
   });
+
+  it('#1250 L3: a later generation that changes the adapters refreshes simulationOnly; the open code stays', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-claim-generations-'));
+    directories.push(root);
+    const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
+    let landscape = { simulated: ['sandbox'], simulationOnly: true };
+    let codes = 0;
+    const lines: string[] = [];
+    const claim = new ChatOwnerClaim({ roles, projectRoot: root, logger: { info() {}, warn: line => { lines.push(line); } },
+      code: () => ['CCCC4444', 'DDDD5555'][codes++]!, now: () => 42, pid: 4242, adapters: () => landscape });
+    const file = async () => JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'));
+    await claim.refresh();
+    expect(await file()).toMatchObject({ code: 'CCCC4444', simulationOnly: true });
+    // The next generation adds a real platform.
+    landscape = { simulated: ['sandbox'], simulationOnly: false };
+    lines.length = 0;
+    await claim.refresh();
+    expect(await file()).toEqual({ version: 1, code: 'CCCC4444', pid: 4242, createdAt: 42 });
+    expect(lines.join('\n')).toContain('认领 <码>');
+    // Unchanged adapters: nothing is logged or written again.
+    lines.length = 0;
+    await claim.refresh();
+    expect(lines).toEqual([]);
+    expect(codes).toBe(1);
+    await claim.dispose();
+  });
 });
