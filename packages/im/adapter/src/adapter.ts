@@ -21,7 +21,7 @@ import {
   type EndpointStartFailure, type EndpointStartPhase, type EndpointFailureCategory,
 } from './adapter-types.js';
 import {
-  compareEndpointDirectories, configuredEndpointSeeds, endpointWritebackEntry, splitEnvironmentReferences,
+  compareEndpointDirectories, configuredEndpointSeeds, endpointWritebackEntry, isEndpointConfigDivergence, splitEnvironmentReferences,
   type EndpointConfigDrift, type EndpointConfigSource, type EndpointWritebackPlaceholder,
 } from './endpoint-config-drift.js';
 
@@ -237,9 +237,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   #reportConfigDrift(): void {
     if (!this.#options.configSource) return;
     void this.configDrift().then(drift => {
-      if (!drift.entries.length) return;
-      const ids = (kind: string) => drift.entries.filter(entry => entry.kind === kind).map(entry => entry.id);
-      const changed = drift.entries.filter(entry => entry.kind === 'changed')
+      // Accounts added in the Console are not in the file by design: not drift (#1250).
+      const entries = drift.entries.filter(isEndpointConfigDivergence);
+      if (!entries.length) return;
+      const ids = (kind: string) => entries.filter(entry => entry.kind === kind).map(entry => entry.id);
+      const changed = entries.filter(entry => entry.kind === 'changed')
         .map(entry => `${entry.id}(${(entry.fields ?? []).map(field => field.path).join('|')})`);
       logger.warn(formatCompact({ op: 'endpoint_config_drift', adapter: this.descriptor.name,
         ...(ids('config_only').length ? { configOnly: ids('config_only').join(',') } : {}),
@@ -316,7 +318,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         return this.#commit({
           expectedRevision,
           next: () => this.#replace(instanceId, record => {
-            const { secretRefs: _previous, ...rest } = record;
+            // The file has the account now: missing from it later is drift again (no `origin`).
+            const { secretRefs: _previous, origin: _origin, ...rest } = record;
             return { ...rest, config, ...(secretRefs ? { secretRefs } : {}),
               desiredEnabled: start === true ? true : record.desiredEnabled, revision: record.revision + 1 };
           }),
@@ -489,9 +492,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return this.#commit({
       expectedRevision,
       next: () => {
+        // Created here, not in zhin.config.yml: never reported as missing from the file (#1250).
         const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId,
           canonicalId: `${this.descriptor.id}~${instanceId}` as CapabilityId,
-          revision: 1, desiredEnabled: false });
+          revision: 1, desiredEnabled: false, origin: 'console' });
         return [...this.#desired(), record];
       },
       execution: { instanceId, action: 'add' },
@@ -580,8 +584,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     const replacementId = randomUUID();
     const config = this.#newConfiguration(input.endpointId, input.config, replacementId);
     this.validateConfiguration(config as Config);
+    // The replacement keeps where the account came from (the file or account management).
     const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId: replacementId,
-      canonicalId: `${this.descriptor.id}~${replacementId}` as CapabilityId, revision: 1, desiredEnabled: false });
+      canonicalId: `${this.descriptor.id}~${replacementId}` as CapabilityId, revision: 1, desiredEnabled: false,
+      ...(child.desired.origin ? { origin: child.desired.origin } : {}) });
     return this.#commit({
       expectedRevision,
       next: () => this.#desired().map(value => value.instanceId === instanceId ? record : value),
@@ -1352,7 +1358,7 @@ function graceWait(work: Promise<unknown>, ms: number, signal: AbortSignal): Pro
 }
 
 function metadata(record: EndpointDesiredRecord): import('./adapter-types.js').EndpointDesiredMetadata {
-  const { config: _config, secretRefs: _secretRefs, platformUserId: _platformUserId, ...view } = record;
+  const { config: _config, secretRefs: _secretRefs, platformUserId: _platformUserId, origin: _origin, ...view } = record;
   return Object.freeze(view);
 }
 function freezeRecord(record: EndpointDesiredRecord): EndpointDesiredRecord {

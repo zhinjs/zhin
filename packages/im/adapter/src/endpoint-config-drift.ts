@@ -71,7 +71,8 @@ export interface EndpointConfigWriteResult {
 
 /**
  * - `config_only`: in the configuration file, not among the persisted accounts (it does not run);
- * - `snapshot_only`: persisted (and possibly running), no longer in the configuration file;
+ * - `snapshot_only`: persisted (and possibly running), not in the configuration file — removed
+ *   from it, or (`origin: 'console'`) added in the Console and never written to it;
  * - `changed`: in both, with different configuration (`fields`).
  */
 export type EndpointConfigDriftKind = 'config_only' | 'snapshot_only' | 'changed';
@@ -91,6 +92,12 @@ export interface EndpointConfigDriftEntry {
   readonly instanceId?: string;
   /** Persisted enabled intent (`snapshot_only` / `changed`). */
   readonly desiredEnabled?: boolean;
+  /**
+   * `snapshot_only` only: `console` when the account was added in the Console (never in the file).
+   * That is not a divergence ({@link isEndpointConfigDivergence}): it is listed so it can be written
+   * back, but warnings and the attention inbox leave it out (#1250).
+   */
+  readonly origin?: 'console';
   /** `changed` only. */
   readonly fields?: readonly EndpointConfigDriftField[];
 }
@@ -324,9 +331,18 @@ export function compareEndpointDirectories(seeds: readonly ConfiguredEndpointSee
   for (const record of records) {
     if (configured.has(record.endpointId)) continue;
     entries.push(Object.freeze({ id: record.endpointId, kind: 'snapshot_only', instanceId: record.instanceId,
-      desiredEnabled: record.desiredEnabled }));
+      desiredEnabled: record.desiredEnabled, ...(record.origin === 'console' ? { origin: 'console' as const } : {}) }));
   }
   return Object.freeze({ entries: Object.freeze(entries), unverified: Object.freeze(unverified) });
+}
+
+/**
+ * Whether a drift entry is a real divergence between the file and the saved accounts: everything
+ * except an account added in the Console that the file never had (`snapshot_only` with
+ * `origin: 'console'`). Saved accounts are the authority, so such an account runs as intended.
+ */
+export function isEndpointConfigDivergence(entry: Pick<EndpointConfigDriftEntry, 'kind' | 'origin'>): boolean {
+  return !(entry.kind === 'snapshot_only' && entry.origin === 'console');
 }
 
 /**

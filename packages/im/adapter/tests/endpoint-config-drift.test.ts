@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId,
   type CapabilityId, type PluginId, type PluginNodeSnapshot, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, compareEndpointConfiguration, compareEndpointDirectories, configuredEndpointSeeds,
-  createEndpointSpecification, defineAdapter, placeholderVariable, endpointEventGatewayToken, endpointSpec, endpointWritebackEntry,
+  createEndpointSpecification, defineAdapter, isEndpointConfigDivergence, placeholderVariable, endpointEventGatewayToken, endpointSpec, endpointWritebackEntry,
   splitEnvironmentReferences, type Endpoint, type EndpointConfigSource, type EndpointCreationContext, type EndpointDesiredRecord,
   type EndpointDesiredRepository, type EndpointDesiredSnapshot, type EndpointSecretResolver } from '../src/index.js';
 
@@ -270,6 +270,41 @@ describe('Adapter configuration drift, import and write-back', () => {
     expect(output).toContain('configOnly: new');
     expect(output).toContain('savedOnly: gone');
     expect(output).not.toContain(SECRET);
+  });
+
+  it('does not report an account added in the Console as missing from the file (#1250 console-added-endpoint-flagged-as-drift)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // No saved accounts yet: the first Console addition is the migration to "saved accounts win".
+    const { adapter, repository, slot } = await fixture({ block: {} });
+    expect(adapter.needsMigration).toBe(true);
+    await adapter.add(null, { endpointId: 'sandbox-bot2', config: {} });
+    const persisted = repository.state.get(slot.id)!.endpoints.find(record => record.endpointId === 'sandbox-bot2')!;
+    expect(persisted.origin).toBe('console');
+    expect(adapter.list().find(row => row.endpointId === 'sandbox-bot2')).not.toHaveProperty('origin');
+    const drift = await adapter.configDrift();
+    expect(drift.authority).toBe('snapshot');
+    // Still listed (so it can be written back), but marked and not a divergence.
+    expect(drift.entries.filter(entry => entry.id === 'sandbox-bot2'))
+      .toEqual([{ id: 'sandbox-bot2', kind: 'snapshot_only', instanceId: persisted.instanceId, desiredEnabled: false, origin: 'console' }]);
+    expect(drift.entries.filter(isEndpointConfigDivergence)).toEqual([]);
+
+    // A restart (restore) logs no drift warning for it.
+    const restored = await fixture({ saved: [saved('main', {}), saved('sandbox-bot2', {}, { origin: 'console' })], block: { endpoints: [{ id: 'main' }] } });
+    await restored.adapter.configDrift();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect([...warn.mock.calls, ...log.mock.calls].flat().join('\n')).not.toContain('endpoint_config_drift');
+  });
+
+  it('still reports an account that came from the file and was removed from it', async () => {
+    expect(isEndpointConfigDivergence({ kind: 'snapshot_only' })).toBe(true);
+    expect(isEndpointConfigDivergence({ kind: 'snapshot_only', origin: 'console' })).toBe(false);
+    expect(isEndpointConfigDivergence({ kind: 'config_only' })).toBe(true);
+    expect(isEndpointConfigDivergence({ kind: 'changed' })).toBe(true);
+    // Importing a Console account from the file makes it a file account: removing it later is drift again.
+    const { adapter, repository, slot } = await fixture({ saved: [saved('main', {}, { origin: 'console' })], block: { endpoints: [{ id: 'main' }] } });
+    await adapter.importConfigured('main', 1);
+    expect(repository.state.get(slot.id)!.endpoints[0]).not.toHaveProperty('origin');
   });
 
   it('imports a configured account with ${VAR} kept as a reference and starts it on request', async () => {

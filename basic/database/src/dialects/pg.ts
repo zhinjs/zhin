@@ -89,7 +89,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     if (this.usePool && this.pool) {
       await this.pool.end();
       this.pool = null;
-      logger.info('PostgreSQL 连接池已关闭');
+      logger.debug('PostgreSQL 连接池已关闭');
     } else if (this.connection) {
       await this.connection.end();
     this.connection = null;

@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import inquirer from 'inquirer';
+import { stdinIsInteractive } from '../utils/interactive.js';
 import fs from 'fs-extra';
 import path from 'path';
 import { logger } from '../utils/logger.js';
@@ -33,7 +34,10 @@ const pluginCommand = new Command('plugin')
 
     // 本地插件目录（./plugins/<name>）：默认不删，确认后删除
     const pluginDir = path.join(cwd, 'plugins', name);
-    if (fs.existsSync(pluginDir)) {
+    if (fs.existsSync(pluginDir) && !stdinIsInteractive()) {
+      // No terminal to confirm on (#1250): keep the directory (the prompt's default) instead of waiting.
+      logger.info(`已保留本地插件目录 "${pluginDir}"（非交互环境不询问；需要时手动删除）`);
+    } else if (fs.existsSync(pluginDir)) {
       const { confirmDelete } = await inquirer.prompt([
         {
           type: 'confirm',

@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { ROOT_CONFIG_FILE_NAMES, type SnapshotLease } from '@zhin.js/plugin-runtime';
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, isEndpointConfigDivergence } from '@zhin.js/adapter';
 import { commandFeatureId, isCommandIndex, type CommandRouteClaimant } from '@zhin.js/command';
 import type {
   AttentionCommandClaimant,
@@ -104,8 +104,10 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
             if (!node || node.parent !== snapshot.root) continue;
             let drift;
             try { drift = await adapter.configDrift(); } catch { continue; }
-            if (!drift.entries.length) continue;
-            const ids = (kind: string) => drift.entries.filter(entry => entry.kind === kind).map(entry => entry.id);
+            // Accounts added in the Console were never in the file: not drift (#1250).
+            const entries = drift.entries.filter(isEndpointConfigDivergence);
+            if (!entries.length) continue;
+            const ids = (kind: string) => entries.filter(entry => entry.kind === kind).map(entry => entry.id);
             rows.push({ instanceKey: node.instanceKey, adapter: adapter.descriptor.name,
               configOnly: ids('config_only'), savedOnly: ids('snapshot_only'), changed: ids('changed') });
           }

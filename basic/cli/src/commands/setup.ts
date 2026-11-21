@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import inquirer from 'inquirer';
+import { stdinIsInteractive } from '../utils/interactive.js';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -55,7 +56,8 @@ async function setupBootstrapFiles(cwd: string, locale: Locale = 'zh-CN', yes = 
     const filePath = path.join(cwd, file.name);
     const exists = fs.existsSync(filePath);
 
-    if (exists && yes) {
+    // Without a terminal the overwrite question cannot be answered (#1250): keep the file, as `--yes` does.
+    if (exists && (yes || !stdinIsInteractive())) {
       console.log(chalk.gray(wizardText(locale, "  跳过 {v0}", [file.name])));
       continue;
     }
@@ -156,6 +158,12 @@ export const setupCommand = new Command('setup')
     const explicitSteps = options.bootstrap || options.database || options.adapters || options.ai || options.decisions || nonInteractiveSteps;
     // Without flags the full interactive wizard runs; `-y` alone runs nothing interactive.
     const all = !explicitSteps && !options.yes;
+    const promptingSteps = all || options.database || options.adapters || options.ai || options.decisions;
+    if (promptingSteps && !stdinIsInteractive()) {
+      // inquirer would wait forever for an answer (#1250).
+      logger.error(wizardText(locale, "配置向导需要交互式终端（标准输入不是终端）：非交互请用 --yes 搭配 --adapter <name> / --enable-ai / --skip-adapters / --skip-ai / --bootstrap"));
+      process.exit(1);
+    }
     const outcomes: SetupStepOutcomes = {};
 
     try {

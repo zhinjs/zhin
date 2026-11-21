@@ -23,7 +23,8 @@ describe('attention.list: endpoint configuration drift (#1250)', () => {
     const qq = drift.find(item => item.subject?.plugin === 'qq')!;
     expect(qq).toMatchObject({ severity: 'warning', source: 'endpoint-config', action: { path: '/plugins/qq' } });
     expect(qq.detail).toContain('仅在配置文件（未运行）：new');
-    expect(qq.detail).toContain('已不在配置文件（仍按已保存账号运行）：gone');
+    expect(qq.detail).toContain('仅存在于已保存账号中（配置文件里没有；照常按已保存账号运行，不处理也不影响）：gone');
+    expect(qq.detail).not.toContain('已不在配置文件');
     expect(qq.detail).toContain('配置不同：main');
     const offline = list.items.find(item => item.kind === 'endpoint.offline');
     expect(offline?.detail).toContain('auth');

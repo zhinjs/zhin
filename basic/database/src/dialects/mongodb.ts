@@ -88,7 +88,7 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       await this.client.close();
       this.client = null;
       this.db = null;
-      logger.info('MongoDB 连接已关闭');
+      logger.debug('MongoDB 连接已关闭');
     }
   }
 

@@ -5,6 +5,7 @@ import { output } from '../utils/output.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
+import { nonInteractiveMessage, stdinIsInteractive } from '../utils/interactive.js';
 import { execFileSync } from 'node:child_process';
 import { PluginManagementWorkflow, installSavesExact } from '@zhin.js/gateway/plugin-management';
 import { ignoredBuildsHint } from '@zhin.js/gateway/onboarding';
@@ -41,6 +42,10 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 
     // 如果没有指定插件，交互式输入
     if (!pluginToInstall) {
+      if (!stdinIsInteractive()) {
+        logger.error(nonInteractiveMessage('交互式输入插件名称', '请直接传入插件名称或 git 地址：zhin install <plugin>'));
+        process.exit(1);
+      }
       const { input } = await inquirer.prompt([
         {
           type: 'input',

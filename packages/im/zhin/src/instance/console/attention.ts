@@ -607,7 +607,8 @@ const messages = createMessages({
   'endpoint.reason': { 'zh-CN': '最近一次启动失败（{category}）：{message}', en: 'Last start failed ({category}): {message}' },
   'drift.title': { 'zh-CN': '{adapter} 的配置文件账号与已保存账号不一致', en: 'Accounts of {adapter} in the configuration file differ from the saved ones' },
   'drift.configOnly': { 'zh-CN': '仅在配置文件（未运行）：{ids}', en: 'Only in the configuration file (not running): {ids}' },
-  'drift.savedOnly': { 'zh-CN': '已不在配置文件（仍按已保存账号运行）：{ids}', en: 'No longer in the configuration file (still run as saved): {ids}' },
+  // Not "removed from the file": an account saved by an older version may never have been in it (#1250).
+  'drift.savedOnly': { 'zh-CN': '仅存在于已保存账号中（配置文件里没有；照常按已保存账号运行，不处理也不影响）：{ids}', en: 'Only in the saved accounts (not in the configuration file; they run as saved, leaving them is fine): {ids}' },
   'drift.changed': { 'zh-CN': '配置不同：{ids}', en: 'Configured differently: {ids}' },
   'drift.detail': { 'zh-CN': '{parts}。配置文件里的 endpoints 只在首次启动时导入；之后以已保存账号为准。请在账号页「从配置导入」或「写回配置文件」。', en: '{parts}. The endpoints list is only imported on first start; the saved accounts win afterwards. Import from the configuration or write back on the accounts page.' },
   'drift.action': { 'zh-CN': '处理账号差异', en: 'Review accounts' },

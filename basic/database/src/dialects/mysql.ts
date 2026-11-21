@@ -99,7 +99,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     if (this.usePool && this.pool) {
       await this.pool.end();
       this.pool = null;
-      logger.info('MySQL 连接池已关闭');
+      logger.debug('MySQL 连接池已关闭');
     } else if (this.connection) {
       await this.connection.end();
     this.connection = null;

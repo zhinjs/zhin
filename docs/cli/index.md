@@ -103,17 +103,21 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 | `build` / `publish` | 作用于整个 workspace，按依赖顺序处理（单个插件用 `zhin build` / `zhin pub`）。两者都先打印计划：会处理哪些包、版本，跳过了哪些包及原因（没有 `build` 脚本 / `private: true`）；计划为空时明确说明。`publish` 默认 dry-run（打印计划并运行 `pnpm publish --dry-run`），加 `--execute` 才把全部非 private 包发到 npm（需要 npm 登录；先用临时 dist-tag 发布，全部成功后改到 `--tag`），进度写入 `.zhin/publish-journal.json`，中断后用 `--resume` 继续。`--json` 只输出计划（含 `empty` 字段），不执行任何命令。dry-run 计划为空时退出码为 0，`--execute` / `--resume` 计划为空时退出码为 1 |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
-脚手架生成的项目里已有这些惯例脚本：
+脚手架生成的项目里已有这些惯例脚本（`zhin migrate` 给升级的项目补齐的也正是这一组，缺哪个补哪个，已有的不动）：
 
 ```json
 {
   "scripts": {
     "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
-    "stop": "zhin stop"
+    "stop": "zhin stop",
+    "preview": "zhin preview",
+    "build": "tsc --noEmit"
   }
 }
 ```
+
+要后台运行直接用 `zhin start`（默认就在后台），不需要单独的 `daemon` 脚本。
 
 ### service：系统服务 {#service}
 
@@ -169,6 +173,7 @@ Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
   - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
+  - 标准输入不是终端（管道、`< /dev/null`、CI）时，`init` / `user create` / `user passwd` / `init --reset-store` 不会进入交互提问，而是直接报错退出（退出码 1）并提示改用 `--password-stdin` / `--owner` / `--yes`；`zhin setup`、`zhin onboard`、不带插件名的 `zhin install` 同理。
 - **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户名、显示名、状态、角色绑定和**用户 id**（`ai.personalPrincipals` 的键写 `user:<用户 id>`），`--json` 输出 `{ users: [{ id, username, displayName, disabled, roles }] }`。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
 - **`init --reset-store`**：`.zhin/gateway.db` 丢失或被替换（项目数据库的标记 `zhin_gateway_store` 指向另一个 store）时 Console 保持关闭；确认放弃原有账号后用它重置（需先 `zhin stop`，会要求确认，`--yes` 跳过），重置记入新的审计日志，然后继续初始化。
 - **`migrate`**：把旧版存在项目数据库里的 Console 账号表迁入 `.zhin/gateway.db`（网关启动时也会自动执行；网关运行时只显示状态）。`--revert` 写回项目数据库并清空 gateway.db，降级到旧版本之前必须执行，需先 `zhin stop`。见[升级说明](../migrations/gateway-storage.md)。

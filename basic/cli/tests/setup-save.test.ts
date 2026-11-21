@@ -21,6 +21,13 @@ vi.mock('@zhin.js/scaffold-wizard', async (importOriginal) => {
   };
 });
 
+// The wizard steps are mocked; they stand in for answers on a terminal (#1250: without one setup refuses).
+const terminal = vi.hoisted(() => ({ interactive: true }));
+vi.mock('../src/utils/interactive.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/utils/interactive.js')>();
+  return { ...original, stdinIsInteractive: () => terminal.interactive };
+});
+
 import { setupCommand } from '../src/commands/setup.js';
 import * as wizard from '@zhin.js/scaffold-wizard';
 
@@ -38,12 +45,33 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  terminal.interactive = true;
   process.chdir(prevCwd);
   fs.rmSync(tmp, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
 
 describe('setup 配置落盘', () => {
+  it('fails at once instead of prompting when stdin is not a terminal (#1250)', async () => {
+    terminal.interactive = false;
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`exit ${code}`); }) as never);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const configure = vi.spyOn(wizard, 'configureDatabaseOptions');
+    await expect(setupCommand.parseAsync(['node', 'zhin', '--database'])).rejects.toThrow('exit 1');
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(configure).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.flat().join('')).toContain('需要交互式终端');
+    expect(fs.existsSync(path.join(tmp, 'zhin.config.yml'))).toBe(false);
+  });
+
+  it('keeps existing bootstrap files without a terminal, like --yes (#1250)', async () => {
+    terminal.interactive = false;
+    fs.writeFileSync(path.join(tmp, 'SOUL.md'), '# mine\n');
+    await setupCommand.parseAsync(['node', 'zhin', '--bootstrap']);
+    expect(fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf8')).toBe('# mine\n');
+    expect(fs.existsSync(path.join(tmp, 'TOOLS.md'))).toBe(true);
+  });
+
   it('--bootstrap --database：配置有变更时保存 zhin.config.yml', async () => {
     await setupCommand.parseAsync(['node', 'zhin', '--bootstrap', '--database']);
     const configPath = path.join(tmp, 'zhin.config.yml');

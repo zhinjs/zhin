@@ -41,6 +41,7 @@ import { openGatewayStore, resolveProjectDatabaseConfig } from '@zhin.js/gateway
 import { localGatewayFetch } from '../utils/host-http.js';
 import { describeGatewayError, probeGateway } from '../utils/gateway.js';
 import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
+import { NonInteractiveError, stdinIsInteractive } from '../utils/interactive.js';
 
 export interface ConsoleCliIo {
   log(message: string): void;
@@ -48,6 +49,11 @@ export interface ConsoleCliIo {
   /** Reads all of stdin (for `--password-stdin`). */
   readStdin(): Promise<string>;
   prompt<T extends Record<string, unknown>>(questions: readonly Record<string, unknown>[]): Promise<T>;
+  /**
+   * False when `prompt` cannot be answered (standard input is not a terminal): the commands then
+   * fail with the non-interactive flag to use instead of waiting forever (#1250). Left out: can prompt.
+   */
+  interactive?(): boolean;
   /** True when a Host answers on the configured address. */
   hostRunning(projectRoot: string): Promise<boolean>;
 }
@@ -183,6 +189,7 @@ export async function openConsoleAdmin(projectRoot: string, options: OpenConsole
 /** Errors the commands report as a message (exit 1) instead of a stack. */
 function reportable(error: unknown): string | undefined {
   if (error instanceof IamError) return error.message;
+  if (error instanceof NonInteractiveError) return error.message;
   if (error instanceof LegacyImportError) {
     return error.code === 'store_lost' || error.code === 'store_mismatch' ? error.message : `迁移旧版 Console 账号表失败：${error.message}`;
   }
@@ -200,6 +207,7 @@ export const defaultConsoleCliIo: ConsoleCliIo = {
     return Buffer.concat(chunks).toString('utf8');
   },
   prompt: questions => inquirer.prompt(questions as never) as never,
+  interactive: () => stdinIsInteractive(),
   // Only this project's gateway counts: probing the configured port could find another project's (#1250).
   hostRunning: async projectRoot => Boolean(await localGatewayFetch(projectRoot)),
 };
@@ -231,6 +239,13 @@ export interface ConsoleInitOptions {
 }
 
 type Opener = (projectRoot: string) => Promise<ConsoleAdmin>;
+
+/** Throws {@link NonInteractiveError} when `io` cannot prompt (no terminal on standard input). */
+function ensureInteractive(io: Pick<ConsoleCliIo, 'interactive'>, what: string, hint: string): void {
+  if (io.interactive && !io.interactive()) throw new NonInteractiveError(what, hint);
+}
+
+const NON_INTERACTIVE_INIT_HINT = '非交互初始化请用 zhin console init --owner <name> --password-stdin（密码从标准输入读取）';
 
 function firstLine(text: string): string {
   return text.replace(/\r?\n$/u, '').split(/\r?\n/u)[0] ?? '';
@@ -322,6 +337,7 @@ export async function runConsoleInit(
       }
       databaseInput = { dialect: options.database, connection };
     } else if (interactive) {
+      ensureInteractive(io, 'zhin console init 的交互式向导', NON_INTERACTIVE_INIT_HINT);
       io.log(`当前数据库：${status.database.dialect}（${status.database.source === 'config' ? '配置文件' : '默认'}）`);
       const { change } = await io.prompt<{ change: boolean }>([{
         type: 'confirm', name: 'change', message: '要更换数据库吗？', default: false,
@@ -342,6 +358,7 @@ export async function runConsoleInit(
         io.error('非交互初始化需要 --owner <name> 与 --password-stdin');
         return 1;
       }
+      ensureInteractive(io, password === undefined ? '交互式输入所有者密码' : '交互式输入所有者用户名', NON_INTERACTIVE_INIT_HINT);
       const answers = await io.prompt<{ username?: string; displayName?: string; password?: string; confirm?: string }>([
         ...(username ? [] : [{ type: 'input', name: 'username', message: '所有者用户名' }]),
         ...(displayName || username ? [] : [{ type: 'input', name: 'displayName', message: '显示名（可留空）' }]),
@@ -466,6 +483,7 @@ async function withProject<T>(projectRoot: string, open: Opener, io: ConsoleCliI
 
 async function readPassword(io: ConsoleCliIo, fromStdin: boolean | undefined): Promise<string> {
   if (fromStdin) return firstLine(await io.readStdin());
+  ensureInteractive(io, '交互式输入密码', '改用 --password-stdin 从标准输入读取密码（例如 printf \'%s\\n\' "$PASSWORD" | zhin console user create <name> --password-stdin）');
   const { password, confirm } = await io.prompt<{ password: string; confirm: string }>([
     { type: 'password', name: 'password', message: '密码（至少 10 位）', mask: '*' },
     { type: 'password', name: 'confirm', message: '再次输入密码', mask: '*' },
@@ -531,6 +549,7 @@ async function resetStoreStep(projectRoot: string, options: ConsoleInitOptions, 
   const store = await openGatewayStore(projectRoot);
   try {
     if (!options.yes) {
+      ensureInteractive(io, '确认重置 Console 账号存储', '确认无误后加 --yes 重新运行 zhin console init --reset-store');
       // A store that already holds accounts loses nothing: only the marker is pointed at it.
       const counts = await store.counts();
       const healthy = legacyImportSettled(await readLegacyImportRecord(store)) && (counts.console_users ?? 0) > 0;

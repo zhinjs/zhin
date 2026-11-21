@@ -15,6 +15,7 @@ import { execSync, spawnSync } from 'child_process';
 import { DEFAULT_CREATE_BOT_HTTP_PORT, loadProjectConfig } from '@zhin.js/scaffold-wizard';
 import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
+import { nonInteractiveMessage, stdinIsInteractive } from '../utils/interactive.js';
 import { saveConfig } from '@zhin.js/gateway/project';
 import {
   CREATE_PROJECT_COMMAND,
@@ -351,6 +352,13 @@ export const onboardCommand = new Command('onboard')
 
     if (!checks.node || !checks.pnpm) {
       console.log(chalk.yellow(`请先安装 Node.js (${NODE_ENGINES_HINT}) 与 pnpm 后重试。`));
+      process.exitCode = 1;
+      return;
+    }
+
+    if (!stdinIsInteractive()) {
+      // Every path below asks a question; inquirer would wait forever (#1250).
+      logger.error(nonInteractiveMessage('zhin onboard', '非交互环境请用 zhin onboard --quick 查看步骤，或 zhin setup --yes 搭配参数配置'));
       process.exitCode = 1;
       return;
     }
