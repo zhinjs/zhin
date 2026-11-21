@@ -383,11 +383,11 @@ While the gateway runs (`zhin start`), the install goes through the gateway's de
 ### uninstall: Uninstall
 
 ```bash
-zhin uninstall plugin <name> [--remove-pkg]
+zhin uninstall plugin <name> [--remove-pkg] [--remove-dir]
 zhin uninstall adapter <name> [--remove-pkg]
 ```
 
-`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. While the gateway runs, the uninstall goes through it (instance stopped and started, rolled back on failure). Remove the system service with `zhin service uninstall`.
+`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. When a plugin has a local directory `./plugins/<name>`, `--remove-dir` deletes it without asking (on a terminal too); without the flag a terminal is asked (default: keep) and a non-interactive run (a pipe, CI) keeps it. While the gateway runs, the uninstall goes through it (instance stopped and started, rolled back on failure). Remove the system service with `zhin service uninstall`.
 
 ### enable / disable: Turn a Plugin Instance On or Off {#enable-disable}
 

@@ -72,7 +72,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
           connectionTimeoutMillis: pool?.acquireTimeoutMillis ?? 10000,
         };
         this.pool = new Pool(poolConfig);
-        logger.info(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
+        logger.debug(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
       } else {
       const { Client } = await import('pg');
       const { resetSession: _reset, ...clientOptions } = this.config;

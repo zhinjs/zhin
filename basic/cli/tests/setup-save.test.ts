@@ -46,6 +46,7 @@ beforeEach(() => {
 
 afterEach(() => {
   terminal.interactive = true;
+  vi.unstubAllEnvs();
   process.chdir(prevCwd);
   fs.rmSync(tmp, { recursive: true, force: true });
   vi.restoreAllMocks();
@@ -62,6 +63,23 @@ describe('setup 配置落盘', () => {
     expect(configure).not.toHaveBeenCalled();
     expect(stderr.mock.calls.flat().join('')).toContain('需要交互式终端');
     expect(fs.existsSync(path.join(tmp, 'zhin.config.yml'))).toBe(false);
+  });
+
+  it('--global without a terminal refuses before creating ~/.zhin; --locale en is English (#1250)', async () => {
+    terminal.interactive = false;
+    const home = path.join(tmp, 'home');
+    fs.mkdirSync(home);
+    // os.homedir() follows HOME (the ESM namespace of node:os cannot be spied on).
+    vi.stubEnv('HOME', home);
+    vi.stubEnv('USERPROFILE', home);
+    const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`exit ${code}`); }) as never);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await expect(setupCommand.parseAsync(['node', 'zhin', '--global', '--locale', 'en'])).rejects.toThrow('exit 1');
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(fs.existsSync(path.join(home, '.zhin'))).toBe(false);
+    const output = stderr.mock.calls.flat().join('');
+    expect(output).toContain('The configuration wizard needs an interactive terminal');
+    expect(output).not.toContain('需要交互式终端');
   });
 
   it('keeps existing bootstrap files without a terminal, like --yes (#1250)', async () => {

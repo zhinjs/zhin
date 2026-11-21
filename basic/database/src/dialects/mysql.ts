@@ -59,7 +59,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
           idleTimeout: pool?.idleTimeoutMillis ?? 60000,
         };
         this.pool = createPool(poolConfig);
-        logger.info(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
+        logger.debug(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
       } else {
       const { createConnection } = await import('mysql2/promise');
       const { resetSession: _reset, ...connectionOptions } = this.config;

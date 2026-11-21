@@ -307,6 +307,29 @@ describe('Adapter configuration drift, import and write-back', () => {
     expect(repository.state.get(slot.id)!.endpoints[0]).not.toHaveProperty('origin');
   });
 
+  it('reports a Console account removed from the file after it was written back (#1250 M1)', async () => {
+    const { adapter, repository, slot, configFile } = await fixture({ block: {} });
+    await adapter.add(null, { endpointId: 'x', config: {} });
+    const record = () => repository.state.get(slot.id)!.endpoints.find(entry => entry.endpointId === 'x')!;
+    expect(record().origin).toBe('console');
+    // A write-back the file refuses keeps the marker.
+    const read = configFile.read.bind(configFile);
+    vi.spyOn(configFile, 'read').mockImplementationOnce(async () => ({ ...await read(), revision: 'stale' }));
+    await expect(adapter.writeBackConfigured(['x'])).rejects.toMatchObject({ code: 'conflict' });
+    expect(record().origin).toBe('console');
+    // Written back: the file has it, the marker is gone (same as an import).
+    await adapter.writeBackConfigured(['x']);
+    expect(configFile.block?.endpoints).toEqual([{ id: 'x' }]);
+    expect(record()).not.toHaveProperty('origin');
+    const ofX = async () => (await adapter.configDrift()).entries.filter(entry => entry.id === 'x');
+    expect(await ofX()).toEqual([]);
+    // Removed from the file afterwards: drift again.
+    configFile.block = { endpoints: [] };
+    const drift = await ofX();
+    expect(drift).toEqual([{ id: 'x', kind: 'snapshot_only', instanceId: record().instanceId, desiredEnabled: false }]);
+    expect(drift.filter(isEndpointConfigDivergence)).toHaveLength(1);
+  });
+
   it('imports a configured account with ${VAR} kept as a reference and starts it on request', async () => {
     const { adapter, index, repository, slot } = await fixture({ saved: [saved('old', { mode: 'ws' })],
       block: { mode: 'ws', endpoints: [{ id: 'old' }, { id: 'new', secret: '${NEW_SECRET}' }] } });

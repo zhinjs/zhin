@@ -7,16 +7,14 @@
   "scripts": {
     "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
-    "daemon": "zhin start --mode production --no-watch",
     "build": "tsc --noEmit -p tsconfig.runtime.json",
     "stop": "zhin stop"
   },
   "_scripts-info": {
     "dev": "Plugin Runtime（推荐）。Console: https://console.zhin.dev ，API Base http://127.0.0.1:8068",
     "start": "Plugin Runtime 生产模式（无 watch）",
-    "daemon": "后台守护（Plugin Runtime，zhin stop 停止）",
     "build": "类型检查",
-    "stop": "停止守护进程（legacy）"
+    "stop": "停止后台运行的网关（zhin stop）"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.25",

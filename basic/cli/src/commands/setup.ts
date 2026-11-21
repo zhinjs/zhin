@@ -99,6 +99,19 @@ export const setupCommand = new Command('setup')
   .option('-y, --yes', '非交互：不提问，只执行参数指定的步骤 / Non-interactive: only the steps given by flags')
   .action(async (options) => {
     let locale = resolveLocale(options.locale);
+    const nonInteractiveSteps = (options.adapter ?? []).length > 0 || options.enableAi || options.skipAi || options.skipAdapters;
+    const explicitSteps = options.bootstrap || options.database || options.adapters || options.ai || options.decisions || nonInteractiveSteps;
+    // Without flags the full interactive wizard runs; `-y` alone runs nothing interactive.
+    const all = !explicitSteps && !options.yes;
+    const promptingSteps = all || options.database || options.adapters || options.ai || options.decisions;
+    const refuseWithoutTerminal = () => {
+      if (!promptingSteps || stdinIsInteractive()) return;
+      // inquirer would wait forever for an answer (#1250).
+      logger.error(wizardText(locale, "配置向导需要交互式终端（标准输入不是终端）：非交互请用 --yes 搭配 --adapter <name> / --enable-ai / --skip-adapters / --skip-ai / --bootstrap"));
+      process.exit(1);
+    };
+    // `--global` would create ~/.zhin first: refuse before that, so a refused run leaves nothing behind.
+    if (options.global) refuseWithoutTerminal();
     const cwd = options.global
       ? await ensureGlobalHome({ install: false })
       : process.cwd();
@@ -146,7 +159,6 @@ export const setupCommand = new Command('setup')
     console.log(chalk.bold.cyan(wizardText(locale, "\n🚀 Zhin 配置向导\n")));
 
     const adapterValues: string[] = options.adapter ?? [];
-    const nonInteractiveSteps = adapterValues.length > 0 || options.enableAi || options.skipAi || options.skipAdapters;
     if (adapterValues.length && options.skipAdapters || options.enableAi && options.skipAi) {
       logger.error(wizardText(locale, "--adapter/--enable-ai 不能与对应的 --skip-* 同时使用"));
       process.exit(1);
@@ -155,15 +167,7 @@ export const setupCommand = new Command('setup')
       logger.error(wizardText(locale, "--yes 不能与交互步骤（--database / --adapters / --ai / --decisions）同时使用"));
       process.exit(1);
     }
-    const explicitSteps = options.bootstrap || options.database || options.adapters || options.ai || options.decisions || nonInteractiveSteps;
-    // Without flags the full interactive wizard runs; `-y` alone runs nothing interactive.
-    const all = !explicitSteps && !options.yes;
-    const promptingSteps = all || options.database || options.adapters || options.ai || options.decisions;
-    if (promptingSteps && !stdinIsInteractive()) {
-      // inquirer would wait forever for an answer (#1250).
-      logger.error(wizardText(locale, "配置向导需要交互式终端（标准输入不是终端）：非交互请用 --yes 搭配 --adapter <name> / --enable-ai / --skip-adapters / --skip-ai / --bootstrap"));
-      process.exit(1);
-    }
+    refuseWithoutTerminal();
     const outcomes: SetupStepOutcomes = {};
 
     try {

@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
-    "daemon": "zhin start --mode production --no-watch",
     "stop": "zhin stop",
     "build": "tsc --noEmit",
     "test": "vitest run --root ../.. examples/minimal-bot/tests"

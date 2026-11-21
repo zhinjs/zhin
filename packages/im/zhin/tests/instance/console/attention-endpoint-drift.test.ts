@@ -23,8 +23,14 @@ describe('attention.list: endpoint configuration drift (#1250)', () => {
     const qq = drift.find(item => item.subject?.plugin === 'qq')!;
     expect(qq).toMatchObject({ severity: 'warning', source: 'endpoint-config', action: { path: '/plugins/qq' } });
     expect(qq.detail).toContain('仅在配置文件（未运行）：new');
-    expect(qq.detail).toContain('仅存在于已保存账号中（配置文件里没有；照常按已保存账号运行，不处理也不影响）：gone');
+    // Neutral: a saved-only account may have been removed from the file on purpose (#1250 M2).
+    expect(qq.detail).toContain('仅存在于已保存账号中（配置文件里没有，仍按已保存账号运行；若是有意删除，请在账号页删除该账号，或写回配置文件）：gone');
     expect(qq.detail).not.toContain('已不在配置文件');
+    expect(qq.detail).not.toContain('不处理也不影响');
+    const en = (await collectAttention(sources, { allows: () => true, locale: 'en', now: () => NOW })).items
+      .find(item => item.kind === 'endpoint.config-drift' && item.subject?.plugin === 'qq')!;
+    expect(en.detail).toContain('Only in the saved accounts (not in the configuration file; they still run as saved — if you removed them on purpose, delete them on the accounts page, or write them back to the configuration file): gone');
+    expect(en.detail).not.toContain('leaving them is fine');
     expect(qq.detail).toContain('配置不同：main');
     const offline = list.items.find(item => item.kind === 'endpoint.offline');
     expect(offline?.detail).toContain('auth');

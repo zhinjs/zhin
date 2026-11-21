@@ -351,8 +351,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   /**
    * Write persisted accounts back into `zhin.config.yml` `endpoints` (#1250). Credentials are
    * written as `${VAR}` references only: the reference the file already had, else a placeholder
-   * returned in `placeholders` for the operator to set in `.env`. The persisted accounts are not
-   * changed. Single-account instance blocks (no `endpoints` list) are not rewritten.
+   * returned in `placeholders` for the operator to set in `.env`. The persisted accounts keep their
+   * configuration; only their `origin: 'console'` marker is dropped (the file has them now, so
+   * removing one from it later is drift). Single-account instance blocks (no `endpoints` list) are not rewritten.
    */
   async writeBackConfigured(endpointIds: readonly string[], options: Readonly<{
     signal?: AbortSignal; sensitiveFields?: readonly string[];
@@ -393,10 +394,47 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       if (index >= 0) entries[index] = written.entry; else entries.push(written.entry);
     }
     options.signal?.throwIfAborted();
-    const result = await source.writeEndpoints(this.descriptor.owner,
-      entries as readonly Readonly<Record<string, unknown>>[], document.revision, options.signal);
+    // The file has these accounts now: like `importConfigured`, drop `origin: 'console'` so that
+    // removing one from the file later is drift again. Dropped before the file write (a saved file
+    // reloads this Adapter instance) and put back if the write certainly did not happen.
+    const marked = new Set([...this.#children.values()]
+      .filter(child => ids.includes(child.desired.endpointId) && child.desired.origin === 'console')
+      .map(child => child.desired.instanceId));
+    if (marked.size) await this.#markConsoleOrigin(marked, false, options.signal);
+    let result: Awaited<ReturnType<EndpointConfigSource['writeEndpoints']>>;
+    try {
+      result = await source.writeEndpoints(this.descriptor.owner,
+        entries as readonly Readonly<Record<string, unknown>>[], document.revision, options.signal);
+    } catch (error) {
+      if (marked.size && !(error instanceof AdapterManagementError && error.code === 'commit_unknown')) {
+        try { await this.#markConsoleOrigin(marked, true); } catch (restoreError) {
+          logger.warn(formatCompact({ op: 'endpoint_writeback_origin_lost', adapter: this.descriptor.name,
+            code: restoreError instanceof AdapterManagementError ? restoreError.code : 'unknown' }));
+        }
+      }
+      throw error;
+    }
     return Object.freeze({ revision: result.revision, written: Object.freeze(ids), placeholders: Object.freeze(placeholders),
       missingEnv: Object.freeze([...(result.missingEnv ?? [])]) });
+  }
+
+  /**
+   * Set or drop the `origin: 'console'` marker of these accounts in one commit (no execution).
+   * Write-back drops it before the file write, because a saved file reloads this Adapter instance
+   * (#1250).
+   */
+  #markConsoleOrigin(instanceIds: ReadonlySet<string>, mark: boolean, signal?: AbortSignal): Promise<AdapterMutationResult> {
+    const first = [...this.#children.values()].find(child => instanceIds.has(child.desired.instanceId));
+    if (!first) throw new AdapterManagementError('not_found', 'No saved account has this id');
+    return this.#commit({
+      expectedRevision: this.#revision,
+      next: () => this.#desired().map(record => {
+        if (!instanceIds.has(record.instanceId)) return record;
+        const { origin: _origin, ...rest } = record;
+        return { ...rest, ...(mark ? { origin: 'console' as const } : {}), revision: record.revision + 1 };
+      }),
+      execution: { instanceId: first.desired.instanceId, action: 'update', child: first },
+    }, signal ? { signal } : undefined);
   }
 
   #secretKey(source: EndpointConfigSource, sensitiveFields: readonly string[] = []): (key: string) => boolean {
