@@ -1,7 +1,7 @@
 ---
-"@zhin.js/core": patch
-"@zhin.js/agent": patch
-"zhin.js": patch
+"@zhin.js/core": minor
+"@zhin.js/agent": minor
+"zhin.js": minor
 ---
 
 #1250 第 85 批：收紧入站路由与 Agent 管理命令的分发租约。
