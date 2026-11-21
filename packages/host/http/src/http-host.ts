@@ -785,7 +785,7 @@ export function normalizePath(pathname: string): string {
 
 /**
  * The principal as handed to routes and sockets: deeply frozen, so a route cannot change the
- * object the router vouches for ({@link HttpRouter.isHostIssuedPrincipal}). Already deeply frozen
+ * object the router vouches for (`HttpRouter.isHostIssuedPrincipal`). Already deeply frozen
  * principals (the bridge's, the gateway IAM's) are kept as they are.
  */
 function frozenPrincipal(principal: ConsolePrincipal): ConsolePrincipal {

@@ -215,14 +215,14 @@ export interface AdapterConsoleSpeakerPort {
   ensure(conversation: ConversationRef, principal: unknown): Promise<void>;
 }
 
-/** Root side of {@link AdapterConsoleSpeakerPort}; `owner` is the Adapter's owning plugin. */
+/** Root side of `AdapterConsoleSpeakerPort`; `owner` is the Adapter's owning plugin. */
 export interface SimulatedConsoleSpeakerHost {
   ensure(request: Readonly<{ owner: PluginId; conversation: ConversationRef; principal: unknown }>): Promise<void>;
 }
 
 /**
  * Root-private (readable only while projecting the Adapter Feature): the instance provides it; the
- * Adapter Feature binds it to each trusted simulation Adapter's owner ({@link AdapterConsoleSpeakerPort}).
+ * Adapter Feature binds it to each trusted simulation Adapter's owner (`AdapterConsoleSpeakerPort`).
  */
 export const simulatedConsoleSpeakerToken = createFeaturePrivateToken<SimulatedConsoleSpeakerHost>(
   'zhin.adapter.simulated-console-speaker', featureId('zhin.adapter'), 'Console Sandbox identities for local simulation adapters',
