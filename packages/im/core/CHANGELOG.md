@@ -1,5 +1,150 @@
 # @zhin.js/core
 
+## 1.14.0
+
+### Minor Changes
+
+- 0899424: 私聊里发起人自己按原文存下的消息不再算作外部内容来源（zhinjs/zhin#1250 `own-unhandled-message-counts-as-background`，ADR 0067 D8）。
+
+  - 行为变化：私聊里本回合发起人自己更早发的、没被处理的纯文本消息（例如不是指令的 `/clear`）再以背景消息出现时，不再让回合算作「读过外部内容」，之后建定时任务不再因此要求确认。只认声明了 `messaging.inboundTextAuthoredBySender` 的适配器、同一平台、同一 endpoint、同一会话里与发起人同一 sender id（发起人来源须为 `human`）、带核心入站原文证据的 `message.created`；未声明能力的适配器、带转发标记的消息、群聊、频道、别人发的、带引用 / 转发 / 媒体 / @、被改写或缺少证据的消息照旧计来源。
+  - 行为变化：清空与 `<指令前缀>reset` 的固定回复按原文送达时，以带 `key:` 前缀的会话键记入本会话投递记录，下一回合不把它算作背景来源（`/clear`、`/reset`、`/new` 本身的处理见同批 b67 changeset：直接清空本会话上下文）。
+  - `@zhin.js/adapter`（新增公开能力位）：能力画像 `messaging` 新增 `inboundTextAuthoredBySender`，声明本适配器入站的文本段都是发送者亲笔（转发、引用、卡片表示为非文本段、`replyTo` 或 `forwarded` 标记）；没声明按不保证处理。
+  - `@zhin.js/im-contract`：`ConversationMessage` 新增可选 `inboundTextDigest`，`ConversationContextBlock` 新增可选 `inboundActorId` / `inboundTextDigest`。
+  - `@zhin.js/core`（新增公开字段）：`IncomingMessage` 新增可选 `forwarded`；`ConversationRuntime` 构造参数新增可选 `{ evidenceKey }`，`recordIncoming` 新增可选第三个参数 `{ textAuthoredBySender }`。入站链按适配器画像传入声明；只对声明了能力、有发送者、无转发标记、无引用、纯文本（纯文本视图与文本段一致、非空）且未被认领码脱敏改动的入站消息写原文证据。证据是以实例进程内随机密钥计算的 HMAC-SHA256，绑定会话、消息、发送者 id 与原文；聚合背景块时按存储内容重算核对后才给出，进程重启后旧证据失效。发送者 id 去掉首尾空白后存储。
+  - `@zhin.js/adapter-telegram`：转发（`forward_origin` 与旧版 `forward_*`）、自动转发、inline bot 结果（`via_bot`）、跨会话引用（`external_reply`、`quote`）的入站消息带 `forwarded: true`；新增导出 `isTelegramRelayedMessage`；声明 `inboundTextAuthoredBySender`。
+  - `@zhin.js/adapter-onebot11`、`@zhin.js/adapter-napcat`：CQ 字符串上报格式下，`[CQ:reply,id=…]` 解析为 `replyTo`；串里出现 reply 以外的 CQ 码（at、face、卡片、转发、markdown、媒体等）、不合规的方括号，或 `message` 与 `raw_message` 不一致时，入站消息带 `forwarded: true`，不写原文证据（失败关闭）。NapCat 不再把原始 CQ 串包成单个文本段，纯文本视图改为剥掉 CQ 码后的文本，与 OneBot11 一致（判定见 `src/protocol.ts` 的 `inspectCqString` / `isCqStringRelayed`）。
+  - `@zhin.js/adapter-sandbox`、`@zhin.js/adapter-onebot11`、`@zhin.js/adapter-napcat`、`@zhin.js/adapter-discord`：核实入站转发 / 引用 / 卡片都不以纯文本段出现后声明 `inboundTextAuthoredBySender`。
+
+- 637383b: 确认 / 取消词统一为一套词表，中英文都认、不分语言（zhinjs/zhin#1250 第 74 批）。之前至少 6 处各有一份词表，有的按提问语言分开（中文提问回 `yes` 不算确认），有的中英混收，有的只认一个词。
+
+  - 新增导出（`@zhin.js/core`，经 `zhin.js` 再导出）：`isConfirmWord(text, options?)`、`isCancelWord(text, options?)` 与类型 `ReplyWordOptions`。匹配先做 NFKC（全角转半角）、去首尾空白、去掉末尾标点（`！!。.？?` 等）、不区分大小写，再整句比对——`我不确定`、`取消了吗` 都不是取消词。
+  - 基础确认词：`确认` / `确定` / `同意` / `confirm` / `yes` / `y` / `ok` / `agree`；基础取消词：`取消` / `退出` / `算了` / `cancel` / `quit` / `exit`。是非答语 `是` / `好` / `true` 与 `不` / `否` / `拒绝` / `no` / `n` / `reject` / `false` 只在明确的是非问答里算（`{ yesNo: true }`：`confirm` 提问、布尔列表），普通对话里一句「不」或「no」不会被当成取消。选项序号 `1` / `2` 只在 `confirm` 提问与布尔列表里局部认。
+  - 行为放宽：`confirm` 提问不再按提问语言区分回答（中文提问回 `yes`、英文提问回 `取消` 都有效；提问与提示文案仍用流程固定的语言），并新增 `确定`、`好`、`不`、`ok`、`算了` 等；`select` / `multiselect` / `number` / `list` / `text` 的取消词新增 `算了`，并接受全角、大小写与末尾标点；选项的名称与别名比对也做同样的规范化（`生产。` 选中「生产」）。普通 `select` / `multiselect` 只按名称、别名与序号匹配，不会因为选项名或别名在词表里就接受同类词（选项「好」不认 `ok`，选项 `N` 不认 `no`）。
+  - 审批（`purpose: 'approval'`：普通审批、`humanOnly`、需主人、一次性确认）更严，只认明确答语，中英文不分提问语言：批准是 `确认` / `同意` / `批准` / `confirm` / `approve` / `yes`，拒绝是 `拒绝` / `否` / `no` / `deny` / `reject`，以及选项名与序号。`好`、`是`、`ok`、`y`、`true`、`确定`、`agree` 不再批准（之前英文审批认 `y`），按无效回答重问；`不`、`n` 也不再算拒绝。别名不再按语言分开，统一显示 `否 / no` 与 `确认 / yes`。回复 `取消` / `cancel` 等取消词仍算拒绝（现在与其他提问一样按取消离开，并回复「已取消。」）。
+  - Agent 停止当前回合：`取消` 之外也认 `退出`、`算了`、`quit`、`exit` 及全角、大小写、末尾标点；`@zhin.js/agent/turn` 的 `isCancelIntent(text, commandPrefix?)` 新增可选参数，带命令前缀的取消词（如前缀为 `/` 时的 `/cancel`、前缀为 `#` 时的 `#取消`）按会话真实的命令前缀剥离后识别，不再写死 `/cancel`——命令前缀不是 `/` 的会话里，`/cancel` 不再停止回合（发 `cancel` 或带本会话前缀即可）。
+  - 聊天重启 `restart` 的确认参数、功能自助 `功能 确认 <码>` 的确认子命令认所有基础确认词（如 `restart 确定`、`restart ok`、`功能 OK 123456`），仍需同一个人在同一会话、在时限内确认；`是` / `no` 等是非答语不算。
+  - 插件：提醒创建（`@zhin.js/plugin-reminder`）只对等待中的补问回复判断取消，不再把命令参数当取消（之前 `remind create 十分钟后 取消` 会直接取消；现在 `remind create 明天9点 退出` 按正文「退出」创建）。提醒的补问与点歌选择（`@zhin.js/plugin-music`）之前只认当前语言的一个取消词（`取消` 或 `cancel`），现在不分语言都认上述取消词；回复文案仍用流程固定的语言。
+
+- 49f9042: 统一显示语言类型、语言解析与列表分隔（zhinjs/zhin#1250 第 77 批）。
+
+  - 新增：`@zhin.js/plugin-runtime` 导出 `formatList(locale, items, { separator? })`（`list` 默认 `、` / `, `，`comma` 为 `，` / `, `，`semicolon` 为 `；` / `; `；只拼接，英文不加 `and`），经 `zhin.js` 主入口与 `zhin.js/i18n` 再导出；`queryLocale()` 严格解析 `?locale=`；`projectLocale()` 从 `@zhin.js/core/runtime` 移入（core 不再导出）。
+  - 命令的语言回退改走与消息相同的项目语言（先取 generation 投影的项目语言，再取根配置 `locale`）；之前命令只读根配置。消息自带的语言不合法时回退项目语言，而不是固定的 `zh-CN`。
+  - Console 接口：`/conversations/workspaces/commands`、`/conversations/outcomes`、`/entries`、`/console/api/pages`、Console 首页与插件市场搜索的 `?locale=` 之前把非法值当作中文（或忽略），现在与任务、权限说明接口一样严格：不支持或重复的值返回 400（`invalid_locale`）。缺省行为不变。400 响应由 `@zhin.js/host-http` 新增导出的 `invalidLocaleResponse()` 统一给出（实例路由与插件市场共用，错误文案中英文一致：`locale 只能是 zh-CN 或 en（locale must be zh-CN or en）`；插件市场之前只有英文）。页面标题按 `titleI18n[locale]` 精确取值：`titleI18n` 的键只能是 `zh-CN` / `en`，不再按 `zh` / `en-US` 等前缀或其他键猜测。
+  - 删除别名类型（不留兼容）：`@zhin.js/client` 的 `PluginUiLocale`（改为再导出 `@zhin.js/console-protocol` 新增的 `ConsoleLocale`），`@zhin.js/console-contract` 的 `PageKeywordLocale` 与 `DeclarativeUiLocale`（合并为本包零依赖的 `ConsoleLocale`），`@zhin.js/page` 对这两个类型的再导出；内部别名 `PlatformGuidanceLocale`、`CreateLocale`、`SandboxLocale`、`AdapterConsoleLocale` 一并删除。其余内联的 `'zh-CN' | 'en'` 改用 `Locale` / `ConsoleLocale`。
+  - 语言判定改用 `resolveLocale()`：Agent 未执行工具提示与协作补充文案不再按 `en` 前缀猜测（`en-US` 之类的值回退中文；实际传入的都是已解析的语言）；系统提示的平台说明在缺少语言时改为中文（之前英文）；重启回执、消息结局文案、create-zhin、ICQQ 辅助脚本、成语接龙动作词同样改用统一解析。成语接龙的开局动作词（`chainStartAction`）之前把任何不以 `zh` 开头的值（如 `en-US`、`fr`）当作英文、给出 `pinyin` / `char`；现在只有 `en` 给出英文，其余不支持的值与缺省一样回退中文的「同音」/「同字」（`zh-CN` 与 `en` 不变）。B 站与掘金 Console RPC 删除各自的 `localeOf`。
+  - 列表分隔统一用 `formatList`，输出不变：命令建议、回复兜底的工具列表、工具审批卡、群规豁免、账号命令字段、Console 提醒、地震订阅地区与数据源告警、游戏大厅、轮盘、文字冒险、猜词选项、内容审核动作、网络工具与 RSS 任务详情。`@zhin.js/command` 与 Agent 文案表中的分隔符条目（`suggestionSeparator`、`toolSeparator`、`listSeparator`、`detailSeparator`、猜词 `separator`）删除。
+
+  `@zhin.js/console-ui`：仅补充 `ConsoleUiLocale` 与 `resolveConsoleUiLocale` 的说明注释（本地声明的理由、为何对浏览器语言标签保持宽松），行为不变。
+
+- a05eb73: #1250 第 78 批：拒绝文案与「是不是全局主人」判定各收成一处。
+
+  - `@zhin.js/permission`：拒绝文案的唯一来源。新增导出 `describeCommandDenial(permit, locale, options)`（命令被 `permit` 拒绝时的回复）、`describeGlobalOwnerRequired(locale, { privateChat, bindCommand, commandPrefix })`（需要全局聊天主人的能力：说明需要全局 owner 以及去哪里授予——Console「聊天角色」页，授予前先私聊发送「绑定 <码>」把聊天身份绑定到 Console 账号；还没有全局 owner 时私聊发送「认领 <码>」）、`describeConversationManagerDenial(locale)`（`canManageConversation` 的标准拒绝）与类型 `PermitDenialOptions`；`describeDeniedPermit` 新增第三个参数。`bind` 是普通命令：调用方给出 `bindCommand`（如 `CommandContext.formatCommand('bind')`）或实际命令前缀 `commandPrefix` 时，文案写出带前缀的「!!绑定 <码>」，都没有时注明「配置了命令前缀时带上前缀」（英文同步，并补「to a Console account」）。（不兼容）`describeDeniedPermit` 一律返回完整句子（如「此功能需要 zhin 角色。……」/ "This needs a zhin role. …"，原为「它需要 zhin 角色……」/ "it needs a zhin role…" 这样的句子片段），它也是 `CommandDispatchResult.denial.reason` 与命令反馈渲染器拿到的 `reason`；只有 `describeCommandDenial` 在前面拼上「没有权限执行此指令。」/「无法执行此指令。」（原为「没有权限执行此指令：……」「无法执行此指令：……」）。zhin 角色条件的拒绝不再点名缺的角色（原「需要你在本会话拥有 zhin 角色 {value}」），`owner@global` 改为全局 owner 说明。
+  - `@zhin.js/command`：再导出 `describeConversationManagerDenial`（`zhin.js/command` 同样可用）。
+  - `@zhin.js/core`：命令拒绝回复改用 `describeCommandDenial`（全局 owner 说明里的「绑定」带上本条消息实际的命令前缀）；`private()` 不满足时回复「此指令只能在私聊中使用，请私聊机器人发送。」（原为通用的「没有权限执行此指令。」）；消息结局 `permission_denied` 的发送者文案与命令拒绝同源（「没有权限执行此指令。」）；按钮 `permit` 不满足的回复改为「你不能使用这个按钮。<原因>」（原因是完整句子）。`usageSubjectFromMessage` 的 `owner` 改用 `isOwner()` 判定（行为不变）。（不兼容）删除 `MessageSender.isMaster` / `isTrusted`（无写入点；角色只读 `sender.chatRole`，判全局主人用 `isOwner()`）。
+  - `@zhin.js/agent`：（不兼容）`RuntimeSenderRoles`、`TurnIntentSenderRoles`、`RuntimeManagementSenderRoles` 的 `{ isMaster, isTrusted }` 改为 `{ hostRole?: 'owner' | 'admin' | 'trusted' }`（宿主信任角色：`owner` 只给全局 owner，低层 owner 记为 `admin`）；删除 `ownerApprovalMessages.denied`、`managementMessages.denied`。主人命令 `approve …` 的拒绝改用全局 owner 共享说明（「绑定」带本账号命令前缀）；管理命令对无角色者回复共享的 `describeCommandDenial('trusted')`；`reset` 的拒绝也以这句开头（原「仅聊天角色 owner / admin / trusted 可用」），后面保留改发 /clear 的引导。主人判定统一走 `isOwner` / `hasChatRole`。
+  - `zhin.js`：`config` 命令的 permit 改为 `owner@global` + `private()`（与命令内部 `senderIsGlobalOwner` 同一身份集合）：群里不是全局 owner 的人发送时不回复（结局 `permission_denied`），私聊里得到全局 owner 说明，全局 owner 在群里发得到「请私聊」提示。执行时授权器拒绝时回复与 permit 拒绝同一段文案（不再是「仅可在私聊中使用」变体），并像 `restart` 一样记 `permission_denied`（原因 `not-global-owner`）、群里静默。`restart` 与 `config` 的拒绝都改用全局 owner 共享说明，「绑定」带上实际命令前缀。「是否已有全局 owner」只剩一处判定（实例内部 `hasGlobalOwner`）。
+  - `@zhin.js/console-protocol`：新增导出 `isGlobalOwnerGrant(grant)`、`hasGlobalOwnerGrant(grants)`；`@zhin.js/host-http`、`@zhin.js/gateway` 判 Console 全局所有者改用它们（行为不变）。
+  - `@zhin.js/plugin-bilibili`、`@zhin.js/plugin-earthquake`：（不兼容）删除未被引用的 `SUBSCRIPTION_PERMISSION_DENIED_MESSAGE` 与 i18n 的 `denied` 键；群里无权订阅时改回复标准拒绝 `describeConversationManagerDenial()`。
+  - `@zhin.js/adapter-icqq`：`icqq login` 的操作者判定改用 `@zhin.js/core` 的 `isOwner()`（行为不变）。
+
+- 58ce469: #1250 第 80 批：小型去重，统一多轨实现。
+
+  - **重试、退避与可中断等待**：`@zhin.js/plugin-runtime` 新增 `sleep(ms, signal?)`（中止时清理计时器并以 `signal.reason` 拒绝）、`parseRetryAfterMs()`（解析秒数与 HTTP 日期：接受小数秒、`.5`、`5.` 与前导 `+`；负数、`1e3`、`0x10` 等非法值返回 `undefined`，AI 路径遇到这类值退回普通退避）和 `computeBackoffDelay()`（指数退避，默认等量抖动，可选对称抖动比例），插件经 `zhin.js` 导入。AI Provider 重试、OAuth 刷新冷却、适配器启动重试、地震与网络工具插件的 HTTP 重试、B 站直播 / QQ 扫码 / Telegram 轮询 / 微信 iLink 的等待全部改用它们；`@zhin.js/kernel` 删除不支持中止的 `sleep`，`@zhin.js/ai` 不再导出 `computeBackoffDelay` / `parseRetryAfterMs`，地震、网络工具和微信 iLink 插件不再导出各自的副本。
+  - **HTML 转义**：`@zhin.js/plugin-runtime` 新增 `escapeHtml()`（转义 `& < > " '`），AI 输出、Console 页面外壳、`segment.escape`、链接海报和日历回调页改用它；`@zhin.js/pagemanager` 不再导出自己的 `escapeHtml`。`@zhin.js/jsx` 因只依赖 IM 契约保留同一实现，由契约测试锁定一致。
+  - **`MarkdownView`**：`@zhin.js/components` 的 `Markdown` 组件改名为 `MarkdownView`（`MarkdownProps` → `MarkdownViewProps`，主题组件名同步），与 `zhin.js/jsx` 输出 Markdown 消息段的 `Markdown` 标签区分，不保留旧名。
+  - **会话键**：`@zhin.js/console-protocol` 新增四段会话键 `parseConversationSessionKey()` / `formatConversationSessionKey()` / `isHashedSessionKey()`，网关用量统计（`parseSessionKey` 改名为 `sessionAddressOf`；endpoint 段为空的会话键照常解析，三段键只给出 platform）、实例的聊天记录与收件箱校验、沙盒页面都改用它。功能会话键在 plugin-runtime 与 console-protocol 中各保留一份（两者都是零依赖契约），由契约测试锁定语法、转义与错误文案一致。
+  - **聊天角色导出格式**：`@zhin.js/console-protocol` 新增 `CHAT_ROLES_EXPORT_FORMAT`、`CHAT_ROLES_EXPORT_VERSION`、`CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS`、`chatRolesBackupFileName()` 与 `isConsoleChatRolesExport()`，`zhin chat-roles export|import` 与实例的导出、导入和迁移前备份共用；实例导入现在与 CLI 一样要求四个列表都存在。
+
+- 45dcb9e: #1250 第 84 批：收尾第 83 批（Agent 管理命令改为 Root 命令）的复审问题。
+
+  - 命令只回应人：命令分发统一过滤非人类来源。消息的可信来源 `origin`（或没有可信来源时适配器自报的 `metadata.origin`）不是 `human` 时，这条消息不进任何命令——不执行、不回复无权限（permit 拒绝）、不给近似指令提示，对所有插件命令都生效；结局 `ignored_bot`（原因 `non_human_origin`，阶段 `command`）。过滤分两层：入站分类器判出的可信来源 `self` / `member` / `peer_bot` 在入站阶段就丢弃（结局 `ignored_self` / `ignored_bot`，阶段 `ingress`），中间件、事件处理器和命令都收不到；命令分发层的过滤是兜底，只对没有可信来源、靠 `metadata.origin` 自报的消息生效，这类消息中间件与事件处理器照常收到。「只回应人」只覆盖 PeerRegistry 里登记过的 zhin 机器人（以及出站台账认得出的本实例消息）：不在 PeerRegistry 里的第三方机器人会被分类器判成 `human`，命令照常响应。Agent 管理命令里各自的来源判断随之删除（结局由 `filtered_by_policy` 改为 `ignored_bot`）。
+  - `@zhin.js/core`：新增导出 `isNonHumanOrigin()`（`@zhin.js/core/runtime`，Agent 入站复用同一判定）；`InboundOutcomeSink` 新增可选 `reportCount()`；`ImOperationResourcesInput` 新增可选 `conversationSequence`（这条消息在会话里的序号）。
+  - 结局如实：指令什么都没返回、什么都没发，且执行期间自己记了结局时，分发层不再追加 `command_replied`（它的优先级会压过静默结局）。没有聊天角色的人发 `reset` 却没有清空时，结局记 `not_addressed`（原因 `clear_command`：群里未 @、AI 不回应他等）、`filtered_by_policy`（原因 `outbound_stopped`：控制面停了出站），直播间里记 `not_addressed`（原因 `live_room_clear`）；清空了但冷却期内没有再发确认时记 `cleared`。新增两条原因级结局说明（ADR 0061 表同步）。
+  - 直播间里没有聊天角色的人发 `reset`：保持静默，不清空也不进 AI 回合（文档写明）。
+  - `reset` 的清空路径带上这条消息的会话序号，发言闸门把截至这条消息的场景事件（如刚被禁言）折叠进来再判断。
+  - 分发租约只给 Root 自己分发的 Root 命令操作（Agent 管理命令）：插件命令 / handler 的操作资源里不再有分发租约，深路径导入内部令牌也拿不到，无法钉住旧快照代。操作的 owner 由框架绑定，不由调用方自报：交给插件的消息视图只为它自己的作者打开 Host 资源，自称 Root（`owner: snapshot.root`）时这次操作没有任何 Host 资源；`CommandIndex.dispatch` 从来源消息读操作资源时改从命令作者的视图读取（在执行策略计数之前读取）。
+  - 插件中间件 / handler / 按钮回调经 `CommandIndex.dispatch({ input, source: context.input })` 分发 Root 命令（项目自己的命令与宿主命令）照常执行，装不装 Agent 都一样，拿到的资源与直接发送一致（例如推理客户端），只是没有分发租约：消息视图经插件作者改绑（含 P → Q → Root、Root → P → Root 等多跳，记为第一个插件作者）时，Host 收到 `ImOperationResourcesInput.delegatedFrom`（新增可选字段）并只去掉分发租约。
+  - 分发租约不靠令牌保密：Agent 管理命令只认**本 Host 实例**签发的租约端口，并由 Host 侧用真实快照存储再校验一次。`createHostOperationResources()`（`@zhin.js/agent/runtime`）返回值新增 `isDispatchLease(port)`，只认这个工厂实例自己签发的端口（登记在实例私有的 WeakSet 里，不再是模块级登记：插件自己调用公开的 `createHostOperationResources()` 签出的端口不算）；`RuntimeManagementCommandHost` 新增必填 `isDispatchLease`，Agent Host 把自己那个实例的判定传给 `createRuntimeManagementCommands()`。`AgentRuntime` 新增 `ownsLease(lease)`，`AgentTurnIngressRoute.runManagementOperation()` / `clearAsCommand()` 用它校验命令交来的租约属于这个 Root 的真实 SnapshotStore，不属于就拒绝。调用方经显式 `operation` 自造资源视图、对租约令牌（id 可读）回答 `has` / `use` 的，拿不到租约；没有 Host 资源时同样不执行。需要分发租约的 Agent 管理命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）经插件转发（或自造 `operation`）时不执行，回复中英文提示请用户直接发送该命令（带这条消息的命令前缀，如「请直接发送 /reset。」）。
+  - `CommandIndex.dispatch`：调用方没传 `commandPrefix` 时用来源消息自身的 `commandPrefix`（帮助文本、命令里的 `formatCommand` 都带前缀）；显式传入消息自身的 `snapshot` 与不传等价——同样校验命令表、按 endpoint 过滤被关插件的命令（ADR 0050，之前显式传入会绕过）、拿到同样的资源；从来源消息读操作资源在执行策略计数之前，读取失败不占冷却额度。
+  - 结局如实：经插件转发（来源为框架消息、未传 `operation`）的命令以 UserFacingError 拒绝时，`CommandIndex.dispatch` 自己记这条消息的结局 `refused`（原因为命令的拒绝码，如 `direct_command_required`，阶段 `command`），不再只剩中间件的 `handler_replied`。`dispatch` 返回的 `value` 就是给用户的回复（含拒绝提示），中间件必须把它回复出去（文档示例改为 `return result.value`）；中间件不回复时用户收不到提示。`@zhin.js/feature-kit` 新增内部钩子 `operationInputOutcome` / `reportOperationInputOutcome()`，由框架消息实现。
+  - `createRuntimeManagementCommands()` 必须配合 Host 资源（同一个 `createHostOperationResources()` 实例的 `im` 端口与 `isDispatchLease`）。没有 Host 资源时（嵌入方没接），需要租约的管理命令即使用户直接发送也不执行，回复「管理命令在此实例不可用。」/「Management commands are not available on this instance.」，结局 `refused`（原因 `management_unavailable`，新增原因级结局说明，ADR 0061 表同步），不再误答「不能经插件转发执行，请直接发送」。
+
+### Patch Changes
+
+- 7f39b10: feat!: 出站模板占位符重组为分组字段，并按发送账号渲染命令前缀、菜单与命令写法（#1250 第 70 批）
+
+  **不兼容变更**：`TemplateContext` 字段重组，旧的顶层占位符 `${adapter}`、`${endpoint}`、`${endpointId}`、`${kind}`、`${conversationId}`、`${content}`、`${segments…}`、`${messageId}`、`${timestamp}`、`${mentioned}` 不再展开，会原样发出。所有占位符都至少两段，不再和配置加载时的环境变量引用（单个名字的 `${NAME}`）冲突。
+
+  - `@zhin.js/plugin-runtime`：`TemplateContext` 改为分组——`bot`（`adapter`、`endpoint`、`endpointId`、新增的 `prefix` 与 `menu`，新增导出类型 `TemplateBot`）、`conversation`（`kind`、`id`）、`sender`（`id`、`name`、`roles`）、`message`（`content`、`segments`、`id`、`timestamp`、`mentioned`）与新增的 `command`（发出消息的插件自己的命令在该账号下的写法，`${command.checkin}`、`${command.group.kick}`，命令名里的 `-` 写成 `_`，新增导出类型 `TemplateCommandPaths`）。由事件触发、没有入站消息的发送，由发送方插件经 `incoming.sender` 传入事件主体。
+  - `@zhin.js/core`：出站渲染按新结构填值；`${bot.menu}` / `${command.*}` 按这次发送的语言（`SendRequest.locale`，`$reply` 带入站消息的语言）取菜单关键词，没有时用项目语言，与入站 `message.commandMenu` / `formatCommand` 一致；`menuKeyword: false` 时 `${bot.menu}` 原样保留并按代告警一次（`reason=menu_disabled`）；`bot.prefix` / `bot.menu` 用与入站命令派发同一个 MessageDispatcher（同一个前缀解析器，含 `ImRuntime` 的 `commandPrefix` 覆盖）计算，只有文本含 `${` 时才计算，`${command.*}` 只在文本写了它时才列命令。模板仍是白名单路径替换、单次扫描；`command` 数据冻结、只有数据属性、不含其他插件的命令。
+  - `@zhin.js/plugin-group-suite`：**不兼容变更**——入群欢迎语与问答回答改用出站模板占位符，旧的 `{name}`、`{id}`、`{sender}`、`{sender.id}`、`{time}`、`{date}` 不再展开，会原样发出。欢迎语写 `${sender.name}` / `${sender.id}`（新成员作为数据传入，昵称里的占位符不会被展开）、`${bot.menu}`、`${bot.prefix}`、`${command.*}`；问答回答另可写 `${now.time}`、`${now.date}`（由插件按提问者语言填写），正则捕获组 `$1`–`$9` 作为不受信任内容发送，不会被当成模板。账号配置了命令前缀而欢迎语直接写「帮助」「菜单」「help」「menu」时，在该账号第一条群消息时打一条 warn（只对本插件实际负责欢迎的群：在 `welcomeConversations` 内、且未由 Agent 会话欢迎接管）。欢迎语与已存问答里的旧占位符（`{name}`、`{sender.id}`、`{time}`、单段 `${menu}` 等）首次用到时按账号与文本各告警一次并给出新写法，只告警，不兼容、不迁移。
+    - 回显用户数据的命令回复不再把数据当模板展开：teach / teach-regex 的确认、teach-list、forget、keyword-add / keyword-list / keyword-remove、积分与消息排行、mypoints、mystats 里引用的问题、回答、关键词、昵称与正则错误信息作为不受信任分段发送，按存储原样显示（此前教 `你好|你好 ${sender.name}` 的确认会显示「你好 Admin」）；只有插件自己的文案是模板。
+    - **公开导出的返回类型变化**：`tryTeachReply` 由 `Promise<string | null>` 变为 `Promise<SendContent | null>`；`teachAdd`、`teachList`、`teachForget`、`myPoints`、`pointsRank`、`statsRankText`、`myStatsText` 由 `Promise<string>` 变为 `Promise<SendContent>`（引用用户数据时是含不受信任分段的数组）。直接调用这些函数的代码需按 `SendContent` 处理，或交给 `$reply` / 出站链发送。
+  - `@zhin.js/agent`：Agent 会话入群欢迎（ADR 0037）的 `{nickname}` / `{group}` / `{rules_url}` 填入的值作为数据（`WelcomePart` 文本段新增可选 `literal: true`，发送时为不受信任分段），昵称里的 `${bot.menu}` 等不再被展开；运营者写的其余文本仍是出站模板。
+  - `@zhin.js/testing`：`PluginTestKit` 与 `zhin start` 一样安装出站模板 Host（测试自己提供时不覆盖）。
+  - `@zhin.js/gateway`：群欢迎用途页的提示改为新占位符写法。
+
+- 50b577d: #1250 第 75 批：群里无权限者发确认 / 审批 / 管理类命令时，机器人不回复、不执行，避免旁人乱操作刷屏；私聊照旧回复无权限原因，有权限的人操作出错（确认码过期、格式不对等）照常提示。这些拒绝都记为入站结局 `permission_denied`（群里 `reply: no`，私聊 `reply: yes`），Console「消息结局」可查；原有审计照常写。
+
+  - `@zhin.js/agent`：Agent 管理命令（`models`、`tree`、`fork`、`compact`、`reset`、`ai.health`）对非主人 / 受信任用户、审批卡命令 `approve <id>` / `deny <id>` 对不在审批人名单且不是能结算该自我变更卡的全局主人、主人命令 `approve …` 对非全局主人（全局主人在群里发仍提示改用私聊）、群规命令 `rule approve|reject|disable …` 对非群管理员 / 非审批人：在群聊与频道里不回复，消息在入站管理阶段终止，不会再进入 AI 回合（模型不会代为回答「没有权限」）；私聊回复不变。群规命令在频道等非群会话、或群规不可用时也先判审批人：非审批人静默，只有审批人收到「只能在对应的群里用」「群规不可用」。`rules` 列表、`memory` / `forget` 仍对所有人开放。`RuntimeManagementDeps`、`ImApprovalCommandInput`、`GroupRuleCommandInput`、`OwnerApprovalCommandContext` 新增可选回调 `onUnauthorized(reason)`：处理器在回复是「无权限拒绝」时调用它（返回的文案不变），由入站阶段决定群里静默、私聊回复。
+  - `@zhin.js/agent`（不兼容）：删除只为兼容保留的 `ingressMessages.cleared` 键（清空确认文案只在清空命令里使用）。
+  - `@zhin.js/core`：别人提问的确认 / 选择按钮被旁人点击时，群里不再回复「交互已过期」（提问仍属于被提问的人，结局 `permission_denied`，原因 `interaction_not_own`）；旁人打字回答本来就不会被当成回答，现有测试锁定。带 `permit` 的按钮被不满足条件的人点击时，群里不再回复「你不能使用这个按钮」，私聊照旧说明。提问结束后 10 分钟内（最多记 512 个按钮）仍记得它是问谁的：旁人在群里点已结束提问的按钮也不再回复「交互已过期」，被提问的人自己点仍提示过期，记录过期或被挤掉后按原样提示。插件命令的 `permit` 不满足、且不满足的是对发送者的条件（zhin 角色、`platform:*` / `platform-role:*` / `platform-permission:*`、`user(…)`、插件自定义 permit）时，群聊 / 频道里不再回复「没有权限执行此指令」（也不调用自定义命令反馈渲染器），结局 `permission_denied` 记 `reply: no`；场合条件（`private()`、`group()` 等）与机器人自身条件（`bot:*`）照常回复，例如 `config` 在群里仍对所有人回复。不新增公共导出。
+  - `@zhin.js/command`：命令被拒时，若最先不满足的是场合或机器人条件、而发送者也不满足某个对发送者的条件，拒绝结果改为指名后者（`denial.permit`），使群里对无权限者静默；例如 group-suite 的 `teach`（`group()` + `trusted`）被不受信任的人在私聊里发时，回复改为说明需要 zhin 角色。
+  - `zhin.js`：聊天 `restart` 对非全局主人在群里不回复（审计原因 `not-global-owner`）；另一位全局主人替别人确认他发起的重启时，审计与结局原因记 `confirmation-not-own`，但他有权限，群里照常提示「没有待确认的重启」；主人自己的确认过期或参数不对照常提示。`功能` / `角色` 自助在任何范围都没有 admin 时先按 `not-admin` 拒绝（`角色` 的用法错误、找不到人等格式类拒绝不再在群里回复无权限旁人），该范围没有 admin、角色不足以授予 / 撤销（`not-admin`、`role-denied`、`owner-denied`、`peer-denied`），或确认码属于别人（新拒绝原因 `confirm-not-own`；确认者本身是全局 admin 时照常提示）时，群里不回复，私聊照旧说明；有 admin 的人的用法错误、确认码过期等仍回复。不新增公共导出。
+
+- d3aae4d: #1250 第 81 批：失败、拒绝、限流文案统一用 `createMessages` 中英双语目录，并在 ADR 0061 §1.8 写明三类失败文案（聊天失败话术、消息结局模板、命令反馈）各自的界面与边界。
+
+  - `@zhin.js/core`：消息结局模板（`formatMessageOutcome`）改由 `createMessages` 渲染，加载时检查中英文占位符一致；缺值仍显示 `—`，文案不变；模板用到 `MESSAGE_OUTCOME_PLACEHOLDERS` 以外的占位符时加载即报错；原因级模板只按自有键查找，`reason` 为 `constructor` 等原型键时回落到码级模板，不再抛错。出站媒体被拒时的占位文本（来源不被允许 / 地址不被允许）合成一个目录；`record`（语音）段在来源被拒时显示「[语音未发送：媒体来源不被允许]」/ "[audio not sent: media source not allowed]"（原为「附件」/ "attachment"）。
+  - `@zhin.js/agent`：模型没写出可见回复时的英文兜底按被拒工具数量用单复数（一个工具为 "The required tool `x` was denied and did not run"，原为 "tools … were"）；中文不变，`/clear` 照写（它不看命令前缀）。回合末「操作未执行」说明、后台协作的失败 / 停止 / 补充行改用 `createMessages`，文案不变。（不兼容）删除 `@zhin.js/agent/runtime` 的导出 `renderTriggerError()` 与内置的「❌ AI 处理失败: {error}」模板（生产路径本就不会用到它）：回合失败的聊天回复只经 `renderChatTurnError()`，配置了 `ai.trigger.errorTemplate` 时照旧替换 `{error}` 发出（错误信息里的 `$&`、`$'` 等按原文插入，不再被当作替换模式），未配置时是聊天失败话术。
+
+- 74eb13a: 「这条消息是不是命令」只有一套判断，游戏短口令改走命令系统（#1250 第 82 批）。
+
+  - AI 入口（触发匹配、插话判断、直播间、群聊合并窗口）判断「命令样消息」统一为：该消息所在适配器 / 账号的真实 `commandPrefix`（非空时）加上 `ai.trigger.ignorePrefixes`（默认 `/`、`!`、`！`）。`commandPrefix` 为 `''` 时不加入，不会把所有消息都当命令；配置了 `ignorePrefixes` 时替换默认三项，但真实前缀始终算命令。消息只有在没有命令认领后才会进入 Agent，这里只决定「未被认领的命令样消息」不当 AI 消息、不进合并窗口。
+  - 合并窗口去掉写死的 `/^[/#]/`：被 @ 后的内容（`@bot /status`）也走同一判断；`#` 只有是该适配器的命令前缀时才算命令（原始消息以 `#` 触发前缀开头时照旧不进窗口）。
+  - 行为变化：适配器 `commandPrefix` 为 `#` 等时，以该前缀开头而没有命令认领的消息不再被 `#` 触发前缀交给 AI。
+  - `@zhin.js/agent/runtime` 的 `hasIgnoredTriggerPrefix(text, trigger, commandPrefix)` 新增必填参数 `commandPrefix`（不兼容）。
+  - 游戏短口令（`21点 开始`、`接龙 继续`、`猜拳 石头`、`轮盘 加入`……）不再由各游戏的 `middlewares/*-alias` 入站中间件接管，改为命令自身的 `match`（`gameCommandMatch()`：整句正好是口令，或口令加一个该游戏认识的动作词）。删除 `@zhin.js/game-kit` 的 `defineGameCommandAliasMiddleware()` 与类型 `GameCommandAliasRoute`，以及 10 个游戏的 `middlewares/*-alias`，不留兼容。
+  - 行为变化（更一致）：短口令现在照常经过指令前缀、permit、冷却与结局记录；不再无条件剥掉开头的 `/`——适配器配置了 `commandPrefix` 时要带该前缀，未配置时 `/21点` 不再是命令。
+  - 新增 `二十一点` 短口令；`二十一点 开会`、`21点 开会`、`接龙 今天天气不错` 这类聊天不是命令（旧中间件对 `21点 <任意词>` 会接管）。21 点新增动作 `要牌` / `停牌`（`hit` / `stand`）。
+  - `@zhin.js/game-kit`：新增 `gameCommandMatch()`、`gameCommandAction()`、`normalizeBjAction()`、`gameActionWords()` 与类型 `GameActionTableId`；删除 `isTttAction()`、`isAdvAction()`、`isRpsAction()`、`isGuessAction()`、`isDiceAction()`、`isChainAction()`、`isRiddleAction()`（只供已删除的别名中间件使用）。21 点不再各写两份动作归一化，统一用动作表。
+  - 合并窗口：`/` 开头（原始消息或被 @ 后的内容）始终不进合并窗口，即使 `ignorePrefixes` 改成了别的（如 `['~']`）、适配器前缀也不是 `/`——`/` 是各平台通用的斜杠命令记号，这样的消息单独成一轮，不与相邻消息拼成一句。只影响合并窗口，不影响 AI 触发判断。
+  - 游戏进行中发本游戏的命令口令不再被当成作答：猜谜进行中发 `猜谜` / `猜谜语`、接龙进行中发 `接龙` / `成语接龙`（及口令加已知动作）会交给命令（回帮助），不当谜底 / 成语，不扣失误、不判负。判断按该会话真实的指令前缀：配置了 `/` 时 `/猜谜` 是命令、裸 `猜谜` 仍是作答。`@zhin.js/game-kit` 新增 `routesToGameCommand(input, pattern)` 供自由文本作答的中间件使用。
+  - （不兼容）`@zhin.js/game-kit` 的游戏定义（`RuntimeRegisteredGame` / `defineGame()`）删除 `commandPrefix` 字段：各游戏写死的 `'/21点'` 一类值不再存在，入口只由 `commandPath` 与命令系统决定。原值去掉 `/` 后并入各游戏的 `aliases`（`骰子`、`地牢`、`猜数`、`接龙`、`轮盘`、`猜拳`、`冒险`、`井字棋`、`猜谜`），`排行 骰子`、`游戏大厅 骰子` 照旧能找到游戏。
+  - 游戏大厅 AI 工具 `game_catalog` 的 `startCommand` 不再是写死 `/` 的 `/猜数 开始`：改用与 `games` 命令同源的命令索引渲染（`GameIndex.formatCommand`），工具调用没有会话前缀，因此不带前缀（如 `猜数字 开始`），工具说明提示模型在配置了指令前缀的会话里加上前缀；拿不到命令索引时退回 `commandPath`（如 `guess 开始`）。`toGameCatalogEntry()` 新增可选第二参数。
+  - 各游戏 README 的命令示例注明 `/` 只是示例前缀、按适配器 `commandPrefix` 书写，并把已不存在的 `/游戏` 改为 `游戏大厅`；`docs/ai` 注明与 `commandPrefix` 相同的触发前缀（如 `#`）不再生效。
+
+- a5ac09e: #1250 第 85 批：收紧入站路由与 Agent 管理命令的分发租约。
+
+  - `ingressRouteToken` 改为 Root 私有 token（`createRootPrivateToken`）：插件作用域 `use` / `has` 读不到它，运行时快照的公开资源里也没有它。IM 运行时改经 Root 的真实快照存储按消息租约读取：`resolveIngressRoute(snapshots, lease)`（签名变化，原来是 `resolveIngressRoute(snapshot)`）；`executeInboundTurnSpine` 不再从快照公开资源回退读取路由，只用 `envelope.ingressRoute`。
+  - 令牌下承载的也只是入站钩子的窄外观：新增 `createIngressRouteFacade(route)`（`@zhin.js/core/runtime`），返回冻结对象，只有绑定到路由的 `preRoute` / `shouldRouteBeforeDispatch` / `route`；Agent Host 不再提供 `AgentTurnIngressRoute` 对象本身，路由的选项（Agent 运行时、快照存储）与 `clearAsCommand` / `runManagementOperation` 都不经令牌暴露。`AgentTurnIngressRoute` 的选项改为 ECMAScript 私有字段（`#options`）。
+  - 纵深防御：`AgentTurnIngressRoute` 的 `route` / `preRoute` 只处理 Root 真实快照存储签发且仍有效的租约（`AgentRuntime.ownsLease(lease) && lease.active`）；伪造或他人的租约不路由（返回 `false`，静默，记一条 warn 日志），伪造消息无法借此执行清空等操作。
+  - 分发租约只认本 Host 分发交出的：`createHostOperationResources()` 返回值新增 `holdsDispatchLease(lease)`（只认本工厂签发的租约端口 `retain()` 交出的租约），`AgentTurnIngressRoute` 新增可选项 `holdsDispatchLease`；管理路径除了用真实快照存储校验，还要求租约是本 Host 分发交出的，直接从快照存储 `acquire()` 的租约不执行。**行为变化（嵌入方）**：自行装配时必须把同一个 `createHostOperationResources()` 实例的 `holdsDispatchLease` 传给 `AgentTurnIngressRoute`，不传时 `/models`、`/health`、`/tree`、`/fork`、`/compact`、`/reset` 一律以 `dispatch_lease_rejected` 拒绝；`runManagementOperation` 收到没有 `retainLease` 的分发时也同样拒绝（与 `clearAsCommand` 一致）。校验抛错时，已 retain 的租约在抛出前释放。
+  - Host 侧拒绝租约时不再抛普通错误：以 UserFacingError 拒绝（结局 `refused`，原因 `dispatch_lease_rejected`），回复「这条管理命令没有通过本实例 Agent Host 的分发校验，没有执行。」（英文同义）。
+  - `createRuntimeManagementCommands()` 新增可选项 `hostResourcesInstalled`：Host 接好操作资源时传 `true`（`zhin start` 装配的实例已传），调用方自传的 `operation` 即使不提供任何资源，管理命令的结局也是 `direct_command_required`（之前误报 `management_unavailable`）。`imOperationResourcesToken` 是 Root 私有 token，不在运行时快照的公开资源里，所以由 Host 显式声明，而不是从快照判断。
+  - 结局说明新增原因级模板 `refused` / `direct_command_required` 与 `refused` / `dispatch_lease_rejected`，ADR 0061 表同步；`docs/ai/agent.md`（中英文）补充说明。
+
+- 884d827: 确认 / 取消词规范化去掉末尾标点与空白时改为逐字符从末尾扫描（线性时间），不再用 `[...]+$` 正则，避免一长串空白后接其他字符时回溯变慢（CodeQL：多项式正则）。
+- Updated dependencies [0899424]
+- Updated dependencies [7f39b10]
+- Updated dependencies [50b577d]
+- Updated dependencies [49f9042]
+- Updated dependencies [a05eb73]
+- Updated dependencies [ee51324]
+- Updated dependencies [58ce469]
+- Updated dependencies [45dcb9e]
+  - @zhin.js/im-contract@1.3.1
+  - @zhin.js/adapter@1.6.0
+  - @zhin.js/plugin-runtime@1.5.0
+  - @zhin.js/command@1.5.0
+  - @zhin.js/permission@1.3.0
+  - @zhin.js/kernel@1.6.0
+  - @zhin.js/jsx@1.1.16
+  - @zhin.js/feature-kit@1.1.21
+  - @zhin.js/handler@1.1.22
+  - @zhin.js/component@1.2.2
+  - @zhin.js/middleware@1.1.22
+  - @zhin.js/schedule-feature@1.1.21
+
 ## 1.13.1
 
 ### Patch Changes
