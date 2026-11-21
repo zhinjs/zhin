@@ -6,7 +6,7 @@
  * `writeOnly` / `secret` / password annotations), or — with no annotation — when its name
  * looks like a credential (`token`, `password`, `secret`, `apiKey`, `privateKey`, `*Token`, …).
  */
-import type { PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { environmentReferencesIn, parseEnvUri, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 export type ConfigSchemaNode = Readonly<Record<string, unknown>>;
 
@@ -88,9 +88,13 @@ export function configSchemaChildren(nodes: readonly ConfigSchemaNode[], key: st
   return next;
 }
 
-/** `${VAR}` / `env://VAR` — a value that refers to the environment instead of holding a secret. */
+/**
+ * A value that refers to the environment instead of holding a secret: it contains a `${VAR}` /
+ * `${VAR:-default}` / `${VAR:=default}` reference expansion would replace, or is an `env://VAR`
+ * URI. Text that merely contains `${` (e.g. `a${b`, `${1X}`) is a literal.
+ */
 export function isConfigEnvironmentReference(value: string): boolean {
-  return /\$\{|^env:\/\//u.test(value);
+  return environmentReferencesIn(value).length > 0 || parseEnvUri(value) !== undefined;
 }
 
 export interface LiteralConfigSecret {

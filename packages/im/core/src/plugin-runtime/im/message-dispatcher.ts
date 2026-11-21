@@ -6,10 +6,11 @@ import {
 } from '@zhin.js/command';
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { resolveLocale, type CapabilityId, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
 import { commandMenuReply, renderCommandFeedback } from './command-feedback.js';
 import { gatedCommandIndex } from './feature-gate.js';
+import { isNonHumanOrigin } from './inbound-origin.js';
 
 const logger = getLogger('command');
 
@@ -101,6 +102,8 @@ export class MessageDispatcher {
    * is checked; a pending prompt ends when the sender sends a command meanwhile.
    */
   routesToCommand(message: Message, snapshot: RuntimeSnapshot): boolean {
+    // #1250 第 84 批: a message from something other than a person reaches no command (inbound spine).
+    if (isNonHumanOrigin(message)) return false;
     const prefix = message.commandPrefix ?? this.resolvePrefix(message, snapshot);
     let input = normalizeCommandInputText(message);
     if (prefix && !input.startsWith(prefix)) return false;
@@ -151,7 +154,10 @@ export class MessageDispatcher {
     const matchInput = structuredInput ?? input;
     note('dispatch', 'started');
     const result = await commands.dispatch({ input: matchInput, source: message, interactionFactory: interactionFactory, commandPrefix: prefix, snapshot: snapshot, operation: readOperationInputResources(message, snapshot) });
-    const feedback = await renderCommandFeedback(result, message, snapshot);
+    // The global owner refusal names the Root `bind` command as it is sent here (prefix included),
+    // the same text `restart` / `config` build with `formatCommand('bind')`.
+    const bindCommand = result.status === 'denied' ? commands.formatCommand(snapshot.root, 'bind', prefix, resolveLocale(message.locale)) : undefined;
+    const feedback = await renderCommandFeedback(result, message, snapshot, bindCommand);
     if (feedback) return dispatchOutcome(Object.freeze({ ...result, value: feedback.content }), feedback.owner);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');

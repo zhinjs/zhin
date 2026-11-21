@@ -169,4 +169,145 @@ describe('previewUpdate', () => {
     expect(lines.some(line => line.includes('无法从 registry 查询：gone'))).toBe(true);
     expect(lines.some(line => line.startsWith('共 2 处升级') && line.includes('网关会先停止实例'))).toBe(true);
   });
+
+  // #1250 update-dry-run-hides-pinned-zhin: exact Zhin versions stay, but the preview names newer releases.
+  describe('Zhin packages locked to an exact version', () => {
+    const latestTags: Record<string, string> = { 'zhin.js': '2.0.0', '@zhin.js/core': '1.9.1' };
+    const latestVersion = async (name: string) => latestTags[name];
+    beforeEach(() => {
+      write('pnpm-workspace.yaml', 'allowBuilds:\n  esbuild: true\n');
+      write('package.json', { name: 'bot', dependencies: { 'zhin.js': '1.4.0', '@zhin.js/core': '=1.8.0', left: '^1.0.0' } });
+      write('node_modules/@zhin.js/core/package.json', { name: '@zhin.js/core', version: '1.8.0' });
+    });
+
+    it('lists them with current and latest version and points at zhin migrate --include-pinned', async () => {
+      const preview = await previewUpdate(root, [], { publishedVersions: lookup, latestVersion });
+      expect(preview.members).toHaveLength(1);
+      expect(preview.members[0]).toMatchObject({
+        changes: [],
+        pinned: [
+          { name: '@zhin.js/core', range: '=1.8.0', current: '1.8.0', latest: '1.9.1', upgrade: 'include-pinned' },
+          { name: 'zhin.js', range: '1.4.0', current: '1.4.0', latest: '2.0.0', upgrade: 'include-pinned' },
+        ],
+      });
+      const lines = renderUpdatePreview(preview, false);
+      const at = lines.findIndex(line => line.startsWith('已锁定、有新版本的 Zhin 包（精确版本，zhin update 不会升级'));
+      expect(at).toBeGreaterThan(0);
+      expect(lines.slice(at + 1, at + 4)).toEqual([
+        '  @zhin.js/core  1.8.0 → 1.9.1',
+        '  zhin.js        1.4.0 → 2.0.0',
+        '  升级根项目的锁定：zhin migrate --include-pinned（先加 --dry-run 预览；精确版本保持精确）',
+      ]);
+      expect(lines).toContain('所有依赖都已是范围内的最新版本。');
+    });
+
+    it('compares with the latest dist-tag, not the newest published version', async () => {
+      // 2.0.0 is published but `latest` still points at 1.4.2 (as zhin migrate reads it).
+      const preview = await previewUpdate(root, [], { publishedVersions: lookup, latestVersion: async name => (name === 'zhin.js' ? '1.4.2' : latestTags[name]) });
+      expect(preview.members[0]!.pinned).toEqual([
+        { name: '@zhin.js/core', range: '=1.8.0', current: '1.8.0', latest: '1.9.1', upgrade: 'include-pinned' },
+        { name: 'zhin.js', range: '1.4.0', current: '1.4.0', latest: '1.4.2', upgrade: 'include-pinned' },
+      ]);
+    });
+
+    it('omits the section when the pinned versions are the latest', async () => {
+      const newest = async (name: string) => (name === 'zhin.js' ? ['1.4.0'] : name === '@zhin.js/core' ? ['1.8.0', '1.9.0-beta.1'] : published[name]);
+      const preview = await previewUpdate(root, [], { publishedVersions: newest, latestVersion: async name => (name === 'zhin.js' ? '1.4.0' : '1.8.0') });
+      expect(preview.members[0]!.pinned).toBeUndefined();
+      const lines = renderUpdatePreview(preview, false);
+      expect(lines.some(line => line.includes('已锁定') || line.includes('--include-pinned'))).toBe(false);
+    });
+
+    it('omits the section without an error when the registry cannot be queried', async () => {
+      const offline = async () => undefined;
+      const preview = await previewUpdate(root, [], { publishedVersions: offline, latestVersion: offline });
+      expect(preview.members[0]!.pinned).toBeUndefined();
+      const lines = renderUpdatePreview(preview, false);
+      expect(lines.some(line => line.includes('已锁定') || line.includes('--include-pinned'))).toBe(false);
+      expect(lines.some(line => line.includes('无法从 registry 查询'))).toBe(true);
+    });
+
+    it('treats v1.2.3 as a lock and a locked prerelease as older than the release', async () => {
+      write('package.json', { name: 'bot', dependencies: { 'zhin.js': 'v1.4.0', '@zhin.js/core': '1.9.1-beta.2' } });
+      write('node_modules/@zhin.js/core/package.json', { name: '@zhin.js/core', version: '1.9.1-beta.2' });
+      const withBeta = async (name: string) => (name === '@zhin.js/core' ? ['1.8.0', '1.9.1-beta.2', '1.9.1'] : published[name]);
+      const preview = await previewUpdate(root, [], { publishedVersions: withBeta, latestVersion });
+      expect(preview.members[0]).toMatchObject({
+        changes: [],
+        pinned: [
+          { name: '@zhin.js/core', range: '1.9.1-beta.2', current: '1.9.1-beta.2', latest: '1.9.1' },
+          { name: 'zhin.js', range: 'v1.4.0', current: '1.4.0', latest: '2.0.0' },
+        ],
+      });
+      const lines = renderUpdatePreview(preview, false);
+      // `v1.4.0` names the installed 1.4.0: no extra lock note.
+      expect(lines).toContain('  zhin.js        1.4.0 → 2.0.0');
+    });
+
+    it('lists a lock that is not installed (or installed at another version) with the installed version', async () => {
+      fs.rmSync(path.join(root, 'node_modules/@zhin.js/core'), { recursive: true });
+      write('node_modules/zhin.js/package.json', { name: 'zhin.js', version: '1.3.0' });
+      const preview = await previewUpdate(root, [], { publishedVersions: lookup, latestVersion });
+      expect(preview.members[0]!.pinned).toEqual([
+        { name: '@zhin.js/core', range: '=1.8.0', current: undefined, latest: '1.9.1', upgrade: 'include-pinned' },
+        { name: 'zhin.js', range: '1.4.0', current: '1.3.0', latest: '2.0.0', upgrade: 'include-pinned' },
+      ]);
+      // `zhin update` still installs the locked versions.
+      expect(preview.members[0]!.changes).toEqual([
+        { name: '@zhin.js/core', range: '=1.8.0', current: undefined, target: '1.8.0', latestOutsideRange: '1.9.1' },
+        { name: 'zhin.js', range: '1.4.0', current: '1.3.0', target: '1.4.0', latestOutsideRange: '2.0.0' },
+      ]);
+      const lines = renderUpdatePreview(preview, false);
+      expect(lines).toContain('  @zhin.js/core  未安装 → 1.9.1（锁定 =1.8.0）');
+      expect(lines).toContain('  zhin.js        1.3.0 → 2.0.0（锁定 1.4.0）');
+    });
+
+    it('says a workspace member\'s lock moves with plain zhin migrate unless the root locks it too', async () => {
+      write('pnpm-workspace.yaml', 'packages:\n  - plugins/*\n');
+      write('package.json', { name: 'bot', dependencies: { 'zhin.js': '1.4.0', left: '^1.0.0' } });
+      write('plugins/foo/package.json', { name: 'foo', dependencies: { '@zhin.js/core': '1.8.0', 'zhin.js': '1.4.0' } });
+      const preview = await previewUpdate(root, [], { publishedVersions: lookup, latestVersion });
+      expect(preview.members[1]).toMatchObject({
+        path: 'plugins/foo',
+        pinned: [
+          { name: '@zhin.js/core', range: '1.8.0', current: '1.8.0', latest: '1.9.1', upgrade: 'migrate' },
+          { name: 'zhin.js', range: '1.4.0', current: '1.4.0', latest: '2.0.0', upgrade: 'include-pinned' },
+        ],
+      });
+      const lines = renderUpdatePreview(preview, false);
+      expect(lines).toContain('  @zhin.js/core  1.8.0 → 1.9.1（plugins/foo；zhin migrate 会随根升级）');
+      expect(lines).toContain('  zhin.js        1.4.0 → 2.0.0（plugins/foo；根目录也锁定，zhin migrate --include-pinned 时随根升级）');
+    });
+
+    it('treats every root specifier zhin migrate keeps (v1.4.0, =1.4.0, link:, gitlab:) as the root\'s lock, as migrate does (#1250 B-6)', async () => {
+      write('pnpm-workspace.yaml', 'packages:\n  - plugins/*\n');
+      write('plugins/foo/package.json', { name: 'foo', dependencies: { 'zhin.js': '1.4.0' } });
+      for (const [rootSpec, upgrade] of [['v1.4.0', 'include-pinned'], ['=1.4.0', 'include-pinned'], ['link:../zhin', 'include-pinned'], ['gitlab:me/zhin', 'include-pinned'], ['^1.4.0', 'migrate']] as const) {
+        write('package.json', { name: 'bot', dependencies: { 'zhin.js': rootSpec } });
+        const preview = await previewUpdate(root, [], { publishedVersions: lookup, latestVersion });
+        const member = preview.members.find(entry => entry.path === 'plugins/foo');
+        expect(member?.pinned, rootSpec).toEqual([{ name: 'zhin.js', range: '1.4.0', current: '1.4.0', latest: '2.0.0', upgrade }]);
+      }
+    });
+
+    it('skips locks decided by an override, in optionalDependencies, or written as npm: / workspace:', async () => {
+      write('package.json', {
+        name: 'bot',
+        dependencies: { 'zhin.js': '1.4.0', '@zhin.js/agent': 'npm:@zhin.js/agent@1.0.0', '@zhin.js/tool': 'workspace:*' },
+        optionalDependencies: { '@zhin.js/core': '1.8.0' },
+        pnpm: { overrides: { 'zhin.js': 'link:../zhin' } },
+      });
+      const seen: string[] = [];
+      const preview = await previewUpdate(root, [], {
+        publishedVersions: async name => { seen.push(name); return published[name] ?? ['1.0.0', '2.0.0']; },
+        latestVersion: async name => (name === '@zhin.js/core' ? '1.9.1' : '2.0.0'),
+      });
+      expect(preview.members[0]!.pinned).toBeUndefined();
+      expect(preview.members[0]!.overridden).toEqual(['zhin.js（link:../zhin）']);
+      const lines = renderUpdatePreview(preview, false);
+      expect(lines.some(line => line.includes('已锁定'))).toBe(false);
+      expect(seen).not.toContain('@zhin.js/agent');
+      expect(seen).not.toContain('@zhin.js/tool');
+    });
+  });
 });

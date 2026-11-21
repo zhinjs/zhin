@@ -1,6 +1,7 @@
 import { defineCommand } from 'zhin.js/command';
 import {
   ghApiMessage,
+  ghDate,
   parsePositiveInt,
   requireRepo,
   resolveGhClient,
@@ -30,7 +31,7 @@ export default defineCommand({
     };
     return [
       `#${i.number} ${i.title}`,
-      `${i.user?.login ?? '?'} | ${i.state} | ${i.created_at?.split('T')[0]}`,
+      `${i.user?.login ?? '?'} | ${i.state} | ${ghDate(i.created_at)}`,
       i.labels?.length ? i.labels.map((l) => l.name).filter(Boolean).join(', ') : null,
       i.body ? `\n${i.body.slice(0, 800)}${i.body.length > 800 ? '...' : ''}` : '',
       i.html_url ? `\n${i.html_url}` : null,

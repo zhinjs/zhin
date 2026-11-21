@@ -1,14 +1,22 @@
 import { createMessages } from '@zhin.js/plugin-runtime';
 
 export const managementMessages = createMessages({
-  denied: { 'zh-CN': '⚠️ 仅聊天角色 owner / admin / trusted 可使用此管理指令。', en: '⚠️ Only chat roles owner / admin / trusted can use this management command.' },
   models: { 'zh-CN': '🤖 可用模型:', en: '🤖 Available models:' },
   more: { 'zh-CN': '  ... 还有 {count} 个', en: '  ... {count} more' },
-  usage: { 'zh-CN': 'ℹ️ 用法：{command}', en: 'ℹ️ Usage: {command}' },
   archived: { 'zh-CN': '✅ 已归档当前会话，下次 @ 将使用新上下文', en: '✅ The current session was archived. The next mention will start a new context.' },
   noSession: { 'zh-CN': 'ℹ️ 无活跃会话可归档', en: 'ℹ️ No active session to archive.' },
+  // `{command}`: the command as the sender would send it (prefix included). #1250 第 84 批: a plugin forwarded it.
+  directCommandRequired: { 'zh-CN': 'ℹ️ 该命令不能经插件转发执行，请直接发送 {command}。', en: 'ℹ️ This command cannot run when a plugin forwards it. Send {command} directly.' },
+  // #1250 第 84 批: the embedder registered the commands without the Agent Host's operation resources.
+  managementUnavailable: { 'zh-CN': 'ℹ️ 管理命令在此实例不可用。', en: 'ℹ️ Management commands are not available on this instance.' },
+  // #1250 第 85 批: the Host refused the dispatch lease the command handed it (not one this Host's dispatch handed out).
+  dispatchLeaseRejected: { 'zh-CN': 'ℹ️ 这条管理命令没有通过本实例 Agent Host 的分发校验，没有执行。', en: 'ℹ️ This management command failed the Agent Host\'s dispatch check on this instance and was not run.' },
   health: { 'zh-CN': '🏥 AI 服务健康状态:', en: '🏥 AI service health:' },
+  memoryUnavailable: { 'zh-CN': 'ℹ️ 未启用长期记忆。', en: 'ℹ️ Long-term memory is not enabled.' },
+  memoryIdentity: { 'zh-CN': 'ℹ️ 请在有真实发送者身份的聊天中查看你的记忆。', en: 'ℹ️ View your memories from a chat with a sender identity.' },
   noMemory: { 'zh-CN': 'ℹ️ 目前没有关于你的记忆。', en: 'ℹ️ There are no memories about you.' },
+  // `{command}`: the `memory` command as sent here (prefix included).
+  memoryPrivateOnly: { 'zh-CN': '🔒 记忆只在私聊里列出，请私聊机器人发送 {command} 查看你的记忆。', en: '🔒 Memories are listed in private chats only. Send {command} to the bot in a private chat to see yours.' },
   memories: { 'zh-CN': '🧠 关于你的记忆（{count} 条）：', en: '🧠 Memories about you ({count}):' },
   forgetHint: { 'zh-CN': '发送 {command} <key 或 id> 遗忘一条，{command} all 全部遗忘。', en: 'Send {command} <key or id> to forget one memory, or {command} all to forget all.' },
   forgetUsage: { 'zh-CN': 'ℹ️ 用法：{command} <key 或 id>，或 {command} all', en: 'ℹ️ Usage: {command} <key or id>, or {command} all' },

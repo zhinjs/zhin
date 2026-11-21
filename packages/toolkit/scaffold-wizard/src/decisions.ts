@@ -1,5 +1,6 @@
+import { parseEnvUri, type Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'node:path';
@@ -26,7 +27,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 /** An explicitly requested optional integration. Existing AI configuration is preserved. */
-export async function configureTypeSafeDecisions(config: Readonly<Record<string, unknown>>, locale: 'zh-CN' | 'en' = 'zh-CN', proposal: unknown = {}): Promise<TypeSafeSetupConfig> {
+export async function configureTypeSafeDecisions(config: Readonly<Record<string, unknown>>, locale: Locale = 'zh-CN', proposal: unknown = {}): Promise<TypeSafeSetupConfig> {
   if (!hasChatAgent(config)) throw new Error(wizardText(locale, "先运行 zhin setup --ai 配置聊天模型，再运行 zhin setup --decisions。Jev 决策模型不能替代聊天模型。"));
   console.log(chalk.blue(wizardText(locale, "\nTypeSafe Jev：选择 Agent / Skill / Tool 的可选决策服务。")));
   console.log(chalk.gray(wizardText(locale, "shadow 仅记录建议，不改变已有行为；active 启用推荐。审核默认关闭。调用会向外部服务发送经过权限过滤的请求与候选描述。")));
@@ -38,7 +39,7 @@ export async function configureTypeSafeDecisions(config: Readonly<Record<string,
   ]);
   const reference = record(record(record(proposal).accounts)[answers.instanceKey]).auth;
   const source = record(reference).source;
-  const existingVariable = typeof source === 'string' ? /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/.exec(source)?.[1] : undefined;
+  const existingVariable = parseEnvUri(source);
   return { ...answers, envVar: existingVariable ?? decisionKeyVariable(answers.instanceKey) };
 }
 
@@ -96,7 +97,7 @@ export async function saveTypeSafeSetupDependencies(projectDir: string, setup: T
 }
 
 /** Local checks only; never sends a paid API request or returns credential values. */
-export function diagnoseDecisionConfig(input: Readonly<{ config: Readonly<Record<string, unknown>>; packageJson: unknown; plan?: unknown; locale?: 'zh-CN' | 'en' }>): string[] {
+export function diagnoseDecisionConfig(input: Readonly<{ config: Readonly<Record<string, unknown>>; packageJson: unknown; plan?: unknown; locale?: Locale }>): string[] {
   const { config, packageJson, locale = 'zh-CN' } = input;
   const ai = record(config.ai);
   if (Object.hasOwn(ai, 'decisions')) return [locale === 'en' ? 'Legacy ai.decisions requires explicit migration.' : '旧 ai.decisions 需要显式迁移。'];

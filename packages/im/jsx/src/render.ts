@@ -39,6 +39,10 @@ const UNITLESS_STYLES = new Set([
   'tab-size', 'widows', 'z-index', 'zoom',
 ]);
 
+/**
+ * Escapes `&`, `<`, `>`, `"` and `'`. The same escaper as `escapeHtml` of `@zhin.js/plugin-runtime`
+ * (this leaf package cannot depend on it); `tests/contracts/escape-html.test.ts` locks the two together.
+ */
 export function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');

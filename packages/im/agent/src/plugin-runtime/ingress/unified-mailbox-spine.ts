@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { InferenceOperationScope } from '@zhin.js/ai/provider';
 import { readOperationSession, type AITriggerConfig, type VenueProjector, type VenueRegistry } from '@zhin.js/core';
-import { reportInboundOutcome } from '@zhin.js/core/runtime';
+import { isNonHumanOrigin, reportInboundOutcome } from '@zhin.js/core/runtime';
 import type {
   GroupRuleDefaultOutcome,
   GroupRuleViolationOutcome,
@@ -14,7 +14,7 @@ import type {
   RuntimeSceneEventSignal,
   SendContent,
 } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { conversationRefKey, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createMessages, type Locale, type PluginId, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { HostMailbox } from '../../collaboration/host-mailbox.js';
@@ -30,13 +30,17 @@ import { AmbientEngagement } from './ambient-engagement.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
 import { isClearCommand, type InboundAudioUrlTranscriber } from './content.js';
+import { answerClearCommand, ClearConfirmCooldown, clearSessionContext, matchClearCommand, sendFixedReply } from './clear-command.js';
 import { inboundVoiceSegmentsFromPlatform } from './request-capabilities.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
+import type { AgentCommandPresentation } from '../../init/command-presentation.js';
 import { auditAmbientDecision } from './ingress-ambient-stage.js';
 import { auditStaleReply, reactionOf } from './ingress-delivery-helpers.js';
 import { tryHandleIngressCommands } from './ingress-management-stage.js';
+import { runManagementOperation } from './ingress-management-operation.js';
+import { DispatchLeaseRejectedError, type RuntimeManagementDispatch, type RuntimeManagementOperation } from '../../init/runtime-management-commands.js';
 import { turnFailureOutcome, turnSuccessOutcome } from './ingress-outcomes.js';
 import {
   createAnnouncementDispatcher,
@@ -106,15 +110,12 @@ import { SessionEventDispatcher } from './session-event-dispatch.js';
 const logger = getLogger('agent');
 
 export const ingressMessages = createMessages({
-  cleared: { 'zh-CN': '已清空本会话的 AI 多轮上下文。', en: 'Cleared the AI conversation context for this session.' },
   stopped: { 'zh-CN': '好的，已停止当前回复。', en: 'OK, stopped the current reply.' },
   queue_full: { 'zh-CN': '前面还有几条消息在处理，请稍后再发。', en: 'Other messages are still being processed. Please try again shortly.' },
   expired: { 'zh-CN': '这条消息排队太久，已跳过，需要的话请重新发送。', en: 'This message waited too long and was skipped. Please send it again if needed.' },
 });
-const t = ingressMessages;
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
-const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
 const DEFAULT_AI_TRIGGER_PREFIXES = ['#', 'AI:', 'ai:'];
 const DEFAULT_AI_TRIGGER_IGNORE_PREFIXES = ['/', '!', '！'];
 
@@ -125,20 +126,17 @@ export function resolveTriggerTimeoutMs(trigger?: AITriggerConfig): number {
     : DEFAULT_TRIGGER_TIMEOUT_MS;
 }
 
-export function renderTriggerError(trigger: AITriggerConfig | undefined, detail: string): string {
-  const template = trigger?.errorTemplate?.trim()
-    ? trigger.errorTemplate
-    : DEFAULT_TRIGGER_ERROR_TEMPLATE;
-  return template.replace('{error}', detail);
-}
-
 /**
- * Chat reply for a failed turn: the configured `errorTemplate` when there is one, otherwise a line a
- * member would say, with the cause appended only for the owner.
+ * Chat reply for a failed turn: the configured `errorTemplate` when there is one (operator text, its
+ * first `{error}` replaced by the error message), otherwise {@link chatFailureLine}: a line a member
+ * would say, with the cause appended only for the owner. #1250 第 81 批: there is no built-in
+ * template of its own; the chat failure line is the one default.
  */
 export function renderChatTurnError(trigger: AITriggerConfig | undefined, error: unknown, master: boolean, locale?: Locale): string {
   const detail = error instanceof Error ? error.message : String(error);
-  if (trigger?.errorTemplate?.trim()) return renderTriggerError(trigger, detail);
+  const template = trigger?.errorTemplate;
+  // A callback, so `$&` / `$'` in the error message stay literal text.
+  if (template?.trim()) return template.replace('{error}', () => detail);
   return chatFailureLine(error instanceof TriggerTimeoutError ? 'turn_timeout' : 'turn_error', { master, detail, locale });
 }
 
@@ -190,18 +188,31 @@ export function routeSpecialistAgent(
   return platformAgents[0] ? { userText, agent: platformAgents[0] } : { userText };
 }
 
-/** Messages starting with a command prefix are never AI turns, addressed or not. */
-export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig | undefined): boolean {
+/**
+ * The prefixes that mark a message as a command (#1250 第 82 批: one judgement for every AI entry):
+ * the dispatcher's real `commandPrefix` for this message's adapter / endpoint — left out when it is
+ * `''`, which would make every message a command — plus `ai.trigger.ignorePrefixes` (default `/`, `!`, `！`).
+ * A message reaches the Agent only after no command claimed it, so this only decides what an unclaimed
+ * command-looking message is: never an AI turn and never part of a merge window.
+ */
+function commandLikePrefixes(trigger: AITriggerConfig | undefined, commandPrefix: string | undefined): readonly string[] {
   const ignorePrefixes = trigger?.ignorePrefixes?.length
     ? trigger.ignorePrefixes
     : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
-  return ignorePrefixes.some(prefix => prefix && text.startsWith(prefix));
+  const prefixes = commandPrefix ? [commandPrefix, ...ignorePrefixes] : ignorePrefixes;
+  return prefixes.filter((prefix) => prefix.length > 0);
+}
+
+/** Messages starting with a command prefix ({@link commandLikePrefixes}) are never AI turns, addressed or not. */
+export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig | undefined, commandPrefix: string | undefined): boolean {
+  return commandLikePrefixes(trigger, commandPrefix).some((prefix) => text.startsWith(prefix));
 }
 
 /**
  * ADR 0038 §1: may this addressed message join a group merge window? Only
  * plain-text group / channel messages from non-master senders that are not a
- * trigger-prefix command or a stop word. Everything else keeps its own turn.
+ * trigger-prefix message, a command ({@link hasIgnoredTriggerPrefix}) or a stop word.
+ * Everything else keeps its own turn.
  */
 export function isMergeableGroupTurn(input: Readonly<{
   message: Message;
@@ -214,13 +225,22 @@ export function isMergeableGroupTurn(input: Readonly<{
   const kind = input.message.conversation.kind;
   if (kind !== 'group' && kind !== 'channel') return false;
   if (!input.plainText || input.isMaster) return false;
-  if (isCancelIntent(input.content)) return false;
+  if (isCancelIntent(input.content, input.message.commandPrefix)) return false;
   const text = input.message.content.trim();
   const prefixes = input.trigger?.prefixes?.length ? input.trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
   if (prefixes.some((prefix) => prefix && text.startsWith(prefix))) return false;
-  if (input.message.commandPrefix && text.startsWith(input.message.commandPrefix)) return false;
-  return !/^[/#]/u.test(input.content.trim());
+  // The raw message and the addressed content (`@bot /status`) both go through the one command judgement.
+  const content = input.content.trim();
+  if (hasIgnoredTriggerPrefix(text, input.trigger, input.message.commandPrefix)) return false;
+  if (hasIgnoredTriggerPrefix(content, input.trigger, input.message.commandPrefix)) return false;
+  // `/` is the slash-command mark users carry over from every chat platform, whatever this adapter's
+  // prefix and `ignorePrefixes` say. Such a message keeps its own turn instead of being folded into
+  // the neighbours' merged text, so `ignorePrefixes: ['~']` never merges `@bot /status`.
+  return !text.startsWith(MERGE_WINDOW_COMMAND_MARK) && !content.startsWith(MERGE_WINDOW_COMMAND_MARK);
 }
+
+/** Always command-like for the merge window only (not for AI triggering): see {@link isMergeableGroupTurn}. */
+const MERGE_WINDOW_COMMAND_MARK = '/';
 
 export function matchAiTrigger(
   message: Message,
@@ -230,7 +250,7 @@ export function matchAiTrigger(
   const text = message.content.trim();
   if (!text) return null;
 
-  if (hasIgnoredTriggerPrefix(text, trigger)) return null;
+  if (hasIgnoredTriggerPrefix(text, trigger, message.commandPrefix)) return null;
 
   const isPrivate = message.conversation.kind === 'private';
   const prefixes = trigger?.prefixes?.length ? trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
@@ -380,10 +400,35 @@ export interface AgentTurnIngressRouteOptions {
   readonly assistantStatus?: AgentAssistantStatusPort;
   /** Hard-gate IM approval channel (G6, #1013): settles `approve <id>` / `deny <id>` for approval cards. */
   readonly toolApprovalIm?: ImApprovalChannelPort;
+  /**
+   * #1250 第 85 批: true only for a lease the Host's dispatch handed out (`createHostOperationResources(...)
+   * .holdsDispatchLease`: a lease an issued dispatch lease port's `retain()` returned). The management
+   * paths ({@link AgentTurnIngressRoute.runManagementOperation} / `clearAsCommand`) refuse any other
+   * lease, one acquired from the real SnapshotStore included. Absent: they refuse every lease.
+   */
+  readonly holdsDispatchLease?: (lease: SnapshotLease) => boolean;
+  /**
+   * #1250: an out-of-turn conversation's command presentation (its Endpoint's real command prefix and the
+   * recipient's display language), for group-rule cards and notices sent without an incoming message.
+   * Absent: those texts use the default language and the bare command with a prefix reminder.
+   */
+  readonly resolveConversationPresentation?: (target: Readonly<{
+    platform: string;
+    /** Endpoint key, or the Endpoint capability id when only that is known. */
+    endpoint: string;
+    conversation: Readonly<{ kind: 'private' | 'group'; id: string }>;
+    /** The private recipient whose language preference applies; absent for a group. */
+    recipientId?: string;
+  }>) => AgentCommandPresentation | undefined | Promise<AgentCommandPresentation | undefined>;
 }
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
 export class AgentTurnIngressRoute implements IngressRoute {
+  /**
+   * #1250 第 85 批: ECMAScript-private (not TS `private`): the options hold the Agent runtime and its
+   * SnapshotStore, which must not be reachable from the route object at run time.
+   */
+  readonly #options: AgentTurnIngressRouteOptions;
   #hostMailbox: HostMailbox | undefined;
   #ownsMailbox = false;
   /** Whether this generation's mailbox has the ADR 0038 group merge window. */
@@ -410,11 +455,14 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #groupRuleEnforcer: GroupRuleEnforcer;
   /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
   readonly #floodDetector = new GroupFloodDetector();
+  /** #1250: at most one repeated clear confirmation per conversation and sender within the cooldown. */
+  readonly #clearConfirmCooldown = new ClearConfirmCooldown();
   /** Per-session reaction pacing (memory only, bounded); lives and dies with this route generation. */
-  readonly #reactionPacer = new ReactionPacer({ config: () => this.options.agent.service.getAgentConfig()?.reactions });
+  readonly #reactionPacer = new ReactionPacer({ config: () => this.#options.agent.service.getAgentConfig()?.reactions });
   readonly #groupRuleDefaults: GroupRuleDefaults;
 
-  constructor(private readonly options: AgentTurnIngressRouteOptions) {
+  constructor(options: AgentTurnIngressRouteOptions) {
+    this.#options = options;
     options.assistantStatus?.bindAmbientConfig(() => options.agent.service.getTriggerConfig()?.ambient);
     options.assistantStatus?.bindDecisionEvents(() => options.agent.agent.getDecisionEvents?.());
     options.assistantStatus?.bindControlPlane(
@@ -441,7 +489,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     });
     this.#sessionEvents = createSessionEventDispatcher({ im: options.im, agent: options.agent, onSpoke });
     this.#stopSessionEvents = this.#sessionEvents.start();
-    this.#groupRules = createGroupRuleChannel({ im: options.im, agent: options.agent });
+    this.#groupRules = createGroupRuleChannel({
+      im: options.im,
+      agent: options.agent,
+      ...(options.resolveConversationPresentation ? { resolvePresentation: options.resolveConversationPresentation } : {}),
+    });
     this.#stopGroupRules = this.#groupRules.start();
     this.#groupRuleEnforcer = createGroupRuleEnforcer({ agent: options.agent, onSpoke });
     this.#groupRuleDefaults = new GroupRuleDefaults(() => options.agent?.agent?.getGroupRules?.());
@@ -465,11 +517,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
   async reportGroupRuleViolation(report: GroupRuleViolationReport): Promise<GroupRuleViolationOutcome> {
     const { conversation } = report;
     if (conversation.kind !== 'group' || !report.memberId) return 'no_rule';
+    const presentation = await this.#conversationPresentation({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      conversation: { kind: 'group', id: conversation.id },
+    });
     const result = await executeGroupRule({
-      im: this.options.im,
+      im: this.#options.im,
       enforcer: this.#groupRuleEnforcer,
       conversation,
       source: report.source,
+      ...(presentation ? { presentation } : {}),
       violation: {
         platform: conversation.endpoint.adapter,
         endpoint: conversation.endpoint.id,
@@ -492,15 +550,32 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return result.kind === 'no_rule' ? 'no_rule' : 'handled';
   }
 
+  async #conversationPresentation(
+    target: Parameters<NonNullable<AgentTurnIngressRouteOptions['resolveConversationPresentation']>>[0],
+  ): Promise<AgentCommandPresentation | undefined> {
+    try {
+      return await this.#options.resolveConversationPresentation?.(target);
+    } catch {
+      return undefined;
+    }
+  }
+
   /** content-moderation 迁移：原 `groupModeration` 群按默认模板生成一条待确认规则（ADR 0039 §5）。 */
-  ensureDefaultGroupRule(input: Readonly<{ conversation: ConversationRef; trigger: GroupRuleViolationTrigger }>): Promise<GroupRuleDefaultOutcome> {
+  async ensureDefaultGroupRule(input: Readonly<{ conversation: ConversationRef; trigger: GroupRuleViolationTrigger }>): Promise<GroupRuleDefaultOutcome> {
     const { conversation } = input;
-    if (conversation.kind !== 'group') return Promise.resolve('unavailable');
+    if (conversation.kind !== 'group') return 'unavailable';
+    // #1250: the rule's notes are shown in the group, so they are written in the project language.
+    const locale = (await this.#conversationPresentation({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      conversation: { kind: 'group', id: conversation.id },
+    }))?.locale;
     return this.#groupRuleDefaults.ensure({
       platform: conversation.endpoint.adapter,
       endpoint: conversation.endpoint.id,
       groupId: conversation.id,
       trigger: input.trigger,
+      ...(locale ? { locale } : {}),
     });
   }
 
@@ -517,13 +592,101 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return this.#memberLifecycle.ownsWelcome(conversation);
   }
 
+  /**
+   * #1250 第 83 批: runs an Agent management Root command (`createRuntimeManagementCommands`) for
+   * `message` against the session its AI turn would use, holding a lease on the generation that
+   * dispatched the command (`dispatch.retainLease`) meanwhile. #1250 第 84 批: the retained lease must
+   * belong to this Root's real SnapshotStore ({@link retainOwnedLease}); any other lease is refused.
+   * #1250 第 85 批: a dispatch without `retainLease` is refused the same way as in `clearAsCommand`
+   * (`DispatchLeaseRejectedError`); the management commands always hand one over.
+   */
+  runManagementOperation<T>(message: Message, dispatch: RuntimeManagementDispatch, run: (operation: RuntimeManagementOperation) => Promise<T>): Promise<T> {
+    const options = this.#options;
+    const retainLease = dispatch.retainLease;
+    if (!retainLease) return Promise.reject(new DispatchLeaseRejectedError());
+    return runManagementOperation({
+      message, signal: dispatch.signal, projectRoot: options.projectRoot, toldLedger: options.agent.agent.toldLedger,
+      retainLease: () => this.#retainOwnedLease(retainLease),
+      ...(options.withInferenceScope ? { withInferenceScope: options.withInferenceScope } : {}),
+      ...(options.withModelScope ? { withModelScope: options.withModelScope } : {}),
+    }, run);
+  }
+
+  /**
+   * #1250 第 83 批: the Root `reset` command from a sender without a zhin chat role. The command
+   * dispatch claimed the message, so this runs the same ingress path a `/clear` takes — flood
+   * observation, control-plane and speaking gates, the AI trigger and mention requirements, the clear
+   * of the sender's own session and its confirmation cooldown — on the dispatching generation, and
+   * nothing else: no AI turn, no ambient judgement, never a clear in a live room. `true` when it
+   * cleared. When it did not clear, the route reports why (`not_addressed` / `clear_command`, in a
+   * live room `not_addressed` / `live_room_clear`, a stopped outbound `filtered_by_policy` /
+   * `outbound_stopped`) and that stays the message's outcome: the command returned nothing and sent
+   * nothing, so the dispatch adds no `command_replied` (#1250 第 84 批). The message's conversation
+   * sequence (`dispatch.conversationSequence`) lets the speaking gate fold scene events up to it.
+   */
+  async clearAsCommand(message: Message, dispatch: RuntimeManagementDispatch): Promise<boolean> {
+    if (!dispatch.retainLease) throw new DispatchLeaseRejectedError();
+    const lease = this.#retainOwnedLease(dispatch.retainLease);
+    try {
+      let cleared = false;
+      await this.#route(message, lease, lease.value.root, dispatch.conversationSequence, () => { cleared = true; });
+      return cleared;
+    } finally {
+      lease.release();
+    }
+  }
+
+  /**
+   * #1250 第 84 批: the dispatch lease a management command hands over, checked against the real
+   * SnapshotStore (`AgentRuntime.ownsLease`). The command already accepts only ports this Host instance
+   * issued; this second check refuses a lease that store did not issue whatever port carried it.
+   * #1250 第 85 批: and the lease must be one the Host's own dispatch handed out
+   * (`holdsDispatchLease`), so a lease acquired from the store directly is refused as well. A refusal
+   * is the sender-facing `DispatchLeaseRejectedError` (`refused` / `dispatch_lease_rejected`), not a
+   * failure.
+   *
+   * `retain` must return a lease it newly retained for this call (a dispatch lease port's `retain()`
+   * does): the lease is then ours to end. A lease that does not pass is released here — also when
+   * `ownsLease` or `holdsDispatchLease` throws (the error propagates after the release) — except one
+   * `ownsLease` cleanly reported as foreign: that one is not from our store and not ours to end.
+   */
+  #retainOwnedLease(retain: () => SnapshotLease): SnapshotLease {
+    const lease = retain();
+    const runtime = this.#options.runtime as Partial<Pick<AgentRuntime, 'ownsLease'>>;
+    let foreign = false;
+    let accepted = false;
+    try {
+      foreign = typeof runtime.ownsLease !== 'function' || runtime.ownsLease(lease) !== true;
+      accepted = !foreign && this.#options.holdsDispatchLease?.(lease) === true && lease.active;
+    } finally {
+      if (!accepted && !foreign && lease.active) lease.release();
+    }
+    if (!accepted) throw new DispatchLeaseRejectedError();
+    return lease;
+  }
+
+  /**
+   * #1250 第 85 批 (defence in depth): the ingress hooks run only on an active lease this Root's real
+   * SnapshotStore issued (`AgentRuntime.ownsLease`), as the IM runtime's own lease for the message is.
+   * Anything else (a look-alike `{ value, active, release }` object, another Root's lease, a released
+   * one) is not routed: the hook answers `false` and nothing reaches the sender.
+   */
+  #routesOn(lease: SnapshotLease): boolean {
+    const runtime = this.#options.runtime as Partial<Pick<AgentRuntime, 'ownsLease'>>;
+    try {
+      return typeof runtime.ownsLease === 'function' && runtime.ownsLease(lease) === true && lease.active === true;
+    } catch {
+      return false;
+    }
+  }
+
   #noteSpoke(key: string): void {
     this.#ambientEngagement()?.noteSpoke(key);
     this.#coldField.reset(key);
   }
 
   dispose(): void {
-    this.options.assistantStatus?.bindUsageTraces(() => undefined);
+    this.#options.assistantStatus?.bindUsageTraces(() => undefined);
     this.#coldField.dispose();
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();
@@ -531,6 +694,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopGroupRules();
     this.#groupRuleEnforcer.dispose();
     this.#floodDetector.clear();
+    this.#clearConfirmCooldown.clear();
     this.#reactionPacer.clear();
     this.#sceneEvents.dispose();
     this.#sceneFactRefresher.dispose();
@@ -545,9 +709,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   #mailbox(): HostMailbox {
     if (!this.#hostMailbox) {
-      const config = normalizeMailboxConfig(this.options.agent.service.getAgentConfig()?.mailbox);
+      const config = normalizeMailboxConfig(this.#options.agent.service.getAgentConfig()?.mailbox);
       this.#mergeWindowEnabled = config.merge.enabled;
-      const shared = (this.options.agent.agent as { readonly hostMailbox?: HostMailbox } | undefined)?.hostMailbox;
+      const shared = (this.#options.agent.agent as { readonly hostMailbox?: HostMailbox } | undefined)?.hostMailbox;
       if (shared instanceof HostMailbox) {
         this.#hostMailbox = shared;
         this.#ownsMailbox = false;
@@ -564,23 +728,25 @@ export class AgentTurnIngressRoute implements IngressRoute {
     // ADR 0062 §23: with an `ai.trigger.ambient` section (even an empty allowlist) stored overrides
     // may switch interjection on per group; without the section there is no interjection at all
     // and no engagement state is kept.
-    const config = this.options.agent.service.getTriggerConfig()?.ambient;
+    const config = this.#options.agent.service.getTriggerConfig()?.ambient;
     if (!config) return this.#ambient = null;
     return this.#ambient = new AmbientEngagement({ config });
   }
 
   async #withInference<T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; operationId?: string; signal: AbortSignal }>,
     run: (scope: InferenceOperationScope) => Promise<T>): Promise<T> {
-    if (!this.options.withInferenceScope) throw new Error('The Host inference operation is unavailable');
-    return this.options.withInferenceScope(input, run);
+    if (!this.#options.withInferenceScope) throw new Error('The Host inference operation is unavailable');
+    return this.#options.withInferenceScope(input, run);
   }
 
   async preRoute(
     _message: Message,
-    _lease: SnapshotLease,
+    lease: SnapshotLease,
     _requester: PluginId,
     _conversationSequence: number | undefined,
   ): Promise<boolean> {
+    // Nothing is pre-routed today; the lease check keeps a future pre-route behind the same gate as `route`.
+    if (!this.#routesOn(lease)) return false;
     return false;
   }
 
@@ -588,20 +754,39 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return false;
   }
 
-  async route(
+  route(
     message: Message,
     lease: SnapshotLease,
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
-    const messageOrigin = (message as { readonly origin?: unknown }).origin ?? message.metadata?.origin;
-    if (typeof messageOrigin === 'string' && messageOrigin !== 'human') {
+    if (!this.#routesOn(lease)) {
+      logger.warn(formatCompact({ op: 'ingress_route_lease_rejected', messageId: message.id }));
+      return Promise.resolve(false);
+    }
+    return this.#route(message, lease, requester, conversationSequence);
+  }
+
+  /**
+   * `clearCommand` (see {@link clearAsCommand}): the message is the Root `reset` command of a sender
+   * without a chat role, already recognized as a clear; called when it cleared. The route then
+   * handles only the clear: it stops at the point a `/clear` would be answered or fall through.
+   */
+  async #route(
+    message: Message,
+    lease: SnapshotLease,
+    requester: PluginId,
+    conversationSequence: number | undefined,
+    clearCommand?: () => void,
+  ): Promise<boolean> {
+    const asClear = clearCommand !== undefined;
+    if (isNonHumanOrigin(message)) {
       reportInboundOutcome(message, { outcome: 'ignored_bot', reason: 'non_human_origin', stage: 'agent_gate' });
       return false;
     }
     const operationSession = readOperationSession(message);
     const operationSignal = operationSession?.signal;
-    const options = this.options;
+    const options = this.#options;
     const service = options.agent.service;
     const zhinAgent = options.agent.agent;
     const binding = service.getBindingRegistry().requireZhinBinding();
@@ -633,25 +818,27 @@ export class AgentTurnIngressRoute implements IngressRoute {
       return receipt;
     };
 
+    // #1250 (ADR 0067 D8): fixed runtime replies are this session's own delivery, not background.
+    const replyFixed = (key: string, text: string) => sendFixedReply({ reply, toldLedger: zhinAgent.toldLedger, sessionKey: key, text });
+
     if (turnAccess.origin.kind === 'im') {
       observeFloodMessage({
         im: options.im, enforcer: this.#groupRuleEnforcer, floodDetector: this.#floodDetector,
         message, platform: turnAccess.origin.platform, endpoint: effectiveEndpoint,
+        resolvePresentation: target => this.#conversationPresentation(target),
       });
     }
 
-    if (await tryHandleIngressCommands({
-      message, lease, operationSignal, sessionKey: initialSessionKey, senderRoles, turnAccess,
-      ownerId, effectiveEndpoint, agent: options.agent, groupRules: this.#groupRules,
-      toolApprovalIm: options.toolApprovalIm,
-      withInference: (inferInput, run) => this.#withInference(inferInput, run),
-      withModelScope: options.withModelScope, reply,
+    if (!asClear && await tryHandleIngressCommands({
+      message, turnAccess, ownerId, effectiveEndpoint, agent: options.agent, groupRules: this.#groupRules,
+      toolApprovalIm: options.toolApprovalIm, reply,
     })) {
       reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'agent_gate', command: 'agent' });
       return true;
     }
 
     const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
+    const clearCooldownKey = `${conversationRefKey(message.conversation)}\u0000${turnAccess.principal.subjectId}`;
     const turnId = randomUUID();
     const audit = turnAccess.origin.kind === 'im'
       ? createDecisionAudit(zhinAgent.getDecisionEvents?.(), decisionScopeOf({
@@ -667,6 +854,37 @@ export class AgentTurnIngressRoute implements IngressRoute {
       assistantStatus: options.assistantStatus, ambientEngagement: this.#ambientEngagement(),
       coldField: this.#coldField, audit,
       withInference: (inferInput, run) => this.#withInference(inferInput, run),
+      // #1250: `/clear`, `/reset`, `/new` that no command handled clear the sender's own session
+      // context like a triggered `清空` — only after every ingress gate passed, never when outbound is
+      // stopped, and not in a live room (its session is the shared scene task). The `reset` command of
+      // a sender without a chat role (`asClear`) stops here either way: no ambient judgement.
+      ...(liveRoom && !asClear ? {} : {
+        onUnmatched: async (outboundBlocked: (stage: string) => boolean) => {
+          if (liveRoom) {
+            // #1250 第 84 批: a live room's session is the shared scene task — no clear, no AI turn.
+            reportInboundOutcome(message, { outcome: 'not_addressed', reason: 'live_room_clear', stage: 'agent_gate' });
+            return true;
+          }
+          let stopped = false;
+          const cleared = await answerClearCommand({
+            message,
+            policy: { trigger },
+            recognized: asClear,
+            outboundBlocked: () => (stopped = outboundBlocked('clear_command')),
+            archive: () => zhinAgent.archiveSession(initialSessionKey),
+            cooldown: this.#clearConfirmCooldown,
+            cooldownKey: clearCooldownKey,
+            send: text => replyFixed(initialSessionKey, text),
+          });
+          if (cleared) clearCommand?.();
+          else if (asClear) {
+            reportInboundOutcome(message, stopped
+              ? { outcome: 'filtered_by_policy', reason: 'outbound_stopped', stage: 'agent_gate' }
+              : { outcome: 'not_addressed', reason: 'clear_command', stage: 'agent_gate' });
+          }
+          return cleared || asClear;
+        },
+      }),
     });
     if (gateEvaluation.kind === 'halt') {
       return gateEvaluation.handled;
@@ -681,9 +899,25 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const gate = intentResolver || message.metadata?.turnIntent !== undefined ? undefined : mailbox;
     const plainText = isPlainTextRuntimeMessage(message);
     const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
-      message, trigger, plainText, isMaster: senderRoles.isMaster, content: matched.content,
+      message, trigger, plainText, isMaster: senderRoles.hostRole === 'owner', content: matched.content,
     });
-    const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !isClearCommand(matched.content);
+    // #1250: the triggered text (`清空`, `#clear`) or the addressed message itself (`@bot /clear`)
+    // clears the sender's own session. Never in a live room or an ambient interjection — their session
+    // is the shared scene task — and not while the control plane stops outbound messages (no clear, no
+    // reply, like the untriggered spelling): the message then goes on like any other.
+    let clearStopped = false;
+    const clearRequested = !liveRoom && !ambient
+      && (asClear || isClearCommand(matched.content) || matchClearCommand(message))
+      && !(clearStopped = outboundBlocked('clear_command'));
+    // The `reset` command of a sender without a chat role is a clear or nothing (live room, outbound
+    // stopped); the outcome says which (#1250 第 84 批), and nothing reaches an AI turn.
+    if (asClear && !clearRequested) {
+      reportInboundOutcome(message, clearStopped
+        ? { outcome: 'filtered_by_policy', reason: 'outbound_stopped', stage: 'agent_gate' }
+        : { outcome: 'not_addressed', reason: liveRoom ? 'live_room_clear' : 'clear_command', stage: 'agent_gate' });
+      return true;
+    }
+    const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !clearRequested;
     if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
     audit({
       kind: 'inbound_wake',
@@ -696,10 +930,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
       sceneEvents: this.#sceneEvents, turnAccess, sessionKey, message, platform, effectiveEndpoint, conversationSequence,
     });
 
-    if (isClearCommand(matched.content)) {
-      await zhinAgent.archiveSession(sessionKey);
-      reportInboundOutcome(message, { outcome: 'cleared', reason: 'clear_command', stage: 'agent_gate', turnId });
-      await reply(t(message.locale, 'cleared'));
+    if (clearRequested) {
+      await clearSessionContext({
+        message, turnId, cooldown: this.#clearConfirmCooldown, cooldownKey: clearCooldownKey,
+        archive: () => zhinAgent.archiveSession(sessionKey),
+        send: text => replyFixed(sessionKey, text),
+      });
+      clearCommand?.();
       return true;
     }
 
@@ -784,7 +1021,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       reportInboundOutcome(message, turnFailureOutcome(error, admission?.signal.aborted === true, turnId));
       return handleIngressTurnFailure({
         error, admission, modelStartedAt, modelPayload, audit, sessionKey, trigger,
-        isMaster: senderRoles.isMaster, locale: message.locale, outboundBlocked, reply,
+        isMaster: senderRoles.hostRole === 'owner', locale: message.locale, outboundBlocked, reply,
       });
     } finally {
       capabilityActive = false;

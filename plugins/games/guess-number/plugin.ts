@@ -24,9 +24,8 @@ export default defineGamePlugin<SessionService>({
     title: '猜数字',
     icon: '🔢',
     description: '1~100 七步猜中神秘数',
-    commandPrefix: '/猜数',
     quickStart: '开始',
-    aliases: ['guess'],
+    aliases: ['guess', '猜数'],
     menus: [
       { id: 'start', label: '🎮 开始新局' },
       { id: 'help', label: '📖 玩法说明' },

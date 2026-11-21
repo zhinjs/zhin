@@ -17,7 +17,7 @@ import {
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { OutboundMediaFetcher } from '@zhin.js/core';
-import type { CapabilityId } from 'zhin.js';
+import { sleep as abortableSleep, type CapabilityId } from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop, sendTyping, type WeixinApiOptions } from './ilink-api.js';
 import { IlinkClientMetadata } from './ilink-meta.js';
 import {
@@ -46,12 +46,16 @@ import {
   formatOutboundSegments,
   inboundMessageId,
   segmentLocalPath,
-  sleep,
   weixinIlinkInboundConversation,
   type ResolvedWeixinIlinkConfig,
   type WeixinMessageWithMedia,
   type WeixinWireSegment,
 } from './protocol.js';
+
+/** The shared abortable sleep; an abort ends the wait early (the poll loop then stops). */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return abortableSleep(ms, signal).catch(() => undefined);
+}
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 const BACKOFF_DELAY_MS = 30_000;
@@ -483,7 +487,7 @@ export class WeixinIlinkClient extends EventEmitter {
         continue;
       }
       if (this.#sessionGuard.paused) {
-        await sleep(this.#sessionGuard.remainingMs, abortSignal);
+        await pause(this.#sessionGuard.remainingMs, abortSignal);
         continue;
       }
 
@@ -516,15 +520,15 @@ export class WeixinIlinkClient extends EventEmitter {
           if (sessionExpired) {
             this.#sessionGuard.pause();
             consecutiveFailures = 0;
-            await sleep(this.#sessionGuard.remainingMs, abortSignal);
+            await pause(this.#sessionGuard.remainingMs, abortSignal);
             continue;
           }
           consecutiveFailures += 1;
           // 退避后不清零：对端持续挂时清零会让重试固定打满 RETRY_DELAY_MS。
           if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            await sleep(BACKOFF_DELAY_MS, abortSignal);
+            await pause(BACKOFF_DELAY_MS, abortSignal);
           } else {
-            await sleep(RETRY_DELAY_MS, abortSignal);
+            await pause(RETRY_DELAY_MS, abortSignal);
           }
           continue;
         }
@@ -550,9 +554,9 @@ export class WeixinIlinkClient extends EventEmitter {
           error: err instanceof Error ? err.message : String(err),
         }));
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          await sleep(BACKOFF_DELAY_MS, abortSignal);
+          await pause(BACKOFF_DELAY_MS, abortSignal);
         } else {
-          await sleep(RETRY_DELAY_MS, abortSignal);
+          await pause(RETRY_DELAY_MS, abortSignal);
         }
       }
     }

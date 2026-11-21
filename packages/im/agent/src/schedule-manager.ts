@@ -6,6 +6,7 @@ import {
   type ToolInputJsonSchema,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
+import { formatDateTime } from '@zhin.js/plugin-runtime';
 import {
   addScheduleJob,
   generateScheduleJobId,
@@ -167,7 +168,8 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           ? '执行计划没有指定工具或技能：到点时将按提示词自动选择工具。建议先用 schedule_preview 预演，再把 execution_plan 一起传给 schedule_add。'
           : undefined;
         if (job.schedule.kind === 'at') {
-          const time = new Date(job.schedule.atMs).toLocaleString('zh-CN', { hour12: false });
+          // #1250: the repository's date format, in the process zone as before (`at` jobs carry no zone).
+          const time = formatDateTime(job.schedule.atMs);
           return { success: true, id: job.id, message: `已安排一次性任务，将在 ${time} 执行`, ...(warning ? { warning } : {}) };
         }
         return { success: true, id: job.id, message: '已添加调度任务', ...(warning ? { warning } : {}) };

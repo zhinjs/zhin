@@ -162,8 +162,8 @@ To let external AI clients connect to your bot, use the top-level `mcp:` config 
 ```yaml
 ai:
   trigger:
-    prefixes: ["ai:"]          # default ['#', 'AI:', 'ai:']
-    ignorePrefixes: ["/"]      # default ['/', '!', '！']
+    prefixes: ["ai:"]          # default ['#', 'AI:', 'ai:']; a prefix equal to the adapter's commandPrefix no longer triggers (see below)
+    ignorePrefixes: ["/"]      # default ['/', '!', '！']; the adapter's commandPrefix (when non-empty) always counts as a command prefix too
     respondToAt: true          # default true: trigger when mentioned in a group
     respondToPrivate: true     # default true: trigger on every DM
     keywords: []               # trigger when a DM contains one of these
@@ -171,6 +171,8 @@ ai:
     thinkingMessage: Thinking… # optional placeholder reply before processing
     # errorTemplate: "Error: {error}"  # optional; unset, the bot says it lagged in a chat voice and the owner also sees the cause
 ```
+
+A trigger prefix in `prefixes` that equals the adapter's `commandPrefix` no longer takes effect: with `commandPrefix: '#'`, `#xxx` is matched as a command first, and if no command claims it, it is still a command-like message and is not handed to the AI by the default `#` trigger prefix. To summon the AI by prefix on such an adapter, use a different trigger prefix (for example `ai:`).
 
 Mention triggering relies on the adapter flagging the message as mentioning the bot (CQ codes, Slack `app_mention`, etc.).
 
@@ -319,7 +321,7 @@ ai:
 | `auto` | A tool-less reviewer Agent decides; if it can't, it asks a master; model errors, timeouts or invalid output are denied |
 | `bypass` | Skip approval — but never the dangerous-command blocklist, tool permissions, file / network boundaries or the sandbox |
 
-In groups and channels an approval offers "deny / just this once / this conversation / always allow"; in DMs, "deny / just this once / always allow". "This conversation" applies to everyone in it; "always allow" applies only to the current sender; every lasting decision is bound to the current conversation. `/approve always bash` and `/approve rule <regex>` manage this account's persistent allow rules.
+In groups and channels an approval offers "deny / just this once / this conversation / always allow"; in DMs, "deny / just this once / always allow". "This conversation" applies to everyone in it; "always allow" applies only to the current sender; every lasting decision is bound to the current conversation. `approve always bash` and `approve rule <regex>` (sent with this account's command prefix) manage this account's persistent allow rules.
 
 ::: details More details
 - **Global context files**: besides `contextPaths`, `~/.config/zhin/AGENTS.md` and `~/.config/zhin/ZHIN.md` are loaded automatically (skipped if absent) as a `# User Context` section before project context; 8KB per file, 16KB total.

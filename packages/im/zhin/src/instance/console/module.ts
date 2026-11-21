@@ -35,8 +35,10 @@ export {
   TOOL_APPROVALS_RESOLVE_PERMISSION,
   composeHostConsoleRpc,
   type ToolApprovalCard,
+  type ToolApprovalCardOrigin,
 } from './tool-approvals.js';
 export { HostSelfChanges, type SelfChangeCard } from './self-changes.js';
+export { readScheduleJobLabels } from './schedule-job-labels.js';
 export { defineWorkspaceConversationTable, readWorkspaceConversationNames } from './workspace-conversations.js';
 export { installConsoleIam, type ConsoleIamInstallation, type InstallConsoleIamOptions } from '@zhin.js/gateway/iam';
 export { installHostConsoleTerminal, type InstallHostConsoleTerminalOptions } from '@zhin.js/gateway/terminal';

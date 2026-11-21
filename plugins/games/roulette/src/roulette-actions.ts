@@ -44,6 +44,9 @@ const ACTION_WORDS: Readonly<Record<string, RouletteCommandAction>> = {
   禁言: 'penalty-status',
 };
 
+/** Every action word the short entry (`轮盘 开枪`) accepts. */
+export const ROULETTE_ACTION_WORDS: readonly string[] = Object.freeze(Object.keys(ACTION_WORDS));
+
 /** Empty input means help; unknown words return null so normal chat is never hijacked. */
 export function normalizeRouletteAction(raw: string): RouletteCommandAction | null {
   const word = raw.trim();

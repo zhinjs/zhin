@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ProviderRequestError,
   classifyProviderError,
-  computeBackoffDelay,
   createResilientCompletionPort,
-  parseRetryAfterMs,
   resolveProviderResilienceConfig,
   type ProviderResilienceEvent,
 } from '../../src/llm/provider-resilience.js';
@@ -97,20 +95,6 @@ describe('classifyProviderError', () => {
 });
 
 describe('backoff helpers', () => {
-  it('doubles with jitter and caps at maxDelayMs', () => {
-    const cfg = { baseDelayMs: 1_000, maxDelayMs: 4_000 };
-    expect(computeBackoffDelay(0, cfg, undefined, () => 0)).toBe(500);
-    expect(computeBackoffDelay(1, cfg, undefined, () => 1)).toBe(2_000);
-    expect(computeBackoffDelay(5, cfg, undefined, () => 1)).toBe(4_000);
-    expect(computeBackoffDelay(0, cfg, 7_000)).toBe(7_000);
-  });
-
-  it('parses Retry-After seconds and HTTP dates', () => {
-    expect(parseRetryAfterMs('2')).toBe(2_000);
-    expect(parseRetryAfterMs(new Date(10_000).toUTCString(), 4_000)).toBe(6_000);
-    expect(parseRetryAfterMs('soon')).toBeUndefined();
-  });
-
   it('documents conservative defaults and ignores invalid overrides', () => {
     expect(resolveProviderResilienceConfig()).toEqual({
       maxRetries: 2, baseDelayMs: 1_000, maxDelayMs: 10_000, maxRetryAfterMs: 30_000,

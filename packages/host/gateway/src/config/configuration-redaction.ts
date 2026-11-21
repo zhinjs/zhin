@@ -2,7 +2,9 @@
  * Masks stored configuration values before they leave the store in a response that the
  * caller did not ask to read (e.g. a trusted project patch conflict). Conservative: a
  * schema secret/writeOnly/password/hidden annotation, a secret-like key, or an unexpanded
- * environment reference (`${…}`, `env://…`) is replaced as a whole and never echoed.
+ * environment reference (`${VAR}` / `${VAR:-…}` as the shared parser reads them, a valid
+ * `env://VAR`; `isConfigEnvironmentReference`) is replaced as a whole and never echoed. Other
+ * text containing `${` is a literal: shown in an ordinary field, masked under a secret key / schema.
  */
 import {
   UNRESOLVED_CONFIG_SCHEMA, configSchemaChildren, expandConfigSchema, isConfigEnvironmentReference, isSecretConfigKey,

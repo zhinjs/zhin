@@ -28,4 +28,6 @@ export {
   assertPermitSyntax as assertBuiltinPermits,
   checkBuiltinPermit,
   checkBuiltinPermitList,
+  /** The standard refusal of {@link canManageConversation} (#1250 第 78 批). */
+  describeConversationManagerDenial,
 } from '@zhin.js/permission';

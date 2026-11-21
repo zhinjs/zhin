@@ -6,7 +6,7 @@ import {
   type DatabaseProbeResult,
   type ProbeDialect,
 } from '@zhin.js/database';
-import { expandEnvironmentValue } from '@zhin.js/plugin-runtime';
+import { expandEnvironmentValue, isWholeEnvironmentReference } from '@zhin.js/plugin-runtime';
 import {
   DATABASE_DIALECT_DEFINITIONS,
   validateDatabaseConfig,
@@ -79,7 +79,6 @@ export interface ConsoleSetupServiceOptions {
 
 const DEFAULT_SQLITE_FILE = '.zhin/data.sqlite';
 const SECRET_FIELDS: ReadonlySet<string> = new Set(['password']);
-const ENV_REFERENCE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/u;
 
 /** Result of {@link ConsoleSetupService.applyDatabase}. */
 export interface SetupDatabaseApplyResult {
@@ -209,7 +208,8 @@ export class ConsoleSetupService {
     for (const field of prepared.fields) {
       const value = prepared.raw[field.name];
       if (value === undefined || value === '') continue;
-      if (field.secret && typeof value === 'string' && !ENV_REFERENCE.test(value)) {
+      // A whole `${VAR}` / `${VAR:-default}` reference is kept as written; any other secret text moves to `.env`.
+      if (field.secret && typeof value === 'string' && !isWholeEnvironmentReference(value)) {
         envUpdates[field.env!] = value;
         block[field.name] = `\${${field.env!}}`;
       } else {

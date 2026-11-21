@@ -161,6 +161,7 @@ describe('session event template', () => {
     const at = Date.UTC(2026, 9, 31, 6, 30);
     expect(formatSessionEventAt(at, 'Asia/Shanghai')).toBe('2026-10-31 14:30');
     expect(formatSessionEventAt(at, 'Not/AZone')).toBe('2026-10-31 14:30');
+    expect(formatSessionEventAt(Date.parse('2026-01-05T16:00:00Z'), 'Asia/Shanghai')).toBe('2026-01-06 00:00');
     expect(formatSessionEventIn(0)).toBe('现在');
     expect(formatSessionEventIn(DAY)).toBe('1 天后');
     expect(formatSessionEventIn(HOUR)).toBe('1 小时后');

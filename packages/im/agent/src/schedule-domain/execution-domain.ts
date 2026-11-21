@@ -1,6 +1,6 @@
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { randomUUID } from 'node:crypto';
-import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
+import { createMessages, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 import type { ReplyFallback, TurnEvent } from '../event/turn-event.js';
 import { formatReplyFallback, inlineToolName } from '../core/tool-calls-user-format.js';
@@ -109,10 +109,15 @@ function resolveBudget(config: Required<ZhinAgentConfig>, job: ScheduleJob): Sch
   };
 }
 
-function terminationLabel(reason: NonNullable<ScheduleAuditRecord['budgetTerminated']>): string {
-  if (reason === 'token_limit') return 'token 预算耗尽';
-  if (reason === 'tool_limit') return '工具调用预算耗尽';
-  return '执行超时';
+const terminationMessages = createMessages({
+  token_limit: { 'zh-CN': '[任务因 token 预算耗尽被终止]', en: '[Task stopped: token budget used up]' },
+  tool_limit: { 'zh-CN': '[任务因工具调用预算耗尽被终止]', en: '[Task stopped: tool call budget used up]' },
+  timeout: { 'zh-CN': '[任务因执行超时被终止]', en: '[Task stopped: it ran out of time]' },
+});
+
+/** The note appended to a cut-short scheduled reply, in the job's language (#1250). */
+function terminationNote(reason: NonNullable<ScheduleAuditRecord['budgetTerminated']>, locale: Locale): string {
+  return terminationMessages(locale, reason === 'token_limit' || reason === 'tool_limit' ? reason : 'timeout');
 }
 
 export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
@@ -216,9 +221,9 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     // #1250 b33: the framework's fallback is re-worded with the job's name; the rest of the reply stays.
     const scheduleContext = { jobId: job.id, ...(job.label ? { label: job.label } : {}), turnId: executionId };
     const degradedRaw = fallback && outcome?.status === 'completed'
-      ? formatReplyFallback(fallback, { schedule: scheduleContext }) : raw;
+      ? formatReplyFallback(fallback, { schedule: scheduleContext, locale: resolveLocale(job.locale) }) : raw;
     const validation = validateScheduleOutput(degradedRaw);
-    const suffix = guarded.terminatedBy ? `\n\n[任务因${terminationLabel(guarded.terminatedBy)}被终止]` : '';
+    const suffix = guarded.terminatedBy ? `\n\n${terminationNote(guarded.terminatedBy, resolveLocale(job.locale))}` : '';
     const output = validation.valid ? `${validation.cleaned}${suffix}` : '';
     const durationMs = this.now() - startedAt;
     const acceptedPartial = !options.signal?.aborted && Boolean(guarded.terminatedBy && validation.valid);

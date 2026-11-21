@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 import type { Models } from '@zhin.js/core';
 
 export type GuessSessionStatus = 'active' | 'won' | 'lost' | 'aborted';
@@ -6,7 +7,7 @@ declare module '@zhin.js/core' {
   interface Models {
     guess_sessions: {
       id: string;
-      locale?: 'zh-CN' | 'en' | null;
+      locale?: Locale | null;
       adapter: string;
       endpoint: string;
       channel_type: string;

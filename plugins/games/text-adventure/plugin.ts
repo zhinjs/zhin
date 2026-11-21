@@ -24,9 +24,8 @@ export default defineGamePlugin<GameServices>({
     title: '秘境探险',
     icon: '🗺️',
     description: '文字冒险，31 区域 · 15 结局 · 成就收集',
-    commandPrefix: '/冒险',
     quickStart: '开始',
-    aliases: ['adv', '秘境'],
+    aliases: ['adv', '秘境', '冒险'],
     menus: [
       { id: 'start', label: '🚪 开始冒险' },
       { id: 'continue', label: '🔄 继续冒险' },

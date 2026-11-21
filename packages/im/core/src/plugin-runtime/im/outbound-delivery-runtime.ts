@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { projectLocale, runRuntimeMiddleware } from './inbound-spine.js';
+import { runRuntimeMiddleware } from './inbound-spine.js';
 import {
+  projectLocale,
   resolveLocale,
   type CapabilityId,
   type RuntimeSnapshot,
@@ -12,6 +13,7 @@ import { isStrictCanonicalSegment } from '../../built/segment-contract/validate.
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
 import { createOutboundEnvelope, isComponentCall, isRawContent, isUntrustedContent, operationEndpoint, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
+import { withRenderLocale } from './outbound-render-locale.js';
 import { OutboundRenderer, projectOutboundPayload, resolveOutboundPresentation, type OutboundProjection } from './outbound-renderer.js';
 import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
@@ -92,13 +94,13 @@ export class OutboundDeliveryRuntime {
     let initialPayload: unknown;
     let initialProjection: OutboundProjection;
     try {
-      const rendered = await this.#renderer.render(request.content, {
+      const rendered = await this.#renderer.render(request.content, withRenderLocale({
         requester: request.requester,
         snapshot: snapshot,
         conversation: request.conversation,
         incoming: request.incoming,
         ...renderOptions,
-      });
+      }, request.locale));
       initialProjection = await projectOutboundPayload(rendered, request.conversation, snapshot, { deferInteractive: true, presentation, signal: renderOptions.signal });
       initialPayload = initialProjection.payload;
     } catch (error) {
@@ -163,13 +165,13 @@ export class OutboundDeliveryRuntime {
           try {
             // Native payload replacements and in-place array mutations remain possible; only authoring values need evaluation.
             const replacement = envelope.payload;
-            const renderItemOptions = {
+            const renderItemOptions = withRenderLocale({
               requester: request.requester,
               snapshot: snapshot,
               conversation: request.conversation,
               incoming: request.incoming,
               ...renderOptions,
-            };
+            }, request.locale);
             let replaced: unknown = replacement;
             if (needsAuthoringRender(replacement)) {
               if (Array.isArray(replacement) && initialSegmentSet.size > 0 && replacement.some(item => initialSegmentSet.has(item))) {

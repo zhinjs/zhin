@@ -2,6 +2,7 @@
  * Canonical plugin definition consumed from `zhin.js`.
  * @module zhin.js
  */
+import type { Locale } from './i18n.js';
 import type { Dispose, DisposeStack } from './dispose.js';
 import type { GenerationHandoffRegistry } from './handoff.js';
 import type { FeatureId, PluginId } from './identity.js';
@@ -40,7 +41,7 @@ export interface PluginMetadata {
    * Console-only translations of `displayName`, keyed by interface locale (`zh-CN` / `en`).
    * The Console falls back to `en`, then `displayName`, then the instance key.
    */
-  readonly displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly displayNameI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly icon?: string;
   readonly order?: number;
 }

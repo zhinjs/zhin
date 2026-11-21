@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommandDefinition } from 'zhin.js/command';
+import { commandFeatureId, parseCommandDefinition } from 'zhin.js/command';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
 import { childPluginId, createCapabilitySlot, rootPluginId } from 'zhin.js';
 import {
@@ -61,7 +61,7 @@ function commandContext(games: GameIndex) {
 
 const guess: RuntimeRegisteredGame = {
   id: 'guess', title: '猜数字', icon: '🔢', description: '1~100 七步猜中神秘数',
-  commandPrefix: '/猜数', commandPath: 'guess', quickStart: '开始', aliases: ['guess'],
+  commandPath: 'guess', quickStart: '开始', quickStartI18n: { en: 'start' }, aliases: ['guess'],
 };
 
 describe('@zhin.js/plugin-game-hub runtime', () => {
@@ -128,8 +128,27 @@ describe('@zhin.js/plugin-game-hub runtime', () => {
       minPlayers: 1,
       maxPlayers: 1,
       description: '1~100 七步猜中神秘数',
-      startCommand: '/猜数 开始',
+      // No command index in this context: the command path, without any prefix (#1250 第 82 批).
+      startCommand: 'guess 开始',
     });
+
+    // With the command index the entry carries the command as the `games` command writes it,
+    // never a hard-coded `/`: a tool turn has no prefix, so none is added.
+    const formatted: unknown[] = [];
+    const commands = {
+      $projection: 'zhin.command-index/1',
+      formatCommand: (...args: unknown[]) => { formatted.push(args); return `${String(args[2])}猜数字`; },
+    };
+    const indexed = await gameCatalogTool.execute(
+      {},
+      {
+        locale: 'en',
+        use: (token: unknown) => (token === gameIndexToken ? games : undefined),
+        project: (feature: unknown) => (feature === gameFeatureId ? games : feature === commandFeatureId ? commands : undefined),
+      } as never,
+    );
+    expect(indexed.games[0]?.startCommand).toBe('猜数字 start');
+    expect(formatted).toEqual([[childPluginId(rootPluginId(), 'guess'), 'guess', '', 'en']]);
 
     const filtered = await gameCatalogTool.execute(
       { game: 'nonexistent' },

@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID }
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { expandEnvironmentValue } from './environment-expansion.js';
+import { expandEnvironmentValue, parseEnvUri } from './environment-expansion.js';
 
 /** One stable Host namespace for configuration validation and execution ownership. */
 export function hostModelOwnerId(projectRoot: string): string {
@@ -20,8 +20,8 @@ export function resolveHostCredentialSource(
   lookup: (name: string) => string | undefined,
 ): string | undefined {
   if (typeof source !== 'string') return expandEnvironmentValue(source.expression, lookup);
-  const match = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(source);
-  return match ? lookup(match[1]!) : undefined;
+  const variable = parseEnvUri(source);
+  return variable ? lookup(variable) : undefined;
 }
 
 /** Host-private storage error. No filesystem path, credential or crypto cause escapes. */

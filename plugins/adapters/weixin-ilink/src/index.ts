@@ -4,7 +4,6 @@ export {
   inboundMessageId,
   resolveWeixinIlinkConfig,
   segmentLocalPath,
-  sleep,
   type ResolvedWeixinIlinkConfig,
   type WeixinIlinkEndpointConfig,
   type WeixinInboundMediaPaths,

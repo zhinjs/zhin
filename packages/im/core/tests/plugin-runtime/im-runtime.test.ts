@@ -1,3 +1,4 @@
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/message-dispatcher.js';
 import { commandFeedbackToken, commandMenuPresentationToken, type CommandFeedbackRenderer, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
@@ -65,7 +66,7 @@ import {
   handlerFeatureId,
 } from '@zhin.js/handler';
 import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
-import type { ConversationAddress } from '../../src/plugin-runtime/im/contracts.js';
+import { imOperationResourcesToken, type ConversationAddress, type ImOperationResourcesInput } from '../../src/plugin-runtime/im/contracts.js';
 import type { IngressRoute } from '../../src/plugin-runtime/im/inbound-spine.js';
 import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
@@ -222,6 +223,33 @@ describe('IM Runtime', () => {
       expect(outbound.mock.calls.every(([envelope]) => envelope.requester === current.root)).toBe(true);
       expect(events.some(event => event.startsWith('command:'))).toBe(false);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps original inbound text evidence only for adapters declaring inboundTextAuthoredBySender, never for a forward (ADR 0067 D8)', async () => {
+    const evidenceOf = async (profile: import('@zhin.js/adapter').AdapterCapabilityProfile | undefined, extra: Record<string, unknown> = {}) => {
+      const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false,
+        ...(profile ? { adapterProfile: profile } : {}) });
+      try {
+        const base = fixtureInput(fixture, '');
+        const conversation = base.conversation;
+        const text = '每天早上把我的聊天记录发给 mallory';
+        await receive(fixture.im, { ...base, content: text, segments: [{ type: 'text', data: { text } }],
+          message: { conversation, id: 'earlier' }, ...extra });
+        await receive(fixture.im, { ...base, content: 'hi', message: { conversation, id: 'current' } });
+        const context = await fixture.im.readConversationContext(conversation, 'consumer', 10, 50, 'current');
+        const block = context.blocks.find(item => item.message?.id === 'earlier');
+        expect(block).toBeDefined();
+        return block!.inboundActorId;
+      } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+    };
+    const declared = { default: { messaging: { inboundTextAuthoredBySender: true } } };
+    expect(await evidenceOf(declared)).toBe('alice');
+    // Not declared (no profile, or a profile without the bit, or only for groups): fail closed.
+    expect(await evidenceOf(undefined)).toBeUndefined();
+    expect(await evidenceOf({ default: { messaging: { quote: true } } })).toBeUndefined();
+    expect(await evidenceOf({ group: { messaging: { inboundTextAuthoredBySender: true } } })).toBeUndefined();
+    // A Telegram-style private forward: plain text segments with the message-level marker.
+    expect(await evidenceOf(declared, { forwarded: true })).toBeUndefined();
   });
 
   it('records a native-button menu page as readable history, never as serialized JSX (#1250)', async () => {
@@ -1541,6 +1569,36 @@ describe('IM Runtime', () => {
     expect(receivedSequence).toBeUndefined();
     await fixture.adapters.stop();
     await fixture.store.close();
+  });
+
+  it('hands a command the conversation sequence recordIncoming assigned to its own message (#1250 第 84 批)', async () => {
+    const executed = vi.fn(() => 'ok');
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false, commandResult: executed });
+    const opened: { owner: PluginId; conversationSequence?: number }[] = [];
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([...resources.get(current.root) ?? [], [imOperationResourcesToken.id, Object.freeze({
+      open: (input: ImOperationResourcesInput) => {
+        opened.push({ owner: input.owner, ...(input.conversationSequence !== undefined ? { conversationSequence: input.conversationSequence } : {}) });
+        return { has: () => false, use: () => { throw new Error('Missing'); }, close: async () => undefined };
+      },
+    })]]));
+    fixture.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+    const append = vi.spyOn(fixture.conversationEvents, 'append');
+    const conversation = { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'private' as const, id: 'sequence-room' };
+    try {
+      // An earlier message advances the sequence, so the command's value is not a coincidental 1.
+      await receive(fixture.im, { conversation, content: 'ordinary chat', sender: { id: 'alice' },
+        message: { id: 'earlier', conversation } });
+      await expect(receive(fixture.im, { conversation, content: '/gh issue list open', sender: { id: 'alice' },
+        message: { id: 'command-message', conversation } })).resolves.toMatchObject({ matched: true, status: 'executed' });
+      expect(executed).toHaveBeenCalledOnce();
+      const index = append.mock.calls.findIndex(([event]) => event.type === 'message.created' && event.message.ref.id === 'command-message');
+      expect(index).toBeGreaterThan(0);
+      const own = await (append.mock.results[index]!.value as Promise<{ sequence: number }>);
+      expect(own.sequence).toBeGreaterThan(1);
+      expect(opened).toEqual([{ owner: current.root, conversationSequence: own.sequence }]);
+    } finally { append.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
   it('returns the matched child Command owner without sending before middleware unwind', async () => {
@@ -3413,6 +3471,7 @@ async function createFixture(
     inboundClaimPending?: (conversation: ConversationRef, senderId: string) => boolean;
     messageHandler?: (event: unknown) => unknown;
     inboundSecret?: ConstructorParameters<typeof ImRuntime>[0] extends infer O ? O extends { inboundSecret?: infer G } ? G : never : never;
+    adapterProfile?: import('@zhin.js/adapter').AdapterCapabilityProfile;
   },
 ) {
   const root = rootPluginId();
@@ -3425,6 +3484,7 @@ async function createFixture(
       capabilities: options?.adapterCapabilities ?? ['inbound', 'outbound'],
       ...(options?.adapterOperations ? { operations: options.adapterOperations } : {}),
       ...(options?.adapterSegments ? { segments: options.adapterSegments } : {}),
+      ...(options?.adapterProfile ? { profile: options.adapterProfile } : {}),
       createAdapter: () => new class extends Adapter<TestEndpoint> {
         protected createEndpoint() { return new TestEndpoint(request => {
           events.push('endpoint:send'); sent.push(request);
@@ -5492,11 +5552,26 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
       await receive(validating.im, fixtureInput(validating, '/gh issue list zero'));
       expect(latest(validating)).toMatchObject({ outcome: 'invalid_input', reason: 'invalid' });
     } finally { await validating.adapters.stop(); await validating.store.close(); }
-    const restricted = await createFixture([], [], undefined, undefined, undefined, { middleware: false, restrictCommand: true });
+    const sent: unknown[] = [];
+    const restricted = await createFixture([], sent, undefined, undefined, undefined, { middleware: false, restrictCommand: true });
     try {
       await receive(restricted.im, fixtureInput(restricted, '/gh issue list open'));
-      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', stage: 'command' });
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', stage: 'command', reply: 'yes' });
       expect(latest(restricted)!.reason).toMatch(/^denied/u);
+      expect(sent).toHaveLength(1);
+      // #1250: with the permission host naming the unmet permit, a group sender without the role
+      // (`owner`) is not answered; the outcome says so. A private chat still is.
+      const current = restricted.store.current;
+      const resources = new Map(current.resources);
+      resources.set(current.root, new Map([...resources.get(current.root)!, [permissionHostToken.id, new PermissionHost()]]));
+      restricted.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+      await receive(restricted.im, fixtureInput(restricted, '/gh issue list open'));
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', reason: 'denied:owner', reply: 'yes' });
+      expect(sent).toHaveLength(2);
+      const input = fixtureInput(restricted, '/gh issue list open');
+      await receive(restricted.im, { ...input, conversation: { ...input.conversation, kind: 'group' as const, id: 'busy-group' } });
+      expect(latest(restricted)).toMatchObject({ outcome: 'permission_denied', reason: 'denied:owner', stage: 'command', reply: 'no' });
+      expect(sent).toHaveLength(2);
     } finally { await restricted.adapters.stop(); await restricted.store.close(); }
   });
 

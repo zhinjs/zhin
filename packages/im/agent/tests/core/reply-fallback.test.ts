@@ -13,7 +13,7 @@ const WEATHER = 'api60s__skill__60s-life__weather';
 
 describe('reply fallback (#1250 b33)', () => {
   it('keeps the interactive empty-reply text when nothing else is known', () => {
-    expect(formatToolCallsForUser([])).toBe('模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /reset 后重试，或换用非推理模型。');
+    expect(formatToolCallsForUser([])).toBe('模型未返回可见内容（可能为推理型模型空回复或上下文过长）。可发送 /clear 清空本会话上下文后重试，或换用非推理模型。');
   });
 
   it('names "no tools" for a scheduled job, with its name, id and trace, and no /reset', () => {
@@ -23,6 +23,7 @@ describe('reply fallback (#1250 b33)', () => {
     expect(text).toContain('没有可用的工具');
     expect(text).toContain('zhin trace turn-9');
     expect(text).not.toContain('/reset');
+    expect(text).not.toContain('/clear');
     expect(text).not.toContain('推理型模型');
   });
 
@@ -40,10 +41,45 @@ describe('reply fallback (#1250 b33)', () => {
     expect(described.fallback).toEqual({ cause: 'empty_reply' });
     expect(described.text).toContain('模型未返回可见内容');
     expect(described.text).not.toContain('/reset');
+    expect(described.text).not.toContain('/clear');
   });
 
   it('does not call real tool output a fallback', () => {
     expect(describeToolCallsForUser([{ tool: 'weather', result: '上海 晴 25°C', status: 'completed' }]).fallback).toBeUndefined();
+  });
+
+  it('writes every fallback in English for an English recipient, keeping `/clear` literal (#1250)', () => {
+    const cjk = /[\u4e00-\u9fff]/u;
+    const empty = formatToolCallsForUser([], { locale: 'en' });
+    expect(empty).toBe('The model returned no visible content (a reasoning model may have replied empty, or the context is too long). '
+      + 'Send /clear to clear this conversation\'s context and try again, or switch to a non-reasoning model.');
+    const denied = describeToolCallsForUser([{ tool: WEATHER, result: 'x', status: 'denied' }], { locale: 'en' }).text;
+    expect(denied).toBe(`The required tool \`${WEATHER}\` was denied and did not run, so the request could not be completed. `
+      + 'Try again after someone with permission approves it.');
+    expect(formatReplyFallback({ cause: 'no_tools' }, { locale: 'en' })).toContain('No tools were available');
+    const scheduled = formatReplyFallback({ cause: 'no_tools' },
+      { locale: 'en', schedule: { jobId: 'sched_1', label: 'Weather', turnId: 'turn-9' } });
+    expect(scheduled).toBe('Scheduled job "Weather" (sched_1) did not finish: No tools were available this round and the model gave no reply. '
+      + 'Check the job\'s plan and available tools, or rehearse it first with schedule_preview. Investigate: zhin trace turn-9');
+    expect(scheduled).not.toContain('/clear');
+    expect(describeToolCallsForUser([{ tool: 'read_file', result: 'x', status: 'completed' }], { locale: 'en' }).text)
+      .toContain('Reply "continue"');
+    expect(describeToolCallsForUser([{ tool: 'load_skill', result: 'x' }], { locale: 'en' }).text)
+      .toContain('No useful information');
+    for (const text of [empty, denied, scheduled]) expect(text).not.toMatch(cjk);
+    // The default language is unchanged.
+    expect(formatToolCallsForUser([], { locale: 'zh-CN' })).toBe(formatToolCallsForUser([]));
+  });
+
+  it('agrees in number with the denied tools in English, and keeps the Chinese wording (#1250 第 81 批)', () => {
+    const two = [{ tool: 'a', result: 'x', status: 'denied' as const }, { tool: 'b', result: 'x', status: 'denied' as const }];
+    expect(describeToolCallsForUser(two, { locale: 'en' }).text)
+      .toMatch(/^The required tools `a`, `b` were denied and did not run, so the request could not be completed\./u);
+    expect(describeToolCallsForUser(two).text).toMatch(/^需要的工具 `a`、`b` 被拒绝，没有运行，所以没能完成这个请求。/u);
+    expect(describeToolCallsForUser([two[0]!]).text).toMatch(/^需要的工具 `a` 被拒绝，没有运行/u);
+    // `/clear` is the prefix-independent clear word: literal in both languages, never a command prefix.
+    expect(formatReplyFallback({ cause: 'empty_reply' })).toContain('可发送 /clear 清空');
+    expect(formatReplyFallback({ cause: 'empty_reply' }, { locale: 'en' })).toContain('Send /clear to clear');
   });
 
   it('tells model text from the summary fallback', () => {

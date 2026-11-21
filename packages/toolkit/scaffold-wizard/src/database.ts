@@ -1,5 +1,6 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import { DatabaseConfig } from './types.js';
 import {
   DATABASE_DIALECT_DEFINITIONS,
@@ -18,7 +19,7 @@ function schemaDefault(dialect: DatabaseDialect, ...path: string[]): unknown {
   return schema?.default;
 }
 
-function parseIntegerInput(input: unknown, minimum: number, maximum = Number.MAX_SAFE_INTEGER, locale: 'zh-CN' | 'en' = 'zh-CN'): number | string {
+function parseIntegerInput(input: unknown, minimum: number, maximum = Number.MAX_SAFE_INTEGER, locale: Locale = 'zh-CN'): number | string {
   const raw = String(input).trim();
   if (!/^\d+$/u.test(raw)) return wizardText(locale, "请输入有效的整数 ({v0}-{v1})", [minimum, maximum]);
   const value = Number(raw);
@@ -29,7 +30,7 @@ function parseIntegerInput(input: unknown, minimum: number, maximum = Number.MAX
 }
 
 // 配置数据库选项
-export async function configureDatabaseOptions(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<DatabaseConfig> {
+export async function configureDatabaseOptions(locale: Locale = 'zh-CN'): Promise<DatabaseConfig> {
   const { dialect } = await inquirer.prompt([
     {
       type: 'select',
@@ -74,7 +75,7 @@ export async function configureDatabaseOptions(locale: 'zh-CN' | 'en' = 'zh-CN')
 }
 
 // SQLite 配置
-async function configureSQLite(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<DatabaseConfig> {
+async function configureSQLite(locale: Locale = 'zh-CN'): Promise<DatabaseConfig> {
   const { filename, mode } = await inquirer.prompt([
     {
       type: 'input',
@@ -107,7 +108,7 @@ async function configureSQLite(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<Databa
 }
 
 // MySQL 配置
-async function configureMySQL(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<DatabaseConfig> {
+async function configureMySQL(locale: Locale = 'zh-CN'): Promise<DatabaseConfig> {
   const config = await inquirer.prompt([
     {
       type: 'input',
@@ -159,7 +160,7 @@ async function configureMySQL(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<Databas
 }
 
 // PostgreSQL 配置
-async function configurePostgreSQL(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<DatabaseConfig> {
+async function configurePostgreSQL(locale: Locale = 'zh-CN'): Promise<DatabaseConfig> {
   const config = await inquirer.prompt([
     {
       type: 'input',
@@ -211,7 +212,7 @@ async function configurePostgreSQL(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<Da
 }
 
 // MongoDB 配置
-async function configureMongoDB(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<DatabaseConfig> {
+async function configureMongoDB(locale: Locale = 'zh-CN'): Promise<DatabaseConfig> {
   const { url, dbName } = await inquirer.prompt([
     {
       type: 'input',
@@ -246,7 +247,7 @@ async function configureMongoDB(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<Datab
 }
 
 // Redis 配置
-async function configureRedis(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<DatabaseConfig> {
+async function configureRedis(locale: Locale = 'zh-CN'): Promise<DatabaseConfig> {
   const config = await inquirer.prompt([
     {
       type: 'input',

@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 import type { Models } from '@zhin.js/core';
 
 export type BjSessionStatus = 'active' | 'won' | 'lost' | 'draw' | 'aborted';
@@ -6,7 +7,7 @@ declare module '@zhin.js/core' {
   interface Models {
     bj_sessions: {
       id: string;
-      locale?: 'zh-CN' | 'en' | null;
+      locale?: Locale | null;
       adapter: string;
       endpoint: string;
       channel_type: string;

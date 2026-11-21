@@ -133,6 +133,18 @@ export function isMessageOrigin(value: unknown): value is MessageOrigin {
   return typeof value === 'string' && (MESSAGE_ORIGINS as readonly string[]).includes(value);
 }
 
+/**
+ * zhinjs/zhin#1250 第 84 批: `true` when the message is labelled as coming from something other than a
+ * person — its trusted `origin` (set by the inbound runtime's classifier), or, only when there is
+ * none, the adapter's self-reported `metadata.origin`, other than `human` (e.g. another bot). A
+ * trusted `human` origin is never overridden by metadata. Commands (and their near-miss hints,
+ * permit refusals) and the Agent answer people only.
+ */
+export function isNonHumanOrigin(message: Readonly<{ origin?: unknown; metadata?: Readonly<Record<string, unknown>> }>): boolean {
+  const origin = message.origin ?? message.metadata?.origin;
+  return typeof origin === 'string' && origin !== 'human';
+}
+
 export interface RoomClaimInput {
   readonly platform: string;
   readonly sceneType?: string;

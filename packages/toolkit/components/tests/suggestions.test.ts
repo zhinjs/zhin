@@ -3,7 +3,7 @@ import { Card, DualSection } from '../src/layout.js';
 import { KvTable, Badge } from '../src/display.js';
 import { Sparkline } from '../src/charts.js';
 import { List, ListItem } from '../src/list.js';
-import { Markdown } from '../src/markdown.js';
+import { MarkdownView } from '../src/markdown.js';
 import { ThemeProvider } from '../src/theme.js';
 import { styleObject } from '../src/styles.js';
 import { tint } from '../src/utilities.js';
@@ -74,8 +74,8 @@ describe('component review regressions', () => {
     const separator = `|${Array.from({ length: 100 }, () => '---').join('|')}|`;
     const source = [emptyRow, separator, ...Array.from({ length: 101 }, () => emptyRow)].join('\n');
     expect(source.length).toBeLessThan(100_000);
-    await expect(renderToHtml(jsx(Markdown, { source }))).rejects.toThrow('maximum token count 10000');
-    expect(await renderToHtml(jsx(Markdown, { source: '| | |\n|---|---|\n| | |' }))).toContain('role="cell"');
+    await expect(renderToHtml(jsx(MarkdownView, { source }))).rejects.toThrow('maximum token count 10000');
+    expect(await renderToHtml(jsx(MarkdownView, { source: '| | |\n|---|---|\n| | |' }))).toContain('role="cell"');
   });
 
   it('preserves awaiting promise children while applying the exact surrounding theme', async () => {

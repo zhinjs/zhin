@@ -137,6 +137,44 @@ describe('initiator self-approval port', () => {
     }
   });
 
+  // #1250 第 74 批审查 M1: an approval only takes explicit approval words, never casual answers.
+  it('does not approve on 好 / ok / 是 / y / 确定 / true, and stays pending until an explicit answer', async () => {
+    const f = setup('alice');
+    const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
+    let settled = false;
+    const outcome = port.requestApprovalOutcome(adminRequest()).then(value => { settled = true; return value; });
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+    for (const answer of ['好', 'ok', '是', 'y', '确定', 'true', 'OK!']) {
+      // Claimed as an (invalid) answer of the prompt once the prompt waits again, so it is not handed
+      // to the agent either; it never settles the approval.
+      await vi.waitFor(() => expect(f.reply('alice', answer)).toBe(true));
+      await new Promise(resolve => setTimeout(resolve, 5));
+      expect(settled).toBe(false);
+    }
+    // The first invalid answer re-sent the prompt (Core's invalid-answer flow).
+    expect(f.prompts.length).toBeGreaterThanOrEqual(2);
+    await vi.waitFor(() => expect(f.reply('alice', '同意')).toBe(true));
+    await expect(outcome).resolves.toEqual({ status: 'approved', decision: 'approve-once' });
+  });
+
+  it.each(['同意', 'yes', '2', 'Approve', '批准！'])('approves on %s', async answer => {
+    const f = setup('alice');
+    const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
+    const outcome = port.requestApprovalOutcome(adminRequest());
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+    expect(f.reply('alice', answer)).toBe(true);
+    await expect(outcome).resolves.toEqual({ status: 'approved', decision: 'approve-once' });
+  });
+
+  it.each(['拒绝', 'deny', '否', '1'])('rejects on %s', async answer => {
+    const f = setup('alice');
+    const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
+    const outcome = port.requestApprovalOutcome(adminRequest());
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+    expect(f.reply('alice', answer)).toBe(true);
+    await expect(outcome).resolves.toEqual({ status: 'denied', by: 'user' });
+  });
+
   it('does not let the initiator approve a human-only tool', async () => {
     const f = setup('alice');
     const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction, selfApproval: true });
@@ -199,10 +237,14 @@ describe('initiator self-approval port', () => {
     expect(f.reply('alice', '取消')).toBe(true);
     await expect(first).resolves.toEqual({ status: 'denied', by: 'user' });
 
+    // #1250 第 74 批: 取消 is a cancel word, not a reject alias — it leaves the prompt (a rejection)
+    // and Core confirms with 已取消。, like every other prompt.
+    expect(f.prompts[1]).toBe('已取消。');
+
     const second = port.requestApprovalOutcome(adminRequest({ requestId: 'turn:second' }));
-    await vi.waitFor(() => expect(f.prompts).toHaveLength(2));
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(3));
     expect(f.reply('alice', '', { segments: [{ type: 'action', data: { payload: approveFirst } }] })).toBe(false);
-    const [, approveSecond] = buttonPayloads(f.prompts[1]);
+    const [, approveSecond] = buttonPayloads(f.prompts[2]);
     expect(approveSecond).not.toBe(approveFirst);
     expect(f.reply('alice', '', { segments: [{ type: 'action', data: { payload: approveSecond } }] })).toBe(true);
     await expect(second).resolves.toEqual({ status: 'approved', decision: 'approve-once' });
@@ -254,6 +296,34 @@ describe('approval prompts are marked for the surface', () => {
     });
     await port.requestApprovalOutcome(request({ purpose: 'intent' }));
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'approval' }));
+  });
+});
+
+describe('owner approval in a group (#1250 第 74 批审查 M1)', () => {
+  it('does not approve on 好 / ok, then approves on 同意', async () => {
+    const f = setup('boss', conversation('group', 'room'));
+    const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction });
+    let settled = false;
+    const outcome = port.requestApprovalOutcome(request({ conversationScope: 'group' })).then(value => { settled = true; return value; });
+    await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+    for (const answer of ['好', 'ok']) {
+      await vi.waitFor(() => expect(f.reply('boss', answer)).toBe(true));
+      await new Promise(resolve => setTimeout(resolve, 5));
+      expect(settled).toBe(false);
+    }
+    await vi.waitFor(() => expect(f.reply('boss', '同意')).toBe(true));
+    await expect(outcome).resolves.toEqual({ status: 'approved', decision: 'approve-once' });
+  });
+
+  it('approves once on 2 and rejects on no', async () => {
+    for (const [answer, expected] of [['2', { status: 'approved', decision: 'approve-once' }], ['no', { status: 'denied', by: 'user' }]] as const) {
+      const f = setup('boss', conversation('group', 'room'));
+      const port = createRuntimeApprovalPort({ isMaster: false, interaction: f.interaction });
+      const outcome = port.requestApprovalOutcome(request({ conversationScope: 'group' }));
+      await vi.waitFor(() => expect(f.prompts).toHaveLength(1));
+      expect(f.reply('boss', answer)).toBe(true);
+      await expect(outcome).resolves.toEqual(expected);
+    }
   });
 });
 

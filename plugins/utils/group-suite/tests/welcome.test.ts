@@ -13,7 +13,8 @@ import { Adapter, AdapterIndex, createEndpointSpecification, defineAdapter, endp
 import { HandlerIndex, handlerFeatureId } from '../../../../packages/im/handler/src/index.js';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '../../../../packages/im/middleware/src/index.js';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, childPluginId, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
-import { ImRuntime, memberWelcomeOwnerToken, outboundMessageToken, type IncomingNotice, type OutboundEnvelope } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
+import { CommandIndex, commandFeatureId, defineCommand } from '../../../../packages/im/command/src/index.js';
+import { ImRuntime, installComponentHost, memberWelcomeOwnerToken, outboundMessageToken, type IncomingNotice, type OutboundEnvelope } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { EndpointDeliveryError } from '../../../../packages/im/im-contract/src/index.js';
 import { AiControlPlane, AiSessionOps, SessionProfileStore, type ControlFlagsPatch } from '../../../../packages/im/agent/src/index.js';
 import { MemberLifecycle, capabilityLocalName } from '../../../../packages/im/agent/src/plugin-runtime/index.js';
@@ -73,7 +74,9 @@ interface SessionWelcomeOptions {
   readonly flags?: ControlFlagsPatch;
 }
 
-async function fixture(session?: SessionWelcomeOptions) {
+const WELCOME = '欢迎 ${sender.name} (${sender.id})';
+
+async function fixture(session?: SessionWelcomeOptions, welcomeMessage = WELCOME) {
   const root = rootPluginId();
   const first = childPluginId(root, 'account-one'); const second = childPluginId(root, 'account-two');
   const alpha = childPluginId(root, 'alpha'); const beta = childPluginId(root, 'beta');
@@ -100,15 +103,24 @@ async function fixture(session?: SessionWelcomeOptions) {
     source: '/handlers/welcome/index.ts', definition: welcome }));
   const observer = createCapabilitySlot({ owner: root, feature: middlewareFeatureId, localName: 'observe', source: '/middlewares/observe/index.ts',
     definition: defineMiddleware<OutboundEnvelope>({ target: 'outbound', async handle({ input }, next) { requesters.push(input.requester); await next(); } }) });
+  const checkin = createCapabilitySlot({ owner: alpha, feature: commandFeatureId, localName: 'checkin', source: '/commands/checkin/index.ts',
+    definition: defineCommand({ execute: async () => 'ok' }) });
   const ids = [root, first, second, alpha, beta];
   const state: SnapshotState = { root,
     tree: new Map(ids.map(id => [id, { id, ...(id === root ? {} : { parent: root }), instanceKey: id.split('/').at(-1)!,
       packageName: '@test/welcome-scope', packageRoot: '/project', children: id === root ? ids.slice(1) : [] }])),
-    config: new Map(ids.map(id => [id, id === alpha ? { welcomeMessage: '欢迎 {name} ({id})', welcomeConversations: [] }
-      : id === beta ? { welcomeMessage: 'not enabled', welcomeConversations: [] } : {}])),
-    capabilities: new Map([...adapters, ...handlers, observer].map(slot => [slot.id, slot])), projections: new Map(),
+    config: new Map(ids.map(id => [id, id === alpha ? { welcomeMessage, welcomeConversations: [] }
+      : id === beta ? { welcomeMessage: 'not enabled', welcomeConversations: [] }
+      // #1250: the two accounts of the same adapter kind use different command prefixes.
+      : id === first ? { commandPrefix: '#' } : id === second ? { commandPrefix: '/' } : {}])),
+    capabilities: new Map([...adapters, ...handlers, observer, checkin].map(slot => [slot.id, slot])), projections: new Map(),
     resources: new Map(ids.map(id => [id, new Map<string, unknown>([[endpointEventGatewayToken.id, createTestEventGateway()], [outboundMessageToken.id, im]])])),
   };
+  // Root resources as the instance installs them: the IM gateway (with its command environment) and the Component Host.
+  const rootResources = state.resources.get(root) as Map<string, unknown>;
+  const scope = { provide: (token: { id: string }, value: unknown) => { rootResources.set(token.id, value); } };
+  im.install(scope as never);
+  installComponentHost()({ resources: scope } as never);
   const lifecycle = session ? await sessionWelcome(im, String(adapters[0]!.id), session) : undefined;
   if (lifecycle) {
     const owner = Object.freeze({ ownsWelcome: lifecycle.ownsWelcome.bind(lifecycle) });
@@ -118,12 +130,13 @@ async function fixture(session?: SessionWelcomeOptions) {
   const index = await AdapterIndex.create(adapters, view, new AbortController().signal);
   const store = new SnapshotStore({ ...state, projections: new Map([
     [adapterFeatureId, index], [handlerFeatureId, new HandlerIndex(handlers, view)], [middlewareFeatureId, new MiddlewareIndex([observer], view)],
+    [commandFeatureId, new CommandIndex([checkin], view, {})],
   ]) });
   im.attach(store); await index.start(); index.open();
   const target: DeliveryTarget = { endpoint: im.endpoints.list().find(item => item.id === String(adapters[0]!.id))!.endpoint,
     kind: 'group', id: 'same-group', parent: { kind: 'channel', id: 'parent' }, threadId: 'thread' };
   const config = new Map(store.current.config);
-  config.set(alpha, { welcomeMessage: '欢迎 {name} ({id})', welcomeConversations: [target, target] });
+  config.set(alpha, { welcomeMessage, welcomeConversations: [target, target] });
   store.commit(0, { snapshot: createSnapshotView(1, { ...store.current, config }), dispose() {} });
   const notice: IncomingNotice = { id: 'joined', type: 'notice', name: 'notice.group.member_increase', timestamp: 1, metadata: {},
     conversation: { kind: target.kind, id: target.id, parent: target.parent, threadId: target.threadId }, target: { id: 'new', name: 'Bob' } };
@@ -132,7 +145,13 @@ async function fixture(session?: SessionWelcomeOptions) {
     return im.endpointEvents.receive({ name: 'notice.receive', endpoint: row.endpoint, payload,
       client: index.clientById(row.id as typeof adapters[number]['id']) });
   };
-  return { target, alpha, root, sent, requesters, adapters, notice, receive, lifecycle,
+  /** Allow every account's same-group conversation (the exact list above names only the first). */
+  const allowEverywhere = () => {
+    const next = new Map(store.current.config);
+    next.set(alpha, { welcomeMessage });
+    store.commit(store.current.generation, { snapshot: createSnapshotView(store.current.generation + 1, { ...store.current, config: next }), dispose() {} });
+  };
+  return { target, alpha, root, sent, allowEverywhere, requesters, adapters, notice, receive, lifecycle,
     fail: (status: typeof failure) => { failure = status; },
     close: async () => { lifecycle?.dispose(); await store.close(); await index.stop(); },
   };
@@ -204,6 +223,39 @@ describe('group-suite welcome · delivery', () => {
     try {
       f.fail(status); await expect(f.receive()).rejects.toThrow('Group welcome delivery');
       expect(f.sent).toHaveLength(1); expect(f.sent[0]!.conversation).toEqual(f.target); expect(f.requesters).toEqual([f.alpha]);
+    } finally { await f.close(); }
+  });
+});
+
+describe('group-suite welcome · outbound template (#1250)', () => {
+  const payloadText = (request: EndpointSendRequest) => (request.payload as { data: { text: string } }[]).map(item => item.data.text).join('');
+
+  it('renders ${bot.menu} / ${bot.prefix} / ${command.*} for the account that sends the welcome', async () => {
+    const f = await fixture(undefined, '欢迎 ${sender.name}！发送 ${bot.menu} 查看，${command.checkin} 签到 [${bot.prefix}]');
+    try {
+      f.allowEverywhere();
+      await f.receive();
+      await f.receive(f.notice, String(f.adapters[1]!.id));
+      expect(f.sent.map(payloadText)).toEqual([
+        '欢迎 Bob！发送 #菜单 查看，#checkin 签到 [#]',
+        '欢迎 Bob！发送 /菜单 查看，/checkin 签到 [/]',
+      ]);
+    } finally { await f.close(); }
+  });
+
+  it('treats the nickname as data and leaves {name} / {id} and the removed top-level placeholders unexpanded', async () => {
+    const f = await fixture(undefined, '{name} {id} ${menu} ${prefix} ${adapter} 欢迎 ${sender.name}');
+    try {
+      await f.receive({ ...f.notice, target: { id: 'new', name: '${bot.menu}{name}${sender.id}' } });
+      expect(f.sent.map(payloadText)).toEqual(['{name} {id} ${menu} ${prefix} ${adapter} 欢迎 ${bot.menu}{name}${sender.id}']);
+    } finally { await f.close(); }
+  });
+
+  it('falls back to the member id when the platform gives no name', async () => {
+    const f = await fixture();
+    try {
+      await f.receive({ ...f.notice, target: { id: 'new' } });
+      expect(f.sent.map(payloadText)).toEqual(['欢迎 new (new)']);
     } finally { await f.close(); }
   });
 });

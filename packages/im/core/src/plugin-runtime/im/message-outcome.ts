@@ -4,8 +4,9 @@
  * collects several candidates, the default visibility / reply per code and the zh-CN / en
  * templates shown to the sender and to administrators.
  */
+import { describeCommandDenial } from '@zhin.js/permission';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import type { Locale, PluginId } from '@zhin.js/plugin-runtime';
+import { createMessages, type Locale, type MessageValues, type PluginId } from '@zhin.js/plugin-runtime';
 
 /** Outcome codes (ADR 0061 §1.1–§1.6). Snake case, append-only. @public */
 export const MESSAGE_OUTCOMES = Object.freeze([
@@ -155,6 +156,7 @@ export interface MessageOutcomeTemplate {
   readonly admin: Bilingual;
 }
 
+/** Table data only; rendering goes through {@link outcomeMessages}. */
 const tpl = (senderZh: string, senderEn: string, adminZh: string, adminEn: string): MessageOutcomeTemplate =>
   Object.freeze({ sender: Object.freeze({ 'zh-CN': senderZh, en: senderEn }), admin: Object.freeze({ 'zh-CN': adminZh, en: adminEn }) });
 
@@ -170,7 +172,7 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
   suggested: tpl('没有这条指令，已提示相近的指令。', 'No such command; suggested a close one.', '近似匹配提示，来自 {owner}。', 'Near-match suggestion from {owner}.'),
   refused: tpl('插件拒绝了这次请求。', 'The plugin declined.', 'UserFacingError 来自 {owner}（{stage}）。', 'UserFacingError from {owner} ({stage}).'),
   invalid_input: tpl('指令参数不对，已回复用法。', 'Wrong arguments; usage was sent.', '指令 {command} 参数校验失败。', 'Command {command} failed validation.'),
-  permission_denied: tpl('你没有权限执行这条指令。', 'You are not allowed to run this command.', '指令 {command} 缺少权限（{reason}）。', 'Command {command} denied ({reason}).'),
+  permission_denied: tpl(describeCommandDenial(undefined, 'zh-CN'), describeCommandDenial(undefined, 'en'), '指令 {command} 缺少权限（{reason}）。', 'Command {command} denied ({reason}).'),
   rate_limited: tpl('太频繁或正忙，这次没有处理，请稍后再试。', 'Too frequent or busy; not processed this time.', '限流：{reason}。', 'Limited: {reason}.'),
   approval_denied: tpl('需要确认的操作被拒绝了，没有执行。', 'The action needing approval was declined and did not run.', '审批被拒绝：{detail}。', 'Approval declined: {detail}.'),
   approval_timeout: tpl('等确认超时了，操作没有执行。', 'Approval timed out; the action did not run.', '审批超时：{detail}。', 'Approval timed out: {detail}.'),
@@ -204,14 +206,62 @@ export const MESSAGE_OUTCOME_TEMPLATES: Readonly<Record<MessageOutcome, MessageO
 
 /**
  * Reasons whose wording the outcome's template would misstate (#1250): a prompt replaced by a newer
- * prompt in the same conversation was not left by the sender.
+ * prompt in the same conversation was not left by the sender; a `reset` (the clear command) that did
+ * not clear was a command, not an unaddressed chat message (第 84 批); an Agent management command on an
+ * instance without the Host's operation resources was not declined by a plugin (第 84 批); nor was one
+ * a plugin forwarded, or whose dispatch lease the Host refused (第 85 批).
  */
 const REASON_TEMPLATES: Readonly<Partial<Record<MessageOutcome, Readonly<Record<string, MessageOutcomeTemplate>>>>> = Object.freeze({
+  refused: Object.freeze({
+    management_unavailable: tpl('管理命令在此实例不可用，没有执行。', 'Management commands are not available on this instance; nothing was run.',
+      '管理命令 {command} 未执行：实例未接 Agent Host 的操作资源（{reason}）。', 'Management command {command} not run: the instance has no Agent Host operation resources ({reason}).'),
+    direct_command_required: tpl('这条命令经插件转发时不能执行，没有执行；请直接发送它。', 'This command cannot run when a plugin forwards it; nothing was run. Send it directly.',
+      '管理命令 {command} 未执行：由插件转发，Host 不提供分发租约（{reason}）。', 'Management command {command} not run: forwarded by a plugin, so the Host withheld the dispatch lease ({reason}).'),
+    dispatch_lease_rejected: tpl('这条管理命令没有通过本实例的校验，没有执行。', 'This management command failed this instance\'s check; nothing was run.',
+      '管理命令 {command} 未执行：Host 拒绝了不是本实例分发交出的租约（{reason}）。', 'Management command {command} not run: the Host refused a lease its own dispatch did not hand out ({reason}).'),
+  }),
+  not_addressed: Object.freeze({
+    clear_command: tpl('清空指令只在我会回复你的地方生效（群里要 @ 我），这次没有清空。',
+      'The clear command only works where I answer you (mention me in a group); nothing was cleared.',
+      '清空指令未生效：此处 AI 不回复该发送者或未点名（{reason}）。', 'Clear command not applied: not addressed or the AI does not answer the sender here ({reason}).'),
+    live_room_clear: tpl('直播间里清空指令不清空上下文，也不进 AI 回合。', 'In a live room the clear command clears nothing and starts no AI turn.',
+      '直播间里清空指令不生效（{reason}）。', 'Clear command not applied in a live room ({reason}).'),
+  }),
   interaction_cancelled: Object.freeze({
     superseded: tpl('这个提问被之后的新提问替代了，没有继续。', 'A newer question replaced this one; nothing more was done.',
       '提问被同一会话中更新的提问替代，提问方 {owner}（{stage}）。', 'Prompt replaced by a newer prompt in the conversation, asked by {owner} ({stage}).'),
   }),
 });
+
+/**
+ * #1250 第 81 批: the templates rendered through the repository's one bilingual catalog
+ * (`createMessages`), which checks at load that both languages use the same placeholders. Keys are
+ * `<outcome>.<audience>` and `<outcome>:<reason>.<audience>`.
+ */
+const outcomeMessages = createMessages(Object.fromEntries(checkOutcomePlaceholders([
+  ...Object.entries(MESSAGE_OUTCOME_TEMPLATES).map(([code, template]) => [code, template] as const),
+  ...Object.entries(REASON_TEMPLATES).flatMap(([code, reasons]) =>
+    Object.entries(reasons ?? {}).map(([reason, template]) => [`${code}:${reason}`, template] as const)),
+]).flatMap(([key, template]) => [[`${key}.sender`, template.sender], [`${key}.admin`, template.admin]])));
+
+/**
+ * Load-time guard (#1250 第 81 批): a placeholder outside {@link MESSAGE_OUTCOME_PLACEHOLDERS} gets no
+ * value from {@link outcomeValues}, so rendering it would throw (`GET /conversations/outcomes` 500).
+ * Fail at import instead, which every test importing this module catches.
+ */
+function checkOutcomePlaceholders<T extends readonly (readonly [string, MessageOutcomeTemplate])[]>(entries: T): T {
+  const known: ReadonlySet<string> = new Set(MESSAGE_OUTCOME_PLACEHOLDERS);
+  for (const [key, template] of entries) {
+    for (const [audience, texts] of Object.entries(template)) {
+      for (const [locale, text] of Object.entries(texts as Bilingual)) {
+        for (const [, name] of text.matchAll(/\{(\w+)\}/gu)) {
+          if (!known.has(name!)) throw new Error(`Message outcome template ${key}.${audience} (${locale}) uses unknown placeholder {${name}}`);
+        }
+      }
+    }
+  }
+  return entries;
+}
 
 /**
  * Renders the human-readable reason of a record for one audience. Missing placeholders read as
@@ -222,13 +272,21 @@ export function formatMessageOutcome(
   record: Pick<MessageOutcomeRecord, 'outcome'> & Partial<MessageOutcomeRecord>,
   options: Readonly<{ audience: 'sender' | 'admin'; locale?: Locale; includeDetail?: boolean }>,
 ): string {
-  const template = (record.reason ? REASON_TEMPLATES[record.outcome]?.[record.reason] : undefined)
-    ?? MESSAGE_OUTCOME_TEMPLATES[record.outcome] ?? MESSAGE_OUTCOME_TEMPLATES.unrecorded;
-  const locale: Locale = options.locale === 'en' ? 'en' : 'zh-CN';
-  const text = template[options.audience][locale];
-  return text.replace(/\{(\w+)\}/gu, (_match, name: string) => {
-    if ((name === 'detail' || name === 'errorId') && options.audience === 'admin' && !options.includeDetail) return '—';
-    const value = name === 'stage' ? record.lastStage ?? record.stage : (record as Record<string, unknown>)[name];
-    return typeof value === 'string' && value ? value : '—';
-  });
+  const reasons = Object.hasOwn(REASON_TEMPLATES, record.outcome) ? REASON_TEMPLATES[record.outcome] : undefined;
+  // Own keys only: a reason such as `constructor` must not reach `Object.prototype`.
+  const key = record.reason && reasons && Object.hasOwn(reasons, record.reason) ? `${record.outcome}:${record.reason}`
+    : Object.hasOwn(MESSAGE_OUTCOME_TEMPLATES, record.outcome) ? record.outcome : 'unrecorded';
+  return outcomeMessages(options.locale, `${key}.${options.audience}`, outcomeValues(record, options));
+}
+
+/** Every placeholder's value: the record field, or `—` when absent or hidden from this audience. */
+function outcomeValues(
+  record: Partial<MessageOutcomeRecord>,
+  options: Readonly<{ audience: 'sender' | 'admin'; includeDetail?: boolean }>,
+): MessageValues {
+  return Object.fromEntries(MESSAGE_OUTCOME_PLACEHOLDERS.map((name) => {
+    if ((name === 'detail' || name === 'errorId') && options.audience === 'admin' && !options.includeDetail) return [name, '—'];
+    const value = name === 'stage' ? record.lastStage ?? record.stage : record[name];
+    return [name, typeof value === 'string' && value ? value : '—'];
+  }));
 }

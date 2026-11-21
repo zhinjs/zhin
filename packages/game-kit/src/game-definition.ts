@@ -16,7 +16,6 @@ export interface RuntimeRegisteredGame {
   readonly icon: string;
   readonly description: string;
   readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
-  readonly commandPrefix: string;
   /** Canonical local command head, resolved against the owning plugin's CommandIndex. */
   readonly commandPath?: string;
   readonly quickStart?: string;
@@ -45,7 +44,6 @@ export function defineGame(
 ): Readonly<GameDefinition> {
   if (!game.id.trim()) throw new TypeError('Game id cannot be empty');
   if (!game.title.trim()) throw new TypeError('Game title cannot be empty');
-  if (!game.commandPrefix.trim()) throw new TypeError('Game commandPrefix cannot be empty');
   return Object.freeze({
     ...game,
     aliases: game.aliases ? Object.freeze([...game.aliases]) : undefined,
@@ -62,7 +60,7 @@ export function parseGameDefinition(value: unknown): GameDefinition {
   if (!value || typeof value !== 'object') throw invalidGame();
   const game = value as Partial<GameDefinition>;
   if (game.$feature !== gameBrand || typeof game.id !== 'string'
-    || typeof game.title !== 'string' || typeof game.commandPrefix !== 'string'
+    || typeof game.title !== 'string'
     || !game.records || !game.sessions) {
     throw invalidGame();
   }

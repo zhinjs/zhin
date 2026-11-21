@@ -6,6 +6,7 @@
  * and the refresh control go to the page shell (`usePageChrome`); without a shell (an older
  * Console) the page draws that header itself.
  */
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Card,
@@ -37,7 +38,7 @@ import { pluginRpc } from '../console-utils/remoteApi.js';
 import { CommentReviewSession } from '../review-console/CommentReviewPage.js';
 import { ConversationDirectoryContext, useConversationDirectory } from '../ui/conversation-directory.js';
 import { ConversationPicker } from '../ui/conversation-picker.js';
-import { useLocale, type PluginUiLocale, type PluginUiText } from '../ui/locale.js';
+import { useLocale, type PluginUiText } from '../ui/locale.js';
 import { resolveSyncPluginId } from '../ui/plugin-id.js';
 import { usePluginRpc } from '../ui/rpc.js';
 import {
@@ -118,7 +119,7 @@ function ActionInlineResult({ name, spec, result, fallbackTone = 'neutral', mess
   readonly result: Record<string, unknown>;
   readonly fallbackTone?: BadgeTone;
   readonly message?: string;
-  readonly locale: PluginUiLocale;
+  readonly locale: ConsoleLocale;
   readonly t: PluginUiText['t'];
   readonly onDismiss: () => void;
 }) {

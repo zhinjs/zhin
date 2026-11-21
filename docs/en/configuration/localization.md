@@ -28,7 +28,9 @@ Personal preferences require SQLite, MySQL, or PostgreSQL. Project language stil
 
 A personal preference takes priority, including in groups and channels. It is shared across conversations with the same bot account and sender, but isolated across platforms and bot accounts. Two members in one group can therefore receive different languages.
 
-Confirmations, follow-up questions, music selections, and menu pagination keep their starting language until completion. A preference change affects new operations. Chinese flows accept their Chinese confirmation/cancellation text; English flows accept the English equivalent. Valid button actions and numeric choices retain their existing scope. The language command does not bypass a pending interaction.
+The personal language also sets the language of AI replies (see [AI-generated content](#ai-generated-content)): after `/language en`, the AI answers in English even when asked in Chinese, unless the current message explicitly asks for another language (such as "answer in Chinese"). Users who never set a personal language are unaffected.
+
+Confirmations, follow-up questions, music selections, and menu pagination keep their starting language until completion. A preference change affects new operations. Confirmation and cancellation replies are accepted in Chinese or English whatever the flow's language (`yes` in a Chinese flow and `取消` in an English one both count). Valid button actions and numeric choices retain their existing scope. The language command does not bypass a pending interaction.
 
 The default menu entry is `menu` in English and `菜单` in Chinese. Explicitly configured menu keywords and custom labels remain unchanged.
 
@@ -44,7 +46,16 @@ Reminders accept finite English time patterns such as `in 10 minutes` and `tomor
 
 ## AI-generated content
 
-AI-generated text follows the user's explicit requested reply language first, then the language of their actual message. If neither is clear, it uses `Reply language fallback: zh-CN` or `en` from `[Turn context]`, resolved from the trusted personal preference or project language. Progress and exhausted-turn summaries follow the same rule; an English framework notice does not determine the user's language. This value stays in the dynamic turn context rather than rewriting the stable system-prompt prefix per user.
+The language of AI-generated text is chosen in this order:
+
+1. A reply language the user explicitly asks for. When the user set a personal language with `/language`, only a request in the **current message** overrides that setting.
+2. The personal language the user set with `/language`. That turn's `[Turn context]` reads `Reply language (set by the user with /language): en.`, followed by a note that the setting applies even when the user writes in another language and that a language in `[User profile]` is only a reference and never overrides it.
+3. The language of the user's actual message (an English framework notice does not determine the user's language).
+4. If none of these is clear, `Reply language fallback: zh-CN` or `en` (the project language, Chinese by default), then SOUL.md.
+
+Users who never set a personal language keep the previous behaviour: an explicit request first, then the language of their message, then the project language as the fallback (the line still reads `Reply language fallback: …`). Only a turn that answers one present sender uses that sender's setting; merged multi-sender group turns, live danmaku windows and ambient turns where the bot chimes in on its own keep the fallback, so members of one group do not affect each other. Chat-created reminders and scheduled tasks keep the language captured when they were created.
+
+Progress and exhausted-turn summaries follow the same rule and wording. The value stays in the dynamic turn context rather than rewriting the stable system-prompt prefix per user. The `language` field of the `user_profile` tool is only a reference: the model should not change the reply language for the user, but suggest the language command (such as `/language en`) instead.
 
 This does not store two language versions of every generated reply or add a model call to translate the result. Model-generated content remains unchanged. Explicit instructions specify the language; actual model compliance still requires provider validation. Framework menus, approval choices, errors and fixed generation-failure messages still use the configured language. A plugin's static Prompt Section should respect the user-language priority above instead of overriding explicit requests. It currently has no separate `contentI18n` body slot.
 
@@ -85,6 +96,10 @@ preferredAliasI18n: { en: 'earthquake subscribe' },
 The preferred alias must exist in `alias`. Menus, help, and command references use the same index; translation does not create a second routing system.
 
 Every `createMessages()` key requires both languages with matching placeholder names. Substitution is single-pass, and returns plain text; JSX/renderers remain responsible for HTML escaping.
+
+To list several items, use `formatList(locale, items)` from `zhin.js/i18n` instead of a hand-written separator: Chinese uses `、` and English `, `, so `formatList('en', ['a', 'b'])` is `a, b`. Pass `{ separator: 'comma' }` for longer phrases (`，` / `, `) and `{ separator: 'semicolon' }` for clauses (`；` / `; `). It only joins: no `and` in English, no escaping or sorting.
+
+Check a language value with `isLocale()` and fall back with `resolveLocale()` (an unsupported value becomes `zh-CN`); do not write `locale === 'en' ? 'en' : 'zh-CN'` or guess from an `en` prefix. Commands and messages share one project language: the project language projected with the current generation, then the Root configuration's `locale`. The Console API's `?locale=` accepts a single `zh-CN` or `en`; when absent the default language applies (page lists and the plugin marketplace then show untranslated names), any other value is a 400 (`invalid_locale`).
 
 Translate schema labels without changing validation or persisted values:
 

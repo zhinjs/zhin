@@ -2,6 +2,7 @@ import type { ConsolePrincipal } from '@zhin.js/host-http';
 import {
   CONSOLE_PERMISSIONS,
   grantsAllow,
+  hasGlobalOwnerGrant,
   type GatewayAuthorizedPackage,
   type GatewayTransactionOperation,
 } from '@zhin.js/console-protocol';
@@ -29,7 +30,7 @@ const EXACT_VERSION = /^\d{1,9}\.\d{1,9}\.\d{1,9}(?:-[0-9A-Za-z][0-9A-Za-z.-]{0,
 export function isGatewayOwner(principal: GatewayPrincipal | undefined): boolean {
   if (principal === 'local') return true;
   if (!principal || principal.kind === 'bootstrap') return false;
-  return principal.grants.some(grant => grant.role === 'owner' && grant.scope.kind === 'global');
+  return hasGlobalOwnerGrant(principal.grants);
 }
 
 /** Whether the principal holds a global Console permission (bootstrap: only an open, local Host). */

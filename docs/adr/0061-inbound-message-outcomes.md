@@ -101,30 +101,33 @@ sidebar: false
 
 | outcome | reason | 可见 | 发起人人话（zh / en） | 管理员补充（zh / en） |
 | --- | --- | --- | --- | --- |
-| `replied` | `agent` / `agent_merged`（合流后回复） | 发起人 | 已回复。 / Replied. | 由 Agent `{agent}` 回复，回合 `{turnId}`。 / Replied by agent `{agent}`, turn `{turnId}`. |
-| `command_replied` | `executed` / `menu` / `help` | 发起人 | 已执行指令 {command}。 / Ran command {command}. | 指令 `{command}`（插件 `{owner}`），耗时 {ms} ms。 / Command `{command}` (plugin `{owner}`) in {ms} ms. |
-| `handler_replied` | `middleware` / `handler` / `middleware_replied`（中间件自己回复后停止分发，#1250） | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 {stage} 回复。 / Replied by `{owner}` ({stage}). |
-| `interaction_answered` | `prompt` / `button` | 发起人 | 已作为对「{prompt}」的回答。 / Taken as your answer to "{prompt}". | 提问方 `{owner}`，提问 `{promptId}`。 / Prompt `{promptId}` by `{owner}`. |
-| `suggested` | `near_miss` | 发起人 | 没有这条指令，已提示相近的指令。 / No such command; suggested a close one. | 近似匹配 `{candidates}`。 / Near matches `{candidates}`. |
-| `refused` | `user_facing_error` | 发起人 | 插件拒绝了这次请求：{text} / The plugin declined: {text} | `UserFacingError` 来自 `{owner}`。 / `UserFacingError` from `{owner}`. |
+| `replied` | `agent` / `agent_merged`（合流后回复） | 发起人 | 已回复。 / Replied. | 由 Agent 回复，回合 `{turnId}`。 / Replied by the agent, turn `{turnId}`. |
+| `command_replied` | `executed` / `menu` / `help` | 发起人 | 已执行指令 `{command}`。 / Ran command `{command}`. | 指令 `{command}`（插件 `{owner}`）。 / Command `{command}` (plugin `{owner}`).（#1250 第 84 批：指令什么都没返回、什么都没发，且执行期间自己记了结局——如没有清空的 `reset`——时保留指令自己的结局，分发层不再追加 `command_replied`。） |
+| `handler_replied` | `middleware` / `handler` / `middleware_replied`（中间件自己回复后停止分发，#1250） | 发起人 | 已由插件处理。 / Handled by a plugin. | 由插件 `{owner}` 的 `{stage}` 回复。 / Replied by `{owner}` (`{stage}`). |
+| `interaction_answered` | `prompt` / `button` | 发起人 | 已作为对等待中提问的回答。 / Taken as your answer to a pending question. | 提问方 `{owner}`。 / Prompt by `{owner}`. |
+| `suggested` | `near_miss` | 发起人 | 没有这条指令，已提示相近的指令。 / No such command; suggested a close one. | 近似匹配提示，来自 `{owner}`。 / Near-match suggestion from `{owner}`. |
+| `refused` | `user_facing_error` | 发起人 | 插件拒绝了这次请求。 / The plugin declined.（聊天里回复的是错误本身） | `UserFacingError` 来自 `{owner}`（`{stage}`）。 / `UserFacingError` from `{owner}` (`{stage}`). |
 | `refused` | 指令自带的拒绝码（`UserFacingError` 的 `reason`，如 `simulated-sender`、`unkeyed-conversation`、`not-admin`、`usage`；#1250 第 31 批） | 发起人 | 同上 | 同上；`reason` 为该码，回复文字仍是错误本身。码须匹配 `^[a-z][a-z0-9_.:-]{0,63}$`，否则记 `user_facing_error`。 |
+| `refused` | `management_unavailable`（Agent 管理命令 `models` / `health` / `tree` / `fork` / `compact` / `reset` 所在实例没有接 Agent Host 的操作资源 `createHostOperationResources`，即使用户直接发送也不执行；#1250 第 84 批） | 发起人 | 管理命令在此实例不可用，没有执行。 / Management commands are not available on this instance; nothing was run. | 管理命令 `{command}` 未执行：实例未接 Agent Host 的操作资源（`{reason}`）。 / Management command `{command}` not run: the instance has no Agent Host operation resources (`{reason}`). |
+| `refused` | `direct_command_required`（Agent 管理命令 `models` / `health` / `tree` / `fork` / `compact` / `reset` 由插件中间件 / handler / 按钮回调经 `CommandIndex.dispatch` 转发，Host 不提供分发租约；调用方自传的 `operation` 在装了 Host 的实例上同样如此；#1250 第 84 / 85 批） | 发起人 | 这条命令经插件转发时不能执行，没有执行；请直接发送它。 / This command cannot run when a plugin forwards it; nothing was run. Send it directly.（聊天里回复的是带命令前缀的「请直接发送 /reset。」） | 管理命令 `{command}` 未执行：由插件转发，Host 不提供分发租约（`{reason}`）。 / Management command `{command}` not run: forwarded by a plugin, so the Host withheld the dispatch lease (`{reason}`). |
+| `refused` | `dispatch_lease_rejected`（Host 侧拒绝管理命令交来的租约：不是本 Host 分发签发的端口 `retain()` 交出的，或不属于 Root 的真实快照存储，或根本没有租约；嵌入方没把 `holdsDispatchLease` 传给 `AgentTurnIngressRoute` 时一律如此；#1250 第 85 批） | 发起人 | 这条管理命令没有通过本实例的校验，没有执行。 / This management command failed this instance's check; nothing was run. | 管理命令 `{command}` 未执行：Host 拒绝了不是本实例分发交出的租约（`{reason}`）。 / Management command `{command}` not run: the Host refused a lease its own dispatch did not hand out (`{reason}`). |
 
 #### 1.2 未执行但已在聊天里说明（`reply: yes`）
 
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
-| `invalid_input` | `invalid`（命令参数）| 发起人 | 指令参数不对，已回复用法。 / Wrong arguments; usage was sent. | 校验问题：{issues}。 / Validation: {issues}. |
-| `permission_denied` | `denied:<permit 类别>`（`zhin_role` / `platform` / `bot` / `conversation`）| 发起人 | 你没有权限执行这条指令。 / You are not allowed to run this command. | 缺少 `{permit}`。 / Missing `{permit}`. |
-| `rate_limited` | `cooldown` / `busy` / `capacity` / `identity`（命令 `limited`）、`queue_full` / `expired`（Mailbox 拒绝）| 发起人 | 太频繁或正忙，这次没有处理，请稍后再试。 / Too frequent or busy; not processed this time. | {reason}，约 {retryAfter} 秒后可重试。 / {reason}; retry after ~{retryAfter}s. |
-| `approval_denied` | `tool_approval_denied` | 发起人 | 需要确认的操作被拒绝了，{tool} 没有执行。 / The action needing approval was declined; {tool} did not run. | 审批人 `{approver}`，策略 `{policy}`。 / Declined by `{approver}`, policy `{policy}`. |
-| `approval_timeout` | `tool_approval_timeout` | 发起人 | 等确认超时了，{tool} 没有执行。 / Approval timed out; {tool} did not run. | 等待 {seconds} 秒。 / Waited {seconds}s. |
-| `approval_unavailable` | `unattended` / `no_channel` | 发起人 | 这个操作需要有人确认，但现在没有可确认的渠道，{tool} 没有执行。 / This action needs approval but no one can approve it here; {tool} did not run. | 策略 `{policy}`，原因 `{reason}`。 / Policy `{policy}`, reason `{reason}`. |
-| `tool_failed_reported` | `tool_failed` | 发起人 | 有一步操作失败了（{tool}），回复里已说明。 / A step failed ({tool}); the reply says so. | 错误：{detail}。 / Error: {detail}. |
-| `model_timeout` | `no_response` / `request_timeout` / `turn_timeout` | 发起人 | 模型服务没有响应，这次没回上，请稍后再试。 / The model did not respond; please try again later. | `{provider}/{model}` {phase} 超时 {ms} ms（第 {attempt} 次）。 / `{provider}/{model}` {phase} timed out after {ms} ms (attempt {attempt}). |
-| `model_error` | `ProviderErrorKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `unknown`）| 发起人 | 沿用 `chatFailureLine` 现有话术（“刚卡了一下……” 等）。 / Existing `chatFailureLine` lines. | 沿用 `chatFailureLine` 的原因括注 + `{provider}/{model}`。 / Same cause as `chatFailureLine` + `{provider}/{model}`. |
-| `budget_exhausted` | `budget_exceeded:<budget>` | 发起人 | 这件事步骤太多，做到一半停下了。 / Too many steps; stopped partway. | 超出预算 `{budget}`。 / Budget `{budget}` exceeded. |
-| `interaction_timeout` | `timeout`（指令 / Handler / 中间件的 `ask()` 超时，框架已回复「输入超时」；#1250）| 发起人 | 等你回答超时了，这次没有继续。 / The question timed out; nothing more was done. | 提问超时，提问方 `{owner}`（{stage}）。 / Prompt timed out, asked by `{owner}` ({stage}). |
-| `interaction_cancelled` | `cancelled`（回复了取消词）/ `interrupted`（等待期间发了指令、媒体或 @ 机器人）/ `superseded`（被同一人的新提问顶替）（#1250）| 发起人 | 你退出了这次提问，没有继续。 / You left the question; nothing more was done.（`superseded`：这个提问被之后的新提问替代了，没有继续。 / A newer question replaced this one; nothing more was done.）| 提问结束（`{reason}`），提问方 `{owner}`（{stage}）。 / Prompt ended (`{reason}`), asked by `{owner}` ({stage}).（`superseded`：提问被同一会话中更新的提问替代，提问方 `{owner}`（{stage}）。）|
+| `invalid_input` | `invalid`（命令参数）| 发起人 | 指令参数不对，已回复用法。 / Wrong arguments; usage was sent. | 指令 `{command}` 参数校验失败。 / Command `{command}` failed validation. |
+| `permission_denied` | `denied:<permit 类别>`（`zhin_role` / `platform` / `bot` / `conversation`）| 发起人 | 没有权限执行此指令。 / You do not have permission to run this command.（与命令拒绝同源：`describeCommandDenial()`，`@zhin.js/permission`）| 指令 `{command}` 缺少权限（`{reason}`）。 / Command `{command}` denied (`{reason}`). |
+| `rate_limited` | `cooldown` / `busy` / `capacity` / `identity`（命令 `limited`）、`queue_full` / `expired`（Mailbox 拒绝）| 发起人 | 太频繁或正忙，这次没有处理，请稍后再试。 / Too frequent or busy; not processed this time. | 限流：`{reason}`。 / Limited: `{reason}`. |
+| `approval_denied` | `tool_approval_denied` | 发起人 | 需要确认的操作被拒绝了，没有执行。 / The action needing approval was declined and did not run. | 审批被拒绝：`{detail}`。 / Approval declined: `{detail}`. |
+| `approval_timeout` | `tool_approval_timeout` | 发起人 | 等确认超时了，操作没有执行。 / Approval timed out; the action did not run. | 审批超时：`{detail}`。 / Approval timed out: `{detail}`. |
+| `approval_unavailable` | `unattended` / `no_channel` | 发起人 | 这个操作需要有人确认，但现在没有可确认的渠道，没有执行。 / This action needs approval but no one can approve it here; it did not run. | 无审批通道（`{reason}`）。 / No approval channel (`{reason}`). |
+| `tool_failed_reported` | `tool_failed` | 发起人 | 有一步操作失败了，回复里已说明。 / A step failed; the reply says so. | 工具失败：`{detail}`。 / Tool failed: `{detail}`. |
+| `model_timeout` | `no_response` / `request_timeout` / `turn_timeout` | 发起人 | 模型服务没有响应，这次没回上，请稍后再试。 / The model did not respond; please try again later. | 模型超时（`{reason}`）。 / Model timed out (`{reason}`). |
+| `model_error` | 除超时类外的 `ChatFailureKind`（`rate_limit` / `server` / `network` / `quota_exhausted` / `billing` / `auth` / `context_overflow` / `safety_block` / `bad_request` / `empty_response` / `malformed_tool_call` / `provider_error` / `length` / `unknown` 等）| 发起人 | 模型服务出错了，这次没回上，请稍后再试。 / The model service failed; please try again later.（不复用聊天里当场说的 `chatFailureLine` 话术，原因见 §1.8） | 模型失败（`{reason}`）。 / Model failed (`{reason}`).；`reason` 是对应的 `ChatFailureKind`（`timeout` 记作 `request_timeout`），与 `chatFailureLine` 的原因括注同一组码 |
+| `budget_exhausted` | `budget_exceeded:<budget>` | 发起人 | 这件事步骤太多，做到一半停下了。 / Too many steps; stopped partway. | 超出预算 `{reason}`。 / Budget `{reason}` exceeded. |
+| `interaction_timeout` | `timeout`（指令 / Handler / 中间件的 `ask()` 超时，框架已回复「输入超时」；#1250）| 发起人 | 等你回答超时了，这次没有继续。 / The question timed out; nothing more was done. | 提问超时，提问方 `{owner}`（`{stage}`）。 / Prompt timed out, asked by `{owner}` (`{stage}`). |
+| `interaction_cancelled` | `cancelled`（回复了取消词）/ `interrupted`（等待期间发了指令、媒体或 @ 机器人）/ `superseded`（被同一人的新提问顶替）（#1250）| 发起人 | 你退出了这次提问，没有继续。 / You left the question; nothing more was done.（`superseded`：这个提问被之后的新提问替代了，没有继续。 / A newer question replaced this one; nothing more was done.）| 提问结束（`{reason}`），提问方 `{owner}`（`{stage}`）。 / Prompt ended (`{reason}`), asked by `{owner}` (`{stage}`).（`superseded`：提问被同一会话中更新的提问替代，提问方 `{owner}`（`{stage}`）。 / Prompt replaced by a newer prompt in the conversation, asked by `{owner}` (`{stage}`).） |
 
 `interaction_timeout` / `interaction_cancelled` 是提问方（指令、Handler、中间件）的正常结局：超时、取消、被打断、被顶替不再作为异常冒泡成 `internal_error | command_threw`，日志为 INFO，不触发故障横幅，不计入失败统计；优先级与 `refused` 同档（见决定 11 修订）。
 
@@ -134,14 +137,16 @@ sidebar: false
 
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
-| `not_addressed` | `no_command_not_ambient`（群消息、未匹配命令、本群不在 `ai.trigger.ambient.conversations`）、`prefix_mismatch`、`empty_input`、`ignored_trigger_prefix`、`trigger_disabled` | 发起人 | 这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。 / You did not mention me and it is not a command; here I only answer when mentioned. | 本群不在插话名单；前缀 `{prefix}`。 / Not an ambient conversation; prefix `{prefix}`. |
-| `feature_disabled` | `commands_unavailable` / `plugin_disabled:<plugin>` | 管理员 | 这里没有开启相关功能。 / That feature is not enabled here. | 插件 `{plugin}` 在 {level} 级被关闭（ADR 0050 / 0055）。 / Plugin `{plugin}` disabled at {level}. |
-| `ambient_silent` | `ambient_not_engaged` / `cooldown` / `hourly_cap` / `no_context` / `judge_failed` / `superseded` | 发起人 | 我判断这句不需要我插话。 / I decided not to chime in. | 判定 {confidence}，来源 `{source}`，原因 `{reason}`。 / Confidence {confidence}, source `{source}`, `{reason}`. |
-| `model_silent` | `empty_output` | 发起人 | 我看了，但这次决定不回复。 / I read it but chose not to reply. | 回合 `{turnId}` 完成但没有输出元素。 / Turn `{turnId}` completed with no output. |
+| `not_addressed` | `no_command_not_ambient`（群消息、未匹配命令、本群不在 `ai.trigger.ambient.conversations`）、`prefix_mismatch`、`empty_input`、`ignored_trigger_prefix`、`trigger_disabled` | 发起人 | 这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。 / You did not mention me and it is not a command; here I only answer when mentioned. | 未点名、未匹配指令，本群不插话（`{reason}`）。 / Not addressed, no command, no interjection here (`{reason}`). |
+| `not_addressed` | `clear_command`（没有聊天角色的人发 `reset`，即清空指令，但此处 AI 不回复他：群里未 @、AI 触发关闭等；#1250 第 84 批） | 发起人 | 清空指令只在我会回复你的地方生效（群里要 @ 我），这次没有清空。 / The clear command only works where I answer you (mention me in a group); nothing was cleared. | 清空指令未生效：此处 AI 不回复该发送者或未点名（`{reason}`）。 / Clear command not applied: not addressed or the AI does not answer the sender here (`{reason}`). |
+| `not_addressed` | `live_room_clear`（直播间里没有聊天角色的人发 `reset`：直播间的会话是共享场景任务，不清空，也不进 AI 回合；#1250 第 84 批） | 发起人 | 直播间里清空指令不清空上下文，也不进 AI 回合。 / In a live room the clear command clears nothing and starts no AI turn. | 直播间里清空指令不生效（`{reason}`）。 / Clear command not applied in a live room (`{reason}`). |
+| `feature_disabled` | `commands_unavailable` / `plugin_disabled:<plugin>` | 管理员 | 这里没有开启相关功能。 / That feature is not enabled here. | 功能在此处关闭（`{reason}`）。 / Feature disabled here (`{reason}`). |
+| `ambient_silent` | `ambient_not_engaged` / `cooldown` / `hourly_cap` / `no_context` / `judge_failed` / `superseded` | 发起人 | 我判断这句不需要我插话。 / I decided not to chime in. | 旁听判定不插话（`{reason}`）。 / Ambient judge declined (`{reason}`). |
+| `model_silent` | `empty_output` | 发起人 | 我看了，但这次决定不回复。 / I read it but chose not to reply. | 回合 `{turnId}` 完成但没有输出。 / Turn `{turnId}` completed with no output. |
 | `merged` | `merge_window_joined` / `danmaku_window_picked` | 发起人 | 和你前后几句合在一起回复了。 / Answered together with your other messages. | 合入回合 `{mergedInto}`。 / Merged into turn `{mergedInto}`. |
-| `superseded` | `model_superseded` / `merge_reply_stale_discarded` / `stopped` | 发起人 | 你很快又发了新消息，按新消息处理了。 / You sent a newer message; that one was handled instead. | 被 `{byMessageId}` 顶替。 / Superseded by `{byMessageId}`. |
-| `cleared` | `clear_command` | 发起人 | 已清空上下文。 / Context cleared. | — |
-| `interaction_consumed` | `prompt_captured`（被等待中的提问当作回答，但发起人不是被问者或内容不像回答）| 发起人 | 刚才在等「{prompt}」的回答，这句被当成了回答。 / I was waiting for an answer to "{prompt}" and took this as it. | 提问方 `{owner}`，提问 `{promptId}`，被问者 `{target}`。 / Prompt `{promptId}` by `{owner}`, asked `{target}`. |
+| `superseded` | `model_superseded` / `merge_reply_stale_discarded` / `stopped` | 发起人 | 你很快又发了新消息，按新消息处理了。 / You sent a newer message; that one was handled instead. | 被新消息顶替（`{reason}`）。 / Superseded (`{reason}`). |
+| `cleared` | `clear_command` | 发起人 | 已清空上下文。 / Context cleared. | 已清空上下文。 / Context cleared. |
+| `interaction_consumed` | `prompt_captured`（被等待中的提问当作回答，但发起人不是被问者或内容不像回答）| 发起人 | 刚才在等一个提问的回答，这句被当成了回答。 / I was waiting for an answer to a question and took this as it. | 被等待中的提问吃掉，提问方 `{owner}`（`{reason}`）。 / Captured by a pending prompt of `{owner}` (`{reason}`). |
 
 `interaction_consumed` 是 `reminder-confirm-captures-chat` 的结局：P5 起提问方声明“谁的回答算数”（`answeredBy: 'target' | 'anyone'`，默认 `target`），不是被问者的消息不再被吞；同一提问在第一次无效回答后重发一次，之后改为限频提醒，被问者发指令或媒体时提问结束、消息按正常流程处理（决定 11 及其修订；单独 @ 机器人不算退出）。在 P5 之前先记 `interaction_consumed`，至少能用 `why` 查到“被谁的提问吃掉了”。
 
@@ -149,11 +154,12 @@ sidebar: false
 
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
-| `filtered_by_policy` | `control_emergency_stop` / `control_muted_instance` / `control_muted_session` / `control_read_only` / `control_mention_only` | 发起人 | 机器人在本群暂停回复（{switch}）。 / The bot is paused here ({switch}). | 由 `{actor}` 于 {at} 设置，层级 `{level}`。 / Set by `{actor}` at {at}, level `{level}`. |
-| `filtered_by_policy` | `cannot_speak_muted` / `cannot_speak_muted_all` / `cannot_speak_restricted` | 发起人 | 机器人在本群被禁言，无法回复。 / The bot is muted here. | 平台状态 `{blocked}`。 / Platform state `{blocked}`. |
-| `filtered_by_policy` | `middleware_stopped` | 管理员 | 消息被插件拦下了。 / A plugin stopped this message. | 中间件 `{owner}/{name}`。 / Middleware `{owner}/{name}`. |
-| `filtered_by_policy` | `control_gate_failed` | 管理员 | 机器人暂时不可用。 / The bot is temporarily unavailable. | 控制面判定异常，按急停处理：{detail}。 / Control gate failed closed: {detail}. |
-| `media_rejected` | `too_large` / `mime_mismatch` / `scheme_unsupported` / `host_not_allowed` / `path_not_allowed` / `fetch_failed` / `unmaterialized_platform_reference` | 发起人 | 你发的{kind}我读不了（{reason 的人话}），只看了文字部分。 / I could not read your {kind} ({reason}); only the text was used. | 场景 `{scene}`，`{scheme}://{host}`，{bytes}/{limit} 字节，期望 `{want}` 实得 `{mime}`。 / Scene `{scene}`, `{scheme}://{host}`, … |
+| `filtered_by_policy` | `control_emergency_stop` / `control_muted_instance` / `control_muted_session` / `control_read_only` / `control_mention_only` | 发起人 | 机器人在这里暂停回复或无法发言。 / The bot is paused or cannot speak here. | 被策略过滤（`{reason}`）。 / Filtered by policy (`{reason}`). |
+| `filtered_by_policy` | `cannot_speak_muted` / `cannot_speak_muted_all` / `cannot_speak_restricted` | 发起人 | 同上 | 同上 |
+| `filtered_by_policy` | `middleware_stopped` | 管理员 | 同上 | 同上 |
+| `filtered_by_policy` | `control_gate_failed` | 管理员 | 同上 | 同上 |
+| `filtered_by_policy` | `outbound_stopped`（控制面停止了本会话的出站消息，没有聊天角色的人发的 `reset` 不清空、不回复；#1250 第 84 批） | 发起人 | 同上 | 同上 |
+| `media_rejected` | `too_large` / `mime_mismatch` / `scheme_unsupported` / `host_not_allowed` / `path_not_allowed` / `fetch_failed` / `unmaterialized_platform_reference` | 发起人 | 你发的媒体我读不了，只看了文字部分。 / I could not read your media; only the text was used. | 媒体被拒（`{reason}`）。 / Media rejected (`{reason}`). |
 
 `middleware_stopped` 只记中间件停止分发且**该中间件所属插件没有为本条消息送达任何回复**的情况；别的插件先送达的回复不算。中间件先自己回复（`$reply` 回执 `sent`）再停止分发的（游戏会话输入、菜单），记 `handler_replied` / `middleware_replied`，不算被策略拦下（#1250 `inbound-outcome-middleware-reply-mislabeled`）。消费者按 `outcome` 归类即可：`reason` 只新增取值，旧取值含义不变。
 
@@ -164,9 +170,9 @@ sidebar: false
 | outcome | reason | 管理员人话（zh / en） |
 | --- | --- | --- |
 | `ignored_self` | `self_echo` | 机器人自己发出的消息回显。 / Echo of the bot's own message. |
-| `ignored_bot` | `member` / `peer_bot` / `non_human_origin` | 来自其他机器人，只记录。 / From another bot; recorded only. |
+| `ignored_bot` | `member` / `peer_bot` / `non_human_origin`（消息的可信来源，或无可信来源时适配器自报的 `metadata.origin`，不是 `human`：Agent 入站不回复；#1250 第 84 批起命令分发也不进任何指令——不执行、不回复无权限、不给近似指令提示，阶段 `command`。可信来源 `member` / `peer_bot` 在入站阶段已丢弃，阶段 `ingress`，中间件与事件处理器都收不到；命令分发层的 `non_human_origin` 是兜底，只对无可信来源、靠 `metadata.origin` 自报的消息生效。不在 PeerRegistry 里的第三方机器人被分类器判成 `human`，命令照常响应） | 来自其他机器人（`{reason}`），只记录。 / From another bot (`{reason}`); recorded only. |
 | `dropped_duplicate` | `duplicate` | 同一条消息已由另一个端点处理。 / Already handled by another endpoint. |
-| `dropped_unready` | `venue_unready` | 场地成员 `{endpoints}` 尚未上报自身 ID，消息未处理。 / Venue members `{endpoints}` not ready. |
+| `dropped_unready` | `venue_unready` | 场地成员尚未上报自身 ID，消息未处理：`{detail}`。 / Venue members not ready: `{detail}`. |
 | `dropped_dedup_error` | `dedup_error` | 去重存储出错，按失败关闭丢弃：{detail}。 / Dedup store failed closed: {detail}. |
 | `dropped_retired` | `generation_retired` / `ingress_closed` | 实例正在重载 / 关闭，消息未被接纳。 / Instance reloading or stopping. |
 
@@ -176,9 +182,9 @@ sidebar: false
 
 | outcome | reason | 可见 | 发起人人话 | 管理员补充 |
 | --- | --- | --- | --- | --- |
-| `delivery_failed` | 统一发送失败码（`platform_rejected`、`endpoint_disconnected`、`endpoint_timeout`、`invalid_destination`、`unsupported_media`、`partial_delivery`、`delivery_unconfirmed`……，见 §5 表中发送失败码一行）| 发起人 | 回复已经生成，但发到平台时失败了（{reason 的人话}）。 / The reply was ready but the platform rejected it ({reason}). | 端点 `{endpoint}`，`deliveryUnknown={unknown}`，可重试 `{retryable}`。 |
-| `internal_error` | `command_threw` / `handler_threw` / `middleware_threw` / `agent_threw` / `inbound_threw` | 发起人（只给错误号）| 处理时出错了，已记录（错误号 {errorId}）。 / Something went wrong; logged as {errorId}. | `{stage}` 抛出 `{errorName}: {message}`（截断 200 字，脱敏），插件 `{owner}`。 |
-| `unrecorded` | `missing_outcome` | 管理员 | 这条消息的处理结果没有记录下来。 / No outcome was recorded. | 最后阶段 `{lastStage}`；这是框架缺陷，请报告。 / Last stage `{lastStage}`; a framework bug. |
+| `delivery_failed` | 统一发送失败码（`platform_rejected`、`endpoint_disconnected`、`endpoint_timeout`、`invalid_destination`、`unsupported_media`、`partial_delivery`、`delivery_unconfirmed`……，见 §5 表中发送失败码一行）| 发起人 | 回复已经生成，但发到平台时失败了。 / The reply was ready but the platform rejected it. | 发送失败（`{reason}`）。 / Delivery failed (`{reason}`). |
+| `internal_error` | `command_threw` / `handler_threw` / `middleware_threw` / `agent_threw` / `inbound_threw` | 发起人（只给错误号）| 处理时出错了，已记录（错误号 {errorId}）。 / Something went wrong; logged as {errorId}. | `{stage}` 抛出异常（`{reason}`），插件 `{owner}`：`{detail}`（`detail` 只在要求详情时显示） / `{stage}` threw (`{reason}`), plugin `{owner}`: `{detail}` |
+| `unrecorded` | `missing_outcome` | 管理员 | 这条消息的处理结果没有记录下来。 / No outcome was recorded. | 没有结局记录，最后阶段 `{stage}`；这是框架缺陷，请报告。 / No outcome recorded, last stage `{stage}`; a framework bug. |
 
 `internal_error` 的 `errorId` 与 Console API 的 `err_` + 12 位十六进制同一格式、同一生成函数（zhinjs/zhin#1256 的 `createErrorId`，P1 下移到 `@zhin.js/logger`，见 §5），`zhin logs` 可按它检索。
 
@@ -198,6 +204,39 @@ sidebar: false
 | `notify_failed` | 统一发送失败码 | 失败通知也没发出去。 / The failure notice could not be sent either. |
 
 插件 `schedules/`（`@zhin.js/schedule-feature`）的每次执行同样写一行（`source: 'plugin'`）。会话日程唤醒（`schedule_wake_fired` / `missed` / `merged`）继续写决策审计，同时按本表写结局。notice / request / system 事件**不**逐条写结局（量大、多数无人关心），只在处理器抛错时写 `internal_error`，在请求被自动处理时写 `request_handled`（`approve` / `reject` / `ignored`）。
+
+#### 1.8 失败文案的三个出处与边界（#1250 第 81 批）
+
+同一次失败可能在三个地方被说出来。三处各管一个界面，不互相代替；文案一律写进 `createMessages`（`@zhin.js/plugin-runtime`）的中英双语目录，语言用 `resolveLocale` 解析，不另写字典、`locale === 'en' ? … : …` 分支或自造的占位替换。`createMessages` 加载时检查两种语言的占位符一致，缺值直接报错；结局模板的缺值由调用处补 `—`（见下）。
+
+| 出处 | 什么时候说 | 在哪里显示 | 口吻 | 文件 |
+| --- | --- | --- | --- | --- |
+| 聊天失败话术 `chatFailureLine` | 回合失败（模型报错、超时、回合抛错）的当场 | 聊天里，主动发一句 | 像群友：不提模型、密钥、重试；发送者是主人时才在括号里附上原因 | `packages/im/agent/src/outbound/chat-failure.ts` |
+| 结局模板 `formatMessageOutcome` | 事后被问“为什么” | Sandbox 刚发消息的结局提示（`GET /api/conversations/outcomes`，只用发起人模板），以及 §3 规划的 `why` / Console / CLI 查询 | 陈述事实：发起人模板说发生了什么、要不要重发；管理员模板带阶段、插件、原因码 | `packages/im/core/src/plugin-runtime/im/message-outcome.ts` |
+| 命令反馈 `renderCommandFeedback` | 指令被拒绝、限流、参数不对的当场 | 聊天里，作为这条指令的回复 | 说清缺什么、等多久；permit 拒绝一律用 `describeCommandDenial()`（`@zhin.js/permission`，第 78 批） | `packages/im/core/src/plugin-runtime/im/command-feedback.ts` |
+
+下面几处随回复附带的事实说明从属于第一类（聊天里当场说），不是另一套话术：
+
+- 回合**完成**但模型没写出可见回复：`formatReplyFallback`（`packages/im/agent/src/core/tool-calls-user-format.ts`）说明实际原因（无可用工具、工具被拒、空回复）和下一步。回合没有失败，所以不用拟人化的“卡了一下”，而是告诉人该换说法、找人批准还是发 `/clear`。`/clear` 是不看命令前缀的清空词（`isClearCommand`，`packages/im/agent/src/plugin-runtime/ingress/content.ts`），所以中英文都照写，不拼账号前缀；定时任务的兜底改为点名任务与 `zhin trace`。
+- 回合末的未执行说明 `formatUnexecutedNotice`（`core/unexecuted-tool-notice.ts`）、后台协作的失败与停止行（`collaboration/turn-collaboration.ts`）、出站媒体被拒时替换媒体的占位文本（Core `built/outbound-media-trust.ts`，来源被拒与地址被拒共用一个目录）。
+- `ai.trigger.errorTemplate` 是运维写的文本，不是框架文案：配置了就把第一个 `{error}` 换成错误信息后发出；未配置（或为空白）时就是 `chatFailureLine`。框架不再自带“❌ AI 处理失败”之类的默认模板。
+
+**新增失败文案放哪里**（避免出现第四套）：
+
+1. 回合失败时在聊天里当场说的话：新增一种 `ChatFailureKind`，在 `chat-failure.ts` 的目录里加话术与原因括注；入口、管线和插件不另写一句。
+2. 解释某条消息为什么是这个结局：新增结局码或 `reason`，写进 `MESSAGE_OUTCOME_TEMPLATES`（码级）；只有码级模板会说错时才在 `REASON_TEMPLATES` 加原因级模板。
+3. 指令被拦下（拒绝、限流、参数）：`command-feedback.ts`；permit 拒绝只用 `describeCommandDenial()`。
+4. 不属于以上三类、随回复附带的事实说明，留在产生它的模块，但必须用 `createMessages`；它对应某个结局码时，结局模板只概括，不复述原句。
+
+**语义重复的条目。**
+
+- 超时：聊天里当场说的是 `chatFailureLine('timeout' | 'no_response' | 'turn_timeout')`（“刚卡了一下，你再说一遍？”，主人另见“模型超时 / 模型服务无响应 / 处理超时”）；结局 `model_timeout` 的发起人模板（“模型服务没有响应，这次没回上，请稍后再试。”）是事后问 `why` 时的解释。两句有意不同：当场那句不点破内部原因，免得群聊里刷技术细节；被问“为什么”时用户要的正是原因。两处共用原因码而不是文案：`model_timeout` 的 `reason`（`no_response` / `request_timeout` / `turn_timeout`）与 `model_error` 的 `reason` 对应 `ChatFailureKind`（`timeout` 记作 `request_timeout`），即 `chatFailureLine` 的种类，管理员模板直接显示它，不另起名字。
+- 限流：指令被限时，聊天里当场回的是命令反馈的冷却 / 忙 / 容量 / 身份句（冷却带秒数）；结局 `rate_limited` 的发起人模板只概括“太频繁或正忙，这次没有处理”，因为同一个码还覆盖 Mailbox 的 `queue_full` / `expired`（聊天里由 `ingressMessages` 当场说）。
+- 拒绝：结局 `permission_denied` 的发起人模板就是 `describeCommandDenial()` 的通用句，与命令反馈同源，不重复写。
+
+**结局模板的渲染。** `formatMessageOutcome` 把 `MESSAGE_OUTCOME_TEMPLATES` 与 `REASON_TEMPLATES` 装进一个 `createMessages` 目录（键为 `<码>.<受众>`、`<码>:<原因>.<受众>`），调用时为 `MESSAGE_OUTCOME_PLACEHOLDERS` 的每个占位符给值：记录里没有该字段、字段为空，或 `detail` / `errorId` 对没要求 `includeDetail` 的管理员受众隐藏时，都显示 `—`。模板只能用 `MESSAGE_OUTCOME_PLACEHOLDERS` 里的占位符（测试守护）；`reason` 只在 `REASON_TEMPLATES` 自有键里查原因级模板，其余回落到码级模板。
+
+**现行模板以 `MESSAGE_OUTCOME_TEMPLATES`（及 `REASON_TEMPLATES`）为准。** §1.1–§1.6 表中的人话照录现行模板；两者不一致时以代码为准，并改表跟上。
 
 ### 2. 记录位置：新增轻量的「消息结局」表，链接到决策审计与 turn trace
 

@@ -371,7 +371,7 @@ interface SkillsStatus {
   - `byModel[]` 另带 `driverLabel`（服务所用驱动的显示名，如「OpenAI 兼容」）、`profileId` / `profileName`（这一行的每次调用都能归到同一个模型 Profile 上时才给，有一次调用归不上就不给；发生过模型切换的回合，调用优先归到切换后的 Profile；`profileName` 是 Profile 的名称，没起名就不给）。两个服务同名时可以用它们区分。
   - `byAgent[]`：按 Agent 汇总，字段 `agent`、`label`、`kind`（`main` 主助手 / `agent` 子 Agent / `unrecorded`）、`turns`、`calls`、`inputTokens`、`outputTokens`、`cacheReadTokens`、`cacheWriteTokens`、`cacheShare`。每个（子）回合的调用记在它自己的 `model_selection` 上；没有记录模型选择的旧 trace 归入 `agent: '@unrecorded'`（「未记录」），主助手是 `agent: '@main'`。各行 token 之和等于 `totals`；`turns` 按（子）回合计——一个带子 Agent 的回合在主助手和子 Agent 各计一次，所以各行 `turns` 之和可能大于 `totals.turns`。
   - `byPurpose[]`：按用途汇总，`purpose`（`chat`、`agent`、`summary`、`ambient`、`perception` 等；`agent:<名称>` 记为 `agent`）和可读的 `label`，其余字段同 `byAgent`。按每个（子）回合节点自己的 `model_selection.purpose` 归类（不看根回合），没有记录时是 `@unrecorded`。token 与 `turns` 的口径同 `byAgent`。
-  - `bySession[]` 另带结构化的会话名字段：`scopeKind`（`group` / `private` / `channel` / `schedule` / `internal` / `http` / `a2a` / `mcp`）、`sceneLabel`（群名、用户名、定时任务 id 等，不含「群」「私聊」这类类型词）和 `shortKey`（与 `zhin usage report` 相同规则的短会话键）。`displayName` 保持原样（中文拼好的名字）；Console 应按界面语言用 `scopeKind` + `sceneLabel` 自己拼名，重名时追加 `shortKey`。
+  - `bySession[]` 另带结构化的会话名字段：`scopeKind`（`group` / `private` / `channel` / `schedule` / `internal` / `http` / `a2a` / `mcp`）、`sceneLabel`（群名、用户名、定时任务名（实例还认得该任务时取任务的 `label`，否则是任务 id）等，不含「群」「私聊」这类类型词）和 `shortKey`（与 `zhin usage report` 相同规则的短会话键）。`displayName` 保持原样（中文拼好的名字）；Console 应按界面语言用 `scopeKind` + `sceneLabel` 自己拼名，重名时追加 `shortKey`。
   - `bySession[]` 另带 `endpoint`（trace 里记录的账号）和 `accountLabel`（该账号现在的名称；按 trace 记录的平台（客户端适配器名）与账号 id / 名称匹配，账号已删除、名称就是原始账号 id 时不给）；哈希会话键（`personal-session:v1:…`）解析不出平台时，`platform` 取自 trace 记录的来源；顶层 `sessionsTotal` 是范围内的会话总数，`othersTotals` 是前 50 之外的会话合计（`sessions`、`turns` 和各项 token）。
   - 参数 `compare: 'previous'`：另算紧挨在前、等长的上一周期，返回 `previous: { since, until, truncated, totals }`（只有 `totals`，不含明细）。上一周期按毫秒长度平移（`since - (until - since)` 到 `since`），不按日历对齐；`session` 过滤同样作用于上一周期。当前区间与上一周期各自最多 31 天（一次请求最多扫描 62 天），所以「近 30 天」也能拿到完整的上一周期；只有上一周期被截短时（如碰到时间戳 0）才标 `truncated: true`，Console 应注明「上一周期不完整」。`compare` 写别的值返回 `invalid_input`。
 - 权限仍是 `control:read`，新增字段只是已有数据的显示名与分组，不含提示词或消息内容。
@@ -494,7 +494,7 @@ interface SkillsStatus {
 
 - `sceneId` 只能是 `group:<群号>`；`trigger` 为 `advertising` / `abuse` / `flood`；`ladder` 每档 `{ action: 'remind' | 'warn' | 'mute' | 'suggest_kick', durationSec? }`，`mute` 时长 60 秒–24 小时；`windowMs` 冷静期默认 30 分钟。
 - `group-rule-create` 起草后**立即送审**（`pending`），并把预览卡发回该群。模型只有 `rule_draft` 工具（`risk: safe`，只在群里可用）：发起人必须是本群群主 / 管理员（按消息携带的平台实时角色判定），否则拒绝并写 `rule_draft_forbidden`。
-- 群里的审批命令（只在规则所在的群生效）：`/rule approve <短码>`、`/rule reject <短码>`、`/rule disable <短码|trigger>`、`/rules`（列出本群规则，任何人可看）。短码是卡片上的 `content_hash` 前 8 位，规则改过一个字短码就变，旧卡片批不了新内容。审批人 = 本群群主 / 管理员 ∪ `ai.agent.toolHardGate.imApproval.approverIds`；Console 侧是 `ops:approve`。
+- 群里的审批命令（只在规则所在的群生效，按本账号的命令前缀发送，默认无前缀；预览卡上的命令已按本群账号的前缀写好）：`rule approve <短码>`、`rule reject <短码>`、`rule disable <短码|trigger>`、`rules`（列出本群规则，任何人可看）。短码是卡片上的 `content_hash` 前 8 位，规则改过一个字短码就变，旧卡片批不了新内容。审批人 = 本群群主 / 管理员 ∪ `ai.agent.toolHardGate.imApproval.approverIds`；Console 侧是 `ops:approve`。
 - 状态只前进：`draft` → `pending` → `active`，旁路 `rejected` / `expired`（24 小时未批）/ `disabled`。同群同 `trigger` 只有一条 `active`，批准新规则会把旧规则停用（`rule_superseded`）。停用不需要审批；放宽 = 停用后另起新规则。
 - 审计写 `kind=group_rule`（`rule_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_disabled` / `_superseded` / `_hash_mismatch`、`rule_draft_forbidden`）。数据存在 `ai_group_rules` 表；终态规则 30 天后或每群超过 50 条时删除（启动时与每小时清理）。
 - 执行（切片 C）：违规判定方报告一次命中后，按该群生效规则的当前档执行，审计写 `kind=rule_enforcement`：
@@ -754,7 +754,7 @@ flowchart LR
     E --> BR
 ```
 
-- **Pure Blueprint（`.ts`）**：Node 端只解析纯数据蓝图描述，**彻底跳过 `esbuild` 打包与 `.bundle.js` 产物**。`GET /console/api/pages` 在页面清单中直接携带 `blueprint` JSON，`@zhin.js/pagemanager` 的 `renderConsoleShell` 使用 `@zhin.js/client` 的 `createBlueprintPage` 在浏览器端直接渲染统计卡片、过滤表单、动作栏与表格。
+- **Pure Blueprint（`.ts`）**：Node 端只解析纯数据蓝图描述，**彻底跳过 `esbuild` 打包与 `.bundle.js` 产物**。`GET /console/api/pages` 在页面清单中直接携带 `blueprint` JSON，`@zhin.js/pagemanager` 的 `renderConsoleShell` 使用 `@zhin.js/client` 的 `createBlueprintPage` 在浏览器端直接渲染统计卡片、过滤表单、动作栏与表格。蓝图模块逐个用 esbuild `transform` 去掉类型（不打包）；页面 `meta` 在短时 worker 线程里用 TypeScript 解析，空闲约 2 秒后 worker 结束，长期运行的实例不常驻 TypeScript 编译器。
 - **重交互静态资产（`.tsx`）**：仅对 `pages/*/index.tsx`（如 `plugins/adapters/sandbox`）启用静态 `.bundle.js` 挂载或 `TypeScriptClientBuilder` 打包，Node 进程绝不在运行时 `import()` 浏览器 React 代码。浏览器裸导入 `ALLOWED_ESM_CANONICAL`（`react`、`react-dom` 等）会被改写为 `/esm/<enc>.mjs` 代理，保证整个 Console 只有一份 React。
 - **路由与外壳**：Console 外壳渲染器位于 `@zhin.js/pagemanager`（`packages/console/pagemanager/src/shell/page-renderer.ts`），由 `packages/im/zhin/src/instance/console/host.ts` 装配路由。`GET /console` 是页面索引，`GET /console/api/pages` 返回页面清单，其余路径按地址匹配页面并返回页面外壳；未匹配返回 404，权限不足返回 403。
 

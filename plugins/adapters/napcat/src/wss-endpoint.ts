@@ -22,11 +22,11 @@ import {
   InboundMessageDeduper,
   isNapCatBotMentioned,
   isSelfMessage,
-  normalizeMessage,
 } from './napcat-inbound.js';
 import {
   buildSendAction,
   extractQuoteId,
+  isCqStringRelayed,
   formatInboundContent,
   formatOutboundSegments,
   isMessageEvent,
@@ -199,9 +199,8 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
     if (isSelfMessage(ev)) return;
     const msgId = String(ev.message_id);
     if (!this.#inboundDeduper.shouldProcess(msgId)) return;
-    if (Array.isArray(ev.message) || typeof ev.message === 'string') {
-      ev = { ...ev, message: normalizeMessage(ev.message) };
-    }
+    // 字符串上报格式（messagePostFormat: "string"）保留原始 CQ 串：content 走 stripCqCodes，
+    // reply 由 extractQuoteId 解析，at / face 以外的码按 forwarded 失败关闭（ADR 0067 D8）。
     const conversation = { ...napcatInboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
@@ -223,6 +222,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
       ...(quoteId ? { replyTo: { id: quoteId } } : {}),
+      ...(isCqStringRelayed(ev) ? { forwarded: true } : {}),
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,

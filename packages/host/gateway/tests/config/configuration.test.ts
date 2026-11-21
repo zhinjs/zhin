@@ -130,6 +130,9 @@ describe('application configuration projection and writes', () => {
     expect(await store.validatePluginConfig('missing', {token: '${ZHIN_CONSOLE_DEV_ONLY}', prod: '${zhin_console_prod_only}'})).toMatchObject({missingEnv: ['ZHIN_CONSOLE_DEV_ONLY']});
     await writeFile(join(root, 'schema.json'), JSON.stringify({type: 'object', properties: {token: {type: 'string', default: '${ZHIN_CONSOLE_DEV_ONLY}'}}}));
     expect(await store.validatePluginConfig('plugin', {})).toMatchObject({missingEnv: ['ZHIN_CONSOLE_DEV_ONLY']});
+    // References with a default (even an empty one) always expand: never missing.
+    expect(await store.validatePluginConfig('missing', {a: '${UNSET_A:-x}', b: '${UNSET_B:=}', c: ['${UNSET_C}'], d: '${1BAD}'}))
+      .toMatchObject({missingEnv: ['UNSET_C']});
   });
 });
 
@@ -295,6 +298,14 @@ describe('secret fields are stored in .env, not in the config file (#1250)', () 
     expect(JSON.stringify(result)).not.toContain('plain-new-token');
     expect(parseYaml(await read(root, 'zhin.config.yml')).http.token).toBe('${HTTP_TOKEN}');
     expect(await read(root, '.env')).toBe("# keep\nHTTP_TOKEN='plain-new-token'\nOTHER=1\n");
+  });
+
+  it('treats ${HTTP_TOKEN:-default} as the field\'s own variable: updated in place, the default dropped', async () => {
+    const { configuration, root } = await project('configVersion: 2\nplugins: {}\nhttp:\n  token: "${HTTP_TOKEN:-dev}"\n', 'HTTP_TOKEN=old-value\n');
+    const result = await set(configuration, ['http', 'token'], 'plain-new-token');
+    expect(result).toMatchObject({ status: 'saved', envSecrets: [{ path: ['http', 'token'], variable: 'HTTP_TOKEN' }] });
+    expect(parseYaml(await read(root, 'zhin.config.yml')).http.token).toBe('${HTTP_TOKEN}');
+    expect(await read(root, '.env')).toBe("HTTP_TOKEN='plain-new-token'\n");
   });
 
   it('gives a literal (or new) secret a canonical variable, avoiding names that hold other values', async () => {

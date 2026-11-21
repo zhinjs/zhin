@@ -1,4 +1,4 @@
-import { Scope, DisposeStack, rootPluginId } from '@zhin.js/plugin-runtime';
+import { Scope, DisposeStack, rootPluginId, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { aiCompletionToken, type AgentRuntime } from '@zhin.js/agent/runtime';
 import type { ApprovalJudgment } from '@zhin.js/agent/session';
@@ -95,7 +95,7 @@ it.each([false, true])('uses the independently selected ambient Profile in the a
   vi.spyOn(f.foundation.service, 'getTriggerConfig').mockReturnValue({ enabled: true,
     ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } });
   const route = new AgentTurnIngressRoute({ projectRoot: f.directory,
-    agent: f.foundation, runtime: { executeLeased: vi.fn() } as never,
+    agent: f.foundation, runtime: { executeLeased: vi.fn(), ownsLease: (lease: SnapshotLease) => f.runtime.snapshots.owns(lease) } as never,
     withInferenceScope: (input, operation) => f.host.withInferenceScope(input, operation),
     ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
     im: { readConversationContext: async () => ({ blocks: [{ text: 'One unanswered question' }], cursor: 1 }) } as never });

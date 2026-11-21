@@ -9,6 +9,7 @@ import {
   checkMemoryWritePath,
   classifyMemoryWritePath,
   getSessionMemoryDir,
+  todayDate,
 } from '../src/memory-layers.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 
@@ -21,6 +22,21 @@ describe('memory-layers', () => {
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('今日笔记文件按进程时区的本地日命名（#1250）', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    try {
+      expect(todayDate(Date.parse('2026-01-05T17:00:00Z'))).toBe('2026-01-06');
+      const globalDir = path.join(tmpDir, 'data', 'memory', 'global');
+      fs.mkdirSync(globalDir, { recursive: true });
+      fs.writeFileSync(path.join(globalDir, `${todayDate()}.md`), 'today note');
+      const layers = loadMemoryLayers({ workspaceDir: tmpDir });
+      expect(layers.slices.find((slice) => slice.key === 'daily')?.content).toBe('today note');
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
   });
 
   it('safeSessionKey 稳定且不含冒号', () => {

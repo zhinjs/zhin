@@ -130,14 +130,18 @@ function fail(file: ts.SourceFile, node: ts.Node, message: string): never {
   throw new ClientSourceError(file.fileName, position.line + 1, position.character + 1, message);
 }
 
+// Plain fields (no constructor parameter properties): this module also runs from its `.ts`
+// source in the metadata worker under Node type stripping (`metadata-worker.ts`).
 export class ClientSourceError extends Error {
-  constructor(
-    readonly source: string,
-    readonly line: number,
-    readonly column: number,
-    message: string,
-  ) {
+  readonly source: string;
+  readonly line: number;
+  readonly column: number;
+
+  constructor(source: string, line: number, column: number, message: string) {
     super(`${source}:${line}:${column} ${message}`);
+    this.source = source;
+    this.line = line;
+    this.column = column;
     this.name = 'ClientSourceError';
   }
 }

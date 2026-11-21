@@ -1,5 +1,6 @@
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages as t } from '../i18n.js';
+import { lotteryDateKey } from '../date-key.js';
 import { DEFAULT_WEIGHTS, type DailyReport, type DrawNumbers, type GameId, type GamePick, type ScoreWeights } from '../types.js';
 
 import { recommendGame, formatPickLine, formatPickStats } from './game-pick.js';
@@ -24,7 +25,7 @@ export async function buildDailyReport(
   savePredictions = true,
   weightOverrides?: Map<GameId, ScoreWeights>,
 ): Promise<DailyReport> {
-  const dateStr = date.toISOString().slice(0, 10);
+  const dateStr = lotteryDateKey(date);
   const tieSeed = dateStr;
   const picks = [];
   for (const gameId of gameIds) {
@@ -112,7 +113,7 @@ export async function saveDailyReport(
 export async function loadTodayReport(db: LotteryDb, date = new Date()): Promise<DailyReport | null> {
   const model = db.models.get(REPORTS_TABLE);
   if (!model) return null;
-  const dateStr = date.toISOString().slice(0, 10);
+  const dateStr = lotteryDateKey(date);
   const rows = (await model.select().where({ date: dateStr })) as Array<{
     report_json: string | DailyReport;
     ai_explanation: string;
@@ -136,7 +137,7 @@ export async function loadTodayPendingPicks(
   date = new Date(),
   locale?: Locale,
 ): Promise<GamePick[]> {
-  const today = date.toISOString().slice(0, 10);
+  const today = lotteryDateKey(date);
   const picks: GamePick[] = [];
   for (const gameId of gameIds) {
     const pending = (await listPendingPredictions(db, gameId)) as Array<{
@@ -170,7 +171,7 @@ export async function resolveTodayReport(
   const picks = await loadTodayPendingPicks(db, gameIds, date, locale);
   if (!picks.length) return null;
   return {
-    date: date.toISOString().slice(0, 10),
+    date: lotteryDateKey(date),
     locale: resolveLocale(locale),
     picks,
     disclaimer: t(locale, 'disclaimer'),

@@ -2,6 +2,7 @@ import {
   normalizeProviderJson, providerPlanFingerprint, parseCredentialEnvironmentExpression,
   type JsonObject, type ModelDefinition, type ProfileSelection, type ProviderDriverReference,
 } from '@zhin.js/ai/provider';
+import { parseEnvironmentReference, parseEnvUri } from '@zhin.js/plugin-runtime';
 
 /** A source stamp produced by the Host's selected legacy metadata reader, not by HTTP input. */
 export interface LegacyInferenceSource {
@@ -143,9 +144,13 @@ export function compileLegacyInferenceMigration(options: LegacyInferenceMigratio
     services[serviceAlias] = { driver: resolved.driver, options: resolved.options, models: resolved.models };
     let source: LegacyCredentialReference | undefined;
     const secretRef = text(raw.secretRef);
-    const env = typeof raw.apiKey === 'string' ? /^(?:\$\{([A-Za-z_][A-Za-z0-9_]*)\}|env:\/\/([A-Za-z_][A-Za-z0-9_]*))$/u.exec(raw.apiKey) : null;
+    // A whole `${VAR}` (no default) or `env://VAR` becomes an `env://` account source; a default
+    // (`${VAR:-…}`) is an expression the Host owner keeps; any other `${` (embedded or mistyped)
+    // needs mapping rather than migrating as a literal key.
+    const whole = parseEnvironmentReference(raw.apiKey);
+    const variable = parseEnvUri(raw.apiKey) ?? (whole && whole.default === undefined ? whole.variable : undefined);
     if (secretRef) source = { kind: 'legacy-vault', reference: secretRef };
-    else if (env) source = { kind: 'environment', reference: `env://${env[1] ?? env[2]}` };
+    else if (variable) source = { kind: 'environment', reference: `env://${variable}` };
     else if (parseCredentialEnvironmentExpression(raw.apiKey)) {
       if (ownerId !== options.target.hostOwnerId) block(`${path}.apiKey`, 'environment-source-owner-required');
       else source = { kind: 'legacy-environment-expression', path: `${path}.apiKey` };

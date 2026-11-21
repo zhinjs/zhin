@@ -233,7 +233,7 @@ export async function considerAmbientEngagement(input: Readonly<{
   const trigger = agent.service.getTriggerConfig();
   if (!text) return notAddressed('empty_input');
   if (trigger?.enabled === false) return notAddressed('trigger_disabled');
-  if (hasIgnoredTriggerPrefix(text, trigger)) return notAddressed('ignored_trigger_prefix');
+  if (hasIgnoredTriggerPrefix(text, trigger, message.commandPrefix)) return notAddressed('ignored_trigger_prefix');
   // ADR 0062 §23: the file allowlist is the global default; stored feature overrides decide below it.
   const ambientSwitch = resolveAmbientSwitch(lease.value, message, ambientEngagement?.enabledFor(platform, message.conversation.id) === true);
   if (!ambientEngagement) {

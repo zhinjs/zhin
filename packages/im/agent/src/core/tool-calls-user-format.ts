@@ -7,6 +7,7 @@ import {
   isMediaToolWithBinaryPayload,
   sanitizeToolResult,
 } from '@zhin.js/ai';
+import { createMessages, formatList, type Locale } from '@zhin.js/plugin-runtime';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { ReplyFallback } from '../event/turn-event.js';
 
@@ -39,8 +40,51 @@ export const EXPLORATION_TOOLS: ReadonlySet<string> = new Set(['read_file', 'gre
 const MAX_TOOL_BLOCK_CHARS = 2000;
 const MAX_SUMMARY_CHARS = 3000;
 
-const EXPLORATION_ONLY_REPLY =
-  '这一轮只做了资料查阅，还没有整理出结论。回复「继续」我会接着处理，或者把需求说得更具体一些再试。';
+/**
+ * #1250: the user-facing fallback texts, in the turn's display language. `/clear` is the chat clear
+ * entry word (`isClearCommand` in `plugin-runtime/ingress/content.ts`), recognized without the account's
+ * command prefix, so it stays literal in both languages.
+ */
+const fallbackMessages = createMessages({
+  explorationOnly: {
+    'zh-CN': '这一轮只做了资料查阅，还没有整理出结论。回复「继续」我会接着处理，或者把需求说得更具体一些再试。',
+    en: 'This round only looked things up and has no conclusion yet. Reply "continue" and I will carry on, or try again with a more specific request.',
+  },
+  noUsableResult: {
+    'zh-CN': '未能从工具结果中提取有效信息，请换一种说法或缩小问题范围后重试。',
+    en: 'No useful information could be taken from the tool results. Rephrase or narrow the question and try again.',
+  },
+  causeNoTools: { 'zh-CN': '本轮没有可用的工具，模型也没有给出回复', en: 'No tools were available this round and the model gave no reply' },
+  causeDenied: { 'zh-CN': '需要的工具被拒绝，没有运行', en: 'The required tool was denied and did not run' },
+  causeDeniedTool: { 'zh-CN': '需要的工具 {tools} 被拒绝，没有运行', en: 'The required tool {tools} was denied and did not run' },
+  causeDeniedTools: { 'zh-CN': '需要的工具 {tools} 被拒绝，没有运行', en: 'The required tools {tools} were denied and did not run' },
+  causeEmpty: {
+    'zh-CN': '模型未返回可见内容（可能为推理型模型空回复或上下文过长）',
+    en: 'The model returned no visible content (a reasoning model may have replied empty, or the context is too long)',
+  },
+  scheduleNamed: { 'zh-CN': '「{label}」（{id}）', en: '"{label}" ({id})' },
+  scheduleNextNoTools: {
+    'zh-CN': '请检查任务的执行计划和可用工具，或先用 schedule_preview 预演',
+    en: 'Check the job\'s plan and available tools, or rehearse it first with schedule_preview',
+  },
+  scheduleNextDenied: {
+    'zh-CN': '无人值守时需要审批的工具会被拒绝，请检查审批设置或任务的工具',
+    en: 'Tools that need approval are denied while nobody is watching; check the approval settings or the job\'s tools',
+  },
+  scheduleNextEmpty: { 'zh-CN': '可以换用其他模型后手动运行一次', en: 'Switch to another model and run it once by hand' },
+  scheduleTrace: { 'zh-CN': '排查：zhin trace {turnId}', en: 'Investigate: zhin trace {turnId}' },
+  scheduleTraceBare: { 'zh-CN': '排查：zhin trace', en: 'Investigate: zhin trace' },
+  schedule: { 'zh-CN': '定时任务 {name} 没有完成：{cause}。{next}。{trace}', en: 'Scheduled job {name} did not finish: {cause}. {next}. {trace}' },
+  replyNoTools: { 'zh-CN': '{cause}，所以没能完成这个请求。可以换一种说法再试。', en: '{cause}, so the request could not be completed. Try phrasing it another way.' },
+  replyDenied: {
+    'zh-CN': '{cause}，所以没能完成这个请求。需要有权限的人批准后再试。',
+    en: '{cause}, so the request could not be completed. Try again after someone with permission approves it.',
+  },
+  replyEmpty: {
+    'zh-CN': '{cause}。可发送 /clear 清空本会话上下文后重试，或换用非推理模型。',
+    en: '{cause}. Send /clear to clear this conversation\'s context and try again, or switch to a non-reasoning model.',
+  },
+});
 
 function asString(result: unknown): string {
   if (result == null) return '';
@@ -67,8 +111,10 @@ function formatGenericToolResult(tool: string, result: unknown): string {
 export interface ReplyFallbackContext {
   /** The turn offered the model at least one tool. Absent: unknown (treated as available). */
   readonly toolsAvailable?: boolean;
-  /** A scheduled job's run: named in the text with `zhin trace`; `/reset` is never suggested. */
+  /** A scheduled job's run: named in the text with `zhin trace`; `/clear` is never suggested. */
   readonly schedule?: Readonly<{ jobId: string; label?: string; turnId?: string }>;
+  /** #1250: the display language of the turn's recipient; absent: the default language. */
+  readonly locale?: Locale;
 }
 
 /** Inline-code a tool name so Markdown cannot eat `__` or `*` in it (#1250 b33). */
@@ -80,29 +126,29 @@ export function inlineToolName(name: string): string {
 /**
  * #1250 b33: the fallback text for a turn whose model wrote no visible reply, stating the actual cause.
  * Interactive turns get a next step; a scheduled job gets its name / id and `zhin trace <turnId>` instead
- * of `/reset` (the job's own session is not the chat the owner would reset).
+ * of `/clear` (the job's own session is not the chat the owner would reset).
  */
 export function formatReplyFallback(fallback: ReplyFallback, context: ReplyFallbackContext = {}): string {
-  const tools = fallback.tools?.length ? fallback.tools.map(inlineToolName).join('、') : '';
+  const t = (key: Parameters<typeof fallbackMessages>[1], values?: Parameters<typeof fallbackMessages>[2]) =>
+    fallbackMessages(context.locale, key, values);
+  const tools = fallback.tools?.length ? formatList(context.locale, fallback.tools.map(inlineToolName)) : '';
   const cause = fallback.cause === 'no_tools'
-    ? '本轮没有可用的工具，模型也没有给出回复'
+    ? t('causeNoTools')
     : fallback.cause === 'tool_denied'
-      ? `需要的工具${tools ? ` ${tools} ` : ''}被拒绝，没有运行`
-      : '模型未返回可见内容（可能为推理型模型空回复或上下文过长）';
+      ? tools ? t(fallback.tools!.length === 1 ? 'causeDeniedTool' : 'causeDeniedTools', { tools }) : t('causeDenied')
+      : t('causeEmpty');
   const schedule = context.schedule;
   if (schedule) {
-    const name = schedule.label ? `「${schedule.label}」（${schedule.jobId}）` : schedule.jobId;
-    const next = fallback.cause === 'no_tools'
-      ? '请检查任务的执行计划和可用工具，或先用 schedule_preview 预演'
-      : fallback.cause === 'tool_denied'
-        ? '无人值守时需要审批的工具会被拒绝，请检查审批设置或任务的工具'
-        : '可以换用其他模型后手动运行一次';
-    const trace = schedule.turnId ? `排查：zhin trace ${schedule.turnId}` : '排查：zhin trace';
-    return `定时任务 ${name} 没有完成：${cause}。${next}。${trace}`;
+    const name = schedule.label ? t('scheduleNamed', { label: schedule.label, id: schedule.jobId }) : schedule.jobId;
+    const next = t(fallback.cause === 'no_tools'
+      ? 'scheduleNextNoTools'
+      : fallback.cause === 'tool_denied' ? 'scheduleNextDenied' : 'scheduleNextEmpty');
+    const trace = schedule.turnId ? t('scheduleTrace', { turnId: schedule.turnId }) : t('scheduleTraceBare');
+    return t('schedule', { name, cause, next, trace });
   }
-  if (fallback.cause === 'no_tools') return `${cause}，所以没能完成这个请求。可以换一种说法再试。`;
-  if (fallback.cause === 'tool_denied') return `${cause}，所以没能完成这个请求。需要有权限的人批准后再试。`;
-  return `${cause}。可发送 /reset 后重试，或换用非推理模型。`;
+  if (fallback.cause === 'no_tools') return t('replyNoTools', { cause });
+  if (fallback.cause === 'tool_denied') return t('replyDenied', { cause });
+  return t('replyEmpty', { cause });
 }
 
 /**
@@ -144,12 +190,12 @@ export function describeToolCallsForUser(
     return { text: formatReplyFallback(fallback, context), fallback };
   }
   if (exploredOnly && !context.schedule) {
-    return { text: EXPLORATION_ONLY_REPLY, fallback: { cause: 'empty_reply' } };
+    return { text: fallbackMessages(context.locale, 'explorationOnly'), fallback: { cause: 'empty_reply' } };
   }
   const fallback: ReplyFallback = { cause: 'empty_reply' };
   return {
     text: context.schedule ? formatReplyFallback(fallback, context)
-      : '未能从工具结果中提取有效信息，请换一种说法或缩小问题范围后重试。',
+      : fallbackMessages(context.locale, 'noUsableResult'),
     fallback,
   };
 }

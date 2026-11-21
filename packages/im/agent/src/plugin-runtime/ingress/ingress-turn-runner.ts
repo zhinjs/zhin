@@ -23,6 +23,8 @@ import {
 import type { HostMailbox } from '../../collaboration/host-mailbox.js';
 import { runInMailTurn } from '../../collaboration/mail-turn-context.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '../../context/index.js';
+import { USER_REPLY_LOCALE_METADATA_KEY } from '../../prompt/rules/reply-language.js';
+import { readUserSetReplyLocale } from './user-reply-locale.js';
 import { runWithAgentDecisionTurn } from '../decision-runtime.js';
 import type { AgentRuntime } from '../agent-runtime.js';
 import type { CapabilityIngress } from '../capability-ingress.js';
@@ -265,6 +267,10 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           : effectiveCarrier)
         : effectiveCarrier;
       const mergedSenders = members && members.length > 1 ? mergedTurnSenders(admission.participants) : undefined;
+      // #1250 b69: only a turn answering one present sender follows that sender's own `/language`.
+      const userReplyLocale = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge
+        ? await readUserSetReplyLocale(snapshot, message) : undefined;
+      signal.throwIfAborted();
       const capabilities = liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities;
       let routed = routeSpecialistAgent(
         inbound.text,
@@ -328,7 +334,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             : undefined;
           const turnPolicy = resolveSandboxTurnPolicy({
             runtimeSandbox: turnAccess.origin.kind === 'im' && platformCapabilities?.has('runtime.sandbox') === true,
-            isMaster: senderRoles.isMaster,
+            isMaster: senderRoles.hostRole === 'owner',
             scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined,
             masterShell: service.getAgentConfig()?.masterShell,
             masterShellApprovalMode: service.getAgentConfig()?.masterShellApprovalMode,
@@ -341,7 +347,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           const initiatorPresent = !liveDanmaku && !hasMergedOrShiftedParticipants && !ambient && !liveRoom && !sceneMerge;
           const approver = resolveImApprover({
             senderId: message.sender?.id,
-            isMaster: senderRoles.isMaster,
+            isMaster: senderRoles.hostRole === 'owner',
             // #1250 review: admin held at endpoint level or above; a conversation-level admin or demoted owner is not.
             isAdmin: message.sender?.id ? holdsEndpointAdmin(message.sender) : false,
             ownerId,
@@ -366,7 +372,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
           };
           const askApprovalPort = createRuntimeApprovalPort({
             ...imApprovalOptions,
-            isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
+            isMaster: senderRoles.hostRole === 'owner' && turnPolicy.shell?.approvalMode !== 'ask',
             masterPresent: initiatorPresent,
           });
           const escalatedApprovalPort = createRuntimeApprovalPort({ ...imApprovalOptions, isMaster: false });
@@ -410,9 +416,11 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             ...(sceneEvents.length ? { sceneEvents } : {}),
             ...(mergedSenders ? { mergedSenders } : {}),
             ...(liveDanmaku ? { liveDanmaku } : {}),
-            ...(ambient ? {
-              trustedMetadata: Object.freeze({ [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' }),
-            } : {}),
+            // Always written so adapter metadata cannot claim a user-set locale.
+            trustedMetadata: Object.freeze({
+              [USER_REPLY_LOCALE_METADATA_KEY]: userReplyLocale ?? false,
+              ...(ambient ? { [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' } : {}),
+            }),
             intent: gate ? Object.freeze({ kind: 'new' as const }) : await resolveProductTurnIntent(
               message,
               senderRoles,
@@ -451,12 +459,12 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
                 mode: turnPolicy.shell?.approvalMode
                   ?? service.getAgentConfig()?.execApprovalMode
                   ?? 'auto',
-                masterInitiator: senderRoles.isMaster,
+                masterInitiator: senderRoles.hostRole === 'owner',
                 auto: createAutoApprovalPort(
                   agent.approvalReviewer,
                   escalatedApprovalPort,
                   approvalJudgment,
-                  { escalateRejections: senderRoles.isMaster && turnAccess.origin.kind === 'im' && turnAccess.origin.scope === 'private' },
+                  { escalateRejections: senderRoles.hostRole === 'owner' && turnAccess.origin.kind === 'im' && turnAccess.origin.scope === 'private' },
                 ),
                 ask: askApprovalPort,
               }),

@@ -78,8 +78,9 @@ try {
     await writeScenarioCase('denied', authoredScenario({
       name: 'smoke bot denial in a threaded channel',
       sender: { id: 'visitor', name: '访客', roles: [] },
-      // ADR 0060 P0: a zhin role denial says where roles come from (exact payload).
-      assertions: { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令：它需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。'] },
+      // #1250: in a group or channel a sender without the zhin role is refused silently (no delivery);
+      // a private chat still says where roles come from (core command feedback tests).
+      assertions: { dispatchStatus: 'denied', deliveries: [] },
     })),
     await writeScenarioCase('wrong', authoredScenario({
       name: 'smoke bot wrong expectation',

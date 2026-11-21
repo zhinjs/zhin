@@ -25,10 +25,9 @@ export default defineGamePlugin<SessionService>({
     title: '成语接龙',
     icon: '📜',
     description: '四字成语接龙（同音/同字）',
-    commandPrefix: '/接龙',
     // Chinese action words (`/接龙 同音`); `start_pinyin` / `start_char` remain accepted.
     quickStart: CHAIN_QUICK_START['zh-CN'],
-    aliases: ['chain'],
+    aliases: ['chain', '接龙'],
     menus: [
       { id: 'start_pinyin', label: '🎮 同音接龙' },
       { id: 'start_char', label: '📝 同字接龙' },

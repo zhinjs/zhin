@@ -31,6 +31,8 @@ import {
   type SendRequest,
 } from './contracts.js';
 import { requireAdapters } from './endpoint-runtime.js';
+import type { RecordIncomingOptions } from './conversation-runtime.js';
+import { adapterDeclaresInboundTextAuthoredBySender } from './outbound-segments.js';
 import type { InboundDeduper } from './inbound-dedup.js';
 import type { InboundOriginClassifier } from './inbound-origin.js';
 import {
@@ -42,18 +44,19 @@ import {
   interactionResult,
   isAddressedMessage,
   messageLocale,
-  resolveIngressRoute,
   resolveRoomMembership,
   runInboundMiddlewareAndSpine,
   withEndpointEventPayload,
   type InboundInteractionPort,
   type InboundOutcome,
+  type IngressRoute,
 } from './inbound-spine.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import { InboundOutcomeLedger, type MessageOutcomeLog } from './inbound-outcome-ledger.js';
 import { QUIET_MESSAGE_OUTCOMES, type MessageOutcomeRecord } from './message-outcome.js';
 import { defaultCommandPrefixResolver, MessageDispatcher, normalizeCommandInputText } from './message-dispatcher.js';
 import { suggestCommandReply } from './command-suggestion.js';
+import type { OutboundCommandEnvironmentInput } from './outbound-command-environment.js';
 import { interactionMessages } from '../../built/interaction-messages.js';
 import {
   formatConversationLog,
@@ -71,7 +74,12 @@ interface InboundRuntimeContext {
   readonly outcomes?: Pick<MessageOutcomeLog, 'record'>;
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
-  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
+  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal; conversationSequence?: number; delegatedFrom?: PluginId }>): OperationResourceView | undefined;
+  /**
+   * #1250 第 85 批: the generation's ingress route for `lease` (the Root-private `ingressRouteToken`, read
+   * through the Root's real SnapshotStore). Absent: no ingress route runs.
+   */
+  resolveIngressRoute?(lease: SnapshotLease): IngressRoute | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** One-time secrets (ADR 0060 §3.3 claim code): handled before anything records, logs or routes them. */
   readonly inboundSecret?: InboundSecretGuard;
@@ -96,6 +104,7 @@ interface InboundRuntimeContext {
   recordIncoming(
     input: IncomingMessage,
     sender: MessageSenderRef | undefined,
+    options?: RecordIncomingOptions,
   ): Promise<number | undefined>;
   recordNotice(notice: Notice): Promise<unknown>;
   /** #996: join requests into a group/channel are conversation facts too. */
@@ -134,6 +143,17 @@ export class InboundRuntime {
     bind?: { readonly subjectId: string },
   ): UserInteraction | undefined {
     return this.context.interactions.createForMessage(message, bind);
+  }
+
+  /**
+   * zhinjs/zhin#1250: the command environment of an outbound send's account, computed by the same
+   * dispatcher (and prefix resolver) as inbound command dispatch on that account.
+   */
+  outboundCommandEnvironment(input: OutboundCommandEnvironmentInput, snapshot: RuntimeSnapshot): Readonly<{ prefix: string; menu?: string }> {
+    const source = { conversation: input.conversation, locale: input.locale,
+      ...(input.endpointId !== undefined ? { endpointId: input.endpointId } : {}) };
+    // The resolver and the feature gate read only the conversation, the endpoint name and the locale.
+    return this.#dispatcher.commandEnvironment(source as unknown as Message, snapshot);
   }
 
   async receive(
@@ -345,6 +365,7 @@ export class InboundRuntime {
       });
       const execute = async (): Promise<MessageDispatchResult> => {
         const segments = input.segments ? Object.freeze([...input.segments]) : undefined;
+        const recorded: { sequence?: number } = {};
         const message = new RuntimeMessage(
           {
             conversation,
@@ -399,7 +420,10 @@ export class InboundRuntime {
             captureInteraction: owner => this.context.captureOperation({ target: conversation,
               client: source.client, requester: owner, signal: boundEndpoint.signal }),
             registerOperationView: commandOperation?.bind,
-            createOperationResources: request => this.context.createOperationResources?.({ ...request, lease }),
+            // #1250 第 84 批: the message's own conversation sequence (recorded below, before any
+            // command runs), so a command's operation resources can fold scene events up to it.
+            createOperationResources: request => this.context.createOperationResources?.({ ...request, lease,
+              ...(recorded.sequence !== undefined ? { conversationSequence: recorded.sequence } : {}) }),
             assertActive: () => {
               if (!active) throw new Error('Message author binding scope has ended');
               boundEndpoint.assertActive();
@@ -413,7 +437,11 @@ export class InboundRuntime {
           },
         );
         // A secret-bearing message never enters the conversation history.
-        const conversationSequence = secret ? undefined : await this.context.recordIncoming(input, enrichedSender);
+        const conversationSequence = secret ? undefined : await this.context.recordIncoming(input, enrichedSender, {
+          // ADR 0067 D8: original-text evidence only where the adapter vouches for its text segments.
+          textAuthoredBySender: adapterDeclaresInboundTextAuthoredBySender(adapter, lease.value, conversation),
+        });
+        recorded.sequence = conversationSequence;
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
         ledger.markAddressed(isAddressedMessage(message));
@@ -506,7 +534,7 @@ export class InboundRuntime {
             admission,
             signal: operationSignal,
             interactionFactory,
-            ingressRoute: resolveIngressRoute(lease.value),
+            ingressRoute: this.context.resolveIngressRoute?.(lease),
             diagnostics: this.context.diagnostics,
             runHandlers: () => dispatchInboundHandlers({
               lease,

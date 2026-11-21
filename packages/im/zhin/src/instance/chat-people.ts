@@ -15,8 +15,9 @@
 import {
   chatRoleEntryAppliesTo, isChatIdentity, isChatRole, normalizeChatRoleScope, type ChatIdentity,
 } from '@zhin.js/core';
-import type {
-  ConsoleChatRolesExport, ConsoleChatRolesImportResult,
+import {
+  CHAT_ROLES_EXPORT_FORMAT, CHAT_ROLES_EXPORT_VERSION, isConsoleChatRolesExport,
+  type ConsoleChatRolesExport, type ConsoleChatRolesImportResult,
 } from '@zhin.js/console-protocol';
 import type { FeatureConfigLevel } from '@zhin.js/plugin-runtime';
 import {
@@ -438,8 +439,8 @@ export class ChatPeople {
   export(): ConsoleChatRolesExport {
     const principals = this.#store.principals;
     return Object.freeze({
-      format: 'zhin.chat-roles' as const,
-      version: 1 as const,
+      format: CHAT_ROLES_EXPORT_FORMAT,
+      version: CHAT_ROLES_EXPORT_VERSION,
       exportedAt: this.#now(),
       principals: principals.principals().map(({ id, displayName, createdBy, createdAt }) => ({ id,
         ...(displayName ? { displayName } : {}), ...(createdBy ? { createdBy } : {}), createdAt })),
@@ -469,7 +470,7 @@ export class ChatPeople {
     const skipped: string[] = [];
     const counts = { principals: 0, identities: 0, roles: 0, consoleLinks: 0 };
     const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
-    if (!record(data) || data.format !== 'zhin.chat-roles' || data.version !== 1) throw new ChatPeopleError('invalid', '不是 zhin.chat-roles v1 导出文件');
+    if (!isConsoleChatRolesExport(data)) throw new ChatPeopleError('invalid', `不是 ${CHAT_ROLES_EXPORT_FORMAT} v${CHAT_ROLES_EXPORT_VERSION} 导出文件`);
     const list = (value: unknown) => Array.isArray(value) ? value.filter(record).slice(0, 100_000) : [];
     const exportedIdentities = list(data.identities);
     await this.#store.exclusive(async () => {

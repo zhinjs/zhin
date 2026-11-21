@@ -24,9 +24,8 @@ export default defineGamePlugin<SessionService>({
     title: '骰子对决',
     icon: '🎲',
     description: '掷骰比大小，三局两胜',
-    commandPrefix: '/骰子',
     quickStart: '开始',
-    aliases: ['dice'],
+    aliases: ['dice', '骰子'],
     menus: [
       { id: 'start', label: '🎮 开始对局' },
       { id: 'continue', label: '🔄 继续' },

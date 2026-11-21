@@ -5,6 +5,7 @@ export default defineIngressEvalCase({
   description: 'The master can stop a member turn that is running.',
   source: '#725 same-session admission (PR #746)',
   turnMs: 1000,
+  commandPrefix: '/',
   messages: [
     { at: 0, sender: { id: 'mallory' }, text: '一直循环输出' },
     { at: 100, sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } }, text: '/cancel' },

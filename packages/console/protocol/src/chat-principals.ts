@@ -218,10 +218,35 @@ export interface ConsoleChatIdentityMeResult {
   readonly suggestGlobalOwner?: boolean;
 }
 
+/** `format` of a {@link ConsoleChatRolesExport} (ADR 0060 §4.5). */
+export const CHAT_ROLES_EXPORT_FORMAT = 'zhin.chat-roles' as const;
+/** `version` of a {@link ConsoleChatRolesExport}. */
+export const CHAT_ROLES_EXPORT_VERSION = 1 as const;
+/**
+ * Where `zhin chat-roles export` writes without a file argument and where the instance puts its
+ * pre-migration backup, relative to the project root, as path segments.
+ */
+export const CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS: readonly string[] = Object.freeze(['.zhin', 'backups']);
+
+/** `chat-roles-<ISO time with : and . as ->.json`, the file name of an export / backup taken at `at`. */
+export function chatRolesBackupFileName(at: Date | number): string {
+  return `chat-roles-${new Date(at).toISOString().replace(/[:.]/gu, '-')}.json`;
+}
+
+/**
+ * Whether `value` is a {@link ConsoleChatRolesExport}: the format / version header plus the four
+ * lists. Rows inside the lists are checked by the importer, which skips malformed ones.
+ */
+export function isConsoleChatRolesExport(value: unknown): value is ConsoleChatRolesExport {
+  const data = value as Partial<ConsoleChatRolesExport> | undefined;
+  return !!data && typeof data === 'object' && data.format === CHAT_ROLES_EXPORT_FORMAT && data.version === CHAT_ROLES_EXPORT_VERSION
+    && Array.isArray(data.principals) && Array.isArray(data.identities) && Array.isArray(data.roles) && Array.isArray(data.consoleLinks);
+}
+
 /** ADR 0060 §4.5 export format (`zhin chat-roles export` / `import`). */
 export interface ConsoleChatRolesExport {
-  readonly format: 'zhin.chat-roles';
-  readonly version: 1;
+  readonly format: typeof CHAT_ROLES_EXPORT_FORMAT;
+  readonly version: typeof CHAT_ROLES_EXPORT_VERSION;
   readonly exportedAt: number;
   readonly principals: readonly Readonly<{ id: string; displayName?: string; createdBy?: string; createdAt?: number }>[];
   readonly identities: readonly Readonly<{

@@ -189,8 +189,8 @@ ai:
 ```yaml
 ai:
   trigger:
-    prefixes: ["ai:"]          # 默认 ['#', 'AI:', 'ai:']
-    ignorePrefixes: ["/"]      # 默认 ['/', '!', '！']
+    prefixes: ["ai:"]          # 默认 ['#', 'AI:', 'ai:']；与适配器 commandPrefix 相同的触发前缀不再生效（见下）
+    ignorePrefixes: ["/"]      # 默认 ['/', '!', '！']；适配器的 commandPrefix（非空时）总是额外算作命令前缀
     respondToAt: true          # 默认 true：群里 @ Bot 时触发
     respondToPrivate: true     # 默认 true：私聊直接触发
     keywords: []               # 私聊中包含这些词时触发
@@ -198,6 +198,8 @@ ai:
     thinkingMessage: 思考中…    # 可选：开始处理前的占位回复
     # errorTemplate: "出错了：{error}"   # 可选；不配置时用聊天口吻说"刚卡了一下"，主人会额外看到原因
 ```
+
+`prefixes` 里与适配器 `commandPrefix` 相同的触发前缀不再生效：例如适配器 `commandPrefix: '#'` 时，`#xxx` 先按命令匹配，没有命令认领也只算命令样消息，不会再被默认的 `#` 触发前缀交给 AI。要在这类适配器上用前缀唤起 AI，请换一个不同的触发前缀（如 `ai:`）。
 
 @ 触发依赖适配器标记消息为"提到了 Bot"（例如 CQ 码、Slack 的 app_mention）。
 
@@ -348,7 +350,7 @@ ai:
 | `auto` | 交给一个没有工具的审核 Agent 判断；它无法判断时再询问 master；模型出错、超时或输出无效时直接拒绝 |
 | `bypass` | 跳过审批，但仍然不能绕过危险命令黑名单、工具权限、文件 / 网络边界和沙箱 |
 
-审批时，群聊和频道里可以选择"拒绝 / 仅本次 / 当前会话 / 始终允许"，私聊里是"拒绝 / 仅本次 / 始终允许"。"当前会话"对会话中所有人生效；"始终允许"只对当前发送者生效；所有持续决定都只绑定当前会话。`/approve always bash` 与 `/approve rule <正则>` 管理本账号的持久放行规则。
+审批时，群聊和频道里可以选择"拒绝 / 仅本次 / 当前会话 / 始终允许"，私聊里是"拒绝 / 仅本次 / 始终允许"。"当前会话"对会话中所有人生效；"始终允许"只对当前发送者生效；所有持续决定都只绑定当前会话。`approve always bash` 与 `approve rule <正则>`（按本账号的命令前缀发送）管理本账号的持久放行规则。
 
 ::: details 更多细节
 - **全局上下文文件**：除 `contextPaths` 外，还会自动加载 `~/.config/zhin/AGENTS.md` 与 `~/.config/zhin/ZHIN.md`（不存在则跳过），作为 `# User Context` 段放在项目上下文之前；单个文件最多 8KB，总计最多 16KB。

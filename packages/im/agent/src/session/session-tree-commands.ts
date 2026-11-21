@@ -1,6 +1,5 @@
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { managementMessages as t } from '../init/management-messages.js';
-import { managementCommandReference, type AgentCommandPresentation } from '../init/command-presentation.js';
 import type { SessionBranchPoint } from '@zhin.js/ai';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -14,7 +13,11 @@ function formatBranchList(points: SessionBranchPoint[], locale?: Locale): string
 export async function listSessionTree(
   host: ZhinAgentPrivate,
   sessionKey: string,
-  presentation: AgentCommandPresentation = {},
+  presentation: Readonly<{
+    locale?: Locale;
+    /** The chat invocations of the `tree` / `fork` commands here (prefix included), for the hint. */
+    references?: Readonly<{ tree: string; fork: string }>;
+  }> = {},
 ): Promise<string> {
   const deps: SessionIODeps = {
     agentSessionStore: host.agentSessionStore,
@@ -22,9 +25,7 @@ export async function listSessionTree(
   };
   const { sessionId } = await beginTurnSession(deps, sessionKey);
   const points = await host.contextRepository.listBranchPoints(sessionId);
-  const tree = managementCommandReference('tree', presentation.commandPrefix);
-  const fork = managementCommandReference('fork', presentation.commandPrefix);
-  const hint = tree !== undefined && fork !== undefined ? t(presentation.locale, 'branchHint', { tree, fork }) : '';
+  const hint = presentation.references ? t(presentation.locale, 'branchHint', presentation.references) : '';
   return `${t(presentation.locale, 'branches')}${hint}\n${formatBranchList(points, presentation.locale)}`;
 }
 

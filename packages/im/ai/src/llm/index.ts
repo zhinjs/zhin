@@ -98,12 +98,10 @@ export {
   DEFAULT_PROVIDER_RESILIENCE,
   ProviderRequestError,
   classifyProviderError,
-  computeBackoffDelay,
   createResilientCompletionPort,
   describeProviderFailure,
   providerFailureKind,
   isProviderFailureMessage,
-  parseRetryAfterMs,
   resolveProviderResilienceConfig,
 } from './provider-resilience.js';
 export type {

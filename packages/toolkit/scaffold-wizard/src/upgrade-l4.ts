@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'node:path';
@@ -35,7 +36,7 @@ export function diagnoseUpgradeToL4(
   cwd: string,
   config: Record<string, unknown>,
   pkg?: PackageJsonLike,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): UpgradeToL4Diagnosis {
   const packageJsonPath = path.join(cwd, 'package.json');
   const packageJson = pkg ?? (fs.existsSync(packageJsonPath)
@@ -92,7 +93,7 @@ export function diagnoseUpgradeToL4(
   };
 }
 
-export function getUpgradeToL4Dependencies(config: Record<string, unknown>, locale: 'zh-CN' | 'en' = 'zh-CN'): Record<string, string> {
+export function getUpgradeToL4Dependencies(config: Record<string, unknown>, locale: Locale = 'zh-CN'): Record<string, string> {
   const deps = getRequiredAIDependenciesForConfig({ ai: { enabled: true } });
   return { ...deps, ...getOptionalPeerDependencies(config, locale) };
 }

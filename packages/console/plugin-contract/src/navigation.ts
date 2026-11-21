@@ -1,8 +1,9 @@
+import type { ConsoleLocale } from './page.js';
 export interface NavNode {
   readonly id: string;
   readonly type: 'plugin' | 'page';
   readonly label: string;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   readonly icon?: string;
   readonly path?: string;
   readonly order: number;

@@ -6,6 +6,7 @@ import { agentConsoleDisabledReason, withGenerationAgentConsole } from './agent-
 import { consoleFeatureDisabled, type ConsoleFeatureDisabledReason } from '@zhin.js/console-protocol';
 import { parseBoundedInteger } from '@zhin.js/gateway/http';
 import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
+import { readScheduleJobLabels } from './schedule-job-labels.js';
 import { registerScheduleExecutionRoutes } from './schedule-execution-routes.js';
 import { registerAssistantJobRoutes } from './assistant-job-routes.js';
 import { internalErrorResponse } from './internal-error.js';
@@ -223,7 +224,10 @@ export function registerAgentConsoleRoutes(
     tags: ['agent', 'collaboration'],
   });
 
-  if (options.projectRoot) registerTraceArchiveRoutes({ http, base, projectRoot: options.projectRoot });
+  if (options.projectRoot) {
+    registerTraceArchiveRoutes({ http, base, projectRoot: options.projectRoot,
+      scheduleJobLabels: () => readScheduleJobLabels(snapshots) });
+  }
 
 }
 

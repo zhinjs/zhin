@@ -6,6 +6,7 @@
  * manual entry kept as an advanced option. `ConversationLabel` shows a stored conversation key by
  * its display name. Both read the page's shared directory ({@link useSharedConversationDirectory}).
  */
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import React, { useMemo, useState } from 'react';
 import {
   Button,
@@ -14,7 +15,7 @@ import {
   Input,
 } from '@zhin.js/console-ui';
 import { ChoiceSelect, NoticeBlock, ToneBadge } from '../renderer/kit.js';
-import { useLocale, type PluginUiLocale } from './locale.js';
+import { useLocale } from './locale.js';
 import {
   conversationAddressKey,
   conversationKindLabel,
@@ -43,7 +44,7 @@ export interface ConversationOption {
 export function filterConversationOptions(
   directory: ConversationDirectory,
   query: string,
-  options: { readonly kinds?: readonly ConversationKind[]; readonly locale?: PluginUiLocale; readonly limit?: number } = {},
+  options: { readonly kinds?: readonly ConversationKind[]; readonly locale?: ConsoleLocale; readonly limit?: number } = {},
 ): ConversationOption[] {
   const kinds = new Set(options.kinds?.length ? options.kinds : ALL_KINDS);
   const needle = query.trim().toLowerCase();

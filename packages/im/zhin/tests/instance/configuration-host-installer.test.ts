@@ -5,12 +5,13 @@ import { dirname, join } from 'node:path';
 import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec,
   type EndpointSendRequest } from '@zhin.js/adapter';
 import commandFeature, { commandFeatureId, type CommandIndex } from '@zhin.js/command';
-import { ImRuntime } from '@zhin.js/core/runtime';
 import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../src/instance/console/module.js';
 import { installConfigurationHost } from '../../src/instance/configuration-host-installer.js';
-import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
+import { installChatIdentityBind } from '../../src/instance/chat-identity-bind.js';
+import { createConfigurationChatAuthorizer, createSenderEnricher, ImRuntime, type ConfigurationChatAuthorizer } from '@zhin.js/core/runtime';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 import { chatRolesFromDocument } from './chat-role-fixture.js';
 
 class Client extends EventEmitter {
@@ -29,7 +30,8 @@ class Modules implements ModuleRuntime {
 }
 type Store = Pick<ConsoleConfigurationStore, 'readChat' | 'patchChat'>;
 async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; globalMasters?: readonly string[]; secondEndpoint?: boolean;
-  extraFields?: Readonly<Record<string, string | number>>; endpointNickname?: string; objectTuple?: boolean; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
+  extraFields?: Readonly<Record<string, string | number>>; endpointNickname?: string; objectTuple?: boolean; store?: (real: ConsoleConfigurationStore) => Store;
+  authorize?: (real: ConfigurationChatAuthorizer) => ConfigurationChatAuthorizer; bind?: boolean } = {}) {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-config-chat-')));
   const modules = new Modules();
   const setups = { root: 0 };
@@ -73,7 +75,10 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
     applyConfiguration: revision => runtime.applyConfiguration(revision), readApplication: () => runtime.configurationApplication });
   const store = options.store?.(realStore) ?? realStore;
   const runtime = new RootRuntime({ projectRoot: project, config, modules, environment: { name: 'test', mode: 'test', platform: 'node' },
-    installResources(context) { im.install(context.resources); installConfigurationHost({ store, authorize: createConfigurationChatAuthorizer(() => roles, () => runtime.snapshot) })(context); } });
+    installResources(context) { im.install(context.resources); const authorize = createConfigurationChatAuthorizer(() => roles, () => runtime.snapshot);
+      installConfigurationHost({ store, authorize: options.authorize?.(authorize) ?? authorize })(context);
+      // The Root `bind` command only needs to exist here: its invocation is named in the refusals.
+      if (options.bind) installChatIdentityBind({ codes: {} as never, snapshots: runtime.snapshots })(context); } });
   try { await runtime.start(); im.attach(runtime.snapshots); }
   catch (error) { await runtime.stop(); await rm(project, { recursive: true, force: true }); throw error; }
   const index = runtime.snapshot.projections.get(adapterFeatureId) as AdapterIndex;
@@ -91,7 +96,7 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
     return endpoint[endpointSpec].events.message({ conversation: { endpoint: { id: selected.id, adapter: 'platform' }, kind: input.kind ?? 'private', id: 'conversation' },
       content: text, sender: { id: input.sender ?? 'alice' }, metadata: input.metadata });
   };
-  return { project, runtime, realStore, store, document: config, client, otherClient, secondClient, index, row, receive, setups,
+  return { project, runtime, im, realStore, store, document: config, client, otherClient, secondClient, index, row, receive, setups,
     close: async () => { await runtime.stop(); await rm(project, { recursive: true, force: true }); } };
 }
 function lastReply(client: Client): string { return String(client.sendNative.mock.calls.at(-1)?.[0].payload); }
@@ -285,7 +290,7 @@ it('accepts global owners (migrated from ai.trigger.masters, bound per adapter) 
     await f.receive('!!config get other.nickname', { sender: 'alice' });
     expect(lastReply(f.client)).toContain('Other');
     await f.receive('!!config get other.nickname', { sender: 'stranger' });
-    expect(lastReply(f.client)).toBe('Configuration management requires a real Bot owner in a private chat.');
+    expect(lastReply(f.client)).toBe(describeGlobalOwnerRequired('en'));
   } finally { await f.close(); }
 });
 
@@ -293,7 +298,7 @@ it('does not accept account owners on the same Adapter: chat configuration is ho
   const f = await fixture({ secondEndpoint: true });
   const read = vi.spyOn(f.realStore, 'readChat');
   try {
-    const denied = 'Configuration management requires a real Bot owner in a private chat.';
+    const denied = describeGlobalOwnerRequired('en');
     // carol owns bot/second only — neither via bot/same nor via her own account.
     await f.receive('!!config get bot.nickname', { sender: 'carol' });
     expect(lastReply(f.client)).toBe(denied);
@@ -309,11 +314,76 @@ it('does not accept account owners on the same Adapter: chat configuration is ho
   } finally { await f.close(); }
 });
 
+it('declares owner@global + private(): silent for bystanders in a group, explains in private, asks owners for a private chat (#1250 第 78 批)', async () => {
+  const f = await fixture({ secondEndpoint: true });
+  const read = vi.spyOn(f.realStore, 'readChat');
+  try {
+    // In a group a sender who is no global owner (a stranger, or carol who owns one account) gets no reply at all.
+    for (const sender of ['stranger', 'carol']) {
+      const before = f.client.sendNative.mock.calls.length;
+      await f.receive('!!config get bot.nickname', { sender, kind: 'group' });
+      await f.receive('!!config set bot.nickname -- x', { sender, kind: 'channel' });
+      expect(f.client.sendNative.mock.calls.length).toBe(before);
+    }
+    // In a private chat the same sender learns that a global owner is needed and where it is granted.
+    await f.receive('!!config get bot.nickname', { sender: 'stranger' });
+    expect(lastReply(f.client)).toBe(describeGlobalOwnerRequired('en'));
+    expect(lastReply(f.client)).toContain('claim <code>');
+    // A global owner in a group is told to use a private chat.
+    const before = f.client.sendNative.mock.calls.length;
+    await f.receive('!!config get bot.nickname', { sender: 'alice', kind: 'group' });
+    expect(f.client.sendNative.mock.calls.length).toBe(before + 1);
+    expect(lastReply(f.client)).toBe('This command works in a private chat only; send it to the bot privately.');
+    expect(read).not.toHaveBeenCalled();
+    // …and is served in the private chat.
+    await f.receive('!!config get bot.nickname', { sender: 'alice' });
+    expect(lastReply(f.client)).toContain('Before');
+  } finally { await f.close(); }
+});
+
+it('answers an authorizer refusal with the permit refusal itself and records permission_denied (#1250 第 78 批)', async () => {
+  let refuse = false;
+  const f = await fixture({ bind: true, authorize: real => (session, adapters) => !refuse && real(session, adapters) });
+  const read = vi.spyOn(f.realStore, 'readChat');
+  try {
+    // The permit refusal (a stranger in private) and the authorizer refusal (a global owner the
+    // execution-time check rejects) are one and the same text.
+    await f.receive('!!config get bot.nickname', { sender: 'stranger' });
+    const permitRefusal = lastReply(f.client);
+    // Both name the Root `bind` command with this endpoint's actual prefix.
+    expect(permitRefusal).toBe(describeGlobalOwnerRequired('en', { bindCommand: '!!bind' }));
+    expect(permitRefusal).toContain('「!!bind <code>」');
+    refuse = true;
+    await f.receive('!!config get bot.nickname', { sender: 'alice' });
+    expect(lastReply(f.client)).toBe(permitRefusal);
+    expect(f.im.messageOutcomes.list({ limit: 1 })[0]).toMatchObject({ outcome: 'permission_denied', reason: 'not-global-owner', reply: 'yes', command: 'config' });
+    expect(read).not.toHaveBeenCalled();
+    refuse = false;
+    await f.receive('!!config get bot.nickname', { sender: 'alice' });
+    expect(lastReply(f.client)).toContain('Before');
+  } finally { await f.close(); }
+});
+
+it('keeps the declarative permit equal to the authorizer: the same identities pass both (#1250 第 78 批)', async () => {
+  const f = await fixture({ globalMasters: ['global'] });
+  try {
+    const slot = [...f.runtime.snapshot.capabilities.values()].find(entry => entry.owner === 'root' && entry.localName === 'config/get');
+    expect(slot).toBeDefined();
+    // Global owners pass on both adapters; anyone else is refused before execute with the shared text.
+    for (const [sender, other] of [['alice', false], ['global', false], ['global', true]] as const) {
+      await f.receive(other ? '#config get bot.nickname' : '!!config get bot.nickname', { sender, other });
+      expect(lastReply(other ? f.otherClient : f.client)).toContain('Before');
+    }
+    await f.receive('#config get bot.nickname', { sender: 'bob', other: true });
+    expect(lastReply(f.otherClient)).toBe(describeGlobalOwnerRequired('en'));
+  } finally { await f.close(); }
+});
+
 it('denies owners of a different Adapter even with several endpoints (C2 widen)', async () => {
   const f = await fixture({ secondEndpoint: true, globalMasters: ['global'] });
   const read = vi.spyOn(f.realStore, 'readChat');
   try {
-    const denied = 'Configuration management requires a real Bot owner in a private chat.';
+    const denied = describeGlobalOwnerRequired('en');
     // Cross-Adapter: bot's account owner on other's endpoint, and other's account owner on bot's endpoints.
     for (const sender of ['carol']) {
       await f.receive('#config get other.nickname', { sender, other: true });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveGhClient, resolveGithubEndpoint } from '../lib/github-api.js';
+import { ghDate, resolveGhClient, resolveGithubEndpoint } from '../lib/github-api.js';
 import { platformIdentity, requireOauthModel } from '../lib/github-oauth.js';
 
 describe('test-bot GitHub client access', () => {
@@ -76,5 +76,17 @@ describe('test-bot GitHub client access', () => {
       .toEqual({ platform: 'qq', uid: 'openid' });
     expect(platformIdentity(undefined)).toContain('缺少消息上下文');
     expect(platformIdentity({ adapter: 'qq' })).toContain('platform + sender');
+  });
+
+  it('dates GitHub timestamps by the local day of the process zone (#1250)', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    try {
+      expect(ghDate('2026-01-05T17:00:00Z')).toBe('2026-01-06');
+      expect(ghDate(undefined)).toBe('-');
+      expect(ghDate('not a date')).toBe('-');
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
   });
 });

@@ -1,5 +1,6 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
 import { IlinkQrLoginError, loginWithIlinkQr } from './weixin-ilink-login.js';
 
@@ -16,7 +17,7 @@ export const ADAPTERS_ESSENTIALS_URL = 'https://zhin.js.org/adapters/';
 export const adapterDocsUrl = (slug: string) => `https://zhin.js.org/adapters/${slug}`;
 
 export interface EndpointConfigureContext {
-  readonly locale?: 'zh-CN' | 'en';
+  readonly locale?: Locale;
   envVars: Record<string, string>;
   markRequiresDatabase: () => void;
 }

@@ -8,6 +8,7 @@ import {
   isFinishFailureMessage,
   type FinishFailureKind,
 } from "./bridge/finish-reason.js";
+import { computeBackoffDelay, parseRetryAfterMs, sleep } from "@zhin.js/plugin-runtime";
 import { isContextOverflowError } from "./context-overflow.js";
 import { ProviderResponseError } from "./provider-error-facts.js";
 import type { Context } from "./types/context.js";
@@ -289,19 +290,6 @@ function retryAfterFromHeaders(headers: unknown): number | undefined {
   return parseRetryAfterMs(headerValue(headers, "retry-after"));
 }
 
-export function parseRetryAfterMs(
-  value: string | undefined,
-  now = Date.now()
-): number | undefined {
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0)
-    return Math.round(seconds * 1000);
-  const date = Date.parse(value);
-  if (Number.isNaN(date)) return undefined;
-  return Math.max(0, date - now);
-}
-
 function statusOf(error: Record<string, unknown>): number | undefined {
   for (const key of ["statusCode", "status"]) {
     const value = error[key];
@@ -556,24 +544,6 @@ export function classifyProviderError(
   return { kind: "unknown", retryable: false, status };
 }
 
-/** Exponential backoff with full jitter, honouring a server `Retry-After` when present. */
-export function computeBackoffDelay(
-  retryIndex: number,
-  config: Pick<
-    Required<ProviderResilienceConfig>,
-    "baseDelayMs" | "maxDelayMs"
-  >,
-  retryAfterMs?: number,
-  random: () => number = Math.random
-): number {
-  if (retryAfterMs !== undefined) return retryAfterMs;
-  const ceiling = Math.min(
-    config.maxDelayMs,
-    config.baseDelayMs * 2 ** retryIndex
-  );
-  return Math.round(ceiling / 2 + random() * (ceiling / 2));
-}
-
 /**
  * Detect a reply that carries nothing usable, or a broken tool call: a call with no
  * name, or Gemini's MALFORMED_FUNCTION_CALL finish (surfaced by the bridge as an
@@ -604,22 +574,6 @@ function inspectReply(
   return hasPayload
     ? undefined
     : new EmptyResponseError("empty_response", message);
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(done, ms);
-    function done() {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }
-    function onAbort() {
-      clearTimeout(timer);
-      reject(signal?.reason ?? new Error("aborted"));
-    }
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
 }
 
 /** Timer seam for the per-attempt timeout; evals inject a virtual clock. */
@@ -854,12 +808,7 @@ export function createResilientCompletionPort(
         if (info.retryable && budgetLeft && !retryAfterTooLong) {
           const delayMs = isEmpty
             ? 0
-            : computeBackoffDelay(
-                retries,
-                config,
-                info.retryAfterMs,
-                options.random
-              );
+            : info.retryAfterMs ?? computeBackoffDelay(retries, config, options.random);
           if (isEmpty) emptyRetries++;
           else retries++;
           reportEvent({

@@ -24,7 +24,6 @@ export default defineGamePlugin({
     title: 'My Game',
     icon: 'GAME',
     description: 'A turn-based game',
-    commandPrefix: '/my-game',
     commandPath: 'my-game',
     quickStart: 'start',
   },
@@ -37,14 +36,14 @@ export default defineGamePlugin({
 ```
 
 - `commands/<name>/[[action]]/index.ts` 定义命令（可选参数；在 `defineCommand({ params })` 中声明 `action` 的类型与默认值）。
-- `middlewares/` 处理按钮 payload、裸文本答案和旧命令别名。
+- `middlewares/` 处理按钮 payload 与裸文本答案；游戏短口令（`21点 开始`）是命令自身的 `match`（`gameCommandMatch()`），不是中间件。自由文本作答的中间件先用 `routesToGameCommand(input, pattern)` 判断这条消息是否会路由到本游戏命令，命中就 `next()`。
 - `defineGamePlugin()` 通过 `addGame` 发布 Game capability；`GameIndex` 是整代 snapshot
   的大厅 SSOT，命令通过 `context.project(gameFeatureId)` 读取。
 - `DEFAULT_GAME_STALE_CRON` 与 `scheduleHostToken` 用于清理超时会话。
 - `defineGamePlugin()` 在存在 `outboundHostToken` 时自动通知超时会话所在频道。
 - 对局创建时将 `message.locale` 保存到会话行的可空 `locale` 字段；后续棋盘、提示和超时通知沿用该语言。旧行缺少语言时保留原有中文流程，不因升级后项目或玩家语言变化而切换。新开一局重新读取创建者的语言。
 - `gamePlayerFromInput(input)` 透传消息的 `locale` 与 `formatCommand`；命令也可显式传入第二参数 `{ locale, formatCommand }`。`buildGridKeyboard({ locale })` 本地化默认数字提示，自定义提示保持原文。
-- 大厅通过 `GameIndex.formatHelp(locale, context.formatCommand)` 从当前命令索引解析 `commandPath` 与真实插件 owner；不会将旧的 `commandPrefix` 当作当前环境的调用入口。缺少真实入口时只展示游戏说明。
+- 大厅通过 `GameIndex.formatHelp(locale, context.formatCommand)` 从当前命令索引解析 `commandPath` 与真实插件 owner，按当前会话真实的指令前缀渲染入口；缺少真实入口时只展示游戏说明。游戏定义没有 `commandPrefix` 字段：入口只由 `commandPath` 与命令系统决定。
 - 每个游戏包定义自己的 typed service token；`plugin.ts` 提供资源，command/middleware
   通过 Capability Context 的 `use(token)` 消费。禁止以模块变量保存当前 SessionService。
 

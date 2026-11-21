@@ -2,9 +2,11 @@ import { definePluginStore } from 'zhin.js';
 import {
   gameFeatureId,
   isGameIndex,
+  type GameCommandFormatter,
   type GameIndex,
   type RuntimeRegisteredGame,
 } from '@zhin.js/game-kit';
+import type { Locale } from 'zhin.js/i18n';
 
 export const gameIndexStore = definePluginStore<GameIndex>(
   'zhin.game.index',
@@ -120,9 +122,24 @@ export function inferPlayerBounds(game: RuntimeGameWithPlayers): {
   return { minPlayers: 1, maxPlayers: 1 };
 }
 
-export function toGameCatalogEntry(game: RuntimeRegisteredGame): GameCatalogEntry {
+/**
+ * How a catalog entry writes its start command. `index` + `formatCommand` are the same pair the
+ * `games` command uses (`GameIndex.formatCommand`), so the entry carries the command as this
+ * conversation sends it; without them the command is written without any prefix (#1250 第 82 批).
+ */
+export interface GameCatalogPresentation {
+  readonly index?: Pick<GameIndex, 'formatCommand'>;
+  readonly formatCommand?: GameCommandFormatter;
+  readonly locale?: Locale;
+}
+
+export function toGameCatalogEntry(game: RuntimeRegisteredGame, presentation: GameCatalogPresentation = {}): GameCatalogEntry {
   const { minPlayers, maxPlayers } = inferPlayerBounds(game);
-  const quickStart = game.quickStart ? ` ${game.quickStart}` : '';
+  const locale = presentation.locale;
+  const quickStartText = (locale ? game.quickStartI18n?.[locale] : undefined) ?? game.quickStart;
+  const quickStart = quickStartText ? ` ${quickStartText}` : '';
+  const command = presentation.index?.formatCommand(game.id, presentation.formatCommand)
+    ?? game.commandPath ?? game.id;
   return {
     id: game.id,
     name: game.title,
@@ -132,6 +149,6 @@ export function toGameCatalogEntry(game: RuntimeRegisteredGame): GameCatalogEntr
     maxPlayers,
     playerCountRange: minPlayers === maxPlayers ? `${minPlayers}` : `${minPlayers}-${maxPlayers}`,
     description: game.description,
-    startCommand: `${game.commandPrefix}${quickStart}`,
+    startCommand: `${command}${quickStart}`,
   };
 }

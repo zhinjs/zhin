@@ -60,6 +60,19 @@ describe('@zhin.js/plugin-rss runtime', () => {
     expect(formatFeedPreview('Demo', [])).toBe('Demo: 暂无内容');
   });
 
+  it('dates preview items in the repository format, in the process zone (#1250)', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    try {
+      const item = (date: string) => ({ title: 'T', link: '', date, summary: '', guid: date });
+      const text = formatFeedPreview('Demo', [item('2026-01-05T17:00:00Z'), item('not a date')], 'en');
+      expect(text).toContain('  2026-01-06 01:00:00');
+      expect(text).toContain('  not a date');
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+
   it('rejects invalid preview url without network', async () => {
     const emptyCtx = commandContext(createRuntime());
     const result = await previewCommand.execute({

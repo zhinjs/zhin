@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import type { ConsoleAdapterPageBlueprint, ConsolePageBlueprint } from '@zhin.js/console-contract';
 
 export interface ConsoleIndexPage {
@@ -11,7 +12,7 @@ export interface ConsoleIndexPage {
   readonly group?: string;
   readonly order?: number;
   readonly hideInNav?: boolean;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en' | string, string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<Locale | string, string>>>;
   readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint | Readonly<Record<string, unknown>>;
 }
 
@@ -750,12 +751,4 @@ try {
   }
 }
 </script>`;
-}
-
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }

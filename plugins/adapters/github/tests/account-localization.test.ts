@@ -34,6 +34,20 @@ describe('GitHub account localization', () => {
     expect(insert).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the binding time in the repository date format (#1250)', async () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    try {
+      vi.spyOn(GhClient.prototype, 'verifyAuth').mockResolvedValue({ ok: true, user: 'fixture-user', message: '' });
+      const row = { github_login: 'fixture-user', access_token: 'synthetic', created_at: '2026-01-05T17:00:00.000Z' };
+      const client = { host: 'github.example.test', database: { models: new Map([['github_oauth_users', { select: () => ({ where: async () => [row] }) }]]) } };
+      const message = { clientAdapter: 'github', sender: { id: 'u1' }, locale: 'en' };
+      expect(await executeGithubWhoami({}, client as never, message as never, 'en')).toContain('2026-01-06 01:00:00');
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+
   it('localizes account guidance without inventing a command invocation', async () => {
     const client = { database: { models: new Map([['github_oauth_users', { select: () => ({ where: async () => [] }) }]]) } };
     const message = { clientAdapter: 'github', sender: { id: 'u1' }, locale: 'en' };

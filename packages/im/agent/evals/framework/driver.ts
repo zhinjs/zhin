@@ -1,9 +1,11 @@
 import { createEvalInference } from './inference.js';
+import { USER_REPLY_LOCALE_METADATA_KEY } from '../../src/prompt/rules/reply-language.js';
 import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
 import { deliveredTextDigest, plannedReplyTexts } from '../../src/session/context-provenance.js';
-import type { MessageRef } from '@zhin.js/im-contract';
+import type { ConversationContextBlock, ConversationRef, MessageRef } from '@zhin.js/im-contract';
+import { ConversationRuntime } from '../../../core/src/plugin-runtime/im/conversation-runtime.js';
 /**
  * Engine driver: assembles the smallest real host (ZhinAgent + AgentCore +
  * session/context systems) around the scripted model, builds a canonical
@@ -550,14 +552,19 @@ function buildTurn(
   const policy = trust.policy;
   const turnTools = trust.tools;
   const turnId = `${definition.id}:turn-${index + 1}`;
+  // The canonical address the IM ingress supplies with every IM origin.
+  const conversation = { endpoint: { adapter: PLATFORM, id: ENDPOINT }, kind: scope, id: sceneId } as const;
   let replySequence = 0;
   const turn = createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: turnId, turnId },
-    origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message` },
-    principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles },
+    origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message`, conversation },
+    // The IM runtime's origin classifier marks every human message (`createRuntimeTurnAccess`).
+    principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles, origin: 'human' },
     input: {
       text: message.text,
+      ...(message.locale ? { locale: message.locale } : {}),
+      ...(message.locale && message.localeSetByUser ? { metadata: { [USER_REPLY_LOCALE_METADATA_KEY]: message.locale } } : {}),
       ...(message.images?.length
         ? { media: message.images.map((image) => ({ kind: 'image' as const, source: { kind: 'base64' as const, value: image.base64 }, mimeType: image.mimeType, ...(image.name ? { name: image.name } : {}) })) }
         : {}),
@@ -583,7 +590,7 @@ function buildTurn(
           // This local port delivers the captured output unchanged. Supply the same
           // plain-text evidence the production receipt bridge verifies after sending.
           const messageContexts = plannedReplyTexts(output).flatMap(plannedText => plannedText === undefined ? [] : [{
-            message: { conversation: { endpoint: { adapter: PLATFORM, id: ENDPOINT }, kind: scope, id: sceneId }, id: `${turnId}:reply-${++replySequence}` },
+            message: { conversation, id: `${turnId}:reply-${++replySequence}` },
             plannedText,
           }]);
           deliveredReplies.push(...messageContexts);
@@ -591,8 +598,16 @@ function buildTurn(
         },
       },
       ...(approval ? { approval } : {}),
-      ...(message.backgroundEvents?.length || (message.backgroundOwnReplies && deliveredReplies.length)
-        ? { conversationContext: backgroundContext(message.backgroundEvents ?? [], message.backgroundOwnReplies ? [...deliveredReplies] : []) } : {}),
+      ...(message.backgroundEvents?.length || message.backgroundOwnMessages?.length || (message.backgroundOwnReplies && deliveredReplies.length)
+        ? { conversationContext: backgroundContext(message.backgroundEvents ?? [], message.backgroundOwnReplies ? [...deliveredReplies] : [],
+          conversation, `${turnId}:message`, (message.backgroundOwnMessages ?? []).map((entry, position) => {
+            const own = typeof entry === 'string' ? { text: entry } : entry;
+            return {
+              message: { conversation, id: `${turnId}:own-${position + 1}` },
+              senderId: own.senderId ?? sender.id, senderName: own.senderId ?? sender.name ?? sender.id, text: own.text,
+              ...(own.forwarded ? { forwarded: true } : {}),
+            };
+          })) } : {}),
       ...(message.quote ? { references: quoteReferencePort(message.quote) } : {}),
     },
   });
@@ -701,29 +716,55 @@ function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, inde
 }
 
 type DeliveredEvalReply = Readonly<{ message: MessageRef; plannedText: string }>;
+type OwnEvalMessage = Readonly<{ message: MessageRef; senderId: string; senderName: string; text: string; forwarded?: boolean }>;
 
 /**
  * Member texts become plain background blocks. `ownReplies` (#1250) are the bot's own earlier
  * replies, projected as the IM runtime projects an actor-less outbound message: label, message
- * reference and the delivered text digest the outbound receipt carries.
+ * reference and the delivered text digest the outbound receipt carries. `ownMessages` (ADR 0067 D8)
+ * go through the real core projection: a `ConversationRuntime` stores them as an adapter declaring
+ * `inboundTextAuthoredBySender` delivers them (with the `forwarded` marker where set) and reads them
+ * back, so the evidence the turn engine sees is exactly what core produces.
  */
-function backgroundContext(texts: readonly string[], ownReplies: readonly DeliveredEvalReply[] = []): ConversationContextPort {
-  const own = ownReplies.map((reply, index) => ({
-    kind: 'conversation_event' as const,
-    sequence: index + 1,
-    eventType: 'message.created' as const,
-    text: `You (this bot) [message_id=${JSON.stringify(reply.message.id)}]: ${reply.plannedText}`,
-    message: reply.message,
-    messageTextDigest: deliveredTextDigest(reply.plannedText),
-  }));
-  const members = texts.map((text, index) => ({
-    kind: 'conversation_event' as const,
-    sequence: own.length + index + 1,
-    eventType: 'message.created' as const,
-    text,
-  }));
+function backgroundContext(
+  texts: readonly string[],
+  ownReplies: readonly DeliveredEvalReply[] = [],
+  conversation?: ConversationRef,
+  currentMessageId?: string,
+  ownMessages: readonly OwnEvalMessage[] = [],
+): ConversationContextPort {
+  const projectOwn = async (): Promise<readonly ConversationContextBlock[]> => {
+    if (!ownMessages.length || !conversation || !currentMessageId) return [];
+    const runtime = new ConversationRuntime();
+    for (const own of ownMessages) {
+      await runtime.recordIncoming({
+        conversation, message: own.message, content: own.text, segments: [{ type: 'text', data: { text: own.text } }],
+        ...(own.forwarded ? { forwarded: true } : {}),
+      }, { id: own.senderId, name: own.senderName }, { textAuthoredBySender: true });
+    }
+    const through = await runtime.recordIncoming({ conversation, message: { conversation, id: currentMessageId }, content: '' },
+      { id: 'eval-current' }, { textAuthoredBySender: true });
+    return through === undefined ? [] : (await runtime.readContext(conversation, 'eval', through, 50, currentMessageId)).blocks;
+  };
   return {
-    readPending: async () => ({ cursor: own.length + members.length, blocks: [...own, ...members] }),
+    readPending: async () => {
+      const sender = await projectOwn();
+      const own = ownReplies.map((reply, index) => ({
+        kind: 'conversation_event' as const,
+        sequence: sender.length + index + 1,
+        eventType: 'message.created' as const,
+        text: `You (this bot) [message_id=${JSON.stringify(reply.message.id)}]: ${reply.plannedText}`,
+        message: reply.message,
+        messageTextDigest: deliveredTextDigest(reply.plannedText),
+      }));
+      const members = texts.map((text, index) => ({
+        kind: 'conversation_event' as const,
+        sequence: sender.length + own.length + index + 1,
+        eventType: 'message.created' as const,
+        text,
+      }));
+      return { cursor: sender.length + own.length + members.length, blocks: [...sender, ...own, ...members] };
+    },
     commit: async () => undefined,
   };
 }

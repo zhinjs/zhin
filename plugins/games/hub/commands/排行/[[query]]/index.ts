@@ -1,4 +1,4 @@
-import { createMessages, type Locale } from 'zhin.js/i18n';
+import { createMessages, formatList, type Locale } from 'zhin.js/i18n';
 import { defineCommand } from 'zhin.js/command';
 import {
   channelKey,
@@ -37,11 +37,10 @@ export default defineCommand({
       const hit = games.find(
         (g) => g.id === query
           || (g.titleI18n?.[locale] ?? g.title).includes(query)
-          || g.commandPrefix.includes(query)
           || g.aliases?.some((a) => a.includes(query)),
       );
       if (!hit) {
-        const names = games.map((g) => g.titleI18n?.[locale] ?? g.title).join(locale === 'en' ? ', ' : '、');
+        const names = formatList(locale, games.map((g) => g.titleI18n?.[locale] ?? g.title));
         return messages(locale, 'missing', { query, names });
       }
       gameId = hit.id;

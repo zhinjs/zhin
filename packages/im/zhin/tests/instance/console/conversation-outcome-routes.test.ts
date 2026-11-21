@@ -89,3 +89,17 @@ it('lists only the connection owner\'s messages, never another principal\'s unde
   // No plugin name (operator text) in the response.
   expect(JSON.stringify(all)).not.toContain('help-plugin');
 });
+
+it('answers an unsupported ?locale= with 400 invalid_locale and keeps the default without one (#1250 batch 77)', async () => {
+  const f = await fixture();
+  f.settle('m-weather', { outcome: 'not_addressed', reason: 'no_command_not_ambient', stage: 'ambient' });
+  for (const locale of ['en-US', 'fr', '']) {
+    const response = await f.request({ messageId: 'm-weather', locale });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ success: false, code: 'invalid_locale', error: 'locale 只能是 zh-CN 或 en（locale must be zh-CN or en）' });
+  }
+  const absent = await f.request({ messageId: 'm-weather' });
+  expect(absent.status).toBe(200);
+  expect((await absent.json()).data.outcomes[0].text).toBe('这条消息没有 @ 我，也不是指令，本群我只在被 @ 时回复。');
+});
+

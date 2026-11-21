@@ -82,17 +82,18 @@ function rendered(sent: EndpointSendRequest[]): string { return JSON.stringify(s
 describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, interaction and SQLite', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('uses English-only confirmation, preserves its locale and formats the actual prefix', async () => {
+  it('accepts a Chinese confirmation in an English flow, preserves its locale and formats the actual prefix', async () => {
     const f = await fixture({ locale: 'en', prefix: '!' });
     const now = 1_800_000_000_000; const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
     try {
       const pending = f.receive('!remind create "in 10 minutes" Ship the report');
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('Create this reminder?'));
       expect(rendered(f.sent)).not.toContain('确认创建');
-      await f.receive('确认');
+      await f.receive('maybe later');
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('No reminder was created. Enter'));
       expect(f.added).not.toHaveBeenCalled();
-      await f.receive('confirm'); await pending;
+      // #1250 第 74 批: confirm words are not tied to the flow's language.
+      await f.receive('确认'); await pending;
       expect(f.added).toHaveBeenCalledTimes(1);
       const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
       expect(tasks[0]).toMatchObject({ locale: 'en', text: 'Ship the report', nextRunAt: now + 600_000 });
@@ -156,16 +157,43 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
-  it('does not accept an English confirmation in a Chinese flow', async () => {
+  it('accepts an English confirmation in a Chinese flow, full-width and with trailing punctuation', async () => {
     const f = await fixture();
     try {
       const pending = f.receive('/remind create 10分钟后 正文');
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
-      await f.receive('confirm');
+      await f.receive('我不确定');
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('请明确输入'));
       expect(f.added).not.toHaveBeenCalled();
-      await f.receive('取消'); await pending;
+      await f.receive('Ｃｏｎｆｉｒｍ！'); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+    } finally { await f.close(); }
+  });
+
+  it.each(['Cancel.', '退出', 'QUIT'])('cancels a Chinese flow on %s at a follow-up question and at the confirmation', async word => {
+    const f = await fixture();
+    try {
+      const asking = f.receive('/remind create 10分钟后');
+      await vi.waitFor(() => expect(f.sent.length).toBeGreaterThan(0));
+      await f.receive(word); await asking;
+      const confirming = f.receive('/remind create 10分钟后 正文');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      await f.receive(word); await confirming;
       expect(f.added).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
+
+  // #1250 第 74 批审查 L2: a cancel word given as a command argument is data, not a cancellation.
+  it('creates a reminder whose text is a cancel word given as a command argument', async () => {
+    const f = await fixture();
+    try {
+      const pending = f.receive('/remind create 明天9点 退出');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      expect(rendered(f.sent)).toContain('退出');
+      await f.receive('确认'); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+      const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
+      expect(tasks[0]).toMatchObject({ text: '退出' });
     } finally { await f.close(); }
   });
 
@@ -198,6 +226,8 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       expect(f.added).toHaveBeenCalledTimes(1);
       const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
       expect(tasks).toHaveLength(1); expect(tasks[0]).toMatchObject({ text: '交周报', nextRunAt: 1_800_000_600_000 });
+      // #1250: the created task is dated like the preview, in the configured zone.
+      expect(rendered(f.sent)).toContain('2027-01-15 08:10:00 (UTC)');
       await f.receive('确认'); expect(f.added).toHaveBeenCalledTimes(1); expect(f.outbound.sendTarget).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });

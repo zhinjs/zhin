@@ -1,4 +1,4 @@
-import { componentHostToken, createToken, htmlRendererToken, type CapabilityId, type ComponentHost, type HtmlRendererHost, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { componentHostToken, createToken, htmlRendererToken, projectLocale, type CapabilityId, type ComponentHost, type HtmlRendererHost, type Locale, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
@@ -20,6 +20,12 @@ import {
   type SendContent,
 } from './contracts.js';
 import { JsxButtonRegistry } from './interactive-router.js';
+import {
+  outboundCommandEnvironmentToken,
+  templateCommandPaths,
+  type OutboundCommandEnvironment,
+} from './outbound-command-environment.js';
+import { renderLocaleOf } from './outbound-render-locale.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import type { OutboundFallbackReason, RuntimeMessageRendering } from './message-events.js';
 import {
@@ -186,7 +192,8 @@ export interface OutboundPreviewContext extends Pick<OutboundRenderContext, 'req
 /** Shared dependencies are immutable references; only the request-local cache changes. */
 interface RenderOperation extends Pick<OutboundRenderContext, 'requester' | 'snapshot' | 'signal' | 'bindButton' | 'conversation'> {
   readonly host?: ComponentHost;
-  readonly template?: TemplateContext;
+  /** Lazy: built for the first text that contains a placeholder marker, then reused. */
+  readonly template?: (text: string) => TemplateContext;
   readonly jsxCache: WeakMap<JSXElement, Promise<unknown>>;
 }
 
@@ -221,7 +228,9 @@ export class OutboundRenderer {
     const { requester, snapshot, conversation, incoming, signal, bindButton } = context;
     signal?.throwIfAborted();
     const host = resolveComponentHost(snapshot);
-    const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
+    // `SendRequest.locale` (from `$reply`: the message's language) first, then the project language.
+    const locale = renderLocaleOf(context);
+    const ctx = conversation && host ? lazyTemplateContext(conversation, incoming, requester, snapshot, locale) : undefined;
     const operation: RenderOperation = { requester, snapshot, host, template: ctx,
       jsxCache: context.jsxCache ?? new WeakMap(), signal, bindButton, ...(conversation ? { conversation } : {}) };
     const rendered = await this.#render(content, { operation, depth: 0,
@@ -291,7 +300,7 @@ export class OutboundRenderer {
       if (content.type === 'text') {
         const text = (content.data as Record<string, unknown> | undefined)?.text;
         if (typeof text === 'string' && text.includes(TEMPLATE_MARKER) && host && ctx) {
-          return { ...content, data: { ...content.data, text: host.compileTemplate(text, ctx) } };
+          return { ...content, data: { ...content.data, text: host.compileTemplate(text, ctx(text)) } };
         }
       }
       return content;
@@ -313,28 +322,114 @@ export class OutboundRenderer {
 function compileText(
   text: string,
   host: ComponentHost | undefined,
-  ctx: TemplateContext | undefined,
+  ctx: ((text: string) => TemplateContext) | undefined,
 ): string {
   if (!host || !ctx || !text.includes(TEMPLATE_MARKER)) return text;
-  return host.compileTemplate(text, ctx);
+  return host.compileTemplate(text, ctx(text));
+}
+
+/** `${command…}` with optional spaces, as the template PATH rule allows after trimming. */
+const COMMAND_PLACEHOLDER = /\$\{\s*command[.\s}[]/u;
+
+/**
+ * Nothing is computed until a text needs it: the base context (prefix and menu included) on the
+ * first placeholder, the requester's command paths only for a text that names `command`.
+ */
+function lazyTemplateContext(
+  conversation: ConversationRef,
+  incoming: IncomingContext | undefined,
+  requester: PluginId,
+  snapshot: RuntimeSnapshot,
+  locale: Locale | undefined,
+): (text: string) => TemplateContext {
+  let base: TemplateContext | undefined;
+  let withCommands: TemplateContext | undefined;
+  return (text) => {
+    base ??= buildTemplateContext(conversation, incoming, snapshot, locale);
+    warnMenuOff(text, base, snapshot);
+    if (!COMMAND_PLACEHOLDER.test(text) || base.bot.prefix === undefined) return base;
+    withCommands ??= withCommandPaths(base, conversation, incoming, requester, snapshot, locale);
+    return withCommands;
+  };
+}
+
+/** `${bot.menu}` with optional spaces. */
+const MENU_PLACEHOLDER = /\$\{\s*bot\.menu\s*\}/u;
+/** Snapshots already warned about `${bot.menu}` with the menu turned off (once per generation). */
+const menuOffWarned = new WeakSet<RuntimeSnapshot>();
+
+/**
+ * With `menuKeyword: false` there is no menu entry: `${bot.menu}` stays as written (an empty string
+ * would silently drop the instruction around it), and the operator is told once per generation.
+ */
+function warnMenuOff(text: string, context: TemplateContext, snapshot: RuntimeSnapshot): void {
+  if (context.bot.prefix === undefined || context.bot.menu !== undefined || menuOffWarned.has(snapshot)) return;
+  if (!MENU_PLACEHOLDER.test(text)) return;
+  menuOffWarned.add(snapshot);
+  outboundLogger.warn(formatCompact({ op: 'outbound_template', status: 'kept', reason: 'menu_disabled', placeholder: '${bot.menu}',
+    hint: 'no menu entry (menuKeyword: false), so ${bot.menu} is sent as written; remove it from the text or turn the menu on', generation: snapshot.generation }));
+}
+
+function resolveCommandEnvironment(snapshot: RuntimeSnapshot): OutboundCommandEnvironment | undefined {
+  const value = snapshot.resources.get(snapshot.root)?.get(outboundCommandEnvironmentToken.id);
+  return typeof value === 'function' ? value as OutboundCommandEnvironment : undefined;
+}
+
+function commandEnvironmentInput(conversation: ConversationRef, incoming: IncomingContext | undefined, snapshot: RuntimeSnapshot,
+  locale: Locale | undefined) {
+  return { conversation, locale: locale ?? projectLocale(snapshot),
+    ...(incoming?.endpointId !== undefined ? { endpointId: incoming.endpointId } : {}) };
+}
+
+function withCommandPaths(
+  base: TemplateContext,
+  conversation: ConversationRef,
+  incoming: IncomingContext | undefined,
+  requester: PluginId,
+  snapshot: RuntimeSnapshot,
+  locale: Locale | undefined,
+): TemplateContext {
+  try {
+    const command = templateCommandPaths(snapshot, commandEnvironmentInput(conversation, incoming, snapshot, locale), requester, base.bot.prefix ?? '');
+    return command ? { ...base, command } : base;
+  } catch {
+    // Placeholders stay as written; the send itself never fails over a template lookup.
+    outboundLogger.warn(formatCompact({ op: 'outbound_template', status: 'fallback', reason: 'command_paths_failed', generation: snapshot.generation }));
+    return base;
+  }
 }
 
 function buildTemplateContext(
   conversation: ConversationRef,
-  incoming?: IncomingContext,
+  incoming: IncomingContext | undefined,
+  snapshot: RuntimeSnapshot,
+  locale: Locale | undefined,
 ): TemplateContext {
+  let environment: Readonly<{ prefix: string; menu?: string }> | undefined;
+  const resolve = resolveCommandEnvironment(snapshot);
+  if (resolve) {
+    try {
+      environment = resolve(commandEnvironmentInput(conversation, incoming, snapshot, locale), snapshot);
+    } catch {
+      outboundLogger.warn(formatCompact({ op: 'outbound_template', status: 'fallback', reason: 'command_environment_failed', generation: snapshot.generation }));
+    }
+  }
   return {
-    adapter: conversation.endpoint.adapter,
-    endpoint: conversation.endpoint.id,
-    kind: conversation.kind,
-    conversationId: conversation.id,
-    sender: incoming?.sender,
-    content: incoming?.content,
-    segments: incoming?.segments,
-    messageId: incoming?.messageId,
-    timestamp: incoming?.timestamp,
-    endpointId: incoming?.endpointId,
-    mentioned: incoming?.mentioned,
+    bot: {
+      adapter: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      ...(incoming?.endpointId !== undefined ? { endpointId: incoming.endpointId } : {}),
+      ...(environment ? { prefix: environment.prefix, ...(environment.menu !== undefined ? { menu: environment.menu } : {}) } : {}),
+    },
+    conversation: { kind: conversation.kind, id: conversation.id },
+    ...(incoming?.sender ? { sender: incoming.sender } : {}),
+    ...(incoming ? { message: {
+      content: incoming.content,
+      ...(incoming.segments !== undefined ? { segments: incoming.segments } : {}),
+      ...(incoming.messageId !== undefined ? { id: incoming.messageId } : {}),
+      timestamp: incoming.timestamp,
+      ...(incoming.mentioned !== undefined ? { mentioned: incoming.mentioned } : {}),
+    } } : {}),
   };
 }
 
