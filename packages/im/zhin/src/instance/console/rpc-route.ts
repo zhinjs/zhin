@@ -142,6 +142,12 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         // ADR 0060 §2.4: a bind code carries roles only while its creator still holds global iam.manage.
         options.featureStores?.bindCodes?.observeAuthority(principal.userId, principalAllows(principal, CONSOLE_PERMISSIONS.IAM_MANAGE));
       }
+      // Aliases of the loaded local simulation adapters (`runtime.sandbox`, ADR 0060 §5.4).
+      const currentSimulatedAdapters = (): readonly string[] => {
+        const lease = options.snapshots?.acquire();
+        if (!lease) return [];
+        try { return simulatedAdapterAliases(lease.value); } finally { lease.release(); }
+      };
       // ADR 0060 §2 / §7: people behind chat identities; bind codes only for the caller's own link.
       const chatPrincipalsReply = await dispatchChatPrincipalsConsoleRpc(message, {
         ...(options.featureStores?.people ? { people: options.featureStores.people } : {}),
@@ -150,11 +156,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         ...(isUserPrincipal(principal) ? { consoleUser: { userId: principal.userId, displayName: principal.displayName } } : {}),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),
-        simulatedAdapters: () => {
-          const lease = options.snapshots?.acquire();
-          if (!lease) return [];
-          try { return simulatedAdapterAliases(lease.value); } finally { lease.release(); }
-        },
+        simulatedAdapters: currentSimulatedAdapters,
       });
       if (chatPrincipalsReply) {
         return reply(chatPrincipalsReply.status, chatPrincipalsReply.body, noStore);
@@ -182,6 +184,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         authorizeGlobal: () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.IAM_MANAGE),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),
+        simulatedAdapters: currentSimulatedAdapters,
       });
       if (chatRoleImportsReply) {
         return reply(chatRoleImportsReply.status, chatRoleImportsReply.body, noStore);
@@ -196,6 +199,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         actor: auditActor(principal),
         ...(isUserPrincipal(principal) && principal.displayName ? { actorDisplayName: principal.displayName } : {}),
         publishEvent: (type, data) => options.hub.publish(type, data),
+        simulatedAdapters: currentSimulatedAdapters,
       });
       if (chatRolesReply) {
         return reply(chatRolesReply.status, chatRolesReply.body, noStore);

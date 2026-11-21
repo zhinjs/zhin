@@ -63,7 +63,7 @@ import {
 } from '@zhin.js/im-contract';
 
 import type { AdapterInstance } from './adapter.js';
-import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope,
+import { isTrustedSimulationAdapter, type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope,
   type EndpointStartFailure, type EndpointStartPhase } from './adapter-types.js';
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, mergeEndpointProfileConfiguration,
@@ -100,6 +100,8 @@ export interface AdapterPersistencePorts {
   readonly secrets?: EndpointSecretResolver;
   /** Stored configuration file port (#1250 drift / import / write-back). */
   readonly configSource?: import('./endpoint-config-drift.js').EndpointConfigSource;
+  /** ADR 0060 §5.4: bound per trusted simulation Adapter (`isTrustedSimulationAdapter`) as `AdapterContext.consoleSpeaker`. */
+  readonly consoleSpeaker?: import('./adapter-types.js').SimulatedConsoleSpeakerHost;
   /** @internal Activation grace for account starts (tests); see `DEFAULT_ENDPOINT_START_GRACE_MS`. */
   readonly startGraceMs?: number;
 }
@@ -283,7 +285,16 @@ export class AdapterIndex {
           config: mergeEndpointProfileConfiguration(creationDefaults, record.config),
           id: record.canonicalId, endpointId: record.endpointId, name: slot.localName,
         });
-        const baseContext = Object.freeze({ ...construction, id: slot.id, endpointId: slot.localName, name: slot.localName });
+        // ADR 0060 §5.4: only a trusted local simulation Adapter gets the Console Sandbox identity port, bound to its owner.
+        const { consoleSpeaker: consoleSpeakerHost, ...adapterPorts } = persistence;
+        // Defence in depth: a third-party plugin declaring `runtime.sandbox` stays a simulation but gets no port.
+        const owner = slot.owner;
+        const trustedSimulation = isTrustedSimulationAdapter(definition.profile, snapshot.tree.get(owner)?.packageName);
+        const consoleSpeaker = consoleSpeakerHost && trustedSimulation
+          ? Object.freeze({ ensure: (conversation: ConversationRef, principal: unknown) => consoleSpeakerHost.ensure(Object.freeze({ owner, conversation, principal })) })
+          : undefined;
+        const baseContext = Object.freeze({ ...construction, id: slot.id, endpointId: slot.localName, name: slot.localName,
+          ...(consoleSpeaker ? { consoleSpeaker } : {}) });
         const adapter = definition.createAdapter(baseContext);
         await adapter.initialize({
           descriptor: { id: slot.id, owner: slot.owner, name: slot.localName, source: slot.source,
@@ -291,7 +302,8 @@ export class AdapterIndex {
             ...(definition.profile ? { profile: definition.profile } : {}),
             ...(definition.resolveCapabilities ? { resolveCapabilities: definition.resolveCapabilities } : {}),
             ...(definition.login ? { login: definition.login } : {}) }, initial,
-          ...persistence,
+          // The unbound Root port never reaches Adapter code (only the per-owner binding above).
+          ...adapterPorts,
           creationDefaults,
           bind: (endpoint, record, childSignal) => {
             const context = makeContext(record, childSignal);

@@ -3,7 +3,7 @@ import { capture, captured, defineFeatureProvider, directoryModules } from '@zhi
 import { AdapterIndex } from './adapter-index.js';
 // Native Feature entries have generation URLs. Host tokens must retain the
 // canonical package identity rather than following that revisioned closure.
-import { endpointConfigSourceToken, endpointDesiredRepositoryToken, endpointSecretResolverToken } from '@zhin.js/adapter';
+import { endpointConfigSourceToken, endpointDesiredRepositoryToken, endpointSecretResolverToken, simulatedConsoleSpeakerToken } from '@zhin.js/adapter';
 import { parseAdapterDefinition } from './definition.js';
 
 export const adapterFeatureId = featureId('zhin.adapter');
@@ -31,6 +31,7 @@ const adapterFeature = defineFeatureProvider({
         repository: context.featureResource?.(endpointDesiredRepositoryToken),
         secrets: context.featureResource?.(endpointSecretResolverToken),
         configSource: context.featureResource?.(endpointConfigSourceToken),
+        consoleSpeaker: context.featureResource?.(simulatedConsoleSpeakerToken),
       });
       return {
         value: index,

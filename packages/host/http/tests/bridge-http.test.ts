@@ -567,6 +567,24 @@ describe('bridge WebSocket', () => {
     await context.host.close();
   });
 
+  it('ADR 0060 §5.4: vouches for the principal it parsed from the gateway, never for a look-alike', async () => {
+    const context = await started();
+    const other = await started();
+    let principal: ConsolePrincipal | undefined;
+    context.host.ws('/sandbox').onConnection((conn) => { principal = conn.principal; });
+    await opened(context);
+    const sent = user(['endpoint.operate', 'iam.manage']);
+    expect(await context.transport.openWebSocket({ url: new URL('http://gateway/sandbox'), headers: new Headers(), principal: sent }, new FakePeer())).toBe(true);
+    expect(principal).toEqual(sent);
+    expect(context.host.isHostIssuedPrincipal(principal)).toBe(true);
+    // The gateway's own object (crossed the channel as a clone), copies, and another bridge: no.
+    expect(context.host.isHostIssuedPrincipal(sent)).toBe(false);
+    expect(context.host.isHostIssuedPrincipal({ ...principal! })).toBe(false);
+    expect(other.host.isHostIssuedPrincipal(principal)).toBe(false);
+    await context.host.close();
+    await other.host.close();
+  });
+
   it('reports bufferedAmount until the client socket drained (backpressure)', async () => {
     const context = await started();
     let connection: WsConnection | undefined;

@@ -35,7 +35,7 @@ import { basename, dirname, join } from 'node:path';
 import {
   higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatIdentity, type ChatRole,
 } from '@zhin.js/core';
-import { adapterFeatureId, isAdapterIndex, resolveStaticCapabilities } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, declaresLocalSimulation } from '@zhin.js/adapter';
 import {
   readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type FeatureConfigLevel, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -292,6 +292,18 @@ export function simulatedAdapterAliases(snapshot: Pick<RuntimeSnapshot, 'project
   return Object.freeze([...classifyAdapters(snapshot)].filter(([, kind]) => kind === 'simulated').map(([alias]) => alias).sort());
 }
 
+/**
+ * #1250 owner-hints-dead-end-sandbox-only: the simulation aliases of a snapshot and whether they are
+ * its only adapters (at least one, and no real platform). Claims and bind codes are refused on a
+ * simulation, so such a project's first owner comes from the Sandbox's 「以我的聊天身份发言」 identity.
+ */
+export function chatAdapterLandscape(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined):
+  Readonly<{ simulated: readonly string[]; simulationOnly: boolean }> {
+  const kinds = [...classifyAdapters(snapshot)];
+  const simulated = Object.freeze(kinds.filter(([, kind]) => kind === 'simulated').map(([alias]) => alias).sort());
+  return Object.freeze({ simulated, simulationOnly: simulated.length > 0 && kinds.every(([, kind]) => kind === 'simulated') });
+}
+
 function classifyAdapters(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>> {
   const kinds = new Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>>();
   try {
@@ -301,7 +313,7 @@ function classifyAdapters(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'
         const alias = snapshot.tree.get(row.owner)?.instanceKey;
         const profile = index.capabilityProfile(row.id as CapabilityId);
         if (!alias || !profile) continue;
-        const simulated = resolveStaticCapabilities(profile, []).runtime?.sandbox === true;
+        const simulated = declaresLocalSimulation(profile);
         if (simulated || !kinds.has(alias)) kinds.set(alias, simulated ? 'simulated' : 'platform');
       }
     }

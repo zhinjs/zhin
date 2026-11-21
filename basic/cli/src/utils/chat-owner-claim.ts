@@ -13,6 +13,11 @@ export interface ChatOwnerClaimInfo {
   readonly code: string;
   readonly pid: number;
   readonly createdAt: number;
+  /**
+   * #1250: only simulation adapters (the Sandbox) are loaded, where claims and bind codes are
+   * refused; the first owner comes from the Sandbox's 「以我的聊天身份发言」 identity instead.
+   */
+  readonly simulationOnly?: boolean;
 }
 
 /**
@@ -28,10 +33,18 @@ export async function readChatOwnerClaim(root: string, instance: Readonly<{ pid?
   const current = (instance.pid !== undefined && value.pid === instance.pid)
     || (instance.startedAt !== undefined && createdAt >= instance.startedAt);
   if (!current) return undefined;
-  return { code: value.code, pid: Number(value.pid) || 0, createdAt };
+  return { code: value.code, pid: Number(value.pid) || 0, createdAt, ...(value.simulationOnly === true ? { simulationOnly: true } : {}) };
 }
 
 export function renderChatOwnerClaim(claim: ChatOwnerClaimInfo): string[] {
+  if (claim.simulationOnly) {
+    return [
+      '聊天主人：尚无全局 owner。当前只装了模拟适配器（Sandbox），认领与绑定在这里都不被接受：',
+      '  在 Console 的 Sandbox 打开「以我的聊天身份发言」并发一条消息（会为你的 Console 账号建立 console-<用户 id> 身份），',
+      '  再到 Console「聊天角色」把全局 owner 授予这个身份。',
+      `  接入真实平台后，也可在私聊中直接向机器人发送「认领 ${claim.code}」（不需要命令前缀）。`,
+    ];
+  }
   return [
     `聊天主人：尚无全局 owner。在私聊中直接向机器人发送「认领 ${claim.code}」（claim ${claim.code}，不需要命令前缀）即可认领；`,
     '  认领码一次性，实例重启后轮换；只接受私聊，发到群里会作废。也可在 Console「聊天角色」页授予。',

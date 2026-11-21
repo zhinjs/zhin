@@ -7,7 +7,7 @@ import { getSandboxApiBase, getSandboxAuthHeaders, type SandboxRequestContext } 
 export type SandboxSpeakerMode = 'me' | 'simulated';
 
 /** Why 「以我的聊天身份发言」 could not be used for a message (`asMeUnavailable` on the echo). */
-export type SandboxAsMeUnavailable = 'no-console-user' | 'no-identity' | 'needs-global-iam';
+export type SandboxAsMeUnavailable = 'no-console-user' | 'no-identity' | 'needs-global-iam' | 'needs-self-chat-identity' | 'identity-failed';
 
 /** The server's answer for the last message this page sent. */
 export interface SandboxServerSpeaker {
@@ -18,13 +18,17 @@ export interface SandboxServerSpeaker {
   readonly chatRole?: string;
   readonly trustLevel: string;
   readonly asMeUnavailable?: SandboxAsMeUnavailable;
+  /** Why the server could not create the caller's Sandbox identity (`identity-failed`). */
+  readonly asMeError?: string;
 }
 
 /** Reads the speaker fields of an inbound echo; null on frames from an older Host without them. */
 export function readServerSpeaker(frame: Readonly<Record<string, unknown>>): SandboxServerSpeaker | null {
   if (typeof frame.senderId !== 'string' || typeof frame.senderTrustLevel !== 'string') return null;
   const simulated = frame.simulated === true;
-  const unavailable = frame.asMeUnavailable === 'no-console-user' || frame.asMeUnavailable === 'no-identity' || frame.asMeUnavailable === 'needs-global-iam'
+  const unavailable = frame.asMeUnavailable === 'no-console-user' || frame.asMeUnavailable === 'no-identity'
+    || frame.asMeUnavailable === 'needs-global-iam' || frame.asMeUnavailable === 'needs-self-chat-identity'
+    || frame.asMeUnavailable === 'identity-failed'
     ? frame.asMeUnavailable : undefined;
   return Object.freeze({
     senderId: frame.senderId,
@@ -33,7 +37,28 @@ export function readServerSpeaker(frame: Readonly<Record<string, unknown>>): San
     trustLevel: frame.senderTrustLevel,
     ...(typeof frame.senderChatRole === 'string' && frame.senderChatRole ? { chatRole: frame.senderChatRole } : {}),
     ...(unavailable ? { asMeUnavailable: unavailable } : {}),
+    ...(unavailable === 'identity-failed' && typeof frame.asMeError === 'string' && frame.asMeError ? { asMeError: frame.asMeError.slice(0, 200) } : {}),
   });
+}
+
+/** Why the page turned 「以我的聊天身份发言」 off after a message (#1250 sandbox-speak-as-me). */
+export interface SandboxAsMeNotice {
+  readonly reason: 'needs-global-iam' | 'needs-self-chat-identity' | 'identity-failed';
+  readonly error?: string;
+}
+
+/**
+ * The notice for an own message the server could not send as the caller: the identity could not
+ * be created (`identity-failed`, with the reason) or the linked person holds a global grant the
+ * caller may not speak with (`needs-global-iam`), or the Console user lacks `self.chat-identity`
+ * (`needs-self-chat-identity`). The page then turns the switch off. Other answers
+ * (spoken as me, or `no-identity` from a Host that cannot create it) leave the switch alone.
+ */
+export function asMeFallbackNotice(speaker: SandboxServerSpeaker): SandboxAsMeNotice | null {
+  if (speaker.asMeUnavailable === 'needs-global-iam') return { reason: 'needs-global-iam' };
+  if (speaker.asMeUnavailable === 'needs-self-chat-identity') return { reason: 'needs-self-chat-identity' };
+  if (speaker.asMeUnavailable === 'identity-failed') return { reason: 'identity-failed', ...(speaker.asMeError ? { error: speaker.asMeError } : {}) };
+  return null;
 }
 
 /** Whether a send should ask to speak as the linked identity (only when the socket has a Console user). */

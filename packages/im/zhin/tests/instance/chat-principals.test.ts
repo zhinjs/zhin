@@ -5,10 +5,13 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { createChatRoleReader } from '@zhin.js/core';
-import { authorizeConsoleRpc, type ConsolePrincipal } from '@zhin.js/host-http';
+import { simulatedConsoleSpeakerToken } from '@zhin.js/adapter';
+import { Scope, childPluginId, featureId, readFeaturePrivateResource, rootPluginId } from '@zhin.js/plugin-runtime';
+import { createSimulatedConsoleSpeakerHost } from '../../src/instance/feature-host-installer.js';
+import { authorizeConsoleRpc, createHttpRouter, type ConsolePrincipal } from '@zhin.js/host-http';
 import { CHAT_PRINCIPALS_RPC, CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, CHAT_ROLES_RPC, CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
 import {
-  ChatRoleService, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService,
+  ChatRoleService, ChatRoleStore, defineChatRoleTable, hasGlobalOwner, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
 import {
   CHAT_IDENTITY_RETENTION_MS, CHAT_IDENTITY_SIGHTING_THROTTLE_MS, defineChatPrincipalTables, isChatPrincipalId, newChatPrincipalId,
@@ -555,5 +558,184 @@ describe('chat_roles migration to the person model (ADR 0060 §2.3 / §4.5)', ()
     await reloaded.load();
     expect(migrated).toHaveLength(2);
     await second.stop();
+  });
+});
+
+describe('#1250 roles and the Sandbox (ADR 0060 §5.4)', () => {
+  const sandbox = (userId: string) => ({ adapter: 'sandbox', userId });
+  const room = { endpoint: { id: 'x', adapter: 'sandbox' }, kind: 'private', id: 'r' } as never;
+  const principalsRpc = (type: string, data: Record<string, unknown>, context: ChatPrincipalsRpcContext) =>
+    dispatchChatPrincipalsConsoleRpc({ type, data }, context).then(reply => reply!);
+
+  /** The instance's own Host: principals reach the Root only as objects it attached to a socket. */
+  async function issuingHost() {
+    const router = createHttpRouter({ authentication: 'forwarded' });
+    let last: unknown;
+    router.ws('/sandbox').onConnection(connection => { last = connection.principal; });
+    const transport = { send() {}, close() {}, onMessage: () => () => undefined, onClose: () => () => undefined, bufferedAmount: 0 };
+    const issue = async (principal: ConsolePrincipal) => {
+      last = undefined;
+      const decision = await router.upgrade({ url: new URL('http://gateway/sandbox'), headers: new Headers(), principal });
+      if (!decision.accepted) throw new Error('socket refused');
+      decision.accept(transport);
+      return last as ConsolePrincipal;
+    };
+    return { router, issue };
+  }
+  const consoleUser = (userId: string, permissions: readonly string[] = ['self.chat-identity'], displayName?: string): ConsolePrincipal =>
+    ({ kind: 'user', userId, username: userId, displayName: displayName ?? '', credentialId: `s-${userId}`, roles: [],
+      grants: [{ scope: { kind: 'global' }, permissions: ['endpoint.operate', ...permissions] }] });
+
+  it('the simulation Adapter port creates console-<userId> on the first message from the socket principal (sandbox-speak-as-me)', async () => {
+    const { store, roles, people } = setup();
+    const conversationKey = (c: { endpoint: { adapter: string }; kind: string; id: string }) => `${c.endpoint.adapter}/dev/${c.kind}:${c.id}`;
+    const reader = createChatRoleReader({ roles: () => roles, conversationKey: conversationKey as never,
+      consolePrincipal: user => store.principals.linkOfConsoleUser(user)?.principalId });
+    let saved = 0;
+    const owners: Record<string, { alias: string; simulated: boolean; trusted: boolean }> = {
+      'root/sandbox': { alias: 'sandbox', simulated: true, trusted: true },
+      'root/fake': { alias: 'fake', simulated: true, trusted: false },
+      'root/qq': { alias: 'qq', simulated: false, trusted: false },
+    };
+    const { router, issue } = await issuingHost();
+    const host = createSimulatedConsoleSpeakerHost({ people, adapterOf: owner => owners[owner], conversationKey: conversationKey as never,
+      isHostIssuedPrincipal: value => router.isHostIssuedPrincipal(value), onSaved: () => { saved += 1; } });
+    const user = (userId: string, permissions?: readonly string[], displayName?: string) => issue(consoleUser(userId, permissions, displayName));
+    const ensure = (principal: unknown, owner = 'root/sandbox', conversation = room) => host.ensure({ owner: owner as never, conversation, principal });
+    expect(reader.consoleSpeaker!(room, 'u1')).toBeUndefined();
+    await ensure(await user('u1', ['self.chat-identity'], 'Una'));
+    expect(reader.consoleSpeaker!(room, 'u1')).toEqual(sandbox('console-u1'));
+    expect(saved).toBe(1);
+    expect(store.principals.linkOfConsoleUser('u1')).toMatchObject({ linkedVia: 'console', consoleDisplayName: 'Una' });
+    // Already there: nothing is written again.
+    await ensure(await user('u1'));
+    expect(saved).toBe(1);
+    // M3: `self.chat-identity` is required, checked on the principal itself.
+    await expect(ensure(await user('u-viewer', ['status.view']))).rejects.toThrow('self.chat-identity');
+    await expect(ensure(undefined)).rejects.toThrow('not authenticated by this Host');
+    await expect(ensure(await issue({ kind: 'bootstrap', open: true }))).rejects.toThrow('no signed-in Console user');
+    expect(store.principals.linkOfConsoleUser('u-viewer')).toBeUndefined();
+    // The linked person holds a global grant: global iam.manage comes from the principal, not the caller.
+    await store.grant({ level: 'global', key: '', ...qq('boss'), role: 'owner' });
+    await people.linkConsole({ principal: qq('boss'), consoleUserId: 'u-boss', via: 'manual', actor: 'user:root' });
+    await expect(ensure(await user('u-boss'))).rejects.toThrow('全局 iam.manage');
+    await ensure(await user('u-boss', ['self.chat-identity', 'iam.manage']));
+    expect(reader.consoleSpeaker!(room, 'u-boss', { canManageGlobal: true })).toEqual(sandbox('console-u-boss'));
+    // Only a trusted simulation Adapter, and only a conversation on that Adapter.
+    const qqRoom = { endpoint: { id: 'x', adapter: 'qq' }, kind: 'private', id: 'r' } as never;
+    const fakeRoom = { endpoint: { id: 'x', adapter: 'fake' }, kind: 'private', id: 'r' } as never;
+    await expect(ensure(await user('u2'), 'root/qq', qqRoom)).rejects.toThrow('not a trusted local simulation adapter');
+    await expect(ensure(await user('u2'), 'root/unknown')).rejects.toThrow('not a trusted local simulation adapter');
+    await expect(ensure(await user('u2'), 'root/fake', fakeRoom)).rejects.toThrow('not a trusted local simulation adapter');
+    await expect(ensure(await user('u2'), 'root/sandbox', qqRoom)).rejects.toThrow('not on this adapter');
+    expect(store.principals.linkOfConsoleUser('u2')).toBeUndefined();
+    router.close();
+  });
+
+  it('N1: a principal the Adapter built itself is refused, whatever it lists — no person, identity or link is written', async () => {
+    const { store, roles, people } = setup();
+    await store.grant({ level: 'global', key: '', ...qq('victim'), role: 'owner' });
+    await people.linkConsole({ principal: qq('victim'), consoleUserId: 'u-victim', via: 'manual', actor: 'user:root' });
+    const before = { principals: store.principals.principals().length, identities: store.principals.identities().length, links: store.principals.links().length };
+    const { router, issue } = await issuingHost();
+    let saved = 0;
+    const host = createSimulatedConsoleSpeakerHost({ people, adapterOf: () => ({ alias: 'sandbox', simulated: true, trusted: true }),
+      conversationKey: () => 'sandbox/dev/private:r', isHostIssuedPrincipal: value => router.isHostIssuedPrincipal(value), onSaved: () => { saved += 1; } });
+    const forged = { kind: 'user', userId: 'u-victim', username: 'victim', displayName: 'Victim', credentialId: 'forged', roles: ['owner'],
+      grants: [{ scope: { kind: 'global' }, permissions: ['self.chat-identity', 'iam.manage'] }] };
+    // A plain object, a frozen look-alike, a copy of a real Host-issued principal, another Host's principal.
+    const real = await issue(consoleUser('u-victim', ['self.chat-identity', 'iam.manage']));
+    const elsewhere = await (await issuingHost()).issue(consoleUser('u-victim', ['self.chat-identity', 'iam.manage']));
+    for (const principal of [forged, Object.freeze({ ...forged }), { ...real }, structuredClone(real), elsewhere]) {
+      await expect(host.ensure({ owner: 'root/sandbox' as never, conversation: room, principal }))
+        .rejects.toMatchObject({ name: 'ConsoleSpeakerRefusal', reason: 'not-host-issued' });
+    }
+    // Without the Host's check every call is refused (fail closed).
+    const unwired = createSimulatedConsoleSpeakerHost({ people, adapterOf: () => ({ alias: 'sandbox', simulated: true, trusted: true }),
+      conversationKey: () => 'sandbox/dev/private:r', isHostIssuedPrincipal: undefined });
+    await expect(unwired.ensure({ owner: 'root/sandbox' as never, conversation: room, principal: real })).rejects.toMatchObject({ reason: 'not-host-issued' });
+    expect(saved).toBe(0);
+    expect({ principals: store.principals.principals().length, identities: store.principals.identities().length, links: store.principals.links().length }).toEqual(before);
+    expect(store.principals.identity(sandbox('console-u-victim'))).toBeUndefined();
+    expect(roles.principalOf(sandbox('console-u-victim')).id).not.toBe(roles.principalOf(qq('victim')).id);
+    // The real principal of that socket does work.
+    await host.ensure({ owner: 'root/sandbox' as never, conversation: room, principal: real });
+    expect(saved).toBe(1);
+    expect(roles.principalOf(sandbox('console-u-victim')).id).toBe(roles.principalOf(qq('victim')).id);
+    router.close();
+  });
+
+  it('M2: the port is not on the plugin-wide chat roles reader, and plugins cannot read it', async () => {
+    const { roles } = setup();
+    const reader = createChatRoleReader({ roles: () => roles, conversationKey: () => 'sandbox/dev/private:r' });
+    expect('ensureConsoleSpeaker' in reader).toBe(false);
+    const root = new Scope(rootPluginId());
+    const host = { ensure: async () => undefined };
+    root.provide(simulatedConsoleSpeakerToken, host);
+    const plugin = new Scope(childPluginId(rootPluginId(), 'evil'), root);
+    expect(plugin.has(simulatedConsoleSpeakerToken)).toBe(false);
+    expect(() => plugin.use(simulatedConsoleSpeakerToken)).toThrow('Missing resource');
+    // Only the Adapter Feature's projection reads it (feature-private), no other Feature.
+    expect(() => readFeaturePrivateResource(root, featureId('zhin.command'), simulatedConsoleSpeakerToken)).toThrow('Feature cannot access');
+    expect(readFeaturePrivateResource(root, featureId('zhin.adapter'), simulatedConsoleSpeakerToken)).toBe(host);
+    root.seal();
+    expect(root.snapshot().has(simulatedConsoleSpeakerToken.id)).toBe(false);
+  });
+
+  it('refuses a grant to a simulated sender id, allows the Console Sandbox identity (grant-owner-to-simulated-identity-silent)', async () => {
+    const { store, roles, people } = setup();
+    const grant = (identity: { adapter: string; userId: string }, role = 'owner') =>
+      dispatchChatRolesConsoleRpc({ type: CHAT_ROLES_RPC.GRANT, data: { level: 'global', ...identity, role } },
+        { roles, authorize: () => true, simulatedAdapters: () => ['sandbox'] }).then(reply => reply!);
+    const refused = await grant(sandbox('sandbox-user'));
+    expect(refused.status).toBe(400);
+    expect(refused.body).toMatchObject({ success: false, code: 'simulated-identity' });
+    expect(String(refused.body.error)).toContain('以我的聊天身份发言');
+    expect(store.list()).toEqual([]);
+    // The identity the Sandbox speaks as (its person linked to the Console user) may hold roles.
+    await people.ensureSimulatedIdentities({ consoleUserId: 'u1', aliases: ['sandbox'], canManageGlobal: true });
+    expect((await grant(sandbox('console-u1'))).status).toBe(200);
+    expect(roles.roleAt(sandbox('console-u1'), '')).toBe('owner');
+    // Real platforms and Hosts without simulation adapters are unaffected.
+    expect((await grant(qq('alice'), 'admin')).status).toBe(200);
+    expect((await dispatchChatRolesConsoleRpc({ type: CHAT_ROLES_RPC.GRANT, data: { level: 'global', ...sandbox('dev-user'), role: 'trusted' } },
+      { roles, authorize: () => true }))!.status).toBe(200);
+  });
+
+  it('an owner grant only on ids nobody speaks as is no owner for the 「还没有聊天主人」 checks', async () => {
+    const { store, roles, people } = setup();
+    // Written before this check existed (or with the simulation adapter unknown at the time).
+    await store.grant({ level: 'global', key: '', ...sandbox('sandbox-user'), role: 'owner' });
+    expect(hasGlobalOwner(roles)).toBe(true);
+    expect(hasGlobalOwner(roles, ['sandbox'])).toBe(false);
+    const me = await principalsRpc(CHAT_PRINCIPALS_RPC.ME, {}, { people, authorize: () => true, consoleUser: { userId: 'u1' }, simulatedAdapters: () => ['sandbox'] });
+    expect(me.status).toBe(200);
+    // The same person with a real platform identity counts.
+    const person = store.principals.principalOf(sandbox('sandbox-user'))!.id;
+    await store.exclusive(() => store.principals.assignIdentity(qq('alice'), person, { method: 'manual' }));
+    expect(hasGlobalOwner(roles, ['sandbox'])).toBe(true);
+    // A Console Sandbox identity counts too.
+    const other = setup();
+    await other.people.ensureSimulatedIdentities({ consoleUserId: 'u2', aliases: ['sandbox'], canManageGlobal: true });
+    await other.store.grant({ level: 'global', key: '', ...sandbox('console-u2'), role: 'owner' });
+    expect(hasGlobalOwner(other.roles, ['sandbox'])).toBe(true);
+  });
+
+  it('marks simulated senders in views and says why recent speakers omit them (chat-recent-speakers-empty)', async () => {
+    const { store, people } = setup();
+    await store.grant({ level: 'global', key: '', ...sandbox('sandbox-user'), role: 'trusted' });
+    await people.ensureSimulatedIdentities({ consoleUserId: 'u1', aliases: ['sandbox'], canManageGlobal: true });
+    people.observe({ identity: sandbox('console-u1'), scopeKey: 'sandbox/dev/private:r', displayName: 'Una' });
+    await store.exclusive(async () => undefined);
+    const context = { people, authorize: () => true, simulatedAdapters: () => ['sandbox'] } as const;
+    const recent = await principalsRpc(CHAT_PRINCIPALS_RPC.IDENTITIES_RECENT, { level: 'global' }, context);
+    expect(recent.body.data).toMatchObject({ identities: [{ adapter: 'sandbox', userId: 'console-u1' }], simulatedSendersOmitted: ['sandbox'] });
+    // A scope on another adapter has no such note.
+    const elsewhere = await principalsRpc(CHAT_PRINCIPALS_RPC.IDENTITIES_RECENT, { level: 'adapter', key: 'qq' }, context);
+    expect(elsewhere.body.data).toEqual({ identities: [] });
+    const listed = await principalsRpc(CHAT_PRINCIPALS_RPC.LIST, {}, context);
+    const identities = (listed.body.data as { principals: { identities: Record<string, unknown>[] }[] }).principals.flatMap(person => person.identities);
+    expect(identities.find(identity => identity.userId === 'sandbox-user')).toMatchObject({ simulatedSender: true });
+    expect(identities.find(identity => identity.userId === 'console-u1')).not.toHaveProperty('simulatedSender');
   });
 });

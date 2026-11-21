@@ -136,10 +136,11 @@ describe('command denial text (ADR 0060 §5.3)', () => {
     // `owner@global` (host-wide abilities) is the shared global-owner refusal, with where it is granted (#1250 第 78 批).
     expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).toBe(describeGlobalOwnerRequired('zh-CN'));
     expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot))?.content).toContain('认领 <码>');
-    // The dispatcher passes the Root `bind` invocation as it is sent here (prefix included).
+    // #1250 bind-hint-omits-command-prefix: `绑定 <码>` needs no prefix, so the bare word is named even
+    // when the dispatcher knows the prefixed invocation.
     expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot, '!!绑定'))?.content)
-      .toBe(describeGlobalOwnerRequired('zh-CN', { bindCommand: '!!绑定' }));
-    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot, '!!绑定'))?.content).toContain('「!!绑定 <码>」');
+      .toBe(describeGlobalOwnerRequired('zh-CN'));
+    expect((await renderCommandFeedback(denied('owner@global'), message(), snapshot, '!!绑定'))?.content).toContain('「绑定 <码>」（不需要命令前缀）');
     // Platform conditions keep their own explanation; other conditions stay generic.
     expect((await renderCommandFeedback(denied('platform:admin'), message(), snapshot))?.content).toBe('无法执行此指令。r');
     expect((await renderCommandFeedback(denied('group'), message(), snapshot))?.content).toBe('没有权限执行此指令。');

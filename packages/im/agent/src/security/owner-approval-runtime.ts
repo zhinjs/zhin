@@ -90,8 +90,8 @@ export class OwnerApprovalRuntime {
     const address = ownerCommandAddress(context);
     if (context.scope !== 'private' || !address || !context.senderIsGlobalOwner) {
       if (!context.senderIsGlobalOwner) context.onUnauthorized?.('not_global_owner');
-      return describeGlobalOwnerRequired(locale, { privateChat: true,
-        ...(context.commandPrefix !== undefined ? { commandPrefix: context.commandPrefix } : {}) });
+      // #1250: 「绑定 <码>」 needs no command prefix, so the refusal does not depend on it.
+      return describeGlobalOwnerRequired(locale, { privateChat: true });
     }
 
     if (/^approve\s+always\s+bash\s*$/iu.test(text)) {

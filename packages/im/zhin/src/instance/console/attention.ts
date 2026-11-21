@@ -278,6 +278,8 @@ export interface AttentionChatRoles {
   readonly hasGlobalOwner: boolean;
   /** A claim code is open (`zhin status`). */
   readonly claimOpen: boolean;
+  /** #1250: only simulation adapters are loaded (claims and bind codes are refused there). */
+  readonly simulationOnly?: boolean;
   /** First import not yet marked as read: grants written / raised / skipped. */
   readonly imported?: {
     readonly at: number;
@@ -708,12 +710,16 @@ const messages = createMessages({
   'schedule.action': { 'zh-CN': '查看定时任务', en: 'Open scheduled tasks' },
   'roles.noOwner.title': { 'zh-CN': '还没有聊天主人（全局 owner）', en: 'There is no chat owner (global owner) yet' },
   'roles.noOwner.detail': {
-    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。先「把聊天身份绑定到我」（私聊机器人发送「绑定 <码>」），再在「聊天角色」中把自己设为全局 owner；平台群主不会自动成为 zhin 角色。',
-    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
+    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。先「把聊天身份绑定到我」（私聊机器人发送「绑定 <码>」，不需要命令前缀），再在「聊天角色」中把自己设为全局 owner；平台群主不会自动成为 zhin 角色。',
+    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Bind your chat identity first (send 「bind <code>」 to the bot in a private chat; no command prefix needed), then grant yourself global owner under Chat roles; platform group owners never become zhin roles automatically.',
   },
   'roles.noOwner.claim': {
     'zh-CN': '也可以在私聊中直接向机器人发送「认领 <码>」（不需要命令前缀），认领码见 zhin status（一次性，重启轮换；日志只记哈希前缀）。',
     en: 'Or send 「claim <code>」 to the bot in a private chat (no command prefix needed); zhin status shows the code (one-time, rotates on restart; logs carry only a hash prefix).',
+  },
+  'roles.noOwner.sandbox': {
+    'zh-CN': '危险工具、改配置与重启等宿主能力只对全局 owner 开放。当前只装了模拟适配器（Sandbox），认领与绑定在这里都不被接受：在 Sandbox 打开「以我的聊天身份发言」并发一条消息（会为你的 Console 账号建立 console-<用户 id> 身份），再到「聊天角色」把全局 owner 授予这个身份。',
+    en: 'Host-wide abilities (dangerous tools, configuration, restart) need a global owner. Only simulation adapters (the Sandbox) are loaded, where claims and bind codes are refused: turn on "Speak as my chat identity" in the Sandbox and send a message (it creates the identity console-<user id> for your Console account), then grant that identity global owner under Chat roles.',
   },
   'roles.action': { 'zh-CN': '打开聊天角色', en: 'Open chat roles' },
   'roles.imported.title': { 'zh-CN': '已从配置导入 {count} 条聊天角色', en: '{count} chat role grants were imported from the configuration' },
@@ -1395,9 +1401,11 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         identities: person.identities.map(identity => ({ adapter: identity.adapter, ...(identity.endpoint ? { endpoint: identity.endpoint } : {}),
           userIdTail: [...identity.userId].slice(-4).join('') })) }));
       if (!state.hasGlobalOwner) {
-        drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning', state: { claimOpen: state.claimOpen },
+        drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning',
+          state: { claimOpen: state.claimOpen, ...(state.simulationOnly ? { simulationOnly: true } : {}) },
           title: t('roles.noOwner.title'),
-          detail: state.claimOpen ? `${t('roles.noOwner.detail')}${locale === 'en' ? ' ' : ''}${t('roles.noOwner.claim')}` : t('roles.noOwner.detail'),
+          detail: state.simulationOnly ? t('roles.noOwner.sandbox')
+            : state.claimOpen ? `${t('roles.noOwner.detail')}${locale === 'en' ? ' ' : ''}${t('roles.noOwner.claim')}` : t('roles.noOwner.detail'),
           action });
       }
       const personal = state.personal?.entries ?? [];

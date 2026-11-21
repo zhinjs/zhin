@@ -808,3 +808,47 @@ describe('command spellings carry the real prefix', () => {
     return { conversation: { kind: 'group' as const, id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } }, sender: { id: 'boss' } };
   }
 });
+
+describe('#1250 roles on the Sandbox in chat', () => {
+  const sandboxPlugin = childPluginId(root, 'sandbox');
+  /** The harness snapshot plus a local simulation adapter `sandbox` (`runtime.sandbox`). */
+  function withSandbox(deps: { context: { snapshots: unknown } }) {
+    const base = current;
+    const index = {
+      $projection: 'zhin.adapter-index/1',
+      describe: () => [{ id: 'sandbox-slot', owner: sandboxPlugin }],
+      capabilityProfile: () => ({ default: { runtime: { sandbox: true } } }),
+    };
+    const snap = { ...base, tree: new Map([...base.tree, [sandboxPlugin, { id: sandboxPlugin, instanceKey: 'sandbox', packageName: '@x/sandbox',
+      packageRoot: '/x/sandbox', parent: root, children: [] }]]), projections: new Map([...base.projections, [featureId('zhin.adapter'), { ...base.projections.get(featureId('zhin.adapter')) as object, ...index }]]) };
+    (deps.context as { snapshots: unknown }).snapshots = { acquire: () => ({ value: snap, release() {} }) };
+  }
+  const sandboxActor = (user: string, kind: 'private' | 'group' = 'group') => ({
+    identity: { adapter: 'sandbox', userId: user }, conversationKey: `sandbox/sim/${kind}:r`, endpointKey: 'sandbox/sim', kind,
+    context: { conversationKey: `sandbox/sim/${kind}:r` },
+  }) as never;
+
+  it('refuses a grant to a typed Sandbox sender id, allows the Console Sandbox identity', async () => {
+    const { role, roles, deps } = await harness();
+    withSandbox(deps as never);
+    const people = new ChatPeople({ store: roles.store });
+    await people.ensureSimulatedIdentities({ consoleUserId: 'u1', aliases: ['sandbox'], canManageGlobal: true });
+    await people.ensureSimulatedIdentities({ consoleUserId: 'u2', aliases: ['sandbox'], canManageGlobal: true });
+    await roles.store.grant({ level: 'global', key: '', adapter: 'sandbox', userId: 'console-u1', role: 'owner' });
+    const refused = await role(sandboxActor('console-u1'), '授予 sandbox-user admin 全局');
+    expect(refused).toContain('不能把角色授予模拟发送者 sandbox:sandbox-user');
+    expect(refused).toContain('以我的聊天身份发言');
+    expect(roles.store.list().some(entry => entry.userId === 'sandbox-user')).toBe(false);
+    expect(await role(sandboxActor('console-u1'), '授予 console-u2 admin 全局')).toContain('已保存');
+  });
+
+  it('the no-owner hint on the Sandbox points at 「以我的聊天身份发言」, not at the claim', async () => {
+    const { role, roles, deps } = await harness({ ...on }, {});
+    withSandbox(deps as never);
+    // An owner only on a typed Sandbox id does not count as an owner.
+    await roles.store.grant({ level: 'global', key: '', adapter: 'sandbox', userId: 'sandbox-user', role: 'owner' });
+    const reply = await role(sandboxActor('console-u9', 'private'), '授予 someone admin');
+    expect(reply).toContain('以我的聊天身份发言');
+    expect(reply).not.toContain('认领 <码>');
+  });
+});
