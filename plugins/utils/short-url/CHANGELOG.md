@@ -1,5 +1,15 @@
 # @zhin.js/plugin-short-url
 
+## 1.1.26
+
+### Patch Changes
+
+- Updated dependencies [49f9042]
+  - @zhin.js/console-contract@1.5.0
+  - @zhin.js/page@1.3.0
+  - @zhin.js/tool@1.1.25
+  - @zhin.js/skill@1.1.22
+
 ## 1.1.25
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-short-url",
-  "version": "1.1.25",
+  "version": "1.1.26",
   "description": "Shorten links and expand them, checking every redirect hop for safety.",
   "keywords": [
     "zhin.js",
