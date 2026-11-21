@@ -208,6 +208,15 @@ export interface HttpRouter extends HttpHost, GenerationAdmissionBindable<HttpHo
   readonly corsOrigins: readonly string[];
   /** Terminal: routes are dropped and every later request gets 503. */
   close(): void;
+  /**
+   * Whether `value` is a principal **this** router attached to a {@link RouteContext} or
+   * {@link WsConnection} (the object itself, not a copy): authenticated by its token registry
+   * (`credentials`) or forwarded by its own transport (`forwarded`, the gateway bridge). Such
+   * principals are deeply frozen. Composition roots use it to tell a Host-authenticated principal
+   * from an object a plugin built (ADR 0060 §5.4); it is not on the plugin-facing {@link HttpHost},
+   * and another router's principals never count.
+   */
+  isHostIssuedPrincipal(value: unknown): value is ConsolePrincipal;
 }
 
 interface HttpRoute {
@@ -247,6 +256,13 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
   const wsRoutes = new Map<string, Set<WsRoute>>();
   const httpRoutes: HttpRoute[] = [];
   const changeListeners = new Set<() => void>();
+  // Principals this router handed to a route or socket (see `HttpRouter.isHostIssuedPrincipal`).
+  const issued = new WeakSet<object>();
+  const issue = (principal: ConsolePrincipal): ConsolePrincipal => {
+    const frozen = frozenPrincipal(principal);
+    issued.add(frozen);
+    return frozen;
+  };
   let closed = false;
   const routesChanged = (): void => {
     for (const listener of [...changeListeners]) {
@@ -387,7 +403,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
         const connection: WsConnection = Object.freeze({
           url: request.url,
           headers: request.headers,
-          ...(principal ? { principal } : {}),
+          ...(principal ? { principal: issue(principal) } : {}),
           ...(request.remoteAddress ? { remoteAddress: request.remoteAddress } : {}),
           send: (data: string | Uint8Array) => transport.send(data),
           close: (code?: number, reason?: string) => transport.close(code, reason),
@@ -445,7 +461,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     const context: RouteContext = Object.freeze({
       url,
       params: route.prefix ? Object.freeze({ '*': prefixRemainder(route.path, pathname) }) : NO_PARAMS,
-      ...(auth.principal ? { principal: auth.principal } : {}),
+      ...(auth.principal ? { principal: issue(auth.principal) } : {}),
       ...(info.remoteAddress ? { remoteAddress: info.remoteAddress } : {}),
     });
     let response: Response;
@@ -630,6 +646,8 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     },
     apiBase,
     corsOrigins,
+    isHostIssuedPrincipal: (value: unknown): value is ConsolePrincipal =>
+      typeof value === 'object' && value !== null && issued.has(value),
     close() {
       closed = true;
       wsRoutes.clear();
@@ -763,4 +781,31 @@ export function normalizePath(pathname: string): string {
   let end = pathname.length;
   while (end > 0 && pathname[end - 1] === '/') end -= 1;
   return pathname.slice(0, end) || '/';
+}
+
+/**
+ * The principal as handed to routes and sockets: deeply frozen, so a route cannot change the
+ * object the router vouches for ({@link HttpRouter.isHostIssuedPrincipal}). Already deeply frozen
+ * principals (the bridge's, the gateway IAM's) are kept as they are.
+ */
+function frozenPrincipal(principal: ConsolePrincipal): ConsolePrincipal {
+  if (principal.kind === 'bootstrap') {
+    return Object.isFrozen(principal) ? principal : Object.freeze({ kind: 'bootstrap', open: principal.open });
+  }
+  const deep = Object.isFrozen(principal) && Object.isFrozen(principal.roles) && Object.isFrozen(principal.grants)
+    && principal.grants.every(grant => Object.isFrozen(grant) && Object.isFrozen(grant.scope) && Object.isFrozen(grant.permissions));
+  if (deep) return principal;
+  return Object.freeze({
+    kind: principal.kind,
+    userId: principal.userId,
+    username: principal.username,
+    displayName: principal.displayName,
+    credentialId: principal.credentialId,
+    grants: Object.freeze(principal.grants.map(grant => Object.freeze({
+      ...(grant.role !== undefined ? { role: grant.role } : {}),
+      scope: Object.freeze({ ...grant.scope }),
+      permissions: Object.freeze([...grant.permissions]),
+    }))),
+    roles: Object.freeze([...principal.roles]),
+  });
 }

@@ -66,7 +66,8 @@ export interface BridgedHttpHostOptions extends Omit<HttpRouterOptions, 'address
 }
 
 /** @public Instance HTTP Host carried by the gateway bridge. */
-export interface BridgedHttpHost extends HttpHost, GenerationAdmissionBindable<HttpHost>, AddressAwareHttpHost {
+export interface BridgedHttpHost extends HttpHost, GenerationAdmissionBindable<HttpHost>, AddressAwareHttpHost,
+  Pick<HttpRouter, 'isHostIssuedPrincipal'> {
   /**
    * Opens the bridge: announces the route table and starts serving forwarded requests.
    * Resolves with the gateway's primary address once the gateway announced it (else undefined).
@@ -471,6 +472,8 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
     listRoutes: () => router.listRoutes(),
     get address() { return addresses[0]; },
     get tokenRegistry() { return router.tokenRegistry; },
+    // Only principals this bridge's router forwarded from the gateway (ADR 0060 §5.4).
+    isHostIssuedPrincipal: (value: unknown) => router.isHostIssuedPrincipal(value),
     get activeStreams() { return exchanges.size + sockets.size; },
     routeTable,
     publishRoutes(next) {

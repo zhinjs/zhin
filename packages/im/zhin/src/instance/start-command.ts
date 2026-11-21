@@ -155,6 +155,8 @@ export class InstanceGatewayRequiredError extends Error {
 type InstanceHttpHost = HttpHost & GenerationAdmissionBindable<HttpHost> & {
   listen(): Promise<HttpHostAddress | undefined>;
   close(): Promise<void>;
+  /** ADR 0060 §5.4: whether this Host attached that very principal object to a route or socket. */
+  isHostIssuedPrincipal(value: unknown): boolean;
 };
 
 /** Loads the Node transport only in standalone mode: the bridged instance never loads `node:http` / `ws`. */
@@ -286,6 +288,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const featureHost = createFeatureHost({
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots, projectRoot: options.root,
     personalPrincipalImports,
+    // ADR 0060 §5.4: the Sandbox identity port trusts only principals this Host issued.
+    isHostIssuedPrincipal: value => httpHost.isHostIssuedPrincipal(value),
     ...(controlChannel ? { gatewayMessages: controlChannel } : {}),
     afterLoad: async (roles, candidate, overrides, audit) => {
       await chatRoleMigration.complete(roles, {

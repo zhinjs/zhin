@@ -2,7 +2,7 @@ import { createFeaturePrivateToken, featureId, type CapabilityId, type PluginId 
 import type { AdapterCapability, AdapterOperation, AdapterSegmentPolicy } from './definition.js';
 import type { AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
-import type { AdapterCapabilityProfile, AdapterCapabilityResolver } from './capability-profile.js';
+import { resolveStaticCapabilities, type AdapterCapabilityProfile, type AdapterCapabilityResolver } from './capability-profile.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
 import type { AdapterLoginDeclaration } from './login-capability.js';
 import type { ConversationRef } from '@zhin.js/im-contract';
@@ -194,13 +194,16 @@ export const endpointSecretResolverToken = createFeaturePrivateToken<EndpointSec
 );
 
 /**
- * ADR 0060 §5.4 (#1250 sandbox-speak-as-me): what an Adapter whose capability profile declares a
- * local simulation (`runtime.sandbox`) gets as {@link AdapterContext.consoleSpeaker}. It gives the
- * Console user behind `principal` (the Console principal the Host authenticated on the Adapter's own
- * socket, never an id taken from a message) the Console Sandbox identity `console-<userId>` on this
- * Adapter, like the Console RPC `chat-identities.simulated.ensure`: the Root checks
- * `self.chat-identity` and global `iam.manage` on the principal itself. Rejects with the reason when
- * the identity cannot be created. Other Adapters and plugins never receive it.
+ * ADR 0060 §5.4 (#1250 sandbox-speak-as-me): what a trusted local simulation Adapter
+ * (`isTrustedSimulationAdapter`: `runtime.sandbox` declared by `@zhin.js/adapter-sandbox`) gets as
+ * {@link AdapterContext.consoleSpeaker}. It gives the Console user behind `principal` the Console
+ * Sandbox identity `console-<userId>` on this Adapter, like the Console RPC
+ * `chat-identities.simulated.ensure`. `principal` must be the very object the instance's HTTP Host
+ * put on the Adapter's socket (`WsConnection.principal`): the Root accepts it only when that Host
+ * issued it (`HttpRouter.isHostIssuedPrincipal`) — a look-alike object, a copy or another Host's
+ * principal is refused (`not-host-issued`) whatever it lists — and only then checks
+ * `self.chat-identity` and global `iam.manage` on it. Rejects with the reason when the identity
+ * cannot be created. Other Adapters and plugins never receive it.
  */
 export interface AdapterConsoleSpeakerPort {
   ensure(conversation: ConversationRef, principal: unknown): Promise<void>;
@@ -213,8 +216,42 @@ export interface SimulatedConsoleSpeakerHost {
 
 /**
  * Root-private (readable only while projecting the Adapter Feature): the instance provides it; the
- * Adapter Feature binds it to each simulation Adapter's owner ({@link AdapterConsoleSpeakerPort}).
+ * Adapter Feature binds it to each trusted simulation Adapter's owner ({@link AdapterConsoleSpeakerPort}).
  */
 export const simulatedConsoleSpeakerToken = createFeaturePrivateToken<SimulatedConsoleSpeakerHost>(
   'zhin.adapter.simulated-console-speaker', featureId('zhin.adapter'), 'Console Sandbox identities for local simulation adapters',
 );
+
+/**
+ * ADR 0060 §5.4 / ADR 0044: the one place that says what a local simulation Adapter is.
+ *
+ * - {@link declaresLocalSimulation}: the capability profile declares `runtime.sandbox` (clients
+ *   choose their own sender id). Everything that classifies simulations (global grants of the role
+ *   migration, claims / bind codes refused on a simulation, owners only on simulated ids not
+ *   counting) reads this — a plugin can declare it, and declaring it only takes privileges away.
+ * - {@link isTrustedSimulationAdapter}: additionally shipped by a package the framework trusts to
+ *   speak for the signed-in Console user (`@zhin.js/adapter-sandbox`). Only such an Adapter gets
+ *   `AdapterContext.consoleSpeaker`, and the Root accepts the port's calls only from it; a third-party
+ *   plugin that declares `runtime.sandbox` stays a simulation but never gets the write port.
+ */
+
+/** Packages whose `runtime.sandbox` Adapters may create Console Sandbox identities (`console-<userId>`). */
+export const TRUSTED_SIMULATION_ADAPTER_PACKAGES: readonly string[] = Object.freeze(['@zhin.js/adapter-sandbox']);
+
+/**
+ * Whether a capability profile declares a local simulation (`runtime.sandbox`). Throws like
+ * `resolveStaticCapabilities` on a malformed profile, so callers keep failing closed.
+ */
+export function declaresLocalSimulation(profile: AdapterCapabilityProfile | undefined): boolean {
+  return !!profile && resolveStaticCapabilities(profile, []).runtime?.sandbox === true;
+}
+
+/** Whether the owning plugin's package is one of {@link TRUSTED_SIMULATION_ADAPTER_PACKAGES}. */
+export function isTrustedSimulationAdapterPackage(packageName: string | undefined): boolean {
+  return typeof packageName === 'string' && TRUSTED_SIMULATION_ADAPTER_PACKAGES.includes(packageName);
+}
+
+/** A local simulation ({@link declaresLocalSimulation}) whose owning plugin is a trusted package. */
+export function isTrustedSimulationAdapter(profile: AdapterCapabilityProfile | undefined, packageName: string | undefined): boolean {
+  return isTrustedSimulationAdapterPackage(packageName) && declaresLocalSimulation(profile);
+}

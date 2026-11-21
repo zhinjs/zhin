@@ -193,8 +193,10 @@ export interface SandboxEndpointOptions {
   readonly chatRoles?: ChatRoleReader;
   /**
    * ADR 0060 §5.4 (#1250 sandbox-speak-as-me): creates the signed-in Console user's
-   * `console-<userId>` identity (`AdapterContext.consoleSpeaker`, given only to local simulation
-   * Adapters). Absent: 「以我的聊天身份发言」 needs an identity created in the Console first.
+   * `console-<userId>` identity (`AdapterContext.consoleSpeaker`, given only to trusted local
+   * simulation Adapters — this package's). It takes the socket's own `connection.principal` object:
+   * the Root accepts only principals its HTTP Host issued, never a copy or a built object.
+   * Absent: 「以我的聊天身份发言」 needs an identity created in the Console first.
    */
   readonly consoleSpeaker?: AdapterConsoleSpeakerPort;
   /** How long a message waits for {@link consoleSpeaker} (default {@link SANDBOX_CONSOLE_SPEAKER_TIMEOUT_MS}). */
@@ -706,8 +708,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
    * this adapter (`consoleSpeaker`).
    * #1250 sandbox-speak-as-me: when the user has none yet, it is created here
    * ({@link SandboxEndpointOptions.consoleSpeaker}: the person, its Console link and
-   * `console-<userId>`, the same write as `chat-identities.simulated.ensure`; the Root checks the
-   * socket's principal itself), so the page's default 「以我的聊天身份发言」 works on the first
+   * `console-<userId>`, the same write as `chat-identities.simulated.ensure`; it is handed the
+   * socket's principal object unchanged, which the Root accepts only because its own Host issued it,
+   * and reads the permissions from), so the page's default 「以我的聊天身份发言」 works on the first
    * message without a separate request. A failure or a wait longer than
    * {@link SANDBOX_CONSOLE_SPEAKER_TIMEOUT_MS} is reported (`identity-failed` with the reason) and the
    * message goes out simulated.

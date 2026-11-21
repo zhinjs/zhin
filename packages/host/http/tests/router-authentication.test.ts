@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { jsonResponse } from '@zhin.js/host-http-contract';
 import { createHttpRouter } from '../src/http-host.js';
 import type { ConsolePrincipal } from '../src/access-control.js';
+import { bindGenerationAdmission, createGenerationAdmissionGate } from '@zhin.js/plugin-runtime';
 
 const statusViewer: ConsolePrincipal = Object.freeze({
   kind: 'user',
@@ -11,6 +12,12 @@ const statusViewer: ConsolePrincipal = Object.freeze({
   credentialId: 's1',
   roles: [],
   grants: [{ scope: { kind: 'global' }, permissions: ['status.view'] }],
+});
+
+const frozenViewer: ConsolePrincipal = Object.freeze({
+  ...statusViewer,
+  roles: Object.freeze([]),
+  grants: Object.freeze([Object.freeze({ scope: Object.freeze({ kind: 'global' as const }), permissions: Object.freeze(['endpoint.operate']) })]),
 });
 
 describe('router authentication modes (ADR 0054 §3)', () => {
@@ -45,6 +52,48 @@ describe('router authentication modes (ADR 0054 §3)', () => {
     expect(accepted.accepted).toBe(true);
     if (accepted.accepted) accepted.reject();
     router.close();
+  });
+
+  it('ADR 0060 §5.4: vouches only for the principal objects it attached itself (deeply frozen), per router', async () => {
+    const router = createHttpRouter({ authentication: 'forwarded' });
+    const other = createHttpRouter({ authentication: 'forwarded' });
+    const seen: unknown[] = [];
+    router.route('GET', '/api/system/status', (_request, context) => { seen.push(context.principal); return jsonResponse(200, {}); });
+    router.ws('/sandbox').onConnection(connection => { seen.push(connection.principal); });
+    other.ws('/sandbox').onConnection(connection => { seen.push(connection.principal); });
+    // A principal whose nested parts are mutable is handed on as a deeply frozen copy.
+    const mutable = { ...statusViewer, roles: ['viewer'], grants: [{ scope: { kind: 'global' as const }, permissions: ['status.view', 'endpoint.operate'] }] };
+    expect((await router.handle(new Request('http://local/api/system/status'), { principal: mutable })).status).toBe(200);
+    const transport = { send() {}, close() {}, onMessage: () => () => undefined, onClose: () => () => undefined, bufferedAmount: 0 };
+    for (const target of [router, other]) {
+      const decision = await target.upgrade({ url: new URL('http://local/sandbox'), headers: new Headers(), principal: mutable });
+      expect(decision.accepted).toBe(true);
+      if (decision.accepted) decision.accept(transport);
+    }
+    const [fromRoute, fromSocket, fromOther] = seen as ConsolePrincipal[];
+    expect(fromRoute).toEqual(mutable);
+    expect(fromRoute).not.toBe(mutable);
+    expect(router.isHostIssuedPrincipal(fromRoute)).toBe(true);
+    expect(router.isHostIssuedPrincipal(fromSocket)).toBe(true);
+    expect(Object.isFrozen(fromRoute) && fromRoute.kind === 'user' && Object.isFrozen(fromRoute.grants[0]!.scope)
+      && Object.isFrozen(fromRoute.grants[0]!.permissions)).toBe(true);
+    // What the transport passed in, a look-alike plain object, and another router's principal never count.
+    expect(router.isHostIssuedPrincipal(mutable)).toBe(false);
+    expect(router.isHostIssuedPrincipal(structuredClone(fromRoute))).toBe(false);
+    expect(router.isHostIssuedPrincipal({ ...fromRoute })).toBe(false);
+    expect(router.isHostIssuedPrincipal(fromOther)).toBe(false);
+    expect(other.isHostIssuedPrincipal(fromRoute)).toBe(false);
+    expect(router.isHostIssuedPrincipal(undefined)).toBe(false);
+    expect(router.isHostIssuedPrincipal('u1')).toBe(false);
+    // An already deeply frozen principal is vouched for as is.
+    const decision = await router.upgrade({ url: new URL('http://local/sandbox'), headers: new Headers(), principal: frozenViewer });
+    if (decision.accepted) decision.accept(transport);
+    expect(seen.at(-1)).toBe(frozenViewer);
+    expect(router.isHostIssuedPrincipal(frozenViewer)).toBe(true);
+    // The plugin-facing generation-bound Host has no such query.
+    expect('isHostIssuedPrincipal' in bindGenerationAdmission(router, createGenerationAdmissionGate())).toBe(false);
+    router.close();
+    other.close();
   });
 
   it('lists WebSocket routes with their authentication and reports registration changes', () => {

@@ -3,14 +3,14 @@ import {
   generationAdmissionBinder,
   type GenerationAdmissionBindable,
 } from '@zhin.js/plugin-runtime';
-import { createHttpRouter, type HttpHost } from '../http-host.js';
+import { createHttpRouter, type HttpHost, type HttpRouter } from '../http-host.js';
 import type { HttpHostAddress, HttpHostOptions } from '../host-options.js';
 import { createNodeHttpListener } from './listener.js';
 
 const logger = getLogger('http');
 
 /** @internal Process-root lifecycle and generation admission surface. */
-export interface ProcessHttpHost extends HttpHost, GenerationAdmissionBindable<HttpHost> {
+export interface ProcessHttpHost extends HttpHost, GenerationAdmissionBindable<HttpHost>, Pick<HttpRouter, 'isHostIssuedPrincipal'> {
   listen(): Promise<HttpHostAddress>;
   close(): Promise<void>;
 }
@@ -70,6 +70,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     get tokenRegistry() {
       return tokenRegistry;
     },
+    isHostIssuedPrincipal: (value: unknown) => router.isHostIssuedPrincipal(value),
     listen: () => listener.listen(),
     close(): Promise<void> {
       if (closeResult) return closeResult;

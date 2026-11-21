@@ -17,7 +17,7 @@ export class SandboxAdapter extends Adapter<SandboxWsEndpoint, SandboxEndpointCo
     return new SandboxWsEndpoint({ id: execution.canonicalId, defaults: resolveSandboxEndpoint(input),
       http: this.#context.use(httpHostToken), locale: resolveLocale(this.#context.use(projectLocaleToken)),
       ...optionalChatRoles(() => this.#context.use(chatRolesToken)),
-      // ADR 0060 §5.4: only local simulation Adapters receive it from the Adapter Feature (Root-private).
+      // ADR 0060 §5.4: only trusted local simulation Adapters (this package) receive it from the Adapter Feature (Root-private).
       ...(this.#context.consoleSpeaker ? { consoleSpeaker: this.#context.consoleSpeaker } : {}) });
   }
 }
