@@ -665,6 +665,42 @@ config: {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     await endpoint.stop();
   });
+
+  it('drops QQ webhook inbound while closed and does not retry an unknown send', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const sent = vi.fn(async () => { throw new Error('QQ API 500'); });
+    const mock = createMockBot();
+    mock.sendGroupMessage = sent;
+    const endpoint = await qqFixture(() => new QqHttpEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq-http'),
+      http,
+      config: {
+        context: 'qq', mode: 'webhook', id: 'qq-http', appid: 'app-1', secret: 'secret-1',
+        webhookPath: '/qq/hook', sandbox: false,
+      },
+    }), () => ({ ...mock, middleware: vi.fn(async () => undefined) }), { receive, send: vi.fn(async () => 'sent') });
+    try {
+      await endpoint.start();
+      endpoint.endpoint.admit(textMessage());
+      expect(receive).not.toHaveBeenCalled();
+      endpoint.open();
+      endpoint.endpoint.admit(textMessage());
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+      endpoint.close();
+      endpoint.endpoint.admit(textMessage({ id: 'late' }));
+      await new Promise((done) => setImmediate(done));
+      expect(receive).toHaveBeenCalledTimes(1);
+      await expect(endpoint.send({
+        conversation: { endpoint: { id: 'qq-http', adapter: 'qq' }, kind: 'group', id: 'group-1' },
+        payload: 'pong',
+      })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
+      expect(sent).toHaveBeenCalledTimes(1);
+    } finally {
+      await endpoint.stop();
+      await http.close();
+    }
+  });
 });
 
 it('projects live QQ SDK transport status through disconnect and reconnect', async () => {

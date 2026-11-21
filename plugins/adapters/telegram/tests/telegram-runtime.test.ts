@@ -239,6 +239,19 @@ describe('telegram protocol helpers', () => {
     ]);
   });
 
+  it('maps a location to inbound text and a sendLocation action, keeping latitude 0', () => {
+    const location = { latitude: 0, longitude: 121.5 };
+    expect(formatInboundContent(textMessage({ text: undefined, location }))).toBe('[location: 0,121.5]');
+    expect(formatInboundSegments(textMessage({ text: undefined, location }))).toEqual([]);
+    expect(formatOutboundActions(1001, [
+      { type: 'reply', data: { message_id: '9' } },
+      { type: 'location', data: location },
+    ])).toEqual([{
+      method: 'sendLocation',
+      params: { chat_id: 1001, latitude: 0, longitude: 121.5, reply_parameters: { message_id: 9 } },
+    }]);
+  });
+
   it('formats outbound string and segment payloads', () => {
     expect(defineTelegramAdapter.segments?.markdown).toBe('native');
     expect(formatOutboundActions('1001', 'pong')).toEqual([{
