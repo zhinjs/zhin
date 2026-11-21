@@ -79,15 +79,15 @@ export class RedisDialect<S extends Record<string, object> = Record<string, obje
       });
 
       this.client.on('connect', () => {
-        logger.info('Redis 连接已建立');
+        logger.debug('Redis 连接已建立');
       });
 
       this.client.on('ready', () => {
-        logger.info('Redis 客户端已准备就绪');
+        logger.debug('Redis 客户端已准备就绪');
       });
 
       this.client.on('end', () => {
-        logger.info('Redis 连接已关闭');
+        logger.debug('Redis 连接已关闭');
       });
 
       await this.client.connect();
@@ -104,7 +104,7 @@ export class RedisDialect<S extends Record<string, object> = Record<string, obje
     if (this.client) {
       await this.client.quit();
       this.client = null;
-      logger.info('Redis 连接已关闭');
+      logger.debug('Redis 连接已关闭');
     }
   }
 

@@ -24,7 +24,7 @@ import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
 import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
 import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
-import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
+import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
@@ -50,16 +50,9 @@ const CORE_PACKAGE = 'zhin.js';
 
 // `zhin start` is the entry (ADR 0054 §6); `zhin runtime start` is an accepted alias, never rewritten.
 // A bare `zhin start` in `start` / `dev` is rewritten: it runs in the background by default now.
-const RECOMMENDED_SCRIPTS: Record<string, string> = {
-  ...RECOMMENDED_START_SCRIPTS,
-  stop: 'zhin stop',
-  build: 'tsc --noEmit',
-};
-
-const LEGACY_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  ...LEGACY_START_SCRIPTS,
-  build: ['zhin build'],
-});
+// The set is the scaffold's own (create-zhin-app), checked by a test.
+const RECOMMENDED_SCRIPTS = RECOMMENDED_PROJECT_SCRIPTS;
+const LEGACY_SCRIPTS = LEGACY_PROJECT_SCRIPTS;
 
 function isZhinProject(dir: string): boolean {
   const pkgPath = path.join(dir, 'package.json');

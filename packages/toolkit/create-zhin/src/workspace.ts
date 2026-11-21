@@ -25,6 +25,7 @@ import {
 } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { CREATE_NODE_REQUIREMENT } from './node-requirement.js';
+import { CREATE_BOT_SCRIPTS } from './scripts.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from './templates/bootstrap.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -138,12 +139,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     type: 'module',
     description: `${projectName} - Zhin.js Bot`,
     scripts: {
-      dev: 'zhin start --foreground --watch source config',
-      // Foreground: the production templates (Dockerfile, systemd unit) run `pnpm start`.
-      start: 'zhin start --foreground --mode production --no-watch',
-      stop: 'zhin stop',
-      preview: 'zhin preview',
-      build: 'tsc --noEmit',
+      ...CREATE_BOT_SCRIPTS,
       ...(extras.pm2 ? PM2_SCRIPTS : {}),
     },
     // Zhin packages get the caret range of the release this scaffold ships with, not `latest`.

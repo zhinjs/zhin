@@ -333,7 +333,7 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': '1.1.0', '@zhin.js/agent': '~1.1.0', '@zhin.js/tool': 'latest' },
       devDependencies: { '@zhin.js/cli': '=1.1.0' },
     }, null, 2));
@@ -364,7 +364,7 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies,
     }, null, 2));
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -395,7 +395,7 @@ describe('migrate', () => {
     const original = JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': '^1.1.0', '@zhin.js/cli': '^1.1.0' },
       pnpm: { overrides: {
         '@zhin.js/core': '1.1.0',
@@ -450,7 +450,7 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': '^9.4.2', '@zhin.js/cli': '^9.4.2' },
       pnpm: { overrides: { '@zhin.js/core': '4.0.0', '@zhin.js/cli': '4.0.0' } },
     }, null, 2));
@@ -470,7 +470,7 @@ describe('migrate', () => {
     const original = JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': existing, '@zhin.js/agent': existing },
     }, null, 2);
     fs.writeFileSync(pkgPath, original);
@@ -690,10 +690,13 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', dependencies: { 'zhin.js': '1.0.0' } }, null, 2));
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    expect(pkg.scripts).toMatchObject({
+    // Exactly the scripts of a new create-zhin-app project: no `daemon` (#1250).
+    expect(pkg.scripts).toEqual({
       dev: 'zhin start --foreground --watch source config',
       start: 'zhin start --foreground --mode production --no-watch',
-      daemon: 'zhin start --mode production --no-watch',
+      stop: 'zhin stop',
+      preview: 'zhin preview',
+      build: 'tsc --noEmit',
     });
   });
 

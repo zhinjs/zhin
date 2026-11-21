@@ -18,6 +18,12 @@ export interface EndpointDesiredRecord {
   readonly desiredEnabled: boolean;
   readonly config: Readonly<Record<string, unknown>>;
   readonly secretRefs?: Readonly<Record<string, string>>;
+  /**
+   * `console`: created through account management (`add`, the Console's 「新增账号」), never seeded
+   * or imported from `zhin.config.yml`. Such an account missing from the file is not configuration
+   * drift (#1250). Absent: seeded / imported from the file, or saved by an older version.
+   */
+  readonly origin?: 'console';
 }
 
 export interface EndpointDesiredSnapshot {
@@ -74,7 +80,7 @@ export interface AdapterDescriptorInfo {
   readonly login?: AdapterLoginDeclaration;
 }
 
-export type EndpointDesiredMetadata = Omit<EndpointDesiredRecord, 'config' | 'secretRefs' | 'platformUserId'>;
+export type EndpointDesiredMetadata = Omit<EndpointDesiredRecord, 'config' | 'secretRefs' | 'platformUserId' | 'origin'>;
 export type EndpointAction = 'add' | 'update' | 'start' | 'stop' | 'remove' | 'replace';
 export interface EndpointExecution {
   readonly instanceId: string;

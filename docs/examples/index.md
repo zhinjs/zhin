@@ -119,7 +119,7 @@ pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 
 - 要求 Node.js ≥22.19，凭据读该目录的 `.env`（模板见 `.env.example`）；
 - Console 的 API Base 填 `http://127.0.0.1:8068`，第一次用初始化令牌 `test-bot-dev-token` 创建所有者账号，之后用账号登录；
-- 后台运行：`pnpm daemon`（即 `zhin start --mode production --no-watch`，网关在后台运行），`zhin status` / `zhin logs -f` 查看，`pnpm stop` 停止。
+- 后台运行：`pnpm exec zhin start --mode production --no-watch`（`zhin start` 默认在后台运行网关），`zhin status` / `zhin logs -f` 查看，`pnpm stop` 停止。
 
 ## 下一步
 

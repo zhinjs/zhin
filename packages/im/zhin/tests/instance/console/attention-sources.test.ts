@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, childPluginId, rootPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId, type EndpointConfigDriftEntry } from '@zhin.js/adapter';
 import type { PluginManagementState } from '@zhin.js/host-http';
 import { createAttentionSources } from '../../../src/instance/console/attention-sources.js';
 import { collectAttention } from '../../../src/instance/console/attention.js';
@@ -214,5 +215,33 @@ describe('attention sources wired to the instance', () => {
       databaseHost: { started: false, models: { get: () => undefined } },
     } as unknown as ConsoleRpcComposition);
     expect((await collectAttention(sources, { allows: () => true })).unavailable).toEqual(['logs']);
+  });
+
+  it('leaves accounts added in the Console out of the endpoint drift item (#1250 console-added-endpoint-flagged-as-drift)', async () => {
+    const root = rootPluginId(), owner = childPluginId(root, 'sandbox');
+    const driftOf: Record<string, readonly EndpointConfigDriftEntry[]> = {
+      // Only a Console-added account: no item at all.
+      sandbox: [{ id: 'sandbox-bot2', kind: 'snapshot_only', instanceId: 'i2', desiredEnabled: true, origin: 'console' }],
+    };
+    const adapters = [{ descriptor: { owner, name: 'sandbox' }, configDrift: async () => ({ authority: 'snapshot', revision: 2, entries: driftOf.sandbox!, unverified: [] }) }];
+    const state: SnapshotState = {
+      root,
+      tree: new Map<PluginId, PluginNodeSnapshot>([
+        [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: '/app', children: [owner] }],
+        [owner, { id: owner, parent: root, instanceKey: 'sandbox', packageName: '@zhin.js/adapter-sandbox', packageRoot: '/sandbox', children: [] }],
+      ]),
+      config: new Map(), capabilities: new Map(),
+      projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', adapters: () => adapters }]]),
+      resources: new Map([[root, new Map()]]),
+    } as unknown as SnapshotState;
+    const store = new SnapshotStore(state);
+    stores.push(store);
+    const sources = createAttentionSources({ snapshots: store, configuration: { readSource: async () => ({}) } } as unknown as ConsoleRpcComposition);
+    expect(await sources.endpointConfigDrift!()).toEqual([]);
+    expect((await collectAttention(sources, { allows: () => true })).items.filter(item => item.kind === 'endpoint.config-drift')).toEqual([]);
+
+    // A real divergence next to it is still reported, without the Console-added account.
+    driftOf.sandbox = [...driftOf.sandbox!, { id: 'gone', kind: 'snapshot_only', instanceId: 'i1', desiredEnabled: true }];
+    expect(await sources.endpointConfigDrift!()).toEqual([{ instanceKey: 'sandbox', adapter: 'sandbox', configOnly: [], savedOnly: ['gone'], changed: [] }]);
   });
 });

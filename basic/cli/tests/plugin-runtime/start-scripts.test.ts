@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { isAcceptedStartScript, isForegroundStartScript, isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../../src/plugin-runtime/migrate/start-scripts.js';
+import {
+  isAcceptedStartScript,
+  isForegroundStartScript,
+  isLegacyScript,
+  LEGACY_START_SCRIPTS,
+  RECOMMENDED_PROJECT_SCRIPTS,
+  RECOMMENDED_START_SCRIPTS,
+} from '../../src/plugin-runtime/migrate/start-scripts.js';
+import { CREATE_BOT_SCRIPTS } from '../../../../packages/toolkit/create-zhin/src/scripts.js';
 
 describe('migration start scripts (ADR 0054 §6)', () => {
   it('recommends zhin start like create-zhin-app and accepts zhin runtime start as an alias', () => {
     expect(RECOMMENDED_START_SCRIPTS).toEqual({
       dev: 'zhin start --foreground --watch source config',
       start: 'zhin start --foreground --mode production --no-watch',
-      daemon: 'zhin start --mode production --no-watch',
     });
     for (const script of ['zhin start', 'zhin start --foreground', 'zhin runtime start', 'zhin runtime start --mode production']) {
       expect(isAcceptedStartScript(script), script).toBe(true);
@@ -37,10 +44,17 @@ describe('migration start scripts (ADR 0054 §6)', () => {
     for (const script of [
       'zhin start',
       'zhin start --daemon',
-      RECOMMENDED_START_SCRIPTS.daemon,
+      'zhin start --mode production --no-watch',
       'zhin start && echo --foreground',
       'node index.js --foreground',
       undefined,
     ]) expect(isForegroundStartScript(script), String(script)).toBe(false);
+  });
+
+  it('migrates to exactly the scripts of a new create-zhin-app project (#1250 migrate-adds-daemon-script)', () => {
+    // One list each side; this keeps them from drifting apart again.
+    expect(RECOMMENDED_PROJECT_SCRIPTS).toEqual(CREATE_BOT_SCRIPTS);
+    expect(RECOMMENDED_PROJECT_SCRIPTS).not.toHaveProperty('daemon');
+    for (const [name, script] of Object.entries(RECOMMENDED_START_SCRIPTS)) expect(CREATE_BOT_SCRIPTS[name]).toBe(script);
   });
 });
