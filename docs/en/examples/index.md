@@ -119,7 +119,7 @@ pnpm dev:test                # or cd examples/test-bot && pnpm dev
 
 - Requires Node.js >=22.19; credentials come from that directory's `.env` (template in `.env.example`);
 - in Console, set API Base to `http://127.0.0.1:8068`; the first time, create the owner account with the bootstrap token `test-bot-dev-token`, then sign in with the account;
-- to run in the background: `pnpm daemon` (that is, `zhin start --mode production --no-watch`, the gateway in the background); check it with `zhin status` / `zhin logs -f` and stop it with `pnpm stop`.
+- to run in the background: `pnpm exec zhin start --mode production --no-watch` (`zhin start` runs the gateway in the background by default); check it with `zhin status` / `zhin logs -f` and stop it with `pnpm stop`.
 
 ## Next steps
 

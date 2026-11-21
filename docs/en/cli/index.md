@@ -103,17 +103,21 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 | `build` / `publish` | Work on the whole workspace in dependency order (for a single plugin use `zhin build` / `zhin pub`). Both print the plan first: which packages and versions, and which packages are skipped and why (no `build` script / `private: true`); an empty plan is stated explicitly. `publish` is a dry run by default (prints the plan and runs `pnpm publish --dry-run`); `--execute` publishes every non-private package to npm (needs an npm login; published under a temporary dist-tag first, moved to `--tag` once all succeed), records progress in `.zhin/publish-journal.json`, and `--resume` continues after an interruption. `--json` prints only the plan (with an `empty` field) and runs nothing. An empty dry-run plan exits 0; an empty plan under `--execute` / `--resume` exits 1 |
 | `migrate` | Generate and apply a project-structure migration plan: `--check` previews, `--write` writes atomically, `status` prints a readiness report |
 
-Scaffolded projects already have these conventional scripts:
+Scaffolded projects already have these conventional scripts (`zhin migrate` gives an upgraded project exactly this set, adding the missing ones and leaving existing ones alone):
 
 ```json
 {
   "scripts": {
     "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
-    "stop": "zhin stop"
+    "stop": "zhin stop",
+    "preview": "zhin preview",
+    "build": "tsc --noEmit"
   }
 }
 ```
+
+To run in the background use plain `zhin start` (it backgrounds by default); no separate `daemon` script is needed.
 
 ### service: System Service {#service}
 
@@ -169,6 +173,7 @@ Console users, roles, sessions, API tokens and the audit log live in the gateway
   - There are two recommended ways to pass the database password (use only one source): `--database-password-env <VAR>` references an existing environment variable (the config gets `${VAR}`); `--database-password-stdin` reads the first line of stdin, stores it in `.env` and writes `${VAR}` into the config. Together with `--password-stdin`, the first line is the database password and the second the owner password.
   - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.
   - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, or the second line together with `--database-password-stdin`; at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
+  - When standard input is not a terminal (a pipe, `< /dev/null`, CI), `init` / `user create` / `user passwd` / `init --reset-store` never start an interactive prompt: they fail at once (exit code 1) and point to `--password-stdin` / `--owner` / `--yes`. `zhin setup`, `zhin onboard` and `zhin install` without a plugin name do the same.
 - **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints username, display name, state, role bindings and the **user id** (`ai.personalPrincipals` keys are `user:<user id>`); `--json` prints `{ users: [{ id, username, displayName, disabled, roles }] }`. Adapter- or account-scoped bindings are set in the Console's Access pages.
 - **`init --reset-store`**: when `.zhin/gateway.db` was lost or replaced (the project database's marker `zhin_gateway_store` names another store) the Console stays closed; once you accept that the old accounts are gone, this resets it (gateway stopped first, asks for confirmation, `--yes` skips it), records the reset in the new audit log and continues with setup.
 - **`migrate`** moves the Console account tables an earlier version kept in the project database into `.zhin/gateway.db` (the gateway also does it when it starts; while a gateway runs the command only reports the state). `--revert` writes them back into the project database and empties gateway.db — required before downgrading, with the gateway stopped (`zhin stop`). See the [upgrade notes](../migrations/gateway-storage.md).
@@ -378,11 +383,11 @@ While the gateway runs (`zhin start`), the install goes through the gateway's de
 ### uninstall: Uninstall
 
 ```bash
-zhin uninstall plugin <name> [--remove-pkg]
+zhin uninstall plugin <name> [--remove-pkg] [--remove-dir]
 zhin uninstall adapter <name> [--remove-pkg]
 ```
 
-`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. While the gateway runs, the uninstall goes through it (instance stopped and started, rolled back on failure). Remove the system service with `zhin service uninstall`.
+`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. When a plugin has a local directory `./plugins/<name>`, `--remove-dir` deletes it without asking (on a terminal too); without the flag a terminal is asked (default: keep) and a non-interactive run (a pipe, CI) keeps it. While `package.json` still depends on that local package (no `--remove-pkg`, or another instance still uses it) the directory is always kept, with a notice, so no dependency is left pointing at a deleted directory. While the gateway runs, the uninstall goes through it (instance stopped and started, rolled back on failure). Remove the system service with `zhin service uninstall`.
 
 ### enable / disable: Turn a Plugin Instance On or Off {#enable-disable}
 

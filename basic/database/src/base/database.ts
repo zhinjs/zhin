@@ -133,7 +133,8 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   async stop(): Promise<void> {
     await this.dialect.disconnect();
     this.hasStarted = false;
-    logger.info(`Database disconnected from dialect: ${this.dialect.name}`);
+    // Debug: CLI commands (zhin doctor) open and close databases; a lifecycle line is noise there (#1250).
+    logger.debug(`Database disconnected from dialect: ${this.dialect.name}`);
   }
 
   /**

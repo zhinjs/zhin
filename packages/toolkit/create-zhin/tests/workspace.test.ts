@@ -4,6 +4,7 @@ import path from 'node:path'
 import { parse } from 'yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
+import { CREATE_BOT_SCRIPTS } from '../src/scripts'
 import type { InitOptions } from '../src/types'
 import { scaffoldDependencyRange } from '@zhin.js/scaffold-wizard'
 import { definePage } from '../../../console/plugin-contract/src/index.js'
@@ -280,6 +281,8 @@ describe('createWorkspace', () => {
     }
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
     expect(Object.keys(pkg.scripts).filter((name) => name.startsWith('pm2:'))).toEqual([])
+    // The base set `zhin migrate` also gives upgraded projects (#1250).
+    expect(pkg.scripts).toEqual(CREATE_BOT_SCRIPTS)
     expect(pkg.devDependencies).not.toHaveProperty('pm2')
     const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
     expect(readme).toContain('npx zhin service install')

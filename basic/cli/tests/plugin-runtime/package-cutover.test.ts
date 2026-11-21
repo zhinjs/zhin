@@ -110,7 +110,6 @@ describe('package cutover', () => {
           "private": false,
           "scripts": {
             "build": "pnpm run zhin:build",
-            "daemon": "zhin start --mode production --no-watch",
             "dev": "zhin start --foreground --watch source config",
             "prepack": "pnpm run zhin:build",
             "prepublishOnly": "pnpm run zhin:build",

@@ -1,14 +1,26 @@
 /**
- * Start scripts a migrated project gets (ADR 0054 §6), matching `create-zhin-app`: `zhin start`
+ * Start scripts a migrated project gets (ADR 0054 §6), the same as `create-zhin-app`: `zhin start`
  * is the entry; `zhin runtime start` stays an accepted alias of `zhin start --foreground` and is
- * never rewritten.
+ * never rewritten. No `daemon` script: the scaffold has none (`zhin start` alone runs in the
+ * background; #1250).
  */
 export const RECOMMENDED_START_SCRIPTS = Object.freeze({
   dev: 'zhin start --foreground --watch source config',
   // Foreground: containers, systemd units and PM2 own the process.
   start: 'zhin start --foreground --mode production --no-watch',
-  daemon: 'zhin start --mode production --no-watch',
 } as const);
+
+/**
+ * Every script `zhin migrate` adds to a project that lacks it: exactly the scripts of a new
+ * `create-zhin-app` project (`packages/toolkit/create-zhin/src/scripts.ts`, compared by a test).
+ * Existing scripts are kept unless they are a legacy form ({@link LEGACY_PROJECT_SCRIPTS}).
+ */
+export const RECOMMENDED_PROJECT_SCRIPTS: Readonly<Record<string, string>> = Object.freeze({
+  ...RECOMMENDED_START_SCRIPTS,
+  stop: 'zhin stop',
+  preview: 'zhin preview',
+  build: 'tsc --noEmit',
+});
 
 /**
  * Pre-gateway scripts replaced on migration. `zhin dev` is the link / unlink tool now. A bare
@@ -19,6 +31,12 @@ export const RECOMMENDED_START_SCRIPTS = Object.freeze({
 export const LEGACY_START_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   dev: Object.freeze(['zhin dev', 'zhin start', 'zhin start --daemon']),
   start: Object.freeze(['zhin start', 'zhin start --daemon']),
+});
+
+/** Legacy forms `zhin migrate` rewrites in a project. */
+export const LEGACY_PROJECT_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  ...LEGACY_START_SCRIPTS,
+  build: Object.freeze(['zhin build']),
 });
 
 function normalizeScript(script: string): string {
