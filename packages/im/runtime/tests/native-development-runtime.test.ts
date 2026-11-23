@@ -107,7 +107,7 @@ try {
       source,
       "import { statusMessage } from '../../src/status-command.js';\nexport default statusMessage;\n",
     );
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
     const modules: ModuleRuntime = runtime;
 
     expect((await runtime.load<{ default: string }>(source)).default).toBe('v1');
@@ -130,7 +130,7 @@ try {
       source,
       "import { statusMessage } from '#status-message';\nexport default statusMessage;\n",
     );
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
 
     expect((await runtime.load<{ default: string }>(source)).default).toBe('ready');
     expect(runtime.affectedSources(helper)).toEqual([helper, source]);
@@ -155,7 +155,7 @@ await writeFile(helper, "export const statusMessage = 'v1';\\n");
 await writeFile(bridge, "export { statusMessage } from './status-message.js';\\n");
 await writeFile(entry, "import { statusMessage } from '../../src/status-command.js';\\nexport default statusMessage;\\n");
 ensureTypeScriptSpecifierRemap();
-const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
 const first = (await runtime.load(entry)).default;
 await writeFile(helper, "export const statusMessage = 'v2';\\n");
 runtime.invalidate(helper);
@@ -172,14 +172,18 @@ process.stdout.write(JSON.stringify({ first, second }));
     expect(JSON.parse(stdout)).toEqual({ first: 'v1', second: 'v2' });
   });
 
-  nativeTypeScriptIt('reloads a package-name import of a mounted workspace Plugin with its importer (#1250)', async () => {
+  // `client-build`: the real instance wraps the runtime in ClientBuildModuleRuntime
+  // (createConsoleHostModules), which must forward the cross-package ports (#1250).
+  nativeTypeScriptIt.each(['direct', 'client-build'] as const)('reloads a package-name import of a mounted workspace Plugin with its importer (%s, #1250)', async (mode) => {
     const root = await fixture();
     const runtimeEntry = new URL('../src/index.ts', import.meta.url).href;
+    const clientBuildEntry = new URL('../../../console/pagemanager/src/client-build/index.ts', import.meta.url).href;
     const scenario = join(root, 'cross-package-scenario.mjs');
     await writeFile(scenario, `
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { NativeDevelopmentModuleRuntime } from ${JSON.stringify(runtimeEntry)};
+${mode === 'client-build' ? `import { ClientBuildModuleRuntime } from ${JSON.stringify(clientBuildEntry)};` : ''}
 const root = ${JSON.stringify(root)};
 const weather = join(root, 'plugins/weather');
 const shared = join(root, 'packages/shared');
@@ -197,12 +201,13 @@ await symlink(shared, join(root, 'node_modules/@test/shared'), 'dir');
 await writeFile(wttr, "export const forecast = 'v1';\\n");
 await writeFile(value, "export const value = 's1';\\n");
 await writeFile(entry, "import { forecast } from '@test/weather/wttr';\\nimport { value } from '@test/shared/value';\\nexport default forecast + ':' + value;\\n");
-const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+const native = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
+const runtime = ${mode === 'client-build' ? "new ClientBuildModuleRuntime(native, { async load() { throw new Error('no client modules'); } })" : 'native'};
 const first = (await runtime.load(entry)).default;
-// The committed generation mounts plugins/weather as a local child Plugin.
-runtime.updateRevisionableRoots([weather]);
+// The committed generation mounts plugins/weather as a local child Plugin (called as the HMR coordinator does).
+runtime.updateRevisionableRoots?.([weather]);
 const affected = runtime.affectedSources(wttr);
-const stale = runtime.staleDependents(value);
+const stale = runtime.staleDependents?.(value) ?? [];
 await writeFile(wttr, "export const forecast = 'v2';\\n");
 await runtime.invalidate(wttr);
 const second = (await runtime.load(entry)).default;
@@ -212,7 +217,7 @@ process.stdout.write(JSON.stringify({ first, second, affected, stale }));
 
     const { stdout } = await execFileAsync(
       process.execPath,
-      [...inheritedStripTypeArguments, '--import', tsxLoaderUrl, scenario],
+      [...inheritedStripTypeArguments, ...(mode === 'client-build' ? ['--conditions=development'] : []), '--import', tsxLoaderUrl, scenario],
       { cwd: process.cwd() },
     );
     const entry = join(root, 'tools/lookup/index.ts');
@@ -249,7 +254,7 @@ await writeFile(wttr, module('v1'));
 await writeFile(local, "export const local = 'l1';\\n");
 await writeFile(lookup, "import { forecast, state } from '@test/weather/wttr';\\nimport { local } from './local.ts';\\nexport default { value: forecast + ':' + local, state };\\n");
 await writeFile(other, "import { forecast, state } from '@test/weather/wttr';\\nexport default { value: forecast, state };\\n");
-const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
 await runtime.load(lookup);
 await runtime.load(other);
 runtime.updateRevisionableRoots([weather]);
@@ -316,7 +321,7 @@ process.stdout.write(JSON.stringify(steps));
     await writeFile(mts, 'export default 1;\n');
     await writeFile(cts, "module.exports = require('./helper.cjs');\n");
     await writeFile(cjsHelper, 'module.exports = 2;\n');
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
 
     expect((await runtime.load<{ default: number }>(mts)).default).toBe(1);
     expect((await runtime.load<{ default: number }>(cts)).default).toBe(2);
@@ -337,7 +342,7 @@ process.stdout.write(JSON.stringify(steps));
       source,
       "import { statusMessage } from '../../src/status-message.js';\nexport default statusMessage;\n",
     );
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
     await runtime.load(source);
 
     await writeFile(source, 'export default {;\n');
@@ -360,7 +365,7 @@ process.stdout.write(JSON.stringify(steps));
       source,
       "import { statusMessage } from '../../src/first-message.js';\nexport default statusMessage;\n",
     );
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
     await runtime.load(source);
 
     runtime.beginGeneration();
@@ -392,7 +397,7 @@ process.stdout.write(JSON.stringify(steps));
       source,
       "import { statusMessage } from '../../src/status-message.js';\nexport default statusMessage;\n",
     );
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
 
     await runtime.load(source);
     expect(runtime.affectedSources(helper)).toEqual([helper, source]);
@@ -455,7 +460,7 @@ process.stdout.write(JSON.stringify(steps));
 
   it('keeps direct capabilities local and escalates support modules before they are indexed', async () => {
     const root = await fixture();
-    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, dependencyTracking: 'eager' });
 
     expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.tsx'))).toBe(false);

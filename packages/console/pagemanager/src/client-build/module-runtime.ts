@@ -22,8 +22,20 @@ export class ClientBuildModuleRuntime implements ModuleRuntime {
     return this.server.invalidate?.(source);
   }
 
+  prepareInvalidation(): Promise<void> {
+    return this.server.prepareInvalidation?.() ?? Promise.resolve();
+  }
+
   affectedSources(source: string): readonly string[] {
     return this.server.affectedSources?.(source) ?? [source];
+  }
+
+  staleDependents(source: string): readonly string[] {
+    return this.server.staleDependents?.(source) ?? [];
+  }
+
+  updateRevisionableRoots(roots: readonly string[]): void {
+    this.server.updateRevisionableRoots?.(roots);
   }
 
   requiresProcessRestart(source: string): boolean {
