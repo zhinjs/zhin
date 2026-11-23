@@ -214,7 +214,7 @@ Server-side TSX only transpiles JSX — **you can't `import './card.css'`**, and
 ### Tables, Markdown and code blocks
 
 ```tsx
-import { Table, Checkbox, Switch, Button, Markdown, CodeBlock } from '@zhin.js/components';
+import { Table, Checkbox, Switch, Button, MarkdownView, CodeBlock } from '@zhin.js/components';
 
 const report = <Table
   headers={['Task', 'Done', 'Notify', 'Status']}
@@ -224,13 +224,13 @@ const report = <Table
   ]}
 />;
 
-const article = <Markdown source={'## Checklist\n\n- [x] Smoke test passed\n- [ ] Awaiting release'} />;
+const article = <MarkdownView source={'## Checklist\n\n- [x] Smoke test passed\n- [ ] Awaiting release'} />;
 const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</strong>}
   source={'const ready = true;\nconsole.log(ready);'} />;
 ```
 
 - `Checkbox`, `Radio`, `Switch` and `Button` only **display** state and have no click events. For interaction use `<button onClick>` above.
-- `Markdown` renders a string into themed headings, lists, quotes and tables; fenced code goes to `CodeBlock` (language label, highlighting, optional line numbers).
+- `MarkdownView` renders a string into themed headings, lists, quotes and tables; fenced code goes to `CodeBlock` (language label, highlighting, optional line numbers).
 - `TableRow` and `TableCell` compose tables freely; `List` supports ordered, unordered and nested lists.
 
 ### Tailwind utilities
@@ -369,7 +369,7 @@ Lowercase tags map to segment types and their attributes to segment data, with t
 
 - `<image src={...}>` takes a URL, path, base64 or `MediaRef`; `<image media={...} />` also works.
 - `<card {...payload} />` is a platform-native card handled by the adapter — **not** the library's `Card`.
-- `<markdown>` outputs a Markdown segment — **not** the library's `Markdown`.
+- `<markdown>` outputs a Markdown segment — **not** the library's `MarkdownView`.
 
 ### Middleware context
 

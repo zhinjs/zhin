@@ -10,7 +10,7 @@ import {
 
 /**
  * Plugin Runtime wiring:
- * - `commands/roulette` and the `轮盘` alias middleware share one action runner.
+ * - `commands/roulette` (also reached as 「轮盘 开局」 through its `match`) runs every action.
  * - `middlewares/roulette-fire` lets the player on turn just say 「开枪」.
  * - Sessions use the host database when installed, otherwise memory.
  * - `schedules/deadlines` enforces turn and lobby timeouts and posts the result.
@@ -27,9 +27,8 @@ export default defineGamePlugin<RouletteServices, RouletteSessionRow, Partial<Ro
     title: '俄罗斯轮盘',
     icon: '🔫',
     description: '多人轮流开枪，中弹者输；可按群开启禁言惩罚',
-    commandPrefix: '/轮盘',
     quickStart: '开局',
-    aliases: ['轮盘赌', 'roulette'],
+    aliases: ['轮盘赌', 'roulette', '轮盘'],
     menus: [
       { id: 'open', label: '🎮 开局' },
       { id: 'join', label: '🙋 加入' },

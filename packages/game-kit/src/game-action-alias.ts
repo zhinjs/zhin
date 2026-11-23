@@ -74,6 +74,22 @@ const DICE_ACTIONS: Record<string, string> = {
   结束: 'quit',
 };
 
+const BJ_ACTIONS: Record<string, string> = {
+  start: 'start',
+  continue: 'continue',
+  hit: 'hit',
+  stand: 'stand',
+  quit: 'quit',
+  help: 'help',
+  开始: 'start',
+  继续: 'continue',
+  要牌: 'hit',
+  停牌: 'stand',
+  放弃: 'quit',
+  退出: 'quit',
+  帮助: 'help',
+};
+
 function lookup(map: Record<string, string>, raw: string): string {
   const t = raw.trim();
   if (!t) return 'help';
@@ -84,45 +100,21 @@ export function normalizeTttAction(raw: string): string {
   return lookup(TTT_ACTIONS, raw);
 }
 
-/** 判断 normalize*Action 的结果是否为已知 action（未知名应放行，避免劫持普通聊天） */
-function isKnownAction(map: Record<string, string>, action: string): boolean {
-  return Object.values(map).includes(action);
-}
-
-export function isTttAction(action: string): boolean {
-  return isKnownAction(TTT_ACTIONS, action);
-}
 
 export function normalizeAdvAction(raw: string): string {
   return lookup(ADV_ACTIONS, raw);
-}
-
-export function isAdvAction(action: string): boolean {
-  return isKnownAction(ADV_ACTIONS, action);
 }
 
 export function normalizeRpsAction(raw: string): string {
   return lookup(RPS_ACTIONS, raw);
 }
 
-export function isRpsAction(action: string): boolean {
-  return isKnownAction(RPS_ACTIONS, action);
-}
-
 export function normalizeGuessAction(raw: string): string {
   return lookup(GUESS_ACTIONS, raw);
 }
 
-export function isGuessAction(action: string): boolean {
-  return isKnownAction(GUESS_ACTIONS, action);
-}
-
 export function normalizeDiceAction(raw: string): string {
   return lookup(DICE_ACTIONS, raw);
-}
-
-export function isDiceAction(action: string): boolean {
-  return isKnownAction(DICE_ACTIONS, action);
 }
 
 const CHAIN_ACTIONS: Record<string, string> = {
@@ -167,14 +159,32 @@ export function normalizeChainAction(raw: string): string {
   return lookup(CHAIN_ACTIONS, raw);
 }
 
-export function isChainAction(action: string): boolean {
-  return isKnownAction(CHAIN_ACTIONS, action);
-}
-
-export function isRiddleAction(action: string): boolean {
-  return isKnownAction(RIDDLE_ACTIONS, action);
-}
-
 export function normalizeRiddleAction(raw: string): string {
   return lookup(RIDDLE_ACTIONS, raw);
+}
+
+export function normalizeBjAction(raw: string): string {
+  return lookup(BJ_ACTIONS, raw);
+}
+
+const GAME_ACTIONS = {
+  ttt: TTT_ACTIONS,
+  adv: ADV_ACTIONS,
+  rps: RPS_ACTIONS,
+  guess: GUESS_ACTIONS,
+  dice: DICE_ACTIONS,
+  chain: CHAIN_ACTIONS,
+  riddle: RIDDLE_ACTIONS,
+  bj: BJ_ACTIONS,
+} as const;
+
+/** A game whose action words live in this table. */
+export type GameActionTableId = keyof typeof GAME_ACTIONS;
+
+/**
+ * Every action word (English and Chinese) the game's table knows — the words a short game entry
+ * (`gameCommandMatch`) accepts after its keyword (#1250 第 82 批).
+ */
+export function gameActionWords(game: GameActionTableId): readonly string[] {
+  return Object.freeze(Object.keys(GAME_ACTIONS[game]));
 }

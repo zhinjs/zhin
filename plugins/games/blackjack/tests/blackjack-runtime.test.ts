@@ -52,4 +52,15 @@ describe('@zhin.js/plugin-blackjack runtime (slice-2)', () => {
     expect((result as unknown[]).some((part) =>
       (part as { type?: string }).type === 'keyboard')).toBe(true);
   });
+
+  it('short words: `二十一点 开会` is no command, `二十一点 要牌` plays (#1250 第 82 批)', async () => {
+    const pattern = gameCommand.match!;
+    expect(pattern.test('二十一点 开会')).toBe(false);
+    const run = (text: string) => invokeGameCommand(gameCommand, { ...emptyCtx, params: { action: '' }, match: pattern.exec(text)! });
+    expect(plainTextFromSendContent(await run('21点 要牌') as GameReply)).not.toContain('21 点');
+    expect(plainTextFromSendContent(await run('二十一点 开始') as GameReply)).toContain('21 点');
+    const hit = plainTextFromSendContent(await run('二十一点 要牌') as GameReply);
+    expect(hit).not.toBe(BJ_HELP);
+    expect(String(await run('二十一点'))).toBe(BJ_HELP);
+  });
 });

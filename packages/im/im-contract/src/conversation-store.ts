@@ -50,11 +50,12 @@ function projectMessage(state: MessageProjection, entry: SequencedConversationEv
 
 function projectedMessage(state: MessageProjection): SequencedConversationMessage | undefined {
   if (!state.created) return undefined;
-  const { segments: _segments, contentStatus: _status, outboundTextDigest: _digest, revision: _revision, ...identity } = state.created.message;
+  const { segments: _segments, contentStatus: _status, outboundTextDigest: _digest, inboundTextDigest: _inbound, revision: _revision, ...identity } = state.created.message;
   const content = state.latest ?? state.created.message;
   return { sequence: state.created.sequence, message: freezeConversationData({ ...identity, segments: content.segments,
     ...(content.contentStatus ? { contentStatus: content.contentStatus } : {}),
     ...(content.outboundTextDigest ? { outboundTextDigest: content.outboundTextDigest } : {}),
+    ...(content.inboundTextDigest ? { inboundTextDigest: content.inboundTextDigest } : {}),
     ...(content.revision === undefined ? {} : { revision: content.revision }),
     ...(state.recalled ? { recalled: true as const } : {}),
   }) };

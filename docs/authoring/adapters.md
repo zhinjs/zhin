@@ -166,13 +166,23 @@ SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 
 
 | 组 | 内容 |
 |---|---|
-| `messaging` | `segments`（即原 `AdapterDefinition.segments`，二者是同一份声明，写一处即可）、`maxLength`、`mention`、`quote`、`reaction`、`recall`、`edit`、`forward`、`maxMessagesPerTurn` |
+| `messaging` | `segments`（即原 `AdapterDefinition.segments`，二者是同一份声明，写一处即可）、`maxLength`、`mention`、`quote`、`reaction`、`recall`、`edit`、`forward`、`maxMessagesPerTurn`、`inboundTextAuthoredBySender`（见下） |
 | `scene` | `groupInfo`、`memberProfile`、`roles`（平台角色词到 `owner / admin / member`）、`platformStanding`（入站 `sender.platform` 上报 `standing` / `roles` / `permissions` 中的哪些，ADR 0056 §1）、`selfStanding`（机器人自身在会话中的身份，由 `management.inspectSelfStanding` 查询、框架按会话缓存，供 `bot:*` permit；声明了就必须实现该方法）、`mute`、`maxMembers`、`card`、`title` |
 | `actions` | Bot 能主动做的事：`reaction`、`poke`、`mute`、`unmute`、`muteAll`、`kick`、`setCard`、`setTitle`、`recall`、`essence`、`announce`、`invite`、`quoteReply`、`forward`；每项 `{ scopes, requiresRole?, params? }`，未列出即不支持 |
 | `events` | `emit`（会发出的标准事件名）、`liveDanmaku`（即原 `capabilities: ['liveDanmaku']`） |
 | `feedback` | 「正在输入」方式：`typing` / `reaction` / `status-message` / `none` |
 | `delivery` | `send`、`proactive`、`passiveWindow`、`rateLimitPerMinute`、`mediaMaxBytes`、`spool`、`requiresMessageSeq` |
 | `prompt` | `auto`（自动生成平台说明）、`text`（适配器自定义文本） |
+
+**`messaging.inboundTextAuthoredBySender`（ADR 0067 D8）**：声明本适配器入站的每个 `text` 段都是发送者亲笔写的——转发、引用、卡片、合并转发、inline bot 结果都表示为非文本段（`forward`、`json`、媒体等）、`replyTo`，或在入站消息上加 `forwarded: true` 标记；纯文本视图 `content` 与文本段一致，不往里拼 embed 标题、贴纸名、文件名之类的占位文字。只有声明了它的适配器，核心才会为私聊入站消息记下「原文证据」，让发起人自己更早的原文消息在下一回合不计外部内容来源；没声明一律按外部内容处理（失败关闭）。逐项核实入站转换后再声明；平台给不出转发标记、或把卡片 / 文件名转成文本的适配器不要声明。目前声明的有 sandbox、telegram（转发、`via_bot`、自动转发、跨会话引用带 `forwarded`）、onebot11、napcat、discord。
+
+声明这一位之前逐项核实（有一项做不到就不要声明）：
+
+1. **文本段只来自发送者亲手输入**：`text` 段只取平台上「本人输入框里打的字」（如 Telegram 的 `text` / `caption`、Discord 的 `content`）；卡片标题、embed、贴纸名、文件名、按钮文字、语音转写、系统提示都不进文本段，也不拼进纯文本视图 `content`（`content` 必须等于文本段拼接）。
+2. **转发、引用、卡片、嵌入、机器人代发都要显式表示**：平台能标出的转发（含合并转发、自动转发、inline bot 结果、跨会话引用）在入站消息上加 `forwarded: true`；引用 / 回复带 `replyTo`；卡片（`json` / `xml` / `markdown`）、合并转发、媒体保留为非文本段，绝不展开成 `text` 段；机器人 / webhook 代发的消息要么不入站，要么带 `forwarded`。
+3. **字符串协议格式失败关闭**：平台还能以字符串协议上报（如 OneBot / NapCat 的 CQ 字符串格式）时，不要把原串包成一个 `text` 段；纯文本视图剥掉控制码，引用解析为 `replyTo`，只要出现引用以外的任何码（含 at / face）、语法不合规的串，或多个文本字段互不一致，就加 `forwarded: true`；文本视图与来源判定必须读同一个字段。
+4. **有适配器级测试**：用 `plugins/adapters/test-utils/inbound-evidence.ts` 的 `recordsInboundTextEvidence` 把 `receive` 收到的载荷送进真实的 `ConversationRuntime`，断言卡片、转发、引用不写证据，普通私聊纯文本写证据。
+5. **平台变更后重新核实**：平台新增「以文本形式到达的转发」或新消息类型时，先核实再保留声明。
 
 下面是一个 icqq 风格的例子：
 

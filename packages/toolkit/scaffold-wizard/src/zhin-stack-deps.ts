@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
@@ -217,7 +218,7 @@ export function findInstalledZhinStackIncompatibilities(
   cwd: string,
   pkg: PackageJsonLike,
   config: Record<string, unknown>,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): ZhinStackIncompatibility[] {
   const issues: ZhinStackIncompatibility[] = [];
   const zhinVersion = readInstalledVersion(cwd, 'zhin.js') ?? getDeclaredPackageVersion(pkg, 'zhin.js');
@@ -271,7 +272,7 @@ export function diagnoseZhinStackDependencies(
   cwd: string,
   config: Record<string, unknown>,
   pkg?: PackageJsonLike,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: Locale = 'zh-CN'
 ): ZhinStackDiagnosis {
   const required = getRequiredZhinDependenciesForConfig(config);
   const packageJsonPath = path.join(cwd, 'package.json');

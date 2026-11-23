@@ -8,6 +8,7 @@
  */
 import { Command } from 'commander';
 import { join } from 'node:path';
+import { environmentReferencesIn, parseEnvUri } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { hostGet, hostPost, loadHostHttpConfig, type HostFetchResult, type HostHttpConfig } from '../utils/host-http.js';
@@ -67,12 +68,12 @@ interface InferenceViewSlice {
   readonly statuses?: Readonly<Record<string, { readonly status?: string; readonly environment?: 'present' | 'missing' }>>;
 }
 
-/** Variable names an `env://NAME` source or a `${NAME…}` expression reads. */
+/** Variable names an `env://NAME` source or the `${NAME}` / `${NAME:-…}` references in an expression read. */
 function referencedVariables(source: string | undefined): string[] {
   if (!source) return [];
-  const direct = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(source)?.[1];
+  const direct = parseEnvUri(source);
   if (direct) return [direct];
-  return [...new Set([...source.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/gu)].map(match => match[1]!))];
+  return [...new Set(environmentReferencesIn(source).map(reference => reference.variable))];
 }
 
 const STATUS_TEXT: Readonly<Record<string, string>> = Object.freeze({

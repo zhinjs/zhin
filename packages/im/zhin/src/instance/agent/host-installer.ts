@@ -21,6 +21,7 @@ import { createOwnerApprovalMigrationProvider } from '@zhin.js/agent/runtime';
 import { pluginDataMigrationProviderToken, rootPluginId, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { getProcessPeerRegistry } from '@zhin.js/adapter';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
+import { createConversationPresentationResolver } from './conversation-presentation.js';
 import { installAgentPersistence } from '@zhin.js/agent/runtime';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
 import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
@@ -32,9 +33,11 @@ import {
   createVenueProjector,
   createVenueRegistry,
   venueProjectorToken,
+  untrustedContent,
   venueRegistryToken,
 } from '@zhin.js/core';
 import {
+  createIngressRouteFacade,
   groupRuleViolationToken,
   imOperationResourcesToken,
   ingressRouteToken,
@@ -62,7 +65,9 @@ import {
   botBootstrapFilenames,
   hasBotBootstrapFile,
   describeApprovalChannelConflicts,
+  createRuntimeManagementCommands,
 } from '@zhin.js/agent';
+import { commandFeatureId } from '@zhin.js/command';
 import {
   AgentRuntime,
   agentOperationResourcesToken,
@@ -112,7 +117,10 @@ export interface InstallAgentHostOptions {
   readonly selfChangeApply?: import('../self-change-apply.js').HostSelfChangeApply;
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
-  /** Process-owned Snapshot reader; local operations hold an exact generation lease. */
+  /**
+   * Process-owned Snapshot reader; local operations hold an exact generation lease. #1250: also the
+   * source of the real command prefix and language of out-of-turn cards (IM approval, group rules).
+   */
   readonly snapshots?: SnapshotReader;
   readonly im: ImRuntime;
   readonly projectRoot: string;
@@ -160,7 +168,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
   // #1250: one board across generations — a retained generation keeps its MCP clients.
   const mcpStatus = new HostMcpStatusBoard({ onEvent: logMcpStatusEvent });
-  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, watchProjectFiles }) => {
+  const conversationPresentation = createConversationPresentationResolver(() => options.snapshots);
+  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature, hasFeature, watchProjectFiles }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -285,11 +294,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         protectedPaths: hostProtectedPaths,
         pluginRoots: selfChangePluginRoots,
         ports: selfChangeApplyHost.ports(createSelfChangeGenerationPorts({
+          // #1250: a report quotes the change's summary and paths (model text): sent literal, never
+          // template-compiled.
           send: (target, text) => options.im.endpoints.send({
             adapter: target.adapter,
             endpointKey: target.endpointKey,
             conversation: target.conversation,
-            content: text,
+            content: untrustedContent(text, { source: 'agent:self-change-report' }),
           }),
           resolveOwner: options.resolveEndpointOwner,
           control: () => zhinAgent.controlPlane,
@@ -316,12 +327,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       queue: zhinAgent.toolApprovals,
       settings: () => resolveToolHardGateImApproval(zhinAgent.config.toolHardGate?.imApproval),
       resolveOwner: options.resolveEndpointOwner,
-      send: async (target, text) => {
+      // #1250: the card spells `approve <id>` with the recipient Endpoint's real prefix, in their language.
+      resolvePresentation: target => conversationPresentation({
+        platform: target.platform,
+        endpoint: target.endpointKey,
+        conversation: target.conversation,
+        ...(target.conversation.kind === 'private' ? { recipientId: target.conversation.id } : {}),
+      }),
+      // The card keeps every user / model / plugin value as a literal piece (#1250).
+      send: async (target, content) => {
         await options.im.endpoints.send({
           adapter: target.platform,
           endpointKey: target.endpointKey,
           conversation: target.conversation,
-          content: text,
+          content,
         });
       },
       onDeliveryError: (error, target) => {
@@ -416,10 +435,36 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: agentFoundation,
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,
+      resolveConversationPresentation: conversationPresentation,
+      // #1250 第 85 批: the management paths take only a lease this Host's own dispatch handed out.
+      holdsDispatchLease: lease => operationResources.holdsDispatchLease(lease),
       withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
       withModelScope: (input, operation) => options.inference.withDeploymentModels({ ...input, service }, operation),
     });
-    resources.provide(ingressRouteToken, ingressRoute);
+    // #1250 第 85 批: a Root-private token (plugin scopes cannot read it; the IM runtime reads it through
+    // the Root's real SnapshotStore), and even so it carries only the IM runtime's hooks (`preRoute` /
+    // `shouldRouteBeforeDispatch` / `route`); the route object itself, its options (the Agent runtime,
+    // the SnapshotStore) and its Host-only management paths stay here.
+    resources.provide(ingressRouteToken, createIngressRouteFacade(ingressRoute));
+    // #1250 第 83 批: the Agent management commands (`models`, `health`, `tree`, `fork`, `compact`,
+    // `reset`, and with semantic memory `memory` / `memory forget`) are Root commands: menu, help,
+    // near-miss hints, permits and the `command_replied` outcome come from the command dispatch.
+    if (hasFeature?.(commandFeatureId)) {
+      for (const command of createRuntimeManagementCommands({
+        zhinAgent,
+        semanticMemory: semanticMemory ?? null,
+        // #1250 第 84 批: only the dispatch lease ports this Host's own operation resources issued (the
+        // `im` port provided above) count; a port from another factory (a plugin's) does not.
+        isDispatchLease: port => operationResources.isDispatchLease(port),
+        // #1250 第 85 批: this Host wired those resources (`imOperationResourcesToken` above). The token is
+        // Root-private, so the commands cannot see it in the run-time snapshot; the Host declares it.
+        hostResourcesInstalled: true,
+        // Each command retains the generation that dispatched it (an operation resource bound to the
+        // IM runtime's own lease for the message), never whichever generation is current by then.
+        open: (message, dispatch, run) => ingressRoute.runManagementOperation(message, dispatch, run),
+        clear: async (message, dispatch) => { await ingressRoute.clearAsCommand(message, dispatch); },
+      })) addFeature(commandFeatureId, command.name, command.definition);
+    }
     // #1012 A9 方案②：插件旧欢迎（group-suite）发送前询问；会话开启 welcome.enabled 时让给 MemberLifecycle。
     const memberWelcomeOwner: MemberWelcomeOwner = Object.freeze({
       ownsWelcome: (conversation: ConversationRef) => ingressRoute.ownsMemberWelcome(conversation),

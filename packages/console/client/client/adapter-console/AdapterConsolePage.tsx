@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ConsoleEndpointSummary } from '@zhin.js/console-protocol';
+import type { ConsoleEndpointSummary, ConsoleLocale } from '@zhin.js/console-protocol';
 import { consoleRpc, getApiBase, getToken, pluginRpc, PluginRpcError } from '../console-utils/remoteApi.js';
 import {
   adapterConsoleLocale,
   adapterConsoleText as t,
   pickI18n,
-  type AdapterConsoleLocale,
 } from './messages.js';
 import {
   Button,
@@ -73,7 +72,7 @@ const PAGE_POLL_MS = 6_000;
 const EXPIRY_WARNING_SECONDS = 10;
 
 /** 把失败说成用户能据此行动的话；原始信息只放在技术详情里。 */
-function describeError(error: unknown, locale: AdapterConsoleLocale, context: string): string {
+function describeError(error: unknown, locale: ConsoleLocale, context: string): string {
   if (error instanceof PluginRpcError) {
     if (error.code === 'forbidden') return t(locale, '{0}：没有权限。请联系管理员，或换用有权限的令牌。', context);
     if (error.code === 'unavailable' || error.code === 'timeout') return t(locale, '{0}：Host 暂时无法响应，请稍后重试。', context);
@@ -113,12 +112,12 @@ function runtimeLoginMatches(task: AdapterConsoleLoginTask, runtime: AdapterCons
     && endpoint.canonicalId === identity.canonicalId && endpoint.instanceId === identity.instanceId && endpoint.epoch === identity.epoch && endpoint.incarnationId === identity.incarnationId);
 }
 
-function operationLabel(action: AdapterConsoleExecution['action'], locale: AdapterConsoleLocale): string {
+function operationLabel(action: AdapterConsoleExecution['action'], locale: ConsoleLocale): string {
   const labels = { add: '保存', update: '保存', start: '启动', stop: '停止', remove: '删除', replace: '替换' };
   return t(locale, labels[action] ?? '操作');
 }
 
-function executionLabel(execution: AdapterConsoleExecution, locale: AdapterConsoleLocale): string {
+function executionLabel(execution: AdapterConsoleExecution, locale: ConsoleLocale): string {
   if (execution.status === 'failed') return execution.code === 'endpoint_cleanup_failed'
     ? t(locale, '关闭未完成') : t(locale, '{0}失败', operationLabel(execution.action, locale));
   return t(locale, execution.status === 'pending' ? '操作进行中' : '已完成');
@@ -140,7 +139,7 @@ function sanitizeAddValues(
 
 function renderConfigInput({ field, locale, id, value, disabled, placeholder, onValueChange, allowDefault = true }: {
   field: AdapterConsoleFieldView;
-  locale: AdapterConsoleLocale;
+  locale: ConsoleLocale;
   id?: string;
   value: string;
   disabled: boolean;
@@ -170,7 +169,7 @@ function connectionTone(endpoint: ConsoleEndpointSummary | undefined, known: boo
   return 'danger';
 }
 
-function connectionLabel(endpoint: ConsoleEndpointSummary | undefined, locale: AdapterConsoleLocale, known: boolean): string {
+function connectionLabel(endpoint: ConsoleEndpointSummary | undefined, locale: ConsoleLocale, known: boolean): string {
   if (!known) return t(locale, '状态未知');
   if (!endpoint) return t(locale, '离线');
   if (endpoint.pendingLogin) return t(locale, '等待登录');
@@ -189,7 +188,7 @@ function connectionLabel(endpoint: ConsoleEndpointSummary | undefined, locale: A
   return t(locale, '离线');
 }
 
-function loginTypeLabel(type: string, locale: AdapterConsoleLocale): string {
+function loginTypeLabel(type: string, locale: ConsoleLocale): string {
   switch (type) {
     case 'qrcode': return t(locale, '二维码');
     case 'slider': return t(locale, '滑块验证');
@@ -1001,7 +1000,7 @@ function useAdapterConsoleModel({ adapterKey, refreshKey, isCurrent, autoPoll = 
 /** One configuration field of the add form or the account editor. */
 function renderAccountField({ field, locale, adapterKey, value, disabled, allowDefault, onValueChange }: {
   field: AdapterConsoleFieldView;
-  locale: AdapterConsoleLocale;
+  locale: ConsoleLocale;
   adapterKey: string;
   value: string;
   disabled: boolean;
@@ -1045,7 +1044,7 @@ function renderAccountField({ field, locale, adapterKey, value, disabled, allowD
 }
 
 /** Field list with group headings (fields of one group stay together, in first-seen group order). */
-function renderFieldBlock(fields: readonly AdapterConsoleFieldView[], locale: AdapterConsoleLocale, adapterKey: string, render: (field: AdapterConsoleFieldView) => React.ReactNode) {
+function renderFieldBlock(fields: readonly AdapterConsoleFieldView[], locale: ConsoleLocale, adapterKey: string, render: (field: AdapterConsoleFieldView) => React.ReactNode) {
   const order: string[] = [];
   const byGroup = new Map<string, AdapterConsoleFieldView[]>();
   for (const field of fields) {

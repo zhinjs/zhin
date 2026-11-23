@@ -67,6 +67,9 @@ describe('@zhin.js/plugin-code-runner', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(resolveCodeRunnerBackend({ endpoint: '${CODE_RUNNER_ENDPOINT}' })).toBeUndefined();
     expect(resolveCodeRunnerBackend({ endpoint: '  ' })).toBeUndefined();
+    // The shared parser: a token that only looks like a reference (`${1A}`) is a real token.
+    expect(resolveCodeRunnerBackend({ endpoint: 'https://x', token: '${CODE_RUNNER_TOKEN:-}' })).toEqual({ provider: 'piston', endpoint: 'https://x' });
+    expect(resolveCodeRunnerBackend({ endpoint: 'https://x', token: '${1A}' })).toEqual({ provider: 'piston', endpoint: 'https://x', token: '${1A}' });
   });
 
   it.each([

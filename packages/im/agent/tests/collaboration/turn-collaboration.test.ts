@@ -167,7 +167,13 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
     expect(stripNoReplyOutput([{ type: 'text', content: '这是一只橘猫。 [[no_reply]]' }, { type: 'text', content: '`[[no_reply]]`' }]))
       .toEqual([{ type: 'text', content: '这是一只橘猫。' }]);
     expect(supplementFailureLine('zh-CN')).toBe('补充：后台任务没有完成。');
-    expect(supplementFailureLine('en-US')).toBe('Update: the background task did not finish.');
+    expect(supplementFailureLine('en')).toBe('Update: the background task did not finish.');
+  });
+
+  it('leads a supplement in the turn language and never expands braces in its text (#1250 第 81 批)', () => {
+    expect(asSupplement({ status: 'completed', content: '', reply: '结果是 {count} 个' }, 'zh-CN')?.reply).toBe('补充：结果是 {count} 个');
+    expect(asSupplement({ status: 'completed', content: '', reply: 'it is {text}' }, 'en')?.reply).toBe('Update: it is {text}');
+    expect(asSupplement({ status: 'completed', content: '', reply: '更正：是 3 个' }, 'en')?.reply).toBe('更正：是 3 个');
   });
 
   it('filters the marker out of a streamed snapshot without rewriting what may already be shown (#1250 第 56 批)', () => {
@@ -272,7 +278,7 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
   it('marks new content as a supplement, in the human\'s language, without doubling an existing lead', () => {
     expect(asSupplement({ status: 'completed', content: 'x', reply: '它脖子上还有一个铃铛。' }, 'zh-CN')?.reply).toBe('补充：它脖子上还有一个铃铛。');
     expect(asSupplement({ status: 'completed', content: 'x', reply: '补充：它还有铃铛。' }, 'zh-CN')?.reply).toBe('补充：它还有铃铛。');
-    expect(asSupplement({ status: 'completed', content: 'x', reply: 'It also wears a bell.' }, 'en-US')?.reply).toBe('Update: It also wears a bell.');
+    expect(asSupplement({ status: 'completed', content: 'x', reply: 'It also wears a bell.' }, 'en')?.reply).toBe('Update: It also wears a bell.');
     expect(asSupplement({ status: 'budget_exceeded', content: 'x', reply: '部分结果' }, 'zh-CN')).toMatchObject({ status: 'budget_exceeded', reply: '补充：部分结果' });
   });
 
@@ -280,7 +286,7 @@ describe('engagement outcomes: a result after the request was answered (#1250 de
     const declined = { status: 'completed' as const, content: '', reply: '[[no_reply]]' };
     expect(planSupplement(declined, { failures: false, locale: 'zh-CN' })).toEqual({ kind: 'nothing' });
     expect(planSupplement(declined, { failures: true, locale: 'zh-CN' })).toMatchObject({ kind: 'send', outcome: { status: 'completed', reply: '补充：后台任务没有完成。' } });
-    expect(planSupplement({ status: 'completed', content: '' }, { failures: true, locale: 'en-US' }))
+    expect(planSupplement({ status: 'completed', content: '' }, { failures: true, locale: 'en' }))
       .toMatchObject({ kind: 'send', outcome: { reply: 'Update: the background task did not finish.' } });
     // Stopped (user stop, hot reload): nothing reached the human, so the failure is not counted as told.
     expect(planSupplement({ status: 'cancelled', content: 'stopped' }, { failures: true, locale: 'zh-CN' })).toEqual({ kind: 'cancelled' });

@@ -168,7 +168,6 @@ describe('BaseSessionService', () => {
         title: 'Alpha',
         icon: 'A',
         description: 'Alpha game',
-        commandPrefix: '/alpha',
         quickStart: 'start',
       },
       tables: ['alpha_sessions'],

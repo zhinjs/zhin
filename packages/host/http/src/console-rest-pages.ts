@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HttpHost } from './http-host.js';
 import { readJsonBody } from './json-body.js';
+import { invalidLocaleResponse } from './locale-response.js';
 import { jsonResponse } from '@zhin.js/host-http-contract';
 import {
   MarketplaceDetailCache,
@@ -19,10 +20,10 @@ import {
 import type { ConsoleMcpConnectTestResult, ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   informativeKeywords,
-  isLocale,
   normalizePluginCategory,
   packageAuthorName,
   pickLocalizedText,
+  queryLocale,
   readPluginMarketplaceMetadata,
   type PluginLocalizedText,
 } from '@zhin.js/plugin-runtime';
@@ -455,8 +456,9 @@ function registerMarketplaceRoutes(
     const rawCategory = url.searchParams.get('category') || undefined;
     const category = rawCategory === undefined ? undefined : normalizePluginCategory(rawCategory) ?? rawCategory;
     const official = url.searchParams.get('official') ?? undefined;
-    const rawLocale = url.searchParams.get('locale');
-    const locale = isLocale(rawLocale) ? rawLocale : undefined;
+    // Absent: untranslated names; an unsupported or repeated `locale` is a 400 like every Console route.
+    const locale = url.searchParams.has('locale') ? queryLocale(url.searchParams) : undefined;
+    if (!locale && url.searchParams.has('locale')) return invalidLocaleResponse();
     const searchKeyword = q.trim().toLowerCase();
 
     try {

@@ -22,8 +22,9 @@ import {
   runtimeApprovalPolicy,
   runtimeImSessionKey,
 } from '@zhin.js/agent/runtime';
+import { chatFailureLine } from '@zhin.js/agent';
 import {
-  renderTriggerError,
+  renderChatTurnError,
   resolveTriggerTimeoutMs,
   routeSpecialistAgent,
   withTriggerTimeout,
@@ -215,7 +216,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const snapshot = { projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', capabilityProfile: () => ({}), connection }]]) };
     const signal = new AbortController().signal;
     const state = await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation: message.conversation, signal });
-    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
+    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: {} }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, contextState: state,
     });
@@ -240,7 +241,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const signal = new AbortController().signal;
     expect(await resolveRuntimeTurnContextState({ snapshot: unknownAccount as never, conversation: message.conversation, signal })).toBeUndefined();
     expect(await resolveRuntimeTurnContextState({ snapshot: { projections: new Map() }, conversation: message.conversation, signal })).toBeUndefined();
-    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: true, isTrusted: false } }, {
+    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { hostRole: 'owner' } }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
     });
@@ -266,13 +267,13 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(turnCapabilities.mock.calls[0]?.[0]).toBe(message.conversation.endpoint.id);
     expect(resolveRuntimeTurnCapabilities({ projections: new Map() }, message.conversation, undefined)).toBeUndefined();
 
-    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
+    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: {} }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, platformCapabilities: asAdmin,
     });
     expect(request.input.platformCapabilities).toBe(asAdmin);
     expect(request.input.platformCapabilities?.has('actions.mute')).toBe(true);
-    expect(createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
+    expect(createRuntimeTurnRequest({ message, text: 'hello', roles: {} }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
     }).input.platformCapabilities).toBeUndefined();
@@ -288,7 +289,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const signal = new AbortController().signal;
     const contextState = await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation, signal });
     expect(inspectGroupMember).toHaveBeenCalledExactlyOnceWith({ groupId: '100', userId: '8596238', signal });
-    expect(createRuntimeTurnAccess(message, { isMaster: false, isTrusted: false }, contextState).input)
+    expect(createRuntimeTurnAccess(message, {}, contextState).input)
       .toEqual({ contextState: { bot: { id: '8596238', platformRole } } });
   });
 
@@ -362,14 +363,14 @@ describe('canonical IM TurnRequest ingress', () => {
 
     await expect(resolveProductTurnIntent(
       message,
-      { isMaster: false, isTrusted: true },
+      { hostRole: 'trusted' },
       'supersede',
       resolver,
     )).resolves.toEqual({
       kind: 'steer', targetTurnId: 'turn-alice', authorizedBy: 'product_policy',
     });
     expect(resolver).toHaveBeenCalledWith(expect.objectContaining({
-      senderRoles: { isMaster: false, isTrusted: true },
+      senderRoles: { hostRole: 'trusted' },
       defaultIntent: { kind: 'supersede' },
     }));
   });
@@ -401,10 +402,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const signal = new AbortController().signal;
     const readConversationContext = vi.fn(async () => ({ blocks: [], cursor: 0 }));
     const commitConversationContext = vi.fn(async (_consumer: string, _cursor: number) => undefined);
-    const request = createRuntimeTurnRequest({ message, text: 'look closer', roles: {
-      isMaster: false,
-      isTrusted: true,
-    } }, {
+    const request = createRuntimeTurnRequest({ message, text: 'look closer', roles: { hostRole: 'trusted' } }, {
       traceId: 'trace-1',
       turnId: 'turn-1',
       signal,
@@ -448,7 +446,7 @@ describe('canonical IM TurnRequest ingress', () => {
           { key: 'ref-2', kind: 'forward', sourceId: 'forward-1' },
         ],
       },
-      session: { key: runtimeImSessionKey(createRuntimeTurnAccess(message, { isMaster: false, isTrusted: true }), '/workspace') },
+      session: { key: runtimeImSessionKey(createRuntimeTurnAccess(message, { hostRole: 'trusted' }), '/workspace') },
       policy: {
         permissions: ['trusted'],
         unattended: false,
@@ -482,20 +480,17 @@ describe('canonical IM TurnRequest ingress', () => {
     const options = { traceId: 't', turnId: 'u', signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } } as const;
     expect(() => createRuntimeTurnRequest({ message: makeMessage({
       content: 'x', sender: null, metadata: { endpoint: 'bot' },
-    }), text: 'x', roles: { isMaster: false, isTrusted: false } }, options)).toThrow('sender identity');
+    }), text: 'x', roles: {} }, options)).toThrow('sender identity');
     expect(() => createRuntimeTurnRequest({ message: makeMessage({
       content: 'x', sender: 'u', metadata: {},
-    }), text: 'x', roles: { isMaster: false, isTrusted: false } }, options)).toThrow('endpoint identity');
+    }), text: 'x', roles: {} }, options)).toThrow('endpoint identity');
   });
 
   it('keeps platform role strings out of the principal roles (ADR 0056)', () => {
     const message = makeMessage({
       content: 'x', sender: { id: 'u', roles: ['owner', 'admin'] }, metadata: { endpoint: 'bot' },
     });
-    const request = createRuntimeTurnRequest({ message, text: 'x', roles: {
-      isMaster: false,
-      isTrusted: true,
-    } }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
+    const request = createRuntimeTurnRequest({ message, text: 'x', roles: { hostRole: 'trusted' } }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
     expect(request.principal.roles).toEqual(['trusted']);
     expect(request.policy.permissions).toEqual(['trusted']);
   });
@@ -504,10 +499,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const message = makeMessage({
       content: '继续处理', sender: { id: 'sponsor' }, metadata: { endpoint: 'member-bot' },
     });
-    const request = createRuntimeTurnRequest({ message, text: '继续处理', roles: {
-      isMaster: false,
-      isTrusted: true,
-    } }, {
+    const request = createRuntimeTurnRequest({ message, text: '继续处理', roles: { hostRole: 'trusted' } }, {
       traceId: 'trace-workroom', turnId: 'turn-workroom',
       signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {},
       intent: { kind: 'new' },
@@ -534,10 +526,7 @@ describe('canonical IM TurnRequest ingress', () => {
         turnIntent: { kind: 'follow_up', targetTurnId: 'active-turn' },
       },
     });
-    const request = createRuntimeTurnRequest({ message, text: 'more detail', roles: {
-      isMaster: false,
-      isTrusted: false,
-    } }, {
+    const request = createRuntimeTurnRequest({ message, text: 'more detail', roles: {} }, {
       traceId: 't',
       turnId: 'u',
       signal: new AbortController().signal,
@@ -632,7 +621,8 @@ describe('canonical IM interaction adapter', () => {
           if (request.type === 'select') {
             // Timeouts must surface as timed_out rather than defaulting to a rejection.
             expect(request.default).toBeUndefined();
-            expect(request.options?.[1]?.aliases).toEqual(['同意', '确认']);
+            expect(request.options?.[0]?.aliases).toEqual(['否', 'no']);
+            expect(request.options?.[1]?.aliases).toEqual(['确认', 'yes']);
             expect(request.options?.map(option => option.value)).toEqual([
               'reject',
               'approve-once',
@@ -860,14 +850,30 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
     expect(resolveTriggerTimeoutMs({ timeout: Number.NaN })).toBe(60_000);
   });
 
-  it('errorTemplate 默认 ❌ 模板并插值 {error}', () => {
-    expect(renderTriggerError(undefined, 'boom')).toBe('❌ AI 处理失败: boom');
+  it('errorTemplate 未配置或为空白时用聊天失败口吻，没有内置的 ❌ 模板（#1250 第 81 批）', () => {
+    // Pin the line choice: renderChatTurnError picks a line with Math.random.
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      for (const trigger of [undefined, { errorTemplate: '  ' }]) {
+        expect(renderChatTurnError(trigger, new Error('boom'), false)).toBe(chatFailureLine('turn_error', { random: 0 }));
+        expect(renderChatTurnError(trigger, new Error('boom'), false)).toBe('刚卡了一下，你再说一遍？');
+        // The owner also gets the cause in brackets.
+        expect(renderChatTurnError(trigger, new Error('boom'), true)).toBe(chatFailureLine('turn_error', { random: 0, master: true, detail: 'boom' }));
+        expect(renderChatTurnError(trigger, new Error('boom'), true)).toBe('刚卡了一下，你再说一遍？（boom）');
+        expect(renderChatTurnError(trigger, new Error('boom'), true, 'en')).toBe('I got stuck for a moment. Could you try again? (boom)');
+      }
+    } finally {
+      random.mockRestore();
+    }
   });
 
   it('errorTemplate 自定义模板插值 {error}', () => {
-    expect(renderTriggerError({ errorTemplate: 'ERR {error}' }, 'boom')).toBe('ERR boom');
-    // 空白模板回退默认
-    expect(renderTriggerError({ errorTemplate: '  ' }, 'boom')).toBe('❌ AI 处理失败: boom');
+    expect(renderChatTurnError({ errorTemplate: 'ERR {error}' }, new Error('boom'), false)).toBe('ERR boom');
+  });
+
+  it('errorTemplate 插值时错误信息里的 $& / $\' / $` / $$ 原样保留（#1250 第 81 批）', () => {
+    expect(renderChatTurnError({ errorTemplate: 'ERR {error} end' }, new Error("a $& b $' c $` d $$ e $1"), false))
+      .toBe("ERR a $& b $' c $` d $$ e $1 end");
   });
 
   it('withTriggerTimeout：限时内完成则正常返回', async () => {
@@ -893,20 +899,20 @@ describe('缺口 3：chat role → runtime sender roles (ADR 0056)', () => {
     content: 'hi', target: 'group:100', sender: userId === null ? null : { id: userId, ...(chatRole ? { chatRole, chatRoleLevels: { [chatRole]: ownerLevel } } : {}) }, metadata: { endpoint: '10001' },
   });
 
-  it('global owner → isMaster; a lower-level owner, admin, trusted → isTrusted; none → nothing', () => {
-    expect(resolveRuntimeSenderRoles(withRole('owner'))).toEqual({ isMaster: true, isTrusted: false });
+  it('global owner → hostRole owner; a lower-level owner → admin; admin, trusted as held; none → nothing', () => {
+    expect(resolveRuntimeSenderRoles(withRole('owner'))).toEqual({ hostRole: 'owner' });
     // ADR 0056 §2: a conversation owner is not the host's owner.
-    expect(resolveRuntimeSenderRoles(withRole('owner', 'user-1', 'conversation'))).toEqual({ isMaster: false, isTrusted: true });
+    expect(resolveRuntimeSenderRoles(withRole('owner', 'user-1', 'conversation'))).toEqual({ hostRole: 'admin' });
     expect(resolveRuntimeSenderRoles(makeMessage({ content: 'hi', target: 'group:100', sender: { id: 'u', chatRole: 'owner' }, metadata: { endpoint: '10001' } })))
-      .toEqual({ isMaster: false, isTrusted: true });
-    expect(resolveRuntimeSenderRoles(withRole('admin'))).toEqual({ isMaster: false, isTrusted: true });
-    expect(resolveRuntimeSenderRoles(withRole('trusted'))).toEqual({ isMaster: false, isTrusted: true });
-    expect(resolveRuntimeSenderRoles(withRole())).toEqual({ isMaster: false, isTrusted: false });
+      .toEqual({ hostRole: 'admin' });
+    expect(resolveRuntimeSenderRoles(withRole('admin'))).toEqual({ hostRole: 'admin' });
+    expect(resolveRuntimeSenderRoles(withRole('trusted'))).toEqual({ hostRole: 'trusted' });
+    expect(resolveRuntimeSenderRoles(withRole())).toEqual({});
   });
 
   it.each(['userId', 'user_id', 'senderId', 'isMaster', 'roles'])('never grants from metadata.%s', (key) => {
     const message = makeMessage({ content: 'hi', target: 'group:100', sender: null, metadata: { endpoint: '10001', [key]: key === 'isMaster' ? true : 'forged-owner' } });
-    expect(resolveRuntimeSenderRoles(message)).toEqual({ isMaster: false, isTrusted: false });
+    expect(resolveRuntimeSenderRoles(message)).toEqual({});
   });
 
   it('principal roles are the expanded chat roles, never platform role strings', () => {
@@ -985,7 +991,7 @@ describe('缺口 3：configured Endpoint keys and legacy people lists (ADR 0056 
   });
 
   it('createRuntimeTurnAccess 对非 human 来源抛错，human 写入 principal.origin', () => {
-    const roles = { isMaster: false, isTrusted: false };
+    const roles = {};
     const make = (origin?: string) => ({
       ...makeMessage({ content: 'hi', target: 'private:u1', sender: { id: 'u1', name: 'U' } }),
       endpointId: 'bot-1',

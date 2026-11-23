@@ -1,6 +1,6 @@
 import { subscriptionMigrationScope } from '../../../src/target-migration.js';
 import { messages, commandHint } from '../../../src/i18n.js';
-import { canManageConversation, defineCommand } from 'zhin.js/command';
+import { canManageConversation, defineCommand, describeConversationManagerDenial } from 'zhin.js/command';
 import { parseUid } from '../../../src/api.js';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
 import type { BilibiliConfig } from '../../../src/config.js';
@@ -19,7 +19,7 @@ export default defineCommand<BilibiliConfig>({
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input, locale);
     const run = async () => {
-      if (!canManageConversation({ adapter, scene, sender })) return messages(locale, 'denied');
+      if (!canManageConversation({ adapter, scene, sender })) return describeConversationManagerDenial(locale);
 
       const scope = subscriptionScope(channel);
       const existing = await Subs.select().where({ uid, ...scope });

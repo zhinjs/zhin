@@ -195,7 +195,7 @@ export default defineCommand({
 });
 ```
 
-When unmet the command takes its denial reply: `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (「没有权限执行此指令：它需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」; a platform group owner / admin is also told that platform standing is not a zhin role; the reply never names the missing role or who holds it), conversation conditions keep the generic 「没有权限执行此指令。」.
+When unmet the command takes its denial reply: `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (「没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」; a platform group owner / admin is also told that platform standing is not a zhin role; the reply never names the missing role or who holds it), `owner@global` says a global chat owner is needed and where one is granted (the same text as the checks inside `restart` / `config`, `describeGlobalOwnerRequired()`; its `bind <code>` carries this account's actual command prefix, e.g. 「`!!bind <code>`」), `private()` answers 「此指令只能在私聊中使用，请私聊机器人发送。」, and the other conversation conditions keep the generic 「没有权限执行此指令。」. These texts have one source, `describeCommandDenial()` in `@zhin.js/permission`; subscription commands that decide with `canManageConversation()` reply with `describeConversationManagerDenial()` (`zhin.js/command`).
 
 Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the **Roles** tab of the Console object pages or with the `role grant` chat command. A platform group owner / admin is **not** a zhin role — commands for zhin functions use `admin` / `owner`, commands for platform functions use `platform:*`. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
 
@@ -341,7 +341,7 @@ export default defineCommand({
 
 While a prompt waits (ADR 0061 decision 11, revised, #1250):
 
-- **Cancel**: `select`, multiselect, `number` and `list` prompts accept `取消`, `退出`, `cancel`, `exit` and `quit` in every language, and the prompt says `reply "cancel" to exit`. An option that is itself labelled `取消` stays an option. In `confirm` these words still answer `false`. A `list` reply that is exactly one cancel word cancels (it is not read as the one-item list `['取消']`); a cancel word among several items stays an item. A `text` prompt cancels on these words only when its rules (`minLength`, `pattern`, …) reject them; without rules it takes any text as its answer.
+- **Cancel**: `select`, multiselect, `number` and `list` prompts accept `取消`, `退出`, `算了`, `cancel`, `exit` and `quit` in every language (full-width, case and trailing punctuation are ignored; the vocabulary is `isCancelWord()` in `@zhin.js/core`), and the prompt says `reply "cancel" to exit`. An option that is itself labelled `取消` stays an option. In `confirm` these words still answer `false`; a `confirm` answer may be Chinese or English whatever the prompt's language: `确认` / `确定` / `是` / `好` / `同意` / `yes` / `y` / `ok` / `confirm` answer `true`, `否` / `不` / `拒绝` / `no` / `n` / `cancel` and the like answer `false` (`isConfirmWord()` / `isCancelWord()` with `{ yesNo: true }`). A `list` reply that is exactly one cancel word cancels (it is not read as the one-item list `['取消']`); a cancel word among several items stays an item. A `text` prompt cancels on these words only when its rules (`minLength`, `pattern`, …) reject them; without rules it takes any text as its answer.
 - **Sending something else leaves**: when the asked person sends a message that matches a command (and is not a valid answer) or carries an image / file / voice / video, the prompt ends. **A mention of the bot alone does not leave**: some platforms deliver group messages only when the bot is mentioned, others mark a reply to the bot as a mention, so every answer may carry one; an invalid answer such as "@bot 3" gets the question again (then throttled reminders). Only when the text after the leading mention matches a command (such as "@bot /help") does the prompt end. An answer already taken while the question was still being sent is never displaced by a later message. Command matching honours a command's `adapter` restriction (not its permissions). The bot first says "Left the previous question" once (at most once a minute per person), then handles the new message normally. Other members' messages in a group are not affected.
 - **Invalid answers**: the first invalid answer re-sends the question; after that the bot reminds at most twice per prompt ("Still waiting for your choice: reply with an option number, or reply "cancel" to exit"), at least 20 seconds apart, instead of waiting silently.
 - **How it ends**: on cancel, interruption or a newer prompt, `ask()` throws an error whose `name` is `UserInteractionCancelledError` (`reason`: `cancelled` / `interrupted`; a newer prompt throws `UserInteractionSupersededError`); a timeout throws `UserInteractionTimeoutError` (or returns `default` when one is set). Catch it only to clean up: the framework already told the user ("Cancelled", "Input timed out" or "Left the previous question"), and the inbound outcome is `interaction_cancelled` / `interaction_timeout` (INFO log, not a failure, never `internal_error`). Match on `error.name`.
@@ -685,6 +685,38 @@ Matching uses a fixed priority: static commands before dynamic ones, and more sp
 `commandPrefix` is read from the adapter instance the message belongs to (default `''`); when the instance configures `endpoints`, the source account's `commandPrefix` wins. Implementation: `packages/im/core/src/plugin-runtime/im/message-dispatcher.ts`.
 
 Programmatic `CommandIndex.dispatch({ input, source, snapshot })` returns `status: unmatched | invalid | denied | executed`: `unmatched` has `matched: false`; `invalid` carries `issues: { field, message }[]` and `help`; `denied` means permission refused; only `executed` has a business return value. A Host can pass a real `PermissionSubject` for authorization.
+
+### Run a command from middleware or a button callback {#dispatch-from-middleware}
+
+To turn a button callback (or any inbound message) into a command, take the command table from the current context inside a middleware / handler and pass **the message itself** as `source`; leave out `snapshot`, `commandPrefix` and `operation`, which default to the message's own:
+
+```ts
+// middlewares/vote-buttons/index.ts
+import { defineMiddleware } from 'zhin.js/middleware';
+import { commandFeatureId, type CommandIndex } from '@zhin.js/command';
+
+export default defineMiddleware({
+  async handle(context, next) {
+    const payload = context.input.content;
+    if (!payload.startsWith('vote ')) return next();
+    const result = await context.project<CommandIndex>(commandFeatureId).dispatch({ input: payload, source: context.input });
+    if (!result.matched) return next();
+    if (result.status === 'denied') return result.denial?.reason ?? 'You cannot do that';
+    if (result.status === 'invalid') return result.help;
+    return result.value; // the command's reply, refusal text (UserFacingError) included; undefined when it used $reply
+  },
+});
+```
+
+- The command runs as the message's **real sender**: `permit` and execution policies are checked as usual, and `input.sender` and reply ownership come from the original message; the middleware cannot substitute someone else.
+- The command table is bound to the generation snapshot of the message's operation. Caching a command table across hot reloads, or passing another `snapshot`, is refused (`Message author binding belongs to another generation operation` / `not the command projection of the message's generation`): call `context.project()` in the current middleware / handler every time.
+- Plugins switched off per endpoint / conversation (ADR 0050) do not exist here either: `dispatch` filters out their commands for the message's endpoint and returns `unmatched`, exactly as if the user had sent the command text (also when you pass the message's own `snapshot` explicitly).
+- Help text and `formatCommand()` inside the command use the message's command prefix (for example `/`), also without `commandPrefix`.
+- The `value` `dispatch` returns is the reply for the user: the middleware must send it (return `result.value`, as above), or the user gets nothing. When the command refuses with a UserFacingError (`refused: true`), `dispatch` records the message's outcome as `refused` (with the command's refusal code), as for a command sent directly.
+- Any plugin's command can be dispatched, and so can Root commands (the project's own `commands/` and host commands such as `bind` / `claim` / `config` / `restart` / `role`): they run as usual with the same operation resources (for example the inference client) as when the user sends them directly, with or without the Agent installed.
+- The exception is the Agent management commands that need the **dispatch lease** (`models` / `health` / `tree` / `fork` / `compact` / `reset`): forwarded by a plugin, the Host withholds the lease and the command does not run; `dispatch` returns `status: 'executed'`, `refused: true`, `refusalReason: 'direct_command_required'`, and `value` asks the user (in their language) to send the command directly, prefix included (for example "Send /reset directly."); the outcome is `refused` / `direct_command_required`. Reply with `result.value`, as above. Only a lease this Host instance issued counts: passing your own `operation` that claims to provide one, or a port you minted by calling `createHostOperationResources()` yourself, does not run the command either. `memory` / `memory forget` need no lease and run as usual.
+- A command run this way has no `context.interaction` (multi-turn prompts); for flows that ask follow-up questions, let the user send the command text directly.
+- You do not always need middleware: a JSX `<button onClick>` callback carries its own `permit` (see [Buttons](./middleware-components.md#buttons)); QQ official `mode: 'command'` buttons have the platform prefill `payload` as the user's message, which goes through the normal command matching and authorization chain (other platforms' adapters do not support this kind of button yet).
 
 ### Endpoint management commands for adapters
 

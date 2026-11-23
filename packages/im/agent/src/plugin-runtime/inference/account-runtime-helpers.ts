@@ -7,6 +7,7 @@ import type {
   ProviderRepository,
   ProviderService,
 } from '@zhin.js/ai/provider';
+import { parseEnvUri } from '@zhin.js/plugin-runtime';
 import {
   type ApiKeyMaterial,
   credentialMaterialFingerprint,
@@ -470,7 +471,7 @@ export async function resolveAccountEnvironmentKey(
   if (!source) return current;
   if (account.ownerId !== ctx.options.hostOwnerId)
     throw new InferenceAuthenticationError('not-authorized');
-  if (typeof source === 'string' && !/^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/u.test(source))
+  if (typeof source === 'string' && parseEnvUri(source) === undefined)
     throw new InferenceAuthenticationError('integrity');
   // An identity-free `reauthorize` record on an `env://` account was re-pointed by its Host
   // administrator (`zhin ai account rename-env --reauthorize`): resolve it like a first use.

@@ -46,4 +46,21 @@ describe('instance endpoint configuration source (#1250)', () => {
     await expect(resolver.resolve('${UNSET}', { instanceId: 'a', signal })).rejects.toMatchObject({ code: 'invalid_configuration' });
     await expect(resolver.resolve('literal', { instanceId: 'a', signal })).rejects.toMatchObject({ code: 'invalid_configuration' });
   });
+
+  it('upgrade: a stored reference that is not a valid ${VAR} still starts the account, literally, with a warning', async () => {
+    const signal = new AbortController().signal;
+    const warn = vi.fn();
+    const expand = vi.fn((value: string) => value);
+    const resolver = createEndpointSecretResolver(expand, warn);
+    // Imported by an earlier version: an unclosed reference, and a real token containing `${`.
+    await expect(resolver.resolve('${QQ_SECRET', { instanceId: 'qq-main', signal })).resolves.toBe('${QQ_SECRET');
+    await expect(resolver.resolve('tok${en-1', { instanceId: 'qq-main', signal })).resolves.toBe('tok${en-1');
+    expect(expand).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(2);
+    for (const [message] of warn.mock.calls) {
+      expect(message).toContain('qq-main');
+      expect(message).not.toContain('QQ_SECRET');
+      expect(message).not.toContain('tok${en-1');
+    }
+  });
 });

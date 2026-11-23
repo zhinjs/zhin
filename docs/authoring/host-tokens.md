@@ -220,7 +220,7 @@ async function deliver(stateTarget: DeliveryTarget, use: UseAccessor) {
 
 ## 内部 token
 
-AI 兜底回复不是插件可以修改的 API。composition root 在启动时向 root 资源提供内部的 `ingressRouteToken`，`ImRuntime.receive` 只从当前消息持有的快照中读取它。普通插件不应注册或替换这个 token。
+AI 兜底回复不是插件可以修改的 API。composition root 在启动时向 root 资源提供内部的 `ingressRouteToken`（Root 私有 token，#1250 第 85 批：插件作用域 `use` / `has` 读不到它，运行时快照的公开资源里也没有它），`ImRuntime.receive` 只经 Root 的真实快照存储、按当前消息持有的租约读取它（`resolveIngressRoute(snapshots, lease)`）。普通插件不能注册、替换或读取这个 token。
 
 ## 下一步
 

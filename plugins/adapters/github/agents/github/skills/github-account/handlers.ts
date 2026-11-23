@@ -1,7 +1,7 @@
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages as t } from "../../messages.js";
 import { formatCompact } from '@zhin.js/logger';
-import type { Message } from 'zhin.js';
+import { formatDateTime, type Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
 import { GhClient } from '../../../../src/gh-client.js';
 import type { GithubEndpoint } from '../../../../src/endpoint.js';
@@ -160,7 +160,7 @@ export async function executeGithubWhoami(_args: Record<string, never>, client: 
   const userGh = new GhClient({ host: client.host, token: existing.access_token });
   const auth = await userGh.verifyAuth();
   if (auth.ok) {
-    return t(locale, 'account', { login: auth.user, date: new Date(existing.created_at).toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN') });
+    return t(locale, 'account', { login: auth.user, date: formatDateTime(new Date(existing.created_at), locale) });
   }
   return t(locale, 'expired', { login: existing.github_login });
 }

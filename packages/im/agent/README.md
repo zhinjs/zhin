@@ -317,13 +317,19 @@ ai:
 
 ## IM 管理命令
 
-由 `src/init/runtime-management-commands.ts`（`handleRuntimeManagementCommand`，在 ingress 管理阶段调用）处理（master / 有权限用户）：
+`src/init/runtime-management-commands.ts`（`createRuntimeManagementCommands`）定义的 Root 命令，由 zhin 实例的 Agent Host 注册到 Command Feature（未安装 Agent 时不存在）。它们和其他 Root 命令一样走命令分发：出现在菜单 / 帮助里，有近似指令提示，参数由命令模块解析，结局记 `command_replied`；权限走 permit `trusted`（本会话链上任一 zhin 聊天角色），群里无权限者静默（`permission_denied`），私聊说明原因。
 
-| 类别 | 命令 |
-|------|------|
-| 会话 | `/compact` · `/tree` · `/tree N` · `/reset` |
-| 运维 | `/models` · `/health` |
-| 内省 | `/cmd` · `/endpoints` · `/bindings` · `/tools` · `/mcp` |
+| 命令 | 权限 | 说明 |
+|------|------|------|
+| `/models` · `/health` | `trusted` | 列出语言模型 / AI 服务健康状态 |
+| `/tree` · `/tree N` · `/fork N` | `trusted` | 查看 / 跳转会话分支点 |
+| `/compact` | `trusted` | 压缩当前会话上下文 |
+| `/reset` | 所有人 | 有聊天角色：归档当前会话；其他人：等同 `/clear`（同一条清空路径、触发与 @ 要求、冷却与闸门） |
+| `/memory` · `/memory forget <key\|id\|all>` | 所有人 | 查看 / 遗忘关于自己的记忆（仅启用语义记忆时注册；群里 `/memory` 只提示私聊查看，`forget` 只回复条数） |
+
+命令只回应人：来源不是 `human` 的消息（其他机器人）不进任何命令（第 84 批，所有命令；可信来源在入站阶段就丢弃，命令分发对自报 `metadata.origin` 的消息兜底），不回复、不执行，结局 `ignored_bot` / `non_human_origin`。命令在分发它的那一代上运行（Host 操作资源里的分发租约），不取最新一代。
+
+带短码的 `rule …`、`approve …` / `deny …` 仍在 ingress 管理阶段（`ingress-management-stage.ts`）处理。
 
 zhin-package CLI：`zhin packages`（`basic/cli`）。详见 ADR 0010。
 

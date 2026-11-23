@@ -1978,6 +1978,9 @@ importers:
 
   packages/toolkit/create-zhin:
     dependencies:
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
       '@zhin.js/scaffold-wizard':
         specifier: workspace:*
         version: link:../scaffold-wizard
@@ -3203,6 +3206,9 @@ importers:
       '@zhin.js/console-contract':
         specifier: workspace:*
         version: link:../../../packages/console/plugin-contract
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../../packages/console/protocol
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core

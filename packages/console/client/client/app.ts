@@ -1,3 +1,4 @@
+import type { ConsoleLocale } from '@zhin.js/console-protocol';
 import * as React from "react";
 import type {
   PluginAddRouteInput,
@@ -17,7 +18,7 @@ export type ConsoleRouteRecord = {
   requiredRoles?: string[];
   meta?: {
     hideInMenu?: boolean;
-    titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
     order?: number;
     group?: string;
     fullWidth?: boolean;

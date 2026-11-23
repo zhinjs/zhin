@@ -172,7 +172,7 @@ export default defineCommand({
 ::: details 按钮的更多规则
 - `onClick` 返回字符串、消息段或 JSX 时自动回复一次；返回 `null`、`undefined` 或布尔值不发送；数字 `0` 会回复 `0`。也可以在回调中调用 `message.$reply()`。
 - 回调只对原会话和当前版本有效：一小时后、插件热重载或进程重启后失效。
-- 要限制谁能点，给按钮加 `permit`（与命令同一套规则、同一个评估器，判断的是**点击者**）：`<button permit={['platform:admin']} onClick={…}>`。不满足时回调不执行，点击者收到原因（如「你不能使用这个按钮：需要你是本群群主或管理员。」）。也可以在回调里自行判断 `message.sender`。
+- 要限制谁能点，给按钮加 `permit`（与命令同一套规则、同一个评估器，判断的是**点击者**）：`<button permit={['platform:admin']} onClick={…}>`。不满足时回调不执行，点击者收到原因（如「你不能使用这个按钮。需要你是本群群主或管理员。」）。也可以在回调里自行判断 `message.sender`。
 - 组件（`defineComponent`）本身是纯渲染，不接受 `permit`；可被聊天触发的入口是回调按钮，按上一条鉴权。
 - 降级编号在运行期间递增，不会复用旧编号；多个会话交错时可能跳号，但各会话互不干扰。相邻的 `<button>` 会合并为一组编号。
 - 回调函数不会发送到平台；框架会绑定一个随机标识，支持原生按钮的平台通过 callback 回传。
@@ -224,7 +224,7 @@ export default defineCommand({
 ### 表格、Markdown 与代码块
 
 ```tsx
-import { Table, Checkbox, Switch, Button, Markdown, CodeBlock } from '@zhin.js/components';
+import { Table, Checkbox, Switch, Button, MarkdownView, CodeBlock } from '@zhin.js/components';
 
 const report = <Table
   headers={['任务', '完成', '通知', '操作状态']}
@@ -234,13 +234,13 @@ const report = <Table
   ]}
 />;
 
-const article = <Markdown source={'## 验收记录\n\n- [x] 冒烟通过\n- [ ] 等待上线'} />;
+const article = <MarkdownView source={'## 验收记录\n\n- [x] 冒烟通过\n- [ ] 等待上线'} />;
 const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</strong>}
   source={'const ready = true;\nconsole.log(ready);'} />;
 ```
 
 - `Checkbox`、`Radio`、`Switch`、`Button` 只用于**展示**状态，没有点击事件。需要交互请用上面的 `<button onClick>`。
-- `Markdown` 把字符串渲染成带主题的标题、列表、引用和表格；代码块交给 `CodeBlock`（语言标签、高亮、可选行号）。
+- `MarkdownView` 把字符串渲染成带主题的标题、列表、引用和表格；代码块交给 `CodeBlock`（语言标签、高亮、可选行号）。
 - 也可以用 `TableRow`、`TableCell` 自由组合表格，`List` 支持有序 / 无序和嵌套列表。
 
 ### Tailwind 工具类
@@ -379,7 +379,7 @@ return segment.html({ html: await renderToHtml(node), width: 640, text: '服务�
 
 - `<image src={...}>` 接受 URL、路径、base64 或 `MediaRef`，也可以直接传 `<image media={...} />`。
 - `<card {...payload} />` 是平台原生卡片，交给适配器处理；它**不是**组件库里的 `Card`。
-- `<markdown>` 输出 Markdown 消息段；它**不是**组件库里的 `Markdown`。
+- `<markdown>` 输出 Markdown 消息段；它**不是**组件库里的 `MarkdownView`。
 
 ### 中间件上下文
 

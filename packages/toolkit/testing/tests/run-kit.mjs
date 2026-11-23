@@ -15,6 +15,7 @@ import { databaseRootHostToken, databaseHostToken, PluginDatabaseHost, rootPlugi
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const temporary = await mkdtemp(join(tmpdir(), 'zhin-test-kit-'));
 const mode = process.argv[2] ?? 'base';
+const deliveredText = payload => (Array.isArray(payload) ? payload : [payload]).map(item => typeof item === 'string' ? item : item?.data?.text ?? '').join('');
 const put = async (path, content) => { await mkdir(dirname(path), {recursive:true}); await writeFile(path, content); };
 const json = async (path, value) => put(path, JSON.stringify(value));
 const link = async (name, source) => {
@@ -39,7 +40,7 @@ try {
     await put(join(temporary,'commands/echo/[value]/index.ts'), "import {defineCommand} from 'zhin.js/command';export default defineCommand({permit:['group()','role(admin)'],params:{value:{type:'integer',min:1}},execute:({params,config})=>config.label+':'+params.value});");
     await put(join(temporary,'middlewares/trace/index.ts'), "import {defineMiddleware} from 'zhin.js/middleware';export default defineMiddleware({target:'outbound',async handle({input},next){if(input.payload==='block')return;await next();}});");
   }
-  const config = mounted ? {configVersion:2,plugins:{alpha:'./plugins/group-suite',beta:'./plugins/group-suite'},alpha:{commandNamespace:'alpha', keywordReply:true, welcomeMessage:'欢迎 {name} ({id})'},beta:{commandNamespace:'beta',keywordReply:true}} : {configVersion:2};
+  const config = mounted ? {configVersion:2,plugins:{alpha:'./plugins/group-suite',beta:'./plugins/group-suite'},alpha:{commandNamespace:'alpha', keywordReply:true, welcomeMessage:'欢迎 ${sender.name} (${sender.id})'},beta:{commandNamespace:'beta',keywordReply:true}} : {configVersion:2};
   let renderCalls = 0;
   if(mounted) stateDatabase=await sqliteStateHost(join(temporary,'state.sqlite'));
   kit = await PluginTestKit.create({projectRoot:temporary,config,endpoints:['test','other'],segments: {html:'image',outboundMedia:['base64'],interactive:'text'}, installResources: mounted ? ({resources}) => {resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));resources.provide(databaseRootHostToken,stateDatabase.host);resources.provide(databaseHostToken,new PluginDatabaseHost(rootPluginId(),stateDatabase.host));if(mode==='group')resources.provide(htmlRendererToken, {async render(){renderCalls++;return {data:Buffer.from('fake-image'),format:'png',mimeType:'image/png',width:1,height:1};}});} : undefined});
@@ -87,7 +88,15 @@ try {
     await assert.rejects(kit.start());await kit.close();
     console.log('KIT_ACCEPTANCE_OK');
   } else {
-    assert.equal((await incoming('alpha keyword-add hi secret'))?.status,'denied');
+    // #1250: in a group a sender without the command's role (`trusted`) is refused silently.
+    kit.clearDeliveries();
+    for (const text of ['alpha keyword-add hi secret','alpha teach q|a','alpha forget q']) assert.equal((await incoming(text))?.status,'denied');
+    assert.equal(kit.deliveries.length,0);
+    // A private chat still says why: the role first when it is missing too, else the place (`group()`).
+    const dm=(content,chatRole)=>kit.receive({content,conversation:{kind:'private',id:'u1'},sender:{id:'u1',name:'Alice',...(chatRole?{chatRole}:{})}});
+    assert.equal((await dm('alpha teach q|a'))?.status,'denied');assert.match(deliveredText(kit.deliveries.at(-1).payload),/zhin 角色/);
+    assert.equal((await dm('alpha forget q','admin'))?.status,'denied');assert.equal(deliveredText(kit.deliveries.at(-1).payload),'没有权限执行此指令。');
+    assert.equal(kit.deliveries.length,2);
     assert.equal((await incoming('alpha keyword-add hi hello',['admin']))?.status,'executed');
     kit.clearDeliveries();await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     kit.clearDeliveries();await incoming('hi',[],'g2');assert.equal(kit.deliveries.length,0);
@@ -97,7 +106,8 @@ try {
     kit.clearDeliveries();await incoming('bye');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     // Concurrent different senders mutate the same persistent state through real CAS retries.
     await Promise.all(Array.from({length:8},(_,i)=>kit.receive({content:`alpha keyword-add k${i} r${i}`,conversation:{kind:'group',id:'g1'},sender:{id:`s${i}`,chatRole:'admin'}})));
-    await incoming('alpha keyword-list');for(let i=0;i<8;i++)assert.match(kit.deliveries.at(-1).payload,new RegExp(`k${i}`));
+    // Quoted keywords are literal (untrusted) segments of the reply (#1250): read the delivered text.
+    await incoming('alpha keyword-list');for(let i=0;i<8;i++)assert.match(deliveredText(kit.deliveries.at(-1).payload),new RegExp(`k${i}`));
     // Identical group ids on two endpoint identities have separate check-in and teaching records.
     await incoming('alpha checkin');assert.match(kit.deliveries.at(-1).payload,/签到成功/);
     await incoming('alpha checkin',[],'g1','other');assert.match(kit.deliveries.at(-1).payload,/签到成功/);
@@ -118,9 +128,9 @@ try {
     await assert.rejects(kit.patchConfig([{op:'set',path:['alpha','keywordReply'],value:'bad'}]));
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     const source=join(temporary,'plugins/group-suite/commands/keyword-list/index.ts');
-    await put(source,(await readFile(source,'utf8')).replace("return t(context.locale, 'keywordList',", "return '热更新词库\\n' + t(context.locale, 'keywordList',"));
+    await put(source,(await readFile(source,'utf8')).replace("return echo.content(t(context.locale, 'keywordList',", "return echo.content('热更新词库\\n' + t(context.locale, 'keywordList',"));
     assert.equal((await kit.reloadSource(source)).status,'reloaded');
-    await incoming('alpha keyword-list');assert.match(kit.deliveries.at(-1).payload,/热更新词库/);
+    await incoming('alpha keyword-list');assert.match(deliveredText(kit.deliveries.at(-1).payload),/热更新词库/);
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     await incoming('bye');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     // Whole plugin reload replaces owner Resources, while persistent keywords keep their exact scope.

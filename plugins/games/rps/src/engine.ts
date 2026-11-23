@@ -28,21 +28,24 @@ export function resolveRound(player: RpsMove, bot: RpsMove): 0 | 1 | 2 {
   return BEATS[player] === bot ? 1 : 2;
 }
 
+const MOVE_WORDS: Readonly<Record<string, RpsMove>> = {
+  rock: 'rock',
+  paper: 'paper',
+  scissors: 'scissors',
+  石头: 'rock',
+  布: 'paper',
+  剪刀: 'scissors',
+  r: 'rock',
+  p: 'paper',
+  s: 'scissors',
+};
+
 export function parseMove(raw: string): RpsMove | null {
-  const t = raw.trim().toLowerCase();
-  const map: Record<string, RpsMove> = {
-    rock: 'rock',
-    paper: 'paper',
-    scissors: 'scissors',
-    石头: 'rock',
-    布: 'paper',
-    剪刀: 'scissors',
-    r: 'rock',
-    p: 'paper',
-    s: 'scissors',
-  };
-  return map[t] ?? null;
+  return MOVE_WORDS[raw.trim().toLowerCase()] ?? null;
 }
+
+/** Move words a short entry (`猜拳 石头`) accepts: single letters stay chat (`猜拳 s`). */
+export const RPS_ENTRY_MOVE_WORDS: readonly string[] = Object.freeze(Object.keys(MOVE_WORDS).filter((word) => word.length > 1));
 
 export const WIN_TARGET = 3;
 

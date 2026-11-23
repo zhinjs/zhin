@@ -5,7 +5,7 @@
  */
 import { mkdir } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { expandEnvironmentValue } from '@zhin.js/plugin-runtime';
+import { createEnvironmentLookup, expandEnvironmentValue } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '../project/config-file.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
@@ -175,8 +175,10 @@ export async function loadExpandedProjectConfig(projectRoot: string, environment
     loadRuntimeEnvironmentLayers(projectRoot, environment),
   ]);
   if (!document || typeof document !== 'object' || Array.isArray(document)) return Object.freeze({});
-  const overlay = layers.environments?.[environment];
-  return expandEnvironmentValue(document as Record<string, unknown>, (key) => overlay?.[key] ?? layers.base?.[key] ?? process.env[key]);
+  // The instance's precedence: `.env` / `.env.<environment>` (the overlay) over the process
+  // environment (the layers' base). A dotenv key the instance would reject is not fatal here.
+  const lookup = createEnvironmentLookup(layers.environments?.[environment], layers.base, process.env);
+  return expandEnvironmentValue(document as Record<string, unknown>, lookup);
 }
 
 /** {@link resolveProjectDatabaseConfig} over {@link loadExpandedProjectConfig}. */

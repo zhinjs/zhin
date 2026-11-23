@@ -3,6 +3,7 @@
  * can see (with mocked results), the scripted model responses, and the
  * expected harness behaviour.
  */
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { RESERVED_TOOL_NAME_PREFIXES, RESERVED_TOOL_NAMES } from '../../src/reserved-tools.js';
 import type { ZhinAgentConfig } from '../../src/config/zhin-agent-config.js';
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
@@ -36,6 +37,13 @@ export interface EvalInboundMessage {
    */
   readonly backgroundOwnReplies?: boolean;
   /**
+   * #1250 (ADR 0067 D8): earlier plain-text messages in the same chat that nothing handled (e.g.
+   * `/weather`), stored and read back through the real core `ConversationRuntime` as an adapter that
+   * declares `inboundTextAuthoredBySender` delivers them. A string is this message's own sender; an
+   * object may name another `senderId` or carry the adapter's `forwarded` marker (a Telegram forward).
+   */
+  readonly backgroundOwnMessages?: readonly (string | Readonly<{ text: string; senderId?: string; forwarded?: boolean }>)[];
+  /**
    * The message this one replies to, as the IM ingress resolves it (ADR 0043 §4). `text` is the quoted
    * message's content; `sender` is its author. It becomes a message reference the model could inspect.
    */
@@ -59,6 +67,13 @@ export interface EvalInboundMessage {
    * hands it over (`TurnInput.liveDanmaku`). `sender` is the carrier.
    */
   readonly liveDanmaku?: TurnLiveDanmaku;
+  /** The locale the IM ingress resolved for this message (`TurnInput.locale`). */
+  readonly locale?: Locale;
+  /**
+   * #1250 b69: `locale` is the sender's own `/language` setting, marked by the IM ingress in trusted
+   * turn metadata; absent = the project/default fallback.
+   */
+  readonly localeSetByUser?: boolean;
   /**
    * ADR 0048 H3: `false` = an ordinary group message that neither @s nor
    * replies to the bot. The Mailbox admission policy rejects it

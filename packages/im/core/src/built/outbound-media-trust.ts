@@ -24,7 +24,7 @@
  * it is never sent silently and never sent as is.
  */
 import { fileURLToPath } from 'node:url';
-import type { Locale } from '@zhin.js/plugin-runtime';
+import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { isMediaRef } from './segment-contract/validate.js';
@@ -171,20 +171,32 @@ function isRemoteSourceString(value: string): boolean {
   return /^https?:\/\//iu.test(value) || /^base64:\/\//iu.test(value) || isPlatformFileToken(value);
 }
 
-const NOTICE: Readonly<Record<'zh-CN' | 'en', { readonly labels: Readonly<Record<string, string>>; readonly text: (label: string) => string }>> = {
-  'zh-CN': {
-    labels: { image: '图片', audio: '语音', video: '视频', file: '文件' },
-    text: label => `[${label}未发送：媒体来源不被允许]`,
-  },
-  en: {
-    labels: { image: 'image', audio: 'audio', video: 'video', file: 'file' },
-    text: label => `[${label} not sent: media source not allowed]`,
-  },
-};
+/**
+ * #1250 第 81 批: the visible text that replaces refused outbound media, one catalog for both refusal
+ * points (the source check here and the URL fetch in `outbound-media-fetch.ts`).
+ */
+const mediaRefusalMessages = createMessages({
+  image: { 'zh-CN': '图片', en: 'image' },
+  audio: { 'zh-CN': '语音', en: 'audio' },
+  video: { 'zh-CN': '视频', en: 'video' },
+  file: { 'zh-CN': '文件', en: 'file' },
+  attachment: { 'zh-CN': '附件', en: 'attachment' },
+  sourceRefused: { 'zh-CN': '[{label}未发送：媒体来源不被允许]', en: '[{label} not sent: media source not allowed]' },
+  addressRefused: { 'zh-CN': '[{label}未发送：媒体地址不被允许]', en: '[{label} not sent: media address not allowed]' },
+});
+
+const MEDIA_LABELS: Readonly<Record<string, 'image' | 'audio' | 'video' | 'file'>> = Object.freeze({
+  image: 'image', audio: 'audio', record: 'audio', video: 'video', file: 'file',
+});
+
+/** @internal The refusal text for a media segment: `source` (not trusted here) or `address` (URL refused). */
+export function mediaRefusalText(segmentType: string, cause: 'source' | 'address', locale: Locale | undefined): string {
+  const label = mediaRefusalMessages(locale, Object.hasOwn(MEDIA_LABELS, segmentType) ? MEDIA_LABELS[segmentType]! : 'attachment');
+  return mediaRefusalMessages(locale, cause === 'source' ? 'sourceRefused' : 'addressRefused', { label });
+}
 
 function refusalNotice(type: string, locale: Locale | undefined): Segment {
-  const notice = locale === 'en' ? NOTICE.en : NOTICE['zh-CN'];
-  return { type: 'text', data: { text: notice.text(notice.labels[type] ?? (locale === 'en' ? 'attachment' : '附件')) } };
+  return { type: 'text', data: { text: mediaRefusalText(type, 'source', locale) } };
 }
 
 const logger = getLogger('im.outbound');

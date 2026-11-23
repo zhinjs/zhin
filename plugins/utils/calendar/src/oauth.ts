@@ -8,7 +8,7 @@ import type {
   CalendarProvider,
   CreateEventInput,
 } from "./types.js";
-import { formatInZone } from "./time.js";
+import { dateInZone, formatInZone } from "./time.js";
 import {
   OAuthTokenManager,
   type AuthorizationLostListener,
@@ -161,10 +161,10 @@ export function createGoogleCalendarProvider(
         description: input.description,
         location: input.location,
         start: input.all_day
-          ? { date: input.start.toISOString().slice(0, 10) }
+          ? { date: dateInZone(input.start, options.timezone) }
           : { dateTime: input.start.toISOString(), timeZone: options.timezone },
         end: input.all_day
-          ? { date: input.end.toISOString().slice(0, 10) }
+          ? { date: dateInZone(input.end, options.timezone) }
           : { dateTime: input.end.toISOString(), timeZone: options.timezone },
       };
       const response = await withBearer(
@@ -262,14 +262,13 @@ export function createMicrosoftCalendarProvider(
           ? { contentType: "Text", content: input.description }
           : undefined,
         location: input.location ? { displayName: input.location } : undefined,
-        start: {
-          dateTime: input.start.toISOString().replace(/\.\d{3}Z$/, ""),
-          timeZone: "UTC",
-        },
-        end: {
-          dateTime: input.end.toISOString().replace(/\.\d{3}Z$/, ""),
-          timeZone: "UTC",
-        },
+        // An all-day event must start and end at midnight of its own zone: the configured day, not UTC (#1250).
+        start: input.all_day
+          ? { dateTime: `${dateInZone(input.start, options.timezone)}T00:00:00`, timeZone: options.timezone }
+          : { dateTime: input.start.toISOString().replace(/\.\d{3}Z$/, ""), timeZone: "UTC" },
+        end: input.all_day
+          ? { dateTime: `${dateInZone(input.end, options.timezone)}T00:00:00`, timeZone: options.timezone }
+          : { dateTime: input.end.toISOString().replace(/\.\d{3}Z$/, ""), timeZone: "UTC" },
         isAllDay: Boolean(input.all_day),
       };
       const response = await withBearer(

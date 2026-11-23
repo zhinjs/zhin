@@ -32,7 +32,7 @@ These examples assume a `/` account prefix and no plugin namespace; adjust both 
 
 Send only `/remind create` to be asked for time and content. Quote an expression containing spaces in a command argument; a follow-up answer may contain the entire expression directly.
 
-Review the absolute date, timezone, content and original conversation, then reply `确认`. No task exists before confirmation, and waiting does not move the displayed time. Follow-up answers need no command prefix. Reply `取消` or `cancel` to exit before starting another command; a command sent during a pending question may be interpreted as its answer.
+Review the absolute date, timezone, content and original conversation, then reply `确认`. No task exists before confirmation, and waiting does not move the displayed time. Follow-up answers need no command prefix. Reply a cancel word such as `取消`, `退出` or `cancel` (Chinese or English alike) to exit before starting another command; a command sent during a pending question may be interpreted as its answer.
 
 Use `/remind list` to inspect and `/remind cancel <task ID>` to cancel your own reminder. Creation confirms persistent storage, not eventual platform delivery.
 

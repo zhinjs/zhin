@@ -9,6 +9,7 @@ import { isKeyboardSegment } from '../../built/interactive-segments/types.js';
 import type { Segment } from '../../built/segment-contract/types.js';
 import type { ButtonClickHandler, ButtonProps } from '../../jsx/message-tags.js';
 import { operationEndpoint, type Message, type SendRequest } from './contracts.js';
+import { refuseInteraction } from './interaction-refusal.js';
 import { assertPermitSyntax, describeDeniedPermit, permissionHostToken, toPermissionSubject, type PermissionHost } from '@zhin.js/permission';
 
 const JSX_BUTTON_PREFIX = 'zhin:jsx:';
@@ -143,7 +144,8 @@ export class JsxButtonRegistry {
         ? await host.firstDenied(binding.permit, toPermissionSubject(message), { source: message }).catch(() => binding.permit![0])
         : binding.permit[0];
       if (denied !== undefined) {
-        await message.$reply(t(message.locale, 'denied', { reason: describeDeniedPermit(denied!, message.locale) }));
+        // zhinjs/zhin#1250: silent in a group or channel; a private chat still says why.
+        await refuseInteraction(message, t(message.locale, 'denied', { reason: describeDeniedPermit(denied!, message.locale) }), 'button_permit');
         return true;
       }
     }

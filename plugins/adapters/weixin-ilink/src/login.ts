@@ -2,6 +2,7 @@
  * Resolve iLink bot credentials (config / endpoint state / QR login).
  * No legacy Plugin / loginAssist dependency — QR URL is logged for manual scan.
  */
+import { sleep } from 'zhin.js';
 import { apiGetFetch, apiPostFetch } from './ilink-api.js';
 import type { IlinkClientMetadata } from './ilink-meta.js';
 import { logger } from './ilink-logger.js';
@@ -92,20 +93,8 @@ function abortError(): Error {
 }
 
 function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortError());
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(abortError());
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
+  return sleep(ms, signal).catch(() => {
+    throw abortError();
   });
 }
 

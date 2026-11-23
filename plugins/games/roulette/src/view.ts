@@ -1,4 +1,4 @@
-import { createMessages } from 'zhin.js/i18n';
+import { createMessages, formatList } from 'zhin.js/i18n';
 import type { GamePlayer } from '@zhin.js/game-kit';
 import type { RouletteConfig } from './config.js';
 import { MIN_ROULETTE_PLAYERS, currentPlayer, loserOf, remainingChambers, survivorsOf,
@@ -91,5 +91,5 @@ export function describeStatus(state: RouletteState, config: RouletteConfig, pre
 }
 
 function listNames(players: readonly RoulettePlayer[], presentation: Presentation): string {
-  return players.length ? players.map(player => player.name).join(presentation.locale === 'en' ? ', ' : '、') : messages(presentation.locale, 'none');
+  return players.length ? formatList(presentation.locale, players.map(player => player.name)) : messages(presentation.locale, 'none');
 }

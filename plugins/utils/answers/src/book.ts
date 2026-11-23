@@ -1,3 +1,4 @@
+import { formatDateTime } from 'zhin.js';
 import { type Locale } from 'zhin.js/i18n';
 import { messages } from './messages.js';
 import { createHash, randomInt } from 'node:crypto';
@@ -27,9 +28,9 @@ export function normalizeQuestion(question: string): string {
 /** 给定时区下的日历日期（YYYY-MM-DD）；时区无效时退回 UTC。 */
 export function calendarDay(now: number, timezone: string): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    return formatDateTime(now, undefined, { part: 'date', timeZone: timezone });
   } catch {
-    return new Date(now).toISOString().slice(0, 10);
+    return formatDateTime(now, undefined, { part: 'date', timeZone: 'UTC' });
   }
 }
 

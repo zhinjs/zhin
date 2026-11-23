@@ -21,6 +21,10 @@ describe('http.port', () => {
   it('describes stored values the schema rejects', () => {
     expect(describeInvalidPortValue(8068)).toBeUndefined();
     expect(describeInvalidPortValue('${PORT:-8068}')).toBeUndefined();
+    expect(describeInvalidPortValue('${PORT:=8068}')).toBeUndefined();
+    expect(describeInvalidPortValue(' ${PORT} ')).toBeUndefined();
+    expect(describeInvalidPortValue('${1PORT}')).toContain('当前值');
+    expect(describeInvalidPortValue('${PORT}0')).toContain('当前值');
     expect(describeInvalidPortValue(undefined)).toBeUndefined();
     expect(describeInvalidPortValue('8068')).toContain('当前值 "8068"');
     expect(describeInvalidPortValue(1.5)).toContain('整数');

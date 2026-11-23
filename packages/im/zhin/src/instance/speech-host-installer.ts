@@ -6,10 +6,7 @@ import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent'
 import type { PublicMediaFetchOptions, PublicMediaFetchResult } from '@zhin.js/agent/security';
 import type { InboundAudioUrlSource, InboundAudioUrlTranscription } from '@zhin.js/agent/runtime';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
-import {
-  expandEnvironmentValue,
-  type RootResourceInstaller,
-} from '@zhin.js/runtime';
+import type { RootResourceInstaller } from '@zhin.js/runtime';
 
 export interface SpeechHostConfig {
   readonly stt?: Record<string, unknown>;
@@ -293,7 +290,8 @@ export async function resolveSpeechConfig(
   if (!document || typeof document !== 'object') return undefined;
   const speech = (document as Record<string, unknown>).speech;
   if (!speech || typeof speech !== 'object') return undefined;
-  return expandEnvironmentValue(speech, (key) => process.env[key]) as SpeechHostConfig;
+  // `config` is the host config the instance's EnvStore already expanded; no second pass.
+  return speech as SpeechHostConfig;
 }
 
 /**

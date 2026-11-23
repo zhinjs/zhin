@@ -24,9 +24,8 @@ export default defineGamePlugin<SessionService>({
     title: '猜谜',
     icon: '🧩',
     description: '字谜 + 成语猜谜',
-    commandPrefix: '/猜谜',
     quickStart: '开始',
-    aliases: ['riddle'],
+    aliases: ['riddle', '猜谜'],
     menus: [
       { id: 'char', label: '🔤 字谜模式' },
       { id: 'idiom', label: '📜 成语模式' },

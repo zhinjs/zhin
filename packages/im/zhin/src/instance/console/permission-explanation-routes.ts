@@ -2,7 +2,7 @@ import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, explainCommandPermissions, isCommandIndex, type CommandDescriptor } from '@zhin.js/command';
 import { extractBearerToken, HttpBodyError, isExplicitConsolePrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { createMessages, isLocale, resolveLocale, type Locale, normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { createMessages, queryLocale, resolveLocale, type Locale, normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { noStore } from './no-store.js';
 
 const messages = createMessages({
@@ -198,6 +198,5 @@ function failure(error: unknown, locale: Locale): Response {
 }
 
 function validateLocale(url: URL): void {
-  if (url.searchParams.getAll('locale').length > 1
-    || url.searchParams.has('locale') && !isLocale(url.searchParams.get('locale'))) invalid();
+  if (!queryLocale(url.searchParams)) invalid();
 }

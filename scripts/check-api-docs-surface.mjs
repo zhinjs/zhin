@@ -8,7 +8,7 @@ import {
 
 const expectedSurface = new Map([
   ['zhin.js/i18n', ['createMessages', 'DEFAULT_LOCALE', 'SUPPORTED_LOCALES', 'isLocale', 'resolveLocale',
-    'projectLocaleToken', 'Locale', 'MessageCatalog', 'MessageValues']],
+    'formatList', 'FormatListOptions', 'projectLocaleToken', 'Locale', 'MessageCatalog', 'MessageValues']],
   ['@zhin.js/host-http', [
     'AuthenticatedTokenPrincipal', 'HttpHost', 'HttpHostAddress', 'WsConnection',
     'WsHandle', 'AuthScope', 'HttpHandler', 'ListedRoute', 'OpenApiParameter',
@@ -131,7 +131,7 @@ const expectedMembers = new Map([
   ['zhin.js/core/runtime.MessageBase', [
     '$client', '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',
     '$sendTo', 'clientAdapter', 'content', 'conversation', 'endpointId', 'generation', 'id',
-    'mentioned', 'message', 'metadata', 'origin', 'replyTo', 'segments', 'sender',
+    'forwarded', 'mentioned', 'message', 'metadata', 'origin', 'replyTo', 'segments', 'sender',
     'locale', 'formatCommand', 'commandPrefix', 'commandMenu',
   ]],
   ['zhin.js.PluginDefinition', ['capabilityGraph', 'config', 'configUpdate', 'metadata', 'name', 'requires', 'setup']],

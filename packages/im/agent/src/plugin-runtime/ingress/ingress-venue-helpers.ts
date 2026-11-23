@@ -200,6 +200,12 @@ export async function evaluateIngressGatesAndTrigger(input: {
     inferInput: Readonly<{ lease: SnapshotLease; sessionKey: string; operationId?: string; signal: AbortSignal }>,
     run: (scope: InferenceOperationScope) => Promise<T>,
   ) => Promise<T>;
+  /**
+   * #1250 (ADR 0067 D8): runs only when the control-plane and speaking gates passed and no trigger
+   * matched the message; `true` means it handled the message (e.g. an untriggered `/clear`) and the ingress stops there.
+   * `outboundBlocked` reports the control plane's outbound stop for this conversation.
+   */
+  readonly onUnmatched?: (outboundBlocked: (stage: string) => boolean) => Promise<boolean>;
 }): Promise<IngressGateEvaluation> {
   const {
     message,
@@ -277,7 +283,10 @@ export async function evaluateIngressGatesAndTrigger(input: {
 
   if (!matched && liveRoom) {
     const text = message.content.trim();
-    if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
+    if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger, message.commandPrefix)) matched = { content: text };
+  }
+  if (!matched && input.onUnmatched && await input.onUnmatched(outboundBlocked)) {
+    return { kind: 'halt', handled: true };
   }
   if (!matched) {
     matched = await considerAmbientEngagement({
@@ -401,10 +410,10 @@ export async function tryStopActiveMailTurn(input: {
     message,
     reply,
   } = input;
-  if (!gate || !isCancelIntent(matchedContent)) return false;
+  if (!gate || !isCancelIntent(matchedContent, message.commandPrefix)) return false;
 
   let stoppedKey = sessionKey;
-  let stopped = await gate.stop(sessionKey, senderId, senderRoles.isMaster, entryActorName);
+  let stopped = await gate.stop(sessionKey, senderId, senderRoles.hostRole === 'owner', entryActorName);
   if (
     stopped !== 'stopped'
     && mergeWindowEnabled
@@ -414,7 +423,7 @@ export async function tryStopActiveMailTurn(input: {
     && turnAccess.origin.scope !== 'private'
   ) {
     const sceneKey = runtimeSceneTaskSessionKey(turnAccess, projectRoot);
-    if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.isMaster, entryActorName)) === 'stopped') {
+    if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.hostRole === 'owner', entryActorName)) === 'stopped') {
       stopped = 'stopped';
       stoppedKey = sceneKey;
     }

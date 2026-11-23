@@ -5,6 +5,7 @@
  * Account changes never write startup configuration or environment files or rebuild the Root.
  */
 import {
+  formatList,
   resolveLocale,
   outboundHostToken,
   PluginConsoleRpcError,
@@ -280,14 +281,14 @@ function addUsage(spec: EndpointCommandsSpec, locale: Locale, command?: string):
   const fields = spec.fields ?? [];
   const fieldText = fields.length === 0
     ? ''
-    : endpointCommandMessages(locale, 'fieldList', { fields: fields.map((field) => {
-      const marks = [
+    : endpointCommandMessages(locale, 'fieldList', { fields: formatList(locale, fields.map((field) => {
+      const marks = formatList(locale, [
         field.required ? endpointCommandMessages(locale, 'required') : '',
         field.env ? endpointCommandMessages(locale, 'credential') : '',
         field.descriptionI18n?.[locale] ?? field.description ?? '',
-      ].filter(Boolean).join(locale === 'en' ? ', ' : '，');
+      ].filter(Boolean), { separator: 'comma' });
       return marks ? `${field.key}（${marks}）` : field.key;
-    }).join(locale === 'en' ? ', ' : '、') });
+    })) });
   return endpointCommandMessages(locale, 'addUsage', { command, fields: fieldText });
 }
 
@@ -327,7 +328,7 @@ async function runtimeCommandMutation(runtime: NonNullable<ReturnType<typeof com
   if (action === 'add') {
     const missing = runtime.consoleSpec.fields?.filter(field => field.required && !values?.[field.key]?.trim()) ?? [];
     if (missing.length) return endpointCommandMessages(locale, 'missingFields', {
-      fields: missing.map(field => field.key).join(locale === 'en' ? ', ' : '、'), usage: '',
+      fields: formatList(locale, missing.map(field => field.key)), usage: '',
     });
   }
   try {

@@ -1,4 +1,4 @@
-import { createMessages, type Locale } from 'zhin.js/i18n';
+import { createMessages, formatList, type Locale } from 'zhin.js/i18n';
 
 const catalog = {
   "cloudMetadata": {
@@ -335,7 +335,7 @@ export function message(key: NettoolsMessageKey, values: Readonly<Record<string,
 export function formatMessage(detail: NettoolsMessage, locale: Locale = 'zh-CN'): string {
   const value = (item: NettoolsMessageValue): string | number => {
     if (typeof item === 'string' || typeof item === 'number') return item;
-    if (Array.isArray(item)) return item.map((part) => value(part)).join(locale === 'en' ? '; ' : '；');
+    if (Array.isArray(item)) return formatList(locale, item.map((part) => String(value(part))), { separator: 'semicolon' });
     return formatMessage(item as NettoolsMessage, locale);
   };
   return translate(locale, detail.key, Object.fromEntries(Object.entries(detail.values).map(([key, item]) => [key, value(item)])));

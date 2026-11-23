@@ -15,8 +15,7 @@ import {
   CHAT_ROLES_RPC,
   type ConsoleChatRoleImportsListResult, type ConsoleChatRoleImportsResolveResult,
 } from '@zhin.js/console-protocol';
-import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from '../chat-roles.js';
-import { hasGlobalOwner } from '../chat-owner-claim.js';
+import { ChatRoleStorageUnavailableError, hasGlobalOwner, type InstanceChatRoleService } from '../chat-roles.js';
 import type { ChatRoleAudit, ChatRoleImportBook } from '../chat-role-migration.js';
 import { personalPrincipalPending, type PersonalPrincipalImportBook } from '../chat-personal-principals.js';
 import type { ChatPeople } from '../chat-people.js';

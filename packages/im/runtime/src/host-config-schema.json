@@ -3044,7 +3044,7 @@
               "items": {
                 "type": "string"
               },
-              "description": "忽略的前缀（命令前缀，避免与命令冲突，默认 ['/', '!', '！']）"
+              "description": "除适配器真实 commandPrefix 外额外视为命令的前缀（不当 AI 消息、不进合并窗口；默认 ['/', '!', '！']）"
             },
             "timeout": {
               "type": [

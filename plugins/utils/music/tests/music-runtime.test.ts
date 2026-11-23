@@ -56,10 +56,12 @@ describe('@zhin.js/plugin-music', () => {
     expect(reply).toContain('中文原名');
     expect(reply).toContain('"cancel"');
     const next = vi.fn();
-    await selectionMiddleware.handle({ ...context, input: { ...input, content: '取消', locale: 'zh-CN' } } as never, next);
+    // An ordinary sentence that merely contains a cancel word is not a cancellation.
+    await selectionMiddleware.handle({ ...context, input: { ...input, content: '我不想取消', locale: 'zh-CN' } } as never, next);
     expect(next).toHaveBeenCalledOnce();
     expect(sessions.get(sessionKey(conversation('ep', 'chat'), 'user'))).toBeDefined();
-    await selectionMiddleware.handle({ ...context, input: { ...input, content: 'cancel', locale: 'zh-CN' } } as never, next);
+    // #1250 第 74 批: a Chinese cancel word cancels an English flow; the reply keeps the flow's language.
+    await selectionMiddleware.handle({ ...context, input: { ...input, content: '取消！', locale: 'zh-CN' } } as never, next);
     expect(input.$reply).toHaveBeenCalledWith('Music selection cancelled.');
     expect(sessions.get(sessionKey(conversation('ep', 'chat'), 'user'))).toBeUndefined();
   });

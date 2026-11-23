@@ -1,6 +1,5 @@
-import { resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
+import { projectLocale, resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from '../../built/interaction-messages.js';
-import { projectLocale } from './inbound-spine.js';
 import {
   conversationRefKey,
   type ConversationRef,
@@ -22,6 +21,7 @@ import {
   type UserInteractionView,
 } from '../../built/user-interaction.js';
 import { tagInteractionOwner } from './interaction-end.js';
+import { refuseInteraction } from './interaction-refusal.js';
 import { isInteractionCancelFirst, isInteractionCancelReply } from '../../built/interaction-cancel.js';
 import { randomUUID } from 'node:crypto';
 import {
@@ -134,6 +134,19 @@ const REMINDER_INTERVAL_MS = 20_000;
 /** "Left the previous question" is said at most once per sender and conversation in this window. */
 const EXIT_NOTICE_INTERVAL_MS = 60_000;
 const EXIT_NOTICE_KEYS = 256;
+/**
+ * zhinjs/zhin#1250: who an ended prompt's buttons belonged to is kept this long after it ended, so a
+ * bystander pressing them in a group is not told "expired" (again and again); bounded in count.
+ */
+const ENDED_PROMPT_OWNER_MS = 10 * 60_000;
+const ENDED_PROMPT_ACTIONS = 512;
+
+/** Who an ended prompt's action payload was asked of (its conversation and subject). */
+interface EndedPromptOwner {
+  readonly conversationKey: string;
+  readonly subjectId: string;
+  readonly until: number;
+}
 
 export interface UserInteractionSource {
   readonly locale?: Locale;
@@ -186,6 +199,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   readonly #pendingFallbackIncarnations = new Map<string, PluginIncarnationRef>();
   readonly #markPrompt: ((message: MessageRef) => void) | undefined;
   readonly #exitNotices = new Map<string, number>();
+  /** Action payload → owner of the ended prompt it belonged to (insertion order = oldest first). */
+  readonly #endedOwners = new Map<string, EndedPromptOwner>();
 
   /** `markPrompt` keeps a delivered prompt out of conversation context, like its answer. */
   constructor(
@@ -229,6 +244,13 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const payload = this.#router.resolvePayload(message, { snapshot: effectiveSnapshot });
     if (payload && effectiveSnapshot && await this.#buttons.dispatch(message, payload, effectiveSnapshot)) return true;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
+      // zhinjs/zhin#1250: another sender's live prompt — not expired, just not this sender's to answer.
+      // An ended prompt asked of another sender is not this sender's either: the same silence in a
+      // group (the asked sender still hears it expired).
+      if (this.#askedOfAnother(message, payload, effectiveSnapshot) || this.#endedForAnother(message, payload)) {
+        await refuseInteraction(message, t(message.locale, 'expired'), 'interaction_not_own');
+        return true;
+      }
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }
@@ -570,10 +592,12 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     let delivered = false;
     let buffered: InteractionAnswer | undefined;
     const unsubscribers: (() => void)[] = [];
+    let ended = false;
     const dispose = () => {
       if (this.#claims.get(key) === claim) this.#claims.delete(key);
       clearTimeout(timer);
       for (const unsubscribe of unsubscribers.splice(0)) unsubscribe();
+      if (!ended) { ended = true; this.#rememberEnded(answers.keys(), conversationRefKey(conversation), subjectId); }
     };
     const fail = (error: Error) => {
       if (failure) return;
@@ -637,6 +661,51 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       unsubscribers.push(() => lifetime.removeEventListener('abort', abort));
     }
     return claim;
+  }
+
+  /** Remembers the owner of an ended prompt's actions for {@link ENDED_PROMPT_OWNER_MS}, at most {@link ENDED_PROMPT_ACTIONS}. */
+  #rememberEnded(payloads: Iterable<string>, conversationKey: string, subjectId: string): void {
+    const now = Date.now();
+    this.#pruneEnded(now);
+    for (const payload of payloads) {
+      this.#endedOwners.delete(payload);
+      this.#endedOwners.set(payload, Object.freeze({ conversationKey, subjectId, until: now + ENDED_PROMPT_OWNER_MS }));
+    }
+    while (this.#endedOwners.size > ENDED_PROMPT_ACTIONS) {
+      const oldest = this.#endedOwners.keys().next().value;
+      if (oldest === undefined) break;
+      this.#endedOwners.delete(oldest);
+    }
+  }
+
+  /** Drops expired records; entries are in end order, so the oldest come first. */
+  #pruneEnded(now: number): void {
+    for (const [payload, owner] of this.#endedOwners) {
+      if (owner.until > now) break;
+      this.#endedOwners.delete(payload);
+    }
+  }
+
+  /**
+   * True when `payload` is an action of a prompt that ended recently and was asked of another sender in
+   * this conversation. A prompt anyone could answer, or one whose record is gone, has no other owner.
+   */
+  #endedForAnother(message: Message, payload: string): boolean {
+    this.#pruneEnded(Date.now());
+    const owner = this.#endedOwners.get(payload);
+    if (!owner || owner.subjectId === ANYONE_SUBJECT) return false;
+    return owner.conversationKey === conversationRefKey(message.conversation) && owner.subjectId !== (message.sender?.id ?? '');
+  }
+
+  /** True when `payload` is an action of a live prompt asked of another sender in this conversation. */
+  #askedOfAnother(message: Message, payload: string, snapshot: RuntimeSnapshot | undefined): boolean {
+    const prefix = `${conversationRefKey(message.conversation)}:`;
+    const own = this.#conversationKey(message);
+    for (const [key, claim] of this.#claims) {
+      if (key === own || !key.startsWith(prefix)) continue;
+      if (claim.actions.has(payload) && claim.isLiveFor(message.generation, snapshot)) return true;
+    }
+    return false;
   }
 
   #conversationKey(source: UserInteractionSource, subjectId = source.sender?.id ?? ''): string {

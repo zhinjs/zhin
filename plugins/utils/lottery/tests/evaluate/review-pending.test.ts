@@ -71,8 +71,8 @@ describe('evaluatePendingPredictions', () => {
 
   it('reports waiting when only today pending and no new draw', async () => {
     const { db } = mockDb();
-    const today = new Date().toISOString().slice(0, 10);
-    await savePrediction(db, pick('ssq'), new Date(`${today}T12:00:00Z`));
+    // Saved now: today is the local calendar day (#1250), not the UTC day of a fixed instant.
+    await savePrediction(db, pick('ssq'), new Date());
     const result = await evaluatePendingPredictions(db, ['ssq'], 100, []);
     expect(result.evaluated).toBe(0);
     expect(result.lines[0]).toContain('waiting for next draw');

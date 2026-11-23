@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { ghApiMessage, resolveGhClient } from '../../../../lib/github-api.js';
+import { ghApiMessage, ghDate, resolveGhClient } from '../../../../lib/github-api.js';
 
 export default defineCommand({
   description: '查看仓库信息',
@@ -32,7 +32,7 @@ export default defineCommand({
       `默认分支: ${d.default_branch}`,
       d.language ? `语言: ${d.language}` : null,
       d.license?.name ? d.license.name : null,
-      `创建: ${d.created_at?.split('T')[0]} | 推送: ${d.pushed_at?.split('T')[0]}`,
+      `创建: ${ghDate(d.created_at)} | 推送: ${ghDate(d.pushed_at)}`,
       d.html_url,
     ].filter(Boolean).join('\n');
   },

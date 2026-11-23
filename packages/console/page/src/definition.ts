@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import {
   definePage as baseDefinePage,
   normalizeClientModuleArtifact,
@@ -21,7 +22,6 @@ import {
   CONSOLE_PAGE_SECTIONS,
   isConsolePageSection,
   type ConsolePageSection,
-  type PageKeywordLocale,
   type PageKeywords,
   type NormalizedPageMetadata,
   type PageManifest,
@@ -30,7 +30,6 @@ import {
   type DeclarativeI18nText,
   type DeclarativeBadgeTone,
   type DeclarativeButtonVariant,
-  type DeclarativeUiLocale,
   type DeclarativeRenderable,
   type DeclarativePageContext,
   type DeclarativeBadgeSpec,
@@ -81,7 +80,6 @@ export {
   projectBlueprintToImCard,
   projectBlueprintToCliPanel,
   type ConsolePageSection,
-  type PageKeywordLocale,
   type PageKeywords,
   type NormalizedPageMetadata,
   type PageManifest,
@@ -89,7 +87,6 @@ export {
   type DeclarativeI18nText,
   type DeclarativeBadgeTone,
   type DeclarativeButtonVariant,
-  type DeclarativeUiLocale,
   type DeclarativeRenderable,
   type DeclarativePageContext,
   type DeclarativeBadgeSpec,
@@ -118,7 +115,7 @@ export {
   type BlueprintCliPanelOptions,
 };
 
-export type PageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+export type PageTitleI18n = Readonly<Partial<Record<Locale, string>>>;
 
 export interface PageComponentProps {
   pluginId?: string;

@@ -51,6 +51,8 @@ const MESSAGING_CEILING: Record<string, (value: unknown) => boolean | string> = 
   reaction: (value) => JSON.stringify(value) === JSON.stringify({}),
   // Forward segments render in the page; the platform `forward` action (relaying a message) is not simulated.
   forward: () => 'not applicable',
+  // ADR 0067 D8: the composer's typed text is the sender's own; mentions, faces, media are not text.
+  inboundTextAuthoredBySender: (value) => value === true,
 };
 
 describe('Sandbox profile is the capability ceiling (ADR 0064 §0.1)', () => {

@@ -36,9 +36,8 @@ export default defineGamePlugin<SessionServices>({
     title: '井字棋',
     icon: '♟️',
     description: '三子连珠，群聊排队或人机对战',
-    commandPrefix: '/井字棋',
     quickStart: '人机',
-    aliases: ['ttt'],
+    aliases: ['ttt', '井字棋'],
     menus: [
       { id: 'bot', label: '🤖 人机对战' },
       { id: 'join', label: '👥 加入排队' },

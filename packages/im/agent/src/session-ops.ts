@@ -14,6 +14,7 @@
  *   读库失败时与欢迎同口径视为关闭。计数器与临时 `mention_only` 覆盖只在进程内存（见控制面 `AiControlPlane`）。
  */
 import { getLogger, formatCompact } from '@zhin.js/logger';
+import { untrustedContent, type SendContent } from '@zhin.js/core';
 
 const logger = getLogger('agent');
 
@@ -183,7 +184,12 @@ export interface WelcomeMember {
 }
 
 export type WelcomePart =
-  | Readonly<{ type: 'text'; text: string }>
+  /**
+   * `literal`: member / group data filled into the template (`{nickname}`, `{group}`, `{rules_url}`).
+   * It is sent as untrusted text, so outbound template placeholders inside a nickname (`${bot.menu}`)
+   * stay as written; only the operator's own template text is an outbound template (#1250).
+   */
+  | Readonly<{ type: 'text'; text: string; literal?: true }>
   | Readonly<{ type: 'mention'; id: string; name?: string }>;
 
 export interface WelcomeRenderInput {
@@ -222,15 +228,20 @@ export function unknownTemplateVars(template: string): string[] {
 /**
  * 渲染欢迎模板。只替换白名单变量：`{members}`（逐个 @）、`{nickname}`（昵称，多人用「、」连接）、
  * `{group}`、`{rules_url}`；未知变量原样保留，不报错。
+ *
+ * #1250：变量填入的是数据（`literal` 文本段，发送时按 untrusted 内容发出，不再展开出站模板占位符）；
+ * 运营者写的其余文本仍是出站模板（可写 `${bot.menu}` 等）。
  */
 export function renderWelcomeTemplate(template: string, input: WelcomeRenderInput): WelcomeRender {
   const parts: WelcomePart[] = [];
-  const pushText = (text: string) => {
+  const pushText = (text: string, literal = false) => {
     if (!text) return;
     const last = parts[parts.length - 1];
-    if (last?.type === 'text') parts[parts.length - 1] = { type: 'text', text: last.text + text };
-    else parts.push({ type: 'text', text });
+    if (last?.type === 'text' && (last.literal === true) === literal) {
+      parts[parts.length - 1] = { type: 'text', text: last.text + text, ...(literal ? { literal: true as const } : {}) };
+    } else parts.push({ type: 'text', text, ...(literal ? { literal: true as const } : {}) });
   };
+  const pushData = (text: string) => pushText(text, true);
   let cursor = 0;
   for (const match of template.matchAll(TEMPLATE_VAR)) {
     const index = match.index ?? 0;
@@ -244,13 +255,13 @@ export function renderWelcomeTemplate(template: string, input: WelcomeRenderInpu
         });
         break;
       case 'nickname':
-        pushText(input.members.map(memberName).join('、'));
+        pushData(input.members.map(memberName).join('、'));
         break;
       case 'group':
-        pushText(input.group);
+        pushData(input.group);
         break;
       case 'rules_url':
-        pushText(input.rulesUrl ?? '');
+        pushData(input.rulesUrl ?? '');
         break;
       default:
         pushText(match[0]);
@@ -259,6 +270,21 @@ export function renderWelcomeTemplate(template: string, input: WelcomeRenderInpu
   pushText(template.slice(cursor));
   const text = parts.map((part) => (part.type === 'text' ? part.text : `@${part.name ?? part.id}`)).join('');
   return Object.freeze({ parts: Object.freeze(parts), text, unknownVars: Object.freeze(unknownTemplateVars(template)) });
+}
+
+const WELCOME_DATA_TRUST = Object.freeze({ source: 'agent:welcome' });
+
+/**
+ * @internal Outbound content of a rendered welcome (not exported from the package). The operator's
+ * template text is an outbound template (`${bot.menu}` …); `literal` parts — nicknames, the group
+ * name, the rules URL — are untrusted text, sent as written (#1250).
+ */
+export function welcomePartsContent(parts: readonly WelcomePart[]): SendContent[] {
+  return parts.map((part): SendContent => {
+    if (part.type === 'mention') return { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } };
+    const segment = { type: 'text' as const, data: { text: part.text } };
+    return part.literal ? untrustedContent(segment, WELCOME_DATA_TRUST) : segment;
+  });
 }
 
 // ============================================================================

@@ -4,6 +4,8 @@ it.each([
   ['${API_KEY:-fallback}', 'API_KEY', 'fallback', ':-'],
   ['${API_KEY:=fallback}', 'API_KEY', 'fallback', ':='],
   ['${KEY:-}', 'KEY', '', ':-'],
+  // Same parser as expansion: the default runs to the first `}` and may hold `{`.
+  ['${KEY:-a{b}', 'KEY', 'a{b', ':-'],
 ])('recognizes one complete private environment default expression: %s', (input, variable, fallback, operator) => {
   expect(parseCredentialEnvironmentExpression(input)).toEqual({ variable, fallback, operator });
 });

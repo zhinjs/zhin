@@ -275,6 +275,15 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     super();
   }
 
+  /**
+   * #1250 第 84 批: true only for a lease the SnapshotStore this runtime is attached to issued (the
+   * Root's real store). The ingress route checks the dispatch lease a management command hands it, so
+   * a lease from anywhere else is refused even if it reached the command.
+   */
+  ownsLease(lease: SnapshotLease): boolean {
+    return this.snapshots?.owns(lease) === true;
+  }
+
   async execute(
     owner: PluginId,
     request: TurnRequest,

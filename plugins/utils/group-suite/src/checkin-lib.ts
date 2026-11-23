@@ -1,4 +1,6 @@
 import { messages as t } from './i18n.js';
+import type { SendContent } from '@zhin.js/core/runtime';
+import { createEcho, echoReply } from './echo.js';
 import type { ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getCheckinModel } from './db-store.js';
@@ -118,7 +120,7 @@ export async function myPoints(
   input: ConversationInput,
   runtime: GroupSuiteRuntime,
   commandHead?: string,
-): Promise<string> {
+): Promise<SendContent> {
   const M = getCheckinModel(runtime.db);
   if (!M) return t(input.locale, 'checkinDb');
   const { id: userId } = resolveSender(input);
@@ -131,21 +133,22 @@ export async function myPoints(
   if (rows.length === 0) return commandHead ? t(input.locale, 'checkinHint', { command: commandHead }) : t(input.locale, 'checkinHintNoHead');
   const u = rows[0];
   const checkedToday = u.last_checkin === todayStr();
-  return [
-    t(input.locale, 'pointsTitle', { name: String(u.user_name || t(input.locale, 'user')) }),
+  // The stored nickname is member data: quoted as written, never expanded as template text (#1250).
+  return echoReply(mark => [
+    t(input.locale, 'pointsTitle', { name: mark(u.user_name || t(input.locale, 'user')) }),
     t(input.locale, 'points', { points: String(u.points) }),
     t(input.locale, 'checkinTotal', { days: String(u.total_checkins) }),
     t(input.locale, 'checkinStreak', { days: String(u.streak) }),
     t(input.locale, 'checkinMax', { days: String(u.max_streak) }),
     checkedToday ? t(input.locale, 'checked') : t(input.locale, 'unchecked'),
-  ].join('\n');
+  ].join('\n'));
 }
 
 export async function pointsRank(
   input: ConversationInput,
   cfg: GroupSuiteConfig,
   runtime: GroupSuiteRuntime,
-): Promise<string> {
+): Promise<SendContent> {
   const M = getCheckinModel(runtime.db);
   if (!M) return t(input.locale, 'checkinDb');
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -156,14 +159,15 @@ export async function pointsRank(
   const sorted = all.sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
   const top = sorted.slice(0, cfg.rankSize);
   const medals = ['🥇', '🥈', '🥉'];
+  const echo = createEcho();
   const lines = top.map((u, i) => {
     const prefix = i < 3 ? medals[i] : `${i + 1}.`;
-    return t(input.locale, 'pointsRow', { prefix, name: String(u.user_name || u.user_id), points: String(u.points), days: String(u.total_checkins) });
+    return t(input.locale, 'pointsRow', { prefix, name: echo.mark(u.user_name || u.user_id), points: String(u.points), days: String(u.total_checkins) });
   });
   const title = ctxType === 'group' ? t(input.locale, 'groupPoints')
     : ctxType === 'channel' ? t(input.locale, 'channelPoints') : t(input.locale, 'privatePoints');
   const { id: userId } = resolveSender(input);
   const myRank = sorted.findIndex((u) => u.user_id === userId);
   const footer = myRank >= 0 ? t(input.locale, 'myRankFooter', { rank: myRank + 1 }) : '';
-  return `${title}\n${lines.join('\n')}${footer}`;
+  return echo.content(`${title}\n${lines.join('\n')}${footer}`);
 }

@@ -1,4 +1,4 @@
-import { isConsolePageSection } from '@zhin.js/console-protocol';
+import { isConsolePageSection, type ConsoleLocale } from '@zhin.js/console-protocol';
 import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntriesResponse, type ConsolePluginRegister, type PluginRegisterHostApi } from '@zhin.js/contract';
 import type * as React from 'react';
 import { AdapterConsolePage } from '../adapter-console/AdapterConsolePage.js';
@@ -15,7 +15,7 @@ export type LoadConsoleEntriesOptions = FetchConsoleEntriesOptions & {
   /** Origin for `/@dev` / `/@assets` module URLs (Remote Console: Host API base). */
   assetOrigin?: string;
   hostApi: PluginRegisterHostApi;
-  locale?: 'zh-CN' | 'en';
+  locale?: ConsoleLocale;
   beforeLoad?: () => void;
   onEmpty?: () => void;
   onFetchError?: (status: number) => void;
@@ -26,7 +26,7 @@ export interface ConsoleEntryMetadataFields {
   readonly owner?: string;
   readonly route?: string;
   readonly title?: string;
-  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
   readonly icon?: string;
   readonly group?: string;
   readonly order?: number;
@@ -119,7 +119,7 @@ export function getRegisterFn(mod: Record<string, unknown> | null | undefined): 
 export function resolveEntryRegister(
   mod: Record<string, unknown> | null | undefined,
   entry: ConsoleClientEntry & ConsoleEntryMetadataFields,
-  locale?: 'zh-CN' | 'en',
+  locale?: ConsoleLocale,
 ): ConsolePluginRegister | null {
   const named = getRegisterFn(mod);
   if (named) return named;
@@ -139,7 +139,7 @@ export function resolveEntryRegister(
     : undefined;
   const titleI18n = meta?.titleI18n
     ?? entry.titleI18n
-    ?? (entryMeta?.["titleI18n"] as Readonly<Partial<Record<'zh-CN' | 'en', string>>> | undefined);
+    ?? (entryMeta?.["titleI18n"] as Readonly<Partial<Record<ConsoleLocale, string>>> | undefined);
   const localizedTitle = locale && titleI18n && typeof titleI18n[locale] === "string" && titleI18n[locale]
     ? titleI18n[locale]
     : undefined;
@@ -217,7 +217,7 @@ export function routeKeywords(value: unknown): RouteKeywords | undefined {
   if (plain) return plain.length > 0 ? plain : undefined;
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
-  const out: Partial<Record<"zh-CN" | "en", string[]>> = {};
+  const out: Partial<Record<ConsoleLocale, string[]>> = {};
   for (const locale of ["zh-CN", "en"] as const) {
     const items = list(record[locale]);
     if (items && items.length > 0) out[locale] = items;
@@ -299,7 +299,7 @@ export async function registerConsolePluginsFromEntries(
   hostApi: PluginRegisterHostApi,
   onEntryError?: (entry: ConsoleClientEntry, error: unknown) => void,
   assetOrigin?: string,
-  locale?: 'zh-CN' | 'en',
+  locale?: ConsoleLocale,
 ): Promise<void> {
   if (!entries.length) return;
   const registrations = registrationsOf(hostApi);

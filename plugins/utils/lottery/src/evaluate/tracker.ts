@@ -3,6 +3,7 @@ import { messages as t } from '../i18n.js';
 import { DEFAULT_WEIGHTS, type DrawNumbers, type GameId, type GamePick, type HitSummary, type NormalizedDraw, type ScoreWeights, type AccuracySnapshot } from '../types.js';
 
 import { loadDraws, parseStoredJson, type LotteryDb } from '../db.js';
+import { lotteryDateKey } from '../date-key.js';
 
 import { comparePickToDraw, tuneWeightsFromDraw, formatHitSummary } from './hit-rate.js';
 import { formatWeights, normalizeWeights } from '../stats/weights.js';
@@ -123,7 +124,7 @@ export async function cancelTodayPendingPredictions(
 ): Promise<void> {
   const model = db.models.get(PREDICTIONS_TABLE);
   if (!model) return;
-  const today = date.toISOString().slice(0, 10);
+  const today = lotteryDateKey(date);
   const pending = (await listPendingPredictions(db, gameId)) as Array<{ predict_at: string; predict_date: string }>;
   for (const row of pending.filter((p) => p.predict_date === today)) {
     await model.delete().where({ game_id: gameId, predict_at: row.predict_at, status: 'pending' });
@@ -136,7 +137,7 @@ export async function savePrediction(db: LotteryDb, pick: GamePick, at = new Dat
   await model.insert({
     game_id: pick.gameId,
     predict_at: at.toISOString(),
-    predict_date: at.toISOString().slice(0, 10),
+    predict_date: lotteryDateKey(at),
     numbers: JSON.stringify(pick.numbers),
     weights: JSON.stringify(pick.weights),
     status: 'pending',
@@ -221,7 +222,7 @@ export async function submitAgentReview(
   await predModel.insert({
     game_id: input.gameId,
     predict_at: input.predictAt,
-    predict_date: input.predictAt.slice(0, 10),
+    predict_date: lotteryDateKey(new Date(input.predictAt)),
     numbers: JSON.stringify(pick.numbers),
     weights: JSON.stringify(pick.weights),
     status: 'evaluated',

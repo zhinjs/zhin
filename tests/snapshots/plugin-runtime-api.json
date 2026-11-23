@@ -192,7 +192,7 @@
     "export * from './definition.js';",
     "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue,CommandValidationIssueCode}from './arguments.js';",
-    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,removedPermitReplacement,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
+    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,describeConversationManagerDenial,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,removedPermitReplacement,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{UserFacingError,isUserFacingError,userFacingErrorText,userFacingRefusalReason}from './user-facing-error.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
@@ -232,7 +232,7 @@
     "export{EndpointRuntime}from './endpoint-runtime.js';",
     "export{MessageBus,messageBusToken,type EndpointEvent,type MessageBusEventMap,type MessageBusEventName,type RuntimeMessageEvent,type RuntimeMessageEventSource,type RuntimeMessageRendering,type RuntimeSceneEventSignal,type RuntimeSceneEventSource,type OutboundFallbackReason,}from './message-events.js';",
     "export{enterInboundOutcomeStage,InboundOutcomeLedger,inboundOutcomeSink,MessageOutcomeLog,onUnrecordedInboundOutcome,reportInboundOutcome,type InboundOutcomeLedgerInit,type InboundOutcomeSink,type MessageOutcomeLogOptions,type MessageOutcomeQuery,type MessageOutcomeReader,type UnrecordedOutcomeListener,}from './inbound-outcome-ledger.js';",
-    "export{isMessageOrigin,roomMembershipToken}from './inbound-origin.js';",
+    "export{isMessageOrigin,isNonHumanOrigin,roomMembershipToken}from './inbound-origin.js';",
     "export{renderToSegments,isNativeMessageTag,type MessageRenderOptions}from '../../jsx/message-renderer.js';"
   ],
   "core/runtime/host": [
@@ -261,7 +261,7 @@
     "export * from './base-session-service.js';",
     "export * from './board-sender.js';",
     "export * from './choice-keyboard.js';",
-    "export * from './command-alias.js';",
+    "export * from './command-match.js';",
     "export * from './command-message.js';",
     "export * from './define-game-plugin.js';",
     "export * from './deterministic-random.js';",
@@ -408,6 +408,7 @@
     "export * from './delivery-target.js';",
     "export * from './dispose.js';",
     "export * from './environment-expansion.js';",
+    "export * from './escape-html.js';",
     "export * from './handoff.js';",
     "export * from './host-credential-storage.js';",
     "export * from './host-installer.js';",
@@ -427,6 +428,7 @@
     "export * from './plugin.js';",
     "export * from './relational-state.js';",
     "export * from './relational-target-migration.js';",
+    "export * from './retry.js';",
     "export * from './root-config-document.js';",
     "export * from './root-config-file.js';",
     "export * from './root-controller.js';",

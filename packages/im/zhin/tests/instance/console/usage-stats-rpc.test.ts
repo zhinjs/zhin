@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { PluginConsoleRpcError } from '@zhin.js/plugin-runtime';
 import { AssistantStatus } from '../../../src/instance/console/assistant-status.js';
 import { UsageStatsService, resolveUsageStatsQuery, USAGE_STATS_PERMISSION } from '../../../src/instance/console/usage-stats-rpc.js';
-import { buildUsageStats, bucketStartOf, dayKeyOf, parseSessionKey } from '../../../../../host/gateway/src/usage/aggregate.js';
+import { buildUsageStats, bucketStartOf, dayKeyOf, sessionAddressOf } from '../../../../../host/gateway/src/usage/aggregate.js';
 import { createProviderDisplayIndex } from '../../../src/instance/inference/provider-display.js';
 
 const signal = new AbortController().signal;
@@ -84,8 +84,12 @@ describe('buildUsageStats', () => {
   it('handles a missing directory and odd session keys', async () => {
     const s = await buildUsageStats(join(tmpdir(), 'no-such-usage-dir'), range());
     expect(s.totals).toMatchObject({ turns: 0, calls: 0, cacheShare: 0 });
-    expect(parseSessionKey('weird')).toEqual({ platform: 'weird' });
-    expect(parseSessionKey('a:b:c')).toEqual({ platform: 'a', scope: 'b', sceneId: 'c' });
+    expect(sessionAddressOf('weird')).toEqual({ platform: 'weird' });
+    expect(sessionAddressOf('qq:bot:group:a:b')).toEqual({ platform: 'qq', scope: 'group', sceneId: 'a:b' });
+    // Only four-segment keys carry an address; other shapes name their platform alone (#1250 b80).
+    expect(sessionAddressOf('a:b:c')).toEqual({ platform: 'a' });
+    // The kernel writes an empty endpoint segment for a scene without one; it still carries an address.
+    expect(sessionAddressOf('qq::group:1')).toEqual({ platform: 'qq', scope: 'group', sceneId: '1' });
   });
 });
 
@@ -150,7 +154,7 @@ describe('usage model labels, input basis, time zone and session names (#1250)',
   });
 
   it('does not read hashed session keys as platform:scope:scene', () => {
-    expect(parseSessionKey('scene-task:v1:' + 'b'.repeat(64))).toEqual({});
+    expect(sessionAddressOf('scene-task:v1:' + 'b'.repeat(64))).toEqual({});
   });
 
   it('validates the requested time zone and defaults to the instance zone', () => {

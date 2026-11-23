@@ -6,7 +6,7 @@
  * - 配置（白名单、sendMode 等）不在这里改：用 YAML / config:patch。
  */
 import { definePluginConsoleRpc, PluginConsoleRpcError, type PluginConsoleRpc, type PluginConsoleRpcInput, type PluginConsoleRpcCall, type PluginConsoleRpcJson } from 'zhin.js';
-import { isLocale, type Locale } from 'zhin.js/i18n';
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { bilibiliEndpoints, type BilibiliEndpointDirectory, type BilibiliEndpointView } from './endpoint-directory.js';
 import { BilibiliReviewError } from './endpoint.js';
 import { draftCommentUrl, draftResourceLabel, findDraft, reviewErrorText } from './review.js';
@@ -20,10 +20,6 @@ export const BILIBILI_REVIEW_PERMISSION = 'bilibili:review';
 export const BILIBILI_LOGIN_PERMISSION = 'bilibili:login';
 
 const DRAFTS_PER_ENDPOINT = 50;
-
-function localeOf(input: PluginConsoleRpcInput): Locale | undefined {
-  return typeof input.locale === 'string' && isLocale(input.locale) ? input.locale : undefined;
-}
 
 function requireString(input: PluginConsoleRpcInput, key: string, label: string): string {
   const value = input[key];
@@ -135,11 +131,11 @@ export function createBilibiliConsoleRpc(): PluginConsoleRpc {
         handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const found = findDraft(registry, id);
-          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), localeOf(input)));
+          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), resolveLocale(input.locale)));
           try {
             const { rpid, draft } = await found.endpoint.approveDraft(id);
             return { id, url: draftCommentUrl({ ...draft, parent: rpid }) };
-          } catch (error) { return reviewFailure(id, error, localeOf(input)); }
+          } catch (error) { return reviewFailure(id, error, resolveLocale(input.locale)); }
         }),
       },
       edit: {
@@ -148,11 +144,11 @@ export function createBilibiliConsoleRpc(): PluginConsoleRpc {
           const id = requireString(input, 'id', '草稿 ID');
           const message = typeof input.message === 'string' ? input.message : '';
           const found = findDraft(registry, id);
-          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), localeOf(input)));
+          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), resolveLocale(input.locale)));
           try {
             const draft = found.endpoint.editDraft(id, message);
             return { id, message: draft.message };
-          } catch (error) { return reviewFailure(id, error, localeOf(input)); }
+          } catch (error) { return reviewFailure(id, error, resolveLocale(input.locale)); }
         }),
       },
       drop: {
@@ -160,10 +156,10 @@ export function createBilibiliConsoleRpc(): PluginConsoleRpc {
         handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const found = findDraft(registry, id);
-          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), localeOf(input)));
+          if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), resolveLocale(input.locale)));
           try {
             return { id, dropped: found.endpoint.discardDraft(id) };
-          } catch (error) { return reviewFailure(id, error, localeOf(input)); }
+          } catch (error) { return reviewFailure(id, error, resolveLocale(input.locale)); }
         }),
       },
       login: {

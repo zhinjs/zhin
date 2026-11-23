@@ -28,6 +28,7 @@ import { telegramChatMemberStanding } from './platform-permit.js';
 import {
   buildWebhookUrl,
   formatCallbackContent,
+  isTelegramRelayedMessage,
   formatCallbackSegments,
   formatInboundContent,
   formatInboundSegments,
@@ -434,11 +435,15 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
       ...(msg.reply_to_message?.message_id != null ? { replyTo: { id: String(msg.reply_to_message.message_id) } } : {}),
+      // ADR 0067 D8: forwards, inline-bot results and cross-chat quotes are not the sender's own text.
+      ...(isTelegramRelayedMessage(msg) ? { forwarded: true } : {}),
       metadata: Object.freeze({
         channelType: resolveTelegramChannelType(msg.chat.type),
         chatType: msg.chat.type,
         userId: msg.from?.id,
         date: msg.date,
+        // The bot's own handle (getMe), so `/command@<bot>` can be told apart from another bot's command.
+        ...(this.#botUsername ? { botUsername: this.#botUsername } : {}),
       }),
     });
   }

@@ -121,11 +121,14 @@ export {
 } from './security/approval-channel-conflicts.js';
 export { managementCommandText } from './init/command-presentation.js';
 export {
-  handleRuntimeManagementCommand,
+  createRuntimeManagementCommands,
+  RUNTIME_MANAGEMENT_PERMIT,
 } from './init/runtime-management-commands.js';
 export type {
-  RuntimeManagementDeps,
-  RuntimeManagementSenderRoles,
+  RuntimeManagementCommand,
+  RuntimeManagementCommandHost,
+  RuntimeManagementDispatch,
+  RuntimeManagementOperation,
 } from './init/runtime-management-commands.js';
 export {
   buildRichSystemPrompt,

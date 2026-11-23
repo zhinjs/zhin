@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { OAuthAuthentication, OAuthCredential } from '../provider/driver.js';
 import type { AntigravityServiceOptions, CodexServiceOptions, FixedServiceOptions } from './schema.js';
 import type { JsonObject } from '../provider/types.js';
-import { parseRetryAfterMs } from '../llm/provider-resilience.js';
+import { parseRetryAfterMs } from '@zhin.js/plugin-runtime';
 
 export type AuthenticationFailure = 'rejected' | 'not-submitted' | 'outcome-unknown' | 'invalid-response';
 

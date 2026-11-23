@@ -1,4 +1,4 @@
-import { channelKey, formatGameHelp, gameCommandFeedback, gameCommandHint, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
+import { channelKey, formatGameHelp, gameCommandFeedback, gameCommandHint, normalizeBjAction, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import { continueGame, handleChoice, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
@@ -14,17 +14,17 @@ export async function runBjCommand(
   action: string,
 ): Promise<GameReply> {
   return services.runInScope({ scope: channelKey(message), run: async () => {
-    const a = action.trim().toLowerCase() || 'help';
-    if (a === 'help' || a === '帮助') return getBjHelp(message);
-    if (a === 'start' || a === '开始') return (await startGame(services, message)) ?? '';
-    if (a === 'continue' || a === '继续') return continueGame(services, message);
-    if (a === 'quit' || a === '放弃') {
+    const a = normalizeBjAction(action);
+    if (a === 'help') return getBjHelp(message);
+    if (a === 'start') return (await startGame(services, message)) ?? '';
+    if (a === 'continue') return continueGame(services, message);
+    if (a === 'quit' || a === 'hit' || a === 'stand') {
       const session = await services.getActiveForUser(
         channelKey(message),
         message.sender.id,
       );
       if (!session) return gameCommandFeedback(message, 'noGame');
-      return (await handleChoice(services, message, session.id, 'quit')) ?? '';
+      return (await handleChoice(services, message, session.id, a)) ?? '';
     }
     return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getBjHelp(message);
   } });

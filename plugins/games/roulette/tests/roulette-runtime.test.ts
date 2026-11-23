@@ -19,7 +19,6 @@ import { capabilityId, rootPluginId, type CapabilityId } from 'zhin.js';
 import plugin from '../plugin.ts';
 import deadlineSchedule from '../schedules/deadlines/index.ts';
 import rouletteCommand from '../commands/roulette/[[action]]/index.ts';
-import aliasMiddleware from '../middlewares/roulette-alias/index.ts';
 import fireMiddleware from '../middlewares/roulette-fire/index.ts';
 import type { RouletteConfig } from '../src/config.js';
 import { decodeRouletteState, type RouletteState } from '../src/engine.js';
@@ -471,17 +470,14 @@ describe('timeouts (FakeClock)', () => {
 });
 
 describe('chat entry points', () => {
-  it('the 轮盘 alias runs actions and lets unknown words through', async () => {
-    const open = await runMiddleware(fake, aliasMiddleware, middlewareMessage(createFakeMessage({
-      content: '轮盘 开局',
-      sender: { id: 'alice', name: 'ALICE' },
-      conversation: { kind: 'group', id: 'g1' },
-    })));
-    const chat = await runMiddleware(fake, aliasMiddleware, middlewareMessage(createFakeMessage({ content: '轮盘 好玩吗' })));
+  it('「轮盘 开局」 reaches the command through its match; other 轮盘 text is no command (#1250 第 82 批)', async () => {
+    const pattern = rouletteCommand.match!;
+    expect(pattern.test('轮盘 好玩吗')).toBe(false);
+    const hit = pattern.exec('轮盘 开局')!;
+    await invokeGameCommand(rouletteCommand, { ...createCommandContext(fake, {
+      input: message('alice'), params: { action: '' } }), match: hit });
 
-    expect(open.continued).toBe(false);
     expect((await activeState())?.phase).toBe('lobby');
-    expect(chat.continued).toBe(true);
   });
 
   it('a bare 开枪 fires only for the player on turn', async () => {

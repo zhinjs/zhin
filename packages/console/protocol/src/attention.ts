@@ -10,6 +10,7 @@
  * messages) stays verbatim inside them.
  */
 
+import type { ConsoleLocale } from './locale.js';
 export const ATTENTION_RPC = Object.freeze({
   LIST: 'attention.list',
 } as const);
@@ -265,7 +266,7 @@ export interface ConsoleAttentionPersonLink {
 }
 
 export interface ConsoleAttentionListRequest {
-  readonly locale?: 'zh-CN' | 'en';
+  readonly locale?: ConsoleLocale;
 }
 
 export interface ConsoleAttentionList {

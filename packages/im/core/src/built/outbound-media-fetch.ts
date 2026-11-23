@@ -34,7 +34,7 @@ import {
 } from '@zhin.js/kernel';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { Locale } from '@zhin.js/plugin-runtime';
-import { DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES } from './outbound-media-trust.js';
+import { DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES, mediaRefusalText } from './outbound-media-trust.js';
 
 export const OUTBOUND_MEDIA_FETCH_TIMEOUT_MS = 30_000;
 /** Downloads that may run at once on this host, across every adapter (#1250 第 46 批 L1). */
@@ -267,21 +267,7 @@ function hostDetails(url: string): { readonly host?: string } {
 /** The default fetcher: pinned Node transport. Adapters use it unless a test injects another. */
 export const fetchOutboundMedia: OutboundMediaFetcher = createOutboundMediaFetcher();
 
-const NOTICE: Readonly<Record<'zh-CN' | 'en', { readonly labels: Readonly<Record<string, string>>; readonly fallback: string; readonly text: (label: string) => string }>> = {
-  'zh-CN': {
-    labels: { image: '图片', audio: '语音', record: '语音', video: '视频', file: '文件' },
-    fallback: '附件',
-    text: label => `[${label}未发送：媒体地址不被允许]`,
-  },
-  en: {
-    labels: { image: 'image', audio: 'audio', record: 'audio', video: 'video', file: 'file' },
-    fallback: 'attachment',
-    text: label => `[${label} not sent: media address not allowed]`,
-  },
-};
-
 /** Visible text that replaces a media segment whose URL was refused. */
 export function outboundMediaNotice(segmentType: string, locale?: Locale): string {
-  const notice = locale === 'en' ? NOTICE.en : NOTICE['zh-CN'];
-  return notice.text(notice.labels[segmentType] ?? notice.fallback);
+  return mediaRefusalText(segmentType, 'address', locale);
 }

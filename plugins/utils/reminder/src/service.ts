@@ -1,7 +1,7 @@
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { reminderMessages as t } from './i18n.js';
 import { randomUUID } from 'node:crypto';
-import { createDeliveryTarget, type DeliveryTarget, type OutboundHost, type PluginStateStore } from 'zhin.js';
+import { createDeliveryTarget, formatDateTime, type DeliveryTarget, type OutboundHost, type PluginStateStore } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import type { ReminderConfig } from './config.js';
 import { AdministratorReminderTasks } from './admin-tasks.js';
@@ -171,7 +171,8 @@ export class ReminderService {
   }
 
   describe(task: ReminderTask, locale: Locale = resolveLocale(task.locale)): string {
-    const date = new Intl.DateTimeFormat(locale, { timeZone: this.#config.timezone, dateStyle: 'short', timeStyle: 'medium' }).format(task.nextRunAt);
+    // #1250: `YYYY-MM-DD HH:mm:ss` in the configured zone, as the creation preview shows it.
+    const date = formatDateTime(task.nextRunAt, locale, { timeZone: this.#config.timezone });
     const state = t(locale, { pending: 'pending', unknown: 'unknownStatus', delivered: 'deliveredStatus', failed: 'failedStatus', cancelled: 'cancelledStatus' }[task.status] as 'pending' | 'unknownStatus' | 'deliveredStatus' | 'failedStatus' | 'cancelledStatus');
     const detail = task.detailKey ? t(locale, task.detailKey, { code: task.failureCode ?? '' }) : task.detail;
     return `${task.id} | ${state} | ${date} (${this.#config.timezone})${task.intervalMs === null ? '' : ` | ${t(locale, 'every', { seconds: task.intervalMs / 1000 })}`}`

@@ -4,7 +4,8 @@ export const ownerApprovalMessages = createMessages({
   empty: { 'zh-CN': 'bash 永久放行: 否\n自定义正则放行: 无', en: 'Permanent bash approval: no\nCustom regex approvals: none' },
   status: { 'zh-CN': 'bash 永久放行: {enabled}\n自定义正则放行 ({count}):', en: 'Permanent bash approval: {enabled}\nCustom regex approvals ({count}):' },
   yes: { 'zh-CN': '是', en: 'yes' }, no: { 'zh-CN': '否', en: 'no' },
-  denied: { 'zh-CN': '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。需在插件配置中设置 master/owner。', en: '⚠️ Only the Endpoint Owner can use this command in a private conversation. Set master/owner in the plugin configuration.' },
+  // The refusal of a sender who is no global owner (or not in a private chat): `describeGlobalOwnerRequired`
+  // (`@zhin.js/permission`), shared with the other host-wide abilities (#1250 第 78 批).
   always: { 'zh-CN': '✅ 已对 bash 永久放行 Owner 硬确认（本 Bot）。后续 bash 需确认时将不再弹窗。', en: '✅ Permanently approved bash for this Bot. Future bash requests will skip Owner confirmation.' },
   removed: { 'zh-CN': '✅ 已删除该放行规则。', en: '✅ Removed the approval rule.' },
   added: { 'zh-CN': '✅ 已添加规则 id={id}… ，匹配子命令时将不再要求 Owner 确认（仍受危险命令黑名单等约束）。', en: '✅ Added rule id={id}… Matching subcommands will skip Owner confirmation; dangerous-command restrictions still apply.' },

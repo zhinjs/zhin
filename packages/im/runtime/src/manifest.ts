@@ -1,4 +1,4 @@
-import { PLUGIN_CATEGORIES, isPluginCategory, type PluginCategory } from '@zhin.js/plugin-runtime';
+import { PLUGIN_CATEGORIES, isPluginCategory, type PluginCategory, type Locale } from '@zhin.js/plugin-runtime';
 
 export interface PackageReference {
   readonly package: string;
@@ -25,9 +25,9 @@ export interface ZhinPluginManifest {
   readonly metadata?: Readonly<{
     displayName?: string;
     /** Console display-name translations keyed by `zh-CN` / `en`. */
-    displayNameI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    displayNameI18n?: Readonly<Partial<Record<Locale, string>>>;
     /** Plugin-market description translations keyed by `zh-CN` / `en` (manifest only). */
-    descriptionI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
     /** Plugin-market category, one of `PLUGIN_CATEGORIES` (manifest only). */
     category?: PluginCategory;
     icon?: string;
@@ -376,9 +376,9 @@ function parseLocalizedText(
   source: string,
   issues: string[],
   onUnknownLocale?: (locale: string, message: string) => void,
-): Readonly<Partial<Record<'zh-CN' | 'en', string>>> {
+): Readonly<Partial<Record<Locale, string>>> {
   const record = asRecord(value, source, issues);
-  const result: Partial<Record<'zh-CN' | 'en', string>> = {};
+  const result: Partial<Record<Locale, string>> = {};
   for (const key of Object.keys(record)) {
     if (key !== 'zh-CN' && key !== 'en') {
       const message = `${source}.${key} is not supported (use zh-CN or en)`;

@@ -109,3 +109,31 @@ it('omits provider replay state from the actual Console request DTO while preser
   for (const marker of ['private-account', 'private-signature', 'private-encrypted', 'private-thought']) expect(body).not.toContain(marker);
   expect(body).toContain('call-real'); expect(body).toContain('cacheControl');
 });
+
+it('session summaries carry the latest origin, a readable label and the chats of a multi-chat session (#1250 b63)', async () => {
+  const archive = createTurnTraceArchive(directory, { secrets: [] });
+  const now = Date.now();
+  const other: ConversationRef = { ...conversation, id: 'other-room', threadId: undefined, parent: undefined };
+  await archive.save(trace('t1', { started_at: now - 30, origin: { kind: 'im', platform: 'slack', endpoint: 'main', scope: 'channel', sceneId: other.id, conversation: { ...other, name: '值班群' } } }));
+  await archive.save(trace('t2', { started_at: now - 20 }));
+  await archive.save(trace('legacy', { started_at: now - 10, session_key: 'personal-session:v1:abcdef0123456789', origin: undefined }));
+  await archive.save(trace('job', { started_at: now, session_key: 'schedule:sched_1', origin: { kind: 'schedule', jobId: 'sched_1' } }));
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner' });
+  hosts.push(http);
+  registerTraceArchiveRoutes({ http, base: '/api', projectRoot: directory, dir: directory,
+    scheduleJobLabels: async () => new Map([['sched_1', '每日早报']]) });
+  const { port } = await http.listen();
+  const response = await fetch(`http://127.0.0.1:${port}/api/agent/trace-archive/sessions`, { headers: { authorization: 'Bearer operator' } });
+  const { data } = await response.json();
+  const byKey = new Map(data.map((row: { session_key: string }) => [row.session_key, row]));
+  expect(byKey.get('schedule:sched_1')).toMatchObject({ origin: { kind: 'schedule', jobId: 'sched_1' },
+    scope_kind: 'schedule', scene_label: '每日早报', display_name: '定时任务 每日早报' });
+  const legacy = byKey.get('personal-session:v1:abcdef0123456789') as Record<string, unknown>;
+  for (const field of ['origin', 'platform', 'scope_kind', 'scene_label', 'display_name', 'conversations']) expect(legacy).not.toHaveProperty(field);
+  const chat = byKey.get(sessionKey) as Record<string, unknown> & { origin: Record<string, unknown>; conversations: Array<{ display_name: string; turns: number; origin: unknown }> };
+  // Accounts are matched by `origin.platform` / `origin.endpoint`.
+  expect(chat.origin).toMatchObject({ kind: 'im', platform: 'slack', endpoint: 'main', scope: 'channel', sceneId: conversation.id });
+  expect(chat).toMatchObject({ platform: 'slack', scope_kind: 'channel', scene_label: conversation.id, display_name: `slack · 频道 ${conversation.id}` });
+  expect(chat.conversations.map(c => [c.display_name, c.turns])).toEqual([[`slack · 频道 ${conversation.id}`, 1], ['slack · 频道 值班群', 1]]);
+  expect(chat.conversations[1]!.origin).toMatchObject({ platform: 'slack', endpoint: 'main', sceneId: 'other-room' });
+});

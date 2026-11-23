@@ -216,11 +216,41 @@ pnpm pub       # = pnpm changeset publish; publishes to npm
 
 During daily development you only need `pnpm release` to commit the changeset file; `bump` and `pub` are executed by CI.
 
-The version policy permits `patch` only. Every changeset declaration must use `patch`, and
-`approvedNonPatchReleases` in `.changeset/version-policy.json` must stay empty.
-`pnpm check:release-plan` inspects both the raw declarations and the complete plan Changesets
-derives; any `minor` or `major`, including bumps inferred through dependency propagation, fails CI,
-and there is no exemption entry.
+The version policy permits `patch` by default and never permits `major`. `pnpm check:release-plan`
+inspects both the raw declarations and the complete plan Changesets derives, including bumps inferred
+through dependency propagation. A `minor` passes only after the repository owner approves it and it is
+recorded in `approvedNonPatchReleases` of `.changeset/version-policy.json`:
+
+```json
+{ "package": "@zhin.js/core", "type": "minor", "version": "1.14.0", "reason": "Approved by the owner (…): …" }
+```
+
+- `version` is required: the approved target version (`X.Y.0`). It must equal the package's
+  `newVersion` in the release plan; a package-only entry or a different version is rejected as an
+  unapproved minor, and the error prints the `version` to record.
+- A package has at most one approval (one target version) at a time; unknown keys are rejected.
+- The error prints a complete entry to copy; its `reason` is a placeholder to replace with the
+  owner's approval, e.g. `"reason": "所有者已批准（zhinjs/zhin#1250，2026-11-20）：…"`.
+- Each planned `newVersion` is also compared with the package's most recently released stable tag
+  (newest tag commit; the pre-1.x line's higher numbers are ignored): a different major is always rejected, and a higher minor needs an approval whose `version`
+  equals `newVersion`, so hand-editing `package.json` into a new minor and adding a patch is blocked
+  too (details and the version-collision flow are in the Chinese publishing guide,
+  `docs/contributing/publishing.md`).
+- Prereleases are not supported: `.changeset/pre.json` or a prerelease version in the plan fails
+  with an explicit error.
+- **Delete the entry after publishing.** The check fails on these four kinds of stale approval and
+  asks for their removal:
+  1. the package is not a publishable workspace package (misspelled, deleted, or now private);
+  2. the version is already published (tag `<name>@<version>` exists);
+  3. it is lower than the current `package.json` version (a later release already went out);
+  4. the plan has no minor for the package and `package.json` does not carry that version either
+     (an orphan).
+
+  Two states are valid: the plan is about to bump to that version, or a version PR has already set
+  `package.json` to it and the tag does not exist yet. An old approval therefore never lets a new
+  minor through without the owner's consent. Once publishing has tagged the version, a leftover
+  entry fails every later PR: delete it after the release, usually in the commit that syncs `main`
+  back into the feature branch.
 Release coverage deliberately ignores only tests and Changesets-generated `CHANGELOG.md` files.
 Package-local build, type-check, and tooling configuration can change emitted code or declarations,
 so those configuration changes also require a patch changeset.

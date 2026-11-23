@@ -98,6 +98,12 @@ describe('schedule tools empty-plan and unattended hints (#1250 b33)', () => {
     expect(result.warning).toContain('schedule_preview');
   });
 
+  it('states a one-off job time in the repository date format (#1250)', async () => {
+    const { value } = adding();
+    const result = await tool(value, 'schedule_add').execute({ delay_minutes: 5, prompt: '天气', notify_channel: 'im' }, context) as Record<string, unknown>;
+    expect(result.message).toMatch(/^已安排一次性任务，将在 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} 执行$/u);
+  });
+
   it('does not warn when the plan names tools, or when there is no plan', async () => {
     const withTools = adding();
     const named = await tool(withTools.value, 'schedule_add').execute({

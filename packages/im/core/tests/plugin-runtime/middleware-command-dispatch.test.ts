@@ -15,6 +15,7 @@ import { SnapshotStore, createSnapshotView, createCapabilitySlot, rootPluginId, 
   featureConversationOverridesToken, primaryConfigToken,
   type PrimaryConfig, type RuntimeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { ImRuntime, type Message, type OutboundEnvelope } from '../../src/plugin-runtime/im/index.js';
+import { imOperationResourcesToken, type ImOperationResourcesInput } from '../../src/plugin-runtime/im/contracts.js';
 
 class TestEndpoint implements EndpointContract {
   readonly sent: EndpointSendRequest[] = [];
@@ -33,7 +34,10 @@ type DispatchCall = (index: CommandIndex, input: Message) => Promise<CommandDisp
 /** ADR 0057 §2 stored switches, keyed `<plugin>|<resolution key>` (e.g. `command-author|root/one`). */
 type StoredSwitches = Readonly<Record<string, { enabled: false }>>;
 
-async function fixture(call: DispatchCall, stored: StoredSwitches = {}) {
+/** Host operation resources (Agent-like) the fixture's Root offers; absent: a project without an Agent. */
+type OpenedOperation = Readonly<{ owner: string; delegatedFrom?: string }>;
+
+async function fixture(call: DispatchCall, stored: StoredSwitches = {}, opened?: OpenedOperation[]) {
   const root = rootPluginId();
   const author = childPluginId(root, 'command-author');
   const buttons = childPluginId(root, 'buttons');
@@ -68,7 +72,14 @@ async function fixture(call: DispatchCall, stored: StoredSwitches = {}) {
     definition: defineMiddleware<OutboundEnvelope>({ target: 'outbound', handle: async ({ input }, next) => {
       outboundRequesters.push(input.requester); await next();
     } }) });
-  const commands = [vote, secret];
+  const rootCmd = createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: 'rootcmd', source: '/commands/rootcmd/index.ts',
+    definition: defineCommand<{}, unknown, Message>({ execute: async ({ input }) => {
+      seen.push({ sender: input?.sender });
+      return 'root-ran';
+    } }) });
+  const own = createCapabilitySlot({ owner: buttons, feature: commandFeatureId, localName: 'mine', source: '/commands/mine/index.ts',
+    definition: defineCommand<{}, unknown, Message>({ execute: async () => 'mine-ran' }) });
+  const commands = [vote, secret, rootCmd, own];
   const middlewares = [inbound, outbound];
   const slots = [adapterSlot, ...commands, ...middlewares];
   const document = { configVersion: 2, plugins: { 'command-author': 'command', buttons: 'buttons' } };
@@ -83,6 +94,10 @@ async function fixture(call: DispatchCall, stored: StoredSwitches = {}) {
   resources: new Map([[root, new Map<string, unknown>([
     [endpointEventGatewayToken.id, im.endpointEvents], [permissionHostToken.id, new PermissionHost()],
     [primaryConfigToken.id, primary], ...switches,
+    ...(opened ? [[imOperationResourcesToken.id, Object.freeze({ open: (input: ImOperationResourcesInput) => {
+      opened.push({ owner: input.owner, ...(input.delegatedFrom ? { delegatedFrom: input.delegatedFrom } : {}) });
+      return { has: () => false, use: () => { throw new Error('Missing'); }, close: async () => undefined };
+    } })] as const] : []),
   ])], [author, new Map()], [buttons, new Map()]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() };
   // Production shape: projections see a projection-time view, not the snapshot committed below.
   const view = createSnapshotView(0, state);
@@ -115,6 +130,46 @@ describe('CommandIndex.dispatch from a plugin middleware (issue #1250)', () => {
       // Its reply is authored by the command's owner and goes through the outbound chain.
       expect(f.outboundRequesters).toEqual([f.author]);
       expect(f.endpoint.sent.map(request => request.payload)).toEqual(['voted']);
+    } finally { await f.close(); }
+  });
+
+  it('runs a Root command a plugin middleware dispatches, also in a project without an Agent (#1250 第 84 批)', async () => {
+    const f = await fixture((commands, input) => commands.dispatch({ input: 'rootcmd', source: input }));
+    try {
+      await f.receive('btn:root');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ matched: true, status: 'executed', command: 'rootcmd', value: 'root-ran' })]);
+      expect(f.seen).toEqual([{ sender: expect.objectContaining({ id: 'alice' }) }]);
+    } finally { await f.close(); }
+  });
+
+  it('opens the Root\'s Host resources for a plugin-dispatched Root command as delegated from that plugin (#1250 第 84 批)', async () => {
+    const opened: OpenedOperation[] = [];
+    const f = await fixture((commands, input) => commands.dispatch({ input: 'rootcmd', source: input }), {}, opened);
+    try {
+      await f.receive('btn:root');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ status: 'executed', value: 'root-ran' })]);
+      expect(opened).toEqual([{ owner: f.store.current.root, delegatedFrom: f.buttons }]);
+      // Sent directly, Core's dispatcher runs the same Root command undelegated.
+      opened.length = 0;
+      await f.receive('/rootcmd');
+      expect(opened).toEqual([{ owner: f.store.current.root }]);
+    } finally { await f.close(); }
+  });
+
+  it('runs the middleware\'s own command and another plugin\'s, each with its own operation (#1250 第 84 批)', async () => {
+    const opened: OpenedOperation[] = [];
+    const f = await fixture(async (commands, input) => {
+      await commands.dispatch({ input: 'mine', source: input });
+      return commands.dispatch({ input: 'vote', source: input });
+    }, {}, opened);
+    try {
+      await f.receive('btn:mine');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ status: 'executed', command: 'vote', owner: f.author })]);
+      // Its own command: no rebinding at all. P → Q: Q's operation, delegated from P.
+      expect(opened).toEqual([{ owner: f.buttons }, { owner: f.author, delegatedFrom: f.buttons }]);
     } finally { await f.close(); }
   });
 
@@ -163,6 +218,21 @@ describe('CommandIndex.dispatch from a plugin middleware (issue #1250)', () => {
       expect(f.errors).toEqual([]);
       expect(f.results).toEqual([expect.objectContaining({ matched: false, status: 'unmatched' })]);
       expect(f.seen).toEqual([]);
+      expect(f.endpoint.sent).toEqual([]);
+    } finally { await f.close(); }
+  });
+
+  it('gates an explicit snapshot that is the message\'s own like no snapshot: unmatched, no resources opened (#1250 第 84 批)', async () => {
+    const opened: OpenedOperation[] = [];
+    const snapshotHook = Symbol.for('zhin.operation-input-snapshot/1');
+    const f = await fixture((commands, input) => commands.dispatch({ input: 'vote', source: input,
+      snapshot: (input as unknown as Record<symbol, () => RuntimeSnapshot>)[snapshotHook]!() }), { 'command-author|root/one': { enabled: false } }, opened);
+    try {
+      await f.receive('btn:vote:1');
+      expect(f.errors).toEqual([]);
+      expect(f.results).toEqual([expect.objectContaining({ matched: false, status: 'unmatched' })]);
+      expect(f.seen).toEqual([]);
+      expect(opened).toEqual([]);
       expect(f.endpoint.sent).toEqual([]);
     } finally { await f.close(); }
   });

@@ -12,8 +12,24 @@ describe('cancel intent detection', () => {
     expect(isCancelIntent('取消')).toBe(true);
   });
 
-  it('recognizes "/cancel"', () => {
-    expect(isCancelIntent('/cancel')).toBe(true);
+  it('recognizes "/cancel" through the real command prefix, not a hard-coded slash', () => {
+    expect(isCancelIntent('/cancel', '/')).toBe(true);
+    expect(isCancelIntent('#取消', '#')).toBe(true);
+    expect(isCancelIntent('!quit', '!')).toBe(true);
+    // Without a known prefix, or with another one, a slash is just text.
+    expect(isCancelIntent('/cancel')).toBe(false);
+    expect(isCancelIntent('/cancel', '#')).toBe(false);
+  });
+
+  it('recognizes every cancel word in either language (#1250 第 74 批)', () => {
+    for (const word of ['退出', '算了', 'quit', 'exit', 'cancel', '取消']) expect(isCancelIntent(word)).toBe(true);
+  });
+
+  it('ignores full-width forms and trailing punctuation', () => {
+    expect(isCancelIntent('取消！')).toBe(true);
+    expect(isCancelIntent('Ｃａｎｃｅｌ')).toBe(true);
+    expect(isCancelIntent('cancel!!')).toBe(true);
+    expect(isCancelIntent('算了。')).toBe(true);
   });
 
   it('recognizes "cancel" case-insensitive', () => {
@@ -23,14 +39,22 @@ describe('cancel intent detection', () => {
 
   it('trims whitespace', () => {
     expect(isCancelIntent('  取消  ')).toBe(true);
-    expect(isCancelIntent(' /cancel ')).toBe(true);
+    expect(isCancelIntent(' /cancel ', '/')).toBe(true);
   });
 
   it('rejects non-cancel text', () => {
     expect(isCancelIntent('hello')).toBe(false);
     expect(isCancelIntent('取消了吗')).toBe(false);
-    expect(isCancelIntent('/cancel all')).toBe(false);
+    expect(isCancelIntent('/cancel all', '/')).toBe(false);
     expect(isCancelIntent('')).toBe(false);
+    expect(isCancelIntent('', '/')).toBe(false);
+    expect(isCancelIntent('/', '/')).toBe(false);
+  });
+
+  it('does not take yes/no answers or ordinary sentences for a stop request', () => {
+    for (const text of ['不', 'no', 'n', '否', '我不确定', '算了吧', '退出群聊', 'cancel the order']) {
+      expect(isCancelIntent(text)).toBe(false);
+    }
   });
 });
 

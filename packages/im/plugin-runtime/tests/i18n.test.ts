@@ -1,4 +1,5 @@
-import { createMessages, formatDateTime } from '../src/i18n.js';
+import { createMessages, formatDateTime, formatList, projectLocale, projectLocaleToken, queryLocale } from '../src/i18n.js';
+import type { PluginId, RuntimeSnapshot } from '../src/index.js';
 
 it('keeps locales explicit and interpolates user values exactly once', async () => {
   const t = createMessages({ greet: { 'zh-CN': '你好 {name}', en: 'Hello {name}' } });
@@ -38,5 +39,54 @@ describe('formatDateTime default zone (review of #1288)', () => {
     } finally {
       if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
     }
+  });
+});
+
+describe('formatList (#1250 batch 77)', () => {
+  it('joins with the language separator and never adds a conjunction', () => {
+    expect(formatList('zh-CN', ['甲', '乙', '丙'])).toBe('甲、乙、丙');
+    expect(formatList('en', ['a', 'b', 'c'])).toBe('a, b, c');
+    expect(formatList(undefined, ['甲', '乙'])).toBe('甲、乙');
+    expect(formatList('en', [])).toBe('');
+    expect(formatList('en', ['only'])).toBe('only');
+    expect(formatList('zh-CN', new Set(['x', 'y']))).toBe('x、y');
+  });
+
+  it('has comma and semicolon separators for phrases and clauses', () => {
+    expect(formatList('zh-CN', ['a', 'b'], { separator: 'comma' })).toBe('a，b');
+    expect(formatList('en', ['a', 'b'], { separator: 'comma' })).toBe('a, b');
+    expect(formatList('zh-CN', ['a', 'b'], { separator: 'semicolon' })).toBe('a；b');
+    expect(formatList('en', ['a', 'b'], { separator: 'semicolon' })).toBe('a; b');
+  });
+});
+
+describe('queryLocale (#1250 batch 77)', () => {
+  const query = (search: string) => new URLSearchParams(search);
+  it('falls back when absent and accepts one supported value', () => {
+    expect(queryLocale(query(''))).toBe('zh-CN');
+    expect(queryLocale(query(''), 'en')).toBe('en');
+    expect(queryLocale(query('locale=en'))).toBe('en');
+    expect(queryLocale(query('locale=zh-CN'), 'en')).toBe('zh-CN');
+  });
+
+  it('rejects unsupported, empty and repeated values', () => {
+    expect(queryLocale(query('locale=en-US'))).toBeUndefined();
+    expect(queryLocale(query('locale='))).toBeUndefined();
+    expect(queryLocale(query('locale=en&locale=en'))).toBeUndefined();
+  });
+});
+
+describe('projectLocale (#1250 batch 77)', () => {
+  const root = 'root' as PluginId;
+  const snapshot = (resource: unknown, config: unknown): RuntimeSnapshot => ({
+    generation: 1, root, tree: new Map(), capabilities: new Map(), projections: new Map(),
+    config: new Map([[root, config]]),
+    resources: new Map([[root, new Map(resource === undefined ? [] : [[projectLocaleToken.id, resource]])]]),
+  });
+  it('prefers the projected project language, then the Root configuration, then the default', () => {
+    expect(projectLocale(snapshot('en', { locale: 'zh-CN' }))).toBe('en');
+    expect(projectLocale(snapshot(undefined, { locale: 'en' }))).toBe('en');
+    expect(projectLocale(snapshot(undefined, { locale: 'fr' }))).toBe('zh-CN');
+    expect(projectLocale(snapshot(undefined, undefined))).toBe('zh-CN');
   });
 });

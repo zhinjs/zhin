@@ -45,17 +45,62 @@ export function explainPermitRules(
   }));
 }
 
+/** Options of the denial sentences: the sender's normalized platform standing, when known. */
+export interface PermitDenialOptions {
+  /** `sender.platform.standing`: a group owner / admin learns that it is not a zhin role. */
+  readonly standing?: string;
+  /** A platform / Bot condition's reason the caller already described (the command index's denial). */
+  readonly reason?: string;
+  /**
+   * The chat invocation of the `bind` command where the refusal is sent (endpoint command prefix
+   * included, e.g. `!!绑定`; `CommandContext.formatCommand('bind')`), for the global owner text.
+   */
+  readonly bindCommand?: string;
+  /**
+   * The endpoint's actual command prefix (`''`: none) when `bindCommand` is not at hand: the text
+   * names `<prefix>绑定` / `<prefix>bind`. With neither, it says to add a configured prefix.
+   */
+  readonly commandPrefix?: string;
+}
+
+/** Joins sentences: no separator after full-width punctuation, a space in English. */
+function sentences(locale: Locale, ...parts: readonly string[]): string {
+  return parts.join(locale === 'en' ? ' ' : '');
+}
+
+/** Whether every value of a role permit is `owner@global` (a host-wide ability). */
+function requiresGlobalOwner(values: readonly string[]): boolean {
+  return values.length > 0 && values.every((value) => value === 'owner@global');
+}
+
+/** Where a global owner is granted: the `bind` invocation as sent here when known. */
+function globalOwnerGrant(locale: Locale, options: Pick<PermitDenialOptions, 'bindCommand' | 'commandPrefix'>): string {
+  const word = permissionMessages(locale, 'bindWord');
+  const bind = options.bindCommand?.trim() || (typeof options.commandPrefix === 'string' ? `${options.commandPrefix}${word}` : undefined);
+  return permissionMessages(locale, 'globalOwnerGrant', bind
+    ? { bind, prefixHint: '' }
+    : { bind: word, prefixHint: permissionMessages(locale, 'bindPrefixHint') });
+}
+
+function roleDenial(values: readonly string[], locale: Locale, options: PermitDenialOptions): string {
+  if (requiresGlobalOwner(values)) return sentences(locale, permissionMessages(locale, 'deniedGlobalOwner'), globalOwnerGrant(locale, options));
+  return permissionMessages(locale, options.standing === 'owner' || options.standing === 'admin' ? 'deniedRoleStanding' : 'deniedRole');
+}
+
 /**
- * One sentence telling the sender which condition a denied permit needs (command / button
- * rejection replies). Session conditions stay generic.
+ * Complete sentences telling the sender which condition a denied permit needs (button refusals,
+ * `CommandDispatchResult.denial.reason`, a Root command feedback renderer's `reason`). zhin role
+ * conditions say where roles come from, never which role (ADR 0060 §5.3); `owner@global` says how a
+ * global owner is granted. Session conditions stay generic. Only {@link describeCommandDenial}
+ * prepends the command refusal to them.
  */
-export function describeDeniedPermit(permit: string, locale?: Locale): string {
+export function describeDeniedPermit(permit: string, locale?: Locale, options: PermitDenialOptions = {}): string {
   const resolved = resolveLocale(locale);
   const parsed = parsePermitName(permit);
   if (!parsed) return permissionMessages(resolved, 'deniedGeneric');
   const value = parsed.values.join(', ');
   switch (parsed.kind) {
-    case 'role': return permissionMessages(resolved, 'deniedRole', { value });
+    case 'role': return roleDenial(parsed.values, resolved, options);
     case 'platform': return permissionMessages(resolved, parsed.values[0] === 'owner' ? 'deniedPlatformOwner' : 'deniedPlatformAdmin');
     case 'platform-role': return permissionMessages(resolved, 'deniedPlatformRole', { value });
     case 'platform-permission': return permissionMessages(resolved, 'deniedPlatformPermission', { value });
@@ -65,4 +110,45 @@ export function describeDeniedPermit(permit: string, locale?: Locale): string {
     case 'user': return permissionMessages(resolved, 'deniedUser');
     default: return permissionMessages(resolved, 'deniedScene');
   }
+}
+
+/**
+ * The reply to a command refused for `permit` (zhinjs/zhin#1250 第 78 批: the one source of command
+ * refusals). A zhin role condition says where roles come from (`owner@global`: how a global owner
+ * is granted, the same text as {@link describeGlobalOwnerRequired}); a platform / Bot condition says
+ * what is missing; `private()` asks for a private chat; anything else (no permit, another place
+ * condition, a user list, a custom permit) is the generic sentence.
+ */
+export function describeCommandDenial(permit: string | undefined, locale?: Locale, options: PermitDenialOptions = {}): string {
+  const resolved = resolveLocale(locale);
+  if (typeof permit !== 'string') return permissionMessages(resolved, 'deniedCommand');
+  const parsed = parsePermitName(permit);
+  if (!parsed) return permissionMessages(resolved, 'deniedCommand');
+  if (parsed.kind === 'role') {
+    return requiresGlobalOwner(parsed.values) ? describeGlobalOwnerRequired(resolved, options)
+      : sentences(resolved, permissionMessages(resolved, 'deniedCommand'), roleDenial(parsed.values, resolved, options));
+  }
+  if (parsed.kind === 'private' && parsed.values.every((value) => value === '' || value === '*')) return permissionMessages(resolved, 'deniedPrivate');
+  if (parsed.kind === 'platform' || parsed.kind === 'platform-role' || parsed.kind === 'platform-permission' || BOT_PERMIT_KINDS.has(parsed.kind)) {
+    return sentences(resolved, permissionMessages(resolved, 'deniedCommandHere'), options.reason || describeDeniedPermit(permit, resolved));
+  }
+  return permissionMessages(resolved, 'deniedCommand');
+}
+
+/**
+ * The refusal of a host-wide ability that needs a **global** chat owner (ADR 0056 §2: restart,
+ * configuration, owner approvals, `owner@global` permits), with where a global owner is granted.
+ * `privateChat`: the ability also needs a private chat; `bindCommand` / `commandPrefix`: as in {@link PermitDenialOptions}.
+ */
+export function describeGlobalOwnerRequired(locale?: Locale, options: Readonly<{ privateChat?: boolean; bindCommand?: string; commandPrefix?: string }> = {}): string {
+  const resolved = resolveLocale(locale);
+  return sentences(resolved, permissionMessages(resolved, options.privateChat ? 'globalOwnerPrivateOnly' : 'globalOwnerOnly'), globalOwnerGrant(resolved, options));
+}
+
+/**
+ * The refusal of a conversation-management action guarded by `canManageConversation` (`@zhin.js/command`):
+ * a private chat, or the zhin chat role `admin` of the conversation.
+ */
+export function describeConversationManagerDenial(locale?: Locale): string {
+  return permissionMessages(resolveLocale(locale), 'deniedConversationManager');
 }

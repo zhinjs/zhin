@@ -16,7 +16,7 @@ import {
   type EndpointTransportState,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
-import type { CapabilityId } from 'zhin.js';
+import { sleep, type CapabilityId } from 'zhin.js';
 import { BilibiliLiveApiError, BilibiliLiveClient, type BilibiliLiveFetch } from './client.js';
 import {
   BILIBILI_LIVE_HEARTBEAT_MS,
@@ -267,7 +267,7 @@ export class BilibiliLiveEndpoint extends BilibiliLiveClient implements Endpoint
     try {
       for (const chunk of chunks) {
         signal?.throwIfAborted();
-        if (delivered > 0) await delay(this.#options.chunkDelayMs ?? DEFAULT_CHUNK_DELAY_MS, signal);
+        if (delivered > 0) await sleep(this.#options.chunkDelayMs ?? DEFAULT_CHUNK_DELAY_MS, signal);
         signal?.throwIfAborted();
         await this.sendDanmaku(roomId, chunk, delivered === 0 ? replyUid : undefined);
         delivered += 1;
@@ -294,12 +294,3 @@ function toBytes(data: unknown): Uint8Array | undefined {
   return undefined;
 }
 
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  signal?.throwIfAborted();
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const abort = () => { clearTimeout(timer); reject(signal?.reason); };
-    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
-    signal?.addEventListener('abort', abort, { once: true });
-  });
-}

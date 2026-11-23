@@ -195,7 +195,7 @@ export default defineCommand({
 });
 ```
 
-不满足时走命令的拒绝回复：`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」），zhin 角色条件说明角色从哪里来（「没有权限执行此指令：它需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」，平台群主 / 管理员另说明平台身份不等于 zhin 角色；不点名缺哪个角色或谁持有），会话条件保持通用的「没有权限执行此指令。」。
+不满足时走命令的拒绝回复：`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」），zhin 角色条件说明角色从哪里来（「没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」，平台群主 / 管理员另说明平台身份不等于 zhin 角色；不点名缺哪个角色或谁持有），`owner@global` 说明需要全局聊天主人以及去哪里授予（与 `restart` / `config` 内部校验同一段文案，`describeGlobalOwnerRequired()`；其中的 `绑定 <码>` 带上本账号实际的命令前缀，如「`!!绑定 <码>`」），`private()` 提示「此指令只能在私聊中使用，请私聊机器人发送。」，其余会话条件保持通用的「没有权限执行此指令。」。这些文案只有一处来源：`@zhin.js/permission` 的 `describeCommandDenial()`；订阅类命令用 `canManageConversation()` 判定时，拒绝回复用 `describeConversationManagerDenial()`（`zhin.js/command`）。
 
 角色来自当前真实消息（Runtime 写入的 `sender.chatRole`），授予记录存在项目数据库：在 Console 对象页的「角色」页签或聊天命令 `角色 授予` 中管理。平台群主 / 管理员**不会**自动成为 zhin 角色——管 zhin 功能的命令写 `admin` / `owner`，管平台功能的命令写 `platform:*`。详见[聊天角色](../concepts/chat-roles.md)；旧写法 `role(master)`、`scene_admin`、`platform(adapter,perm)` 的对照见[升级到聊天角色](../migrations/chat-roles.md#permits)。
 
@@ -343,7 +343,7 @@ export default defineCommand({
 
 等待回答期间的行为（ADR 0061 决定 11 修订，#1250）：
 
-- **取消**：`select`、多选、`number`、`list` 都认「取消」「退出」「cancel」「exit」「quit」（中英文通用），提示里会写「回复『取消』退出」。选项本身叫「取消」时按选项处理。`confirm` 里这些词照旧回答 `false`。`list` 的回复恰好是一个取消词时按取消处理（不会被当成单项列表 `['取消']`），多项里夹着「取消」仍是数据。`text` 只有在校验规则（`minLength`、`pattern` 等）不接受这个词时才按取消处理；没有规则的 `text` 把任何文字都当回答。
+- **取消**：`select`、多选、`number`、`list` 都认「取消」「退出」「算了」「cancel」「exit」「quit」（中英文通用，不区分全角半角与大小写，末尾标点忽略；词表在 `@zhin.js/core` 的 `isCancelWord()`），提示里会写「回复『取消』退出」。选项本身叫「取消」时按选项处理。`confirm` 里这些词照旧回答 `false`；`confirm` 的回答中英文均可，不分提问语言：`确认` / `确定` / `是` / `好` / `同意` / `yes` / `y` / `ok` / `confirm` 回答 `true`，`否` / `不` / `拒绝` / `no` / `n` / `cancel` 等回答 `false`（`isConfirmWord()` / `isCancelWord()` 带 `{ yesNo: true }`）。`list` 的回复恰好是一个取消词时按取消处理（不会被当成单项列表 `['取消']`），多项里夹着「取消」仍是数据。`text` 只有在校验规则（`minLength`、`pattern` 等）不接受这个词时才按取消处理；没有规则的 `text` 把任何文字都当回答。
 - **发别的就退出**：被问的人在等待期间发了能匹配到指令的消息（且内容不是有效回答），或带图片 / 文件 / 语音 / 视频的消息，这次提问就结束（提问还在发送时已经收下的有效回答不会被后面的消息顶掉；判断能否匹配指令时会看指令的 `adapter` 限制，不看权限）。**单独 @ 机器人不算退出**：有的平台群消息必须 @ 才会投递、有的把回复机器人当作 @，被问者的每条回答都可能带 @，所以「@机器人 3」这种无效回答照样重发提问 / 限频提醒；只有去掉开头的 @ 后能匹配到指令（如「@机器人 /help」）才退出。退出时机器人先回一次「已退出上一个选择」（同一人每分钟最多一次），再把这条新消息按正常流程处理。群里其他人的消息不受影响。
 - **答错了**：第一次无效回答会重发提问；之后每次提问最多再提醒 2 次「正在等你选择，回复序号，或回复『取消』退出」，两次至少间隔 20 秒，不再静默等待。
 - **结束方式**：取消、被打断或被新提问顶替时 `ask()` 抛出 `name` 为 `UserInteractionCancelledError` 的错误（`reason` 为 `cancelled` / `interrupted`；顶替为 `UserInteractionSupersededError`），超时抛出 `UserInteractionTimeoutError`（设了 `default` 时改为返回默认值）。不需要清理时不必捕获：框架已经告诉用户（取消回「已取消」，超时回「输入超时」，被打断回「已退出上一个选择」），入站结局记为 `interaction_cancelled` / `interaction_timeout`（INFO 日志，不算故障，不记 `internal_error`）。需要收尾时按 `error.name` 判断。
@@ -690,7 +690,7 @@ flowchart LR
 
 ### 从中间件或按钮回调执行命令 {#dispatch-from-middleware}
 
-按钮回调（或任何入站消息）想"转成一条命令执行"时，在中间件 / handler 里用当前上下文取命令表，把**这条消息本身**作为 `source` 传进去，不要自己传 `snapshot`：
+按钮回调（或任何入站消息）想"转成一条命令执行"时，在中间件 / handler 里用当前上下文取命令表，把**这条消息本身**作为 `source` 传进去；`snapshot`、`commandPrefix`、`operation` 都不用传，默认取这条消息自己的：
 
 ```ts
 // middlewares/vote-buttons/index.ts
@@ -702,16 +702,21 @@ export default defineMiddleware({
     const payload = context.input.content;
     if (!payload.startsWith('vote ')) return next();
     const result = await context.project<CommandIndex>(commandFeatureId).dispatch({ input: payload, source: context.input });
+    if (!result.matched) return next();
     if (result.status === 'denied') return result.denial?.reason ?? '你不能执行这个操作';
     if (result.status === 'invalid') return result.help;
-    return undefined; // 命令自己已经 $reply
+    return result.value; // 命令的回复，含拒绝提示（UserFacingError）；命令自己 $reply 时为 undefined
   },
 });
 ```
 
 - 命令以这条消息的**真实发送者**执行：`permit`、执行策略照常检查，命令里的 `input.sender` 和回复归属都来自原消息，中间件无法替换成别人。
 - 命令表绑定到这条消息所在操作的 generation 快照。自己缓存一份命令表跨热重载使用，或传入别的 `snapshot`，会被拒绝（`Message author binding belongs to another generation operation` / `not the command projection of the message's generation`）——每次都在当前中间件 / handler 里调用 `context.project()`。
-- 按 endpoint / 会话关掉的插件（ADR 0050）在这里同样不存在：`dispatch` 按这条消息的 endpoint 过滤掉被关插件的命令，返回 `unmatched`，和用户直接发命令文本一致。
+- 按 endpoint / 会话关掉的插件（ADR 0050）在这里同样不存在：`dispatch` 按这条消息的 endpoint 过滤掉被关插件的命令，返回 `unmatched`，和用户直接发命令文本一致（显式传入这条消息自己的 `snapshot` 也一样）。
+- 帮助文本和命令里的 `formatCommand()` 用这条消息的命令前缀（例如 `/`），不传 `commandPrefix` 也带前缀。
+- `dispatch` 返回的 `value` 就是给用户的回复：中间件必须把它回复出去（如上例 `return result.value`），否则用户收不到。命令以 UserFacingError 拒绝时（`refused: true`），这条消息的结局记为 `refused`（原因为命令的拒绝码），由 `dispatch` 记录，与用户直接发送时一致。
+- 可以分发任何插件的命令，也可以分发 Root 命令（项目自己 `commands/` 下的命令，以及 `bind` / `claim` / `config` / `restart` / `role` 等宿主命令）：照常执行，拿到的操作资源（例如推理客户端）和用户直接发送时一样；装不装 Agent 都一样。
+- 例外是需要**分发租约**的 Agent 管理命令（`models` / `health` / `tree` / `fork` / `compact` / `reset`）：经插件转发时 Host 不提供分发租约，命令不执行，`dispatch` 返回 `status: 'executed'`、`refused: true`、`refusalReason: 'direct_command_required'`，`value` 是请用户直接发送该命令的提示（中英文，带命令前缀，如「请直接发送 /reset。」），结局 `refused` / `direct_command_required`。中间件把 `result.value` 回复出去即可（如上例）。租约只认本 Host 实例签发的：自己传 `operation` 并声称提供租约、或用自己调用 `createHostOperationResources()` 签出的端口，同样不执行。`memory` / `memory forget` 不需要租约，照常执行。
 - 这样执行的命令没有 `context.interaction`（多轮追问）；需要追问的流程请让用户直接发命令文本。
 - 不需要改写参数时也可以不经中间件：JSX `<button onClick>` 回调本身带 `permit`（见[按钮](./middleware-components.md#按钮)）；QQ 官方的 `mode: 'command'` 按钮由平台把 `payload` 预填成用户消息，按普通命令走同一条匹配与鉴权链路（其他平台的适配器目前不支持这种按钮）。
 

@@ -1,8 +1,9 @@
-import { sandboxText, type SandboxLocale } from './messages.js';
+import { sandboxText } from './messages.js';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   MarkdownContent,
   type MessageSegment,
+  type ConsoleLocale,
 } from '@zhin.js/client';
 import { renderSandboxSegments, type SandboxSegmentRenderContext } from './segments/index.js';
 import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport.js';
@@ -81,8 +82,8 @@ function platformStandingLabel(role: 'master' | 'admin' | 'member', locale: stri
 }
 
 export default function Sandbox(props: SandboxPageProps = {}) {
-    const [locale, setLocale] = useState<SandboxLocale>('zh-CN')
-    const localeRef = useRef<SandboxLocale>('zh-CN')
+    const [locale, setLocale] = useState<ConsoleLocale>('zh-CN')
+    const localeRef = useRef<ConsoleLocale>('zh-CN')
     const [initialState] = useState(() => createDefaultPlaygroundState())
     const [messages, setMessages] = useState<Message[]>(() => [...initialState.messages])
     const [channels, setChannels] = useState<Channel[]>(() => [...initialState.sessions])
@@ -1761,7 +1762,7 @@ function useMediaQuery(media: string): boolean {
     return matches
 }
 
-function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {
+function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled', locale: ConsoleLocale = 'zh-CN'): string {
     if (status === 'running') return sandboxText(locale, "Agent 运行中")
     if (status === 'completed') return sandboxText(locale, "最近任务已完成")
     if (status === 'failed') return sandboxText(locale, "最近任务失败")
@@ -1776,13 +1777,13 @@ function messageText(segments: readonly MessageSegment[]): string {
     }).join(' ').trim()
 }
 
-function formatDuration(durationMs: number, locale: SandboxLocale = 'zh-CN'): string {
+function formatDuration(durationMs: number, locale: ConsoleLocale = 'zh-CN'): string {
     if (durationMs < 1_000) return `${durationMs.toLocaleString(locale)} ms`
     if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(durationMs < 10_000 ? 1 : 0)} s`
     return `${Math.floor(durationMs / 60_000)}m ${Math.round((durationMs % 60_000) / 1_000)}s`
 }
 
-function runStepStatusLabel(status: 'running' | 'completed' | 'failed' | 'denied' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {
+function runStepStatusLabel(status: 'running' | 'completed' | 'failed' | 'denied' | 'cancelled', locale: ConsoleLocale = 'zh-CN'): string {
     if (status === 'running') return sandboxText(locale, "进行中")
     if (status === 'completed') return sandboxText(locale, "完成")
     if (status === 'denied') return sandboxText(locale, "已拒绝")

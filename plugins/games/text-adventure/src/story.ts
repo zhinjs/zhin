@@ -1,4 +1,4 @@
-import { type Locale } from 'zhin.js/i18n';
+import { formatList, type Locale } from 'zhin.js/i18n';
 export { ADV_PREFIX } from './story-types.js';
 export type { SceneChoice, Scene, GameState, ChoiceResult } from './story-types.js';
 export { ITEM_LABELS, ITEM_IDS, itemLabel } from './story-items.js';
@@ -55,7 +55,7 @@ export function stateFromSession(row: {
 
 export function formatStatusBar(state: GameState, locale: Locale = 'zh-CN'): string {
   const items = state.inventory.length
-    ? state.inventory.map((id) => itemLabel(id, locale)).join(locale === 'en' ? ', ' : '、')
+    ? formatList(locale, state.inventory.map((id) => itemLabel(id, locale)))
     : locale === 'en' ? 'None' : '无';
   return `❤️ ${Math.max(0, state.hp)}  ·  🎒 ${items}`;
 }

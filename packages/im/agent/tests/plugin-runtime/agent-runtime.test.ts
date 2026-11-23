@@ -1594,3 +1594,39 @@ describe('structured usage persistence', () => {
     } finally { enabled.mockRestore(); error.mockRestore(); await fixture.mcp.stop(); await store.close(); }
   });
 });
+
+describe('AgentRuntime.ownsLease (#1250 第 85 批)', () => {
+  function minimalState(): SnapshotState {
+    const root = rootPluginId();
+    return {
+      root,
+      tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: '/app', children: [] }]]),
+      config: new Map(), resources: new Map([[root, new Map()]]), capabilities: new Map(), projections: new Map(),
+    } as unknown as SnapshotState;
+  }
+
+  it('is true only for a lease the SnapshotStore it is attached to issued', async () => {
+    const store = new SnapshotStore(minimalState());
+    const other = new SnapshotStore(minimalState());
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+    const lease = store.acquire();
+    const foreign = other.acquire();
+    try {
+      // Not attached to a Root yet: no lease is its own.
+      expect(runtime.ownsLease(lease)).toBe(false);
+      runtime.attach(store);
+      expect(runtime.ownsLease(lease)).toBe(true);
+      const retained = store.retain(lease);
+      expect(runtime.ownsLease(retained)).toBe(true);
+      retained.release();
+      // Another Root's store, and a look-alike shaped like a lease on the same generation, are not.
+      expect(runtime.ownsLease(foreign)).toBe(false);
+      expect(runtime.ownsLease({ value: lease.value, active: true, release() {} } as never)).toBe(false);
+    } finally {
+      lease.release();
+      foreign.release();
+      await store.close();
+      await other.close();
+    }
+  });
+});

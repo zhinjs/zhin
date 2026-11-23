@@ -22,9 +22,8 @@ export default defineGamePlugin<SessionService>({
     title: '地牢远征',
     icon: '⚔️',
     description: '1-4 人组队，三层地牢，确定性回合冒险',
-    commandPrefix: '/地牢',
     quickStart: '开始',
-    aliases: ['dungeon'],
+    aliases: ['dungeon', '地牢'],
     menus: [
       { id: 'create', label: '创建远征队' },
       { id: 'join', label: '加入队伍' },

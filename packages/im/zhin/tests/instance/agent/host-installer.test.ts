@@ -1,9 +1,12 @@
 import { agentHostToken } from '@zhin.js/agent/runtime';
-import { ingressRouteToken } from '@zhin.js/core/runtime';
+import { imOperationResourcesToken, ingressRouteToken, RuntimeMessage } from '@zhin.js/core/runtime';
+import { CommandIndex, commandFeatureId, type CommandDefinition } from '@zhin.js/command';
 import {
   Scope,
   SnapshotStore,
+  createCapabilitySlot,
   rootPluginId,
+  type RuntimeSnapshot,
   definePlugin,
   createPluginEventChannel,
 } from '@zhin.js/plugin-runtime';
@@ -161,6 +164,69 @@ describe('installAgentHost', () => {
 
     expect(resources.has(agentHostToken)).toBe(true);
     expect(resources.has(ingressRouteToken)).toBe(true);
+  });
+
+  it('publishes only the ingress hooks under ingressRouteToken: no route object, options, SnapshotStore or management path (#1250 第 85 批)', async () => {
+    const resources = new Scope(rootPluginId());
+    await install()(context(resources));
+    // What any plugin scope reading the token gets.
+    const published = resources.use(ingressRouteToken) as unknown as Record<PropertyKey, unknown>;
+    expect(Object.isFrozen(published)).toBe(true);
+    expect(Object.getPrototypeOf(published)).toBe(Object.prototype);
+    expect(Reflect.ownKeys(published).sort()).toEqual(['preRoute', 'route', 'shouldRouteBeforeDispatch']);
+    for (const key of ['options', 'runtime', 'snapshots', 'clearAsCommand', 'runManagementOperation', 'hostMailbox', 'dispose']) {
+      expect(published[key]).toBeUndefined();
+    }
+    // The hooks are plain closures: neither they nor their prototype lead back to the route.
+    for (const key of ['preRoute', 'route', 'shouldRouteBeforeDispatch']) {
+      const hook = published[key] as Record<PropertyKey, unknown>;
+      expect(typeof hook).toBe('function');
+      expect(Reflect.ownKeys(hook).filter(own => own !== 'length' && own !== 'name')).toEqual([]);
+    }
+    // Writing a field onto it (to swap a hook, say) does nothing.
+    expect(Reflect.set(published, 'route', () => true)).toBe(false);
+  });
+
+  it('registers the Agent management commands as Root commands when the Command Feature is present (#1250 第 83 批)', async () => {
+    const withCommands = { ...(context(new Scope(rootPluginId())) as object), hasFeature: (feature: string) => feature === 'zhin.command' };
+    await install()(withCommands as never);
+    const added = vi.mocked((withCommands as unknown as { addFeature: (...args: unknown[]) => void }).addFeature).mock.calls
+      .filter(([feature]) => feature === 'zhin.command').map(([, name]) => name);
+    // Semantic memory is off in this fixture: `memory` / `memory forget` are not registered.
+    expect(added).toEqual(['models', 'health', 'tree', 'fork', 'compact', 'reset']);
+    const without = context(new Scope(rootPluginId()));
+    await install()(without);
+    expect(vi.mocked((without as unknown as { addFeature: (...args: unknown[]) => void }).addFeature).mock.calls
+      .filter(([feature]) => feature === 'zhin.command')).toEqual([]);
+  });
+
+  it('declares its operation resources to the management commands: a caller\'s resourceless operation gets the direct-send request (#1250 第 85 批)', async () => {
+    const root = rootPluginId();
+    const resources = new Scope(root);
+    const withCommands = { ...(context(resources) as object), hasFeature: (feature: string) => feature === 'zhin.command' };
+    await install()(withCommands as never);
+    resources.seal();
+    // The Host provided its IM operation resources under the Root-private token: the Root reads them,
+    // but they are not in the public resources the run-time snapshot is assembled from.
+    expect(resources.has(imOperationResourcesToken)).toBe(true);
+    const published = resources.snapshot();
+    expect(published.has(imOperationResourcesToken.id)).toBe(false);
+    expect(published.has(ingressRouteToken.id)).toBe(false);
+    const added = vi.mocked((withCommands as unknown as { addFeature: (...args: unknown[]) => void }).addFeature).mock.calls
+      .filter(([feature]) => feature === 'zhin.command') as unknown as Array<[string, string, CommandDefinition]>;
+    const slots = added.map(([, name, definition]) => createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: name,
+      source: `/agent/${name}`, definition }));
+    // The run-time snapshot carries the Root Scope's public resources, as the assembler builds it.
+    const snapshot = { generation: 1, root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: defaultProjectRoot, children: [] }]]),
+      config: new Map(), resources: new Map([[root, published]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() } as unknown as RuntimeSnapshot;
+    const signal = new AbortController().signal;
+    const message = new RuntimeMessage({ conversation: { endpoint: { adapter: 'root', id: 'root\0zhin.adapter\0qq' }, kind: 'group', id: 'group' },
+      content: 'reset', endpointId: 'account', sender: { id: 'alice', roles: ['user'] } },
+      { generation: snapshot.generation, snapshot, clientAdapter: 'qq', signal, reply: vi.fn() });
+    // A caller's own `operation` factory that opens no resources at all.
+    const operation = { signal, create: ({ signal: own }: { signal: AbortSignal }) => ({ signal: own, resources: undefined }) };
+    const result = await new CommandIndex(slots, snapshot).dispatch({ input: 'reset', source: message, operation, locale: 'en' });
+    expect(result).toMatchObject({ matched: true, status: 'executed', refused: true, refusalReason: 'direct_command_required' });
   });
 
   it('captures each real bootstrap source before formatting its headings', async () => {

@@ -72,7 +72,7 @@ A conversation-level `owner` owns that conversation, not the host:
 
 | Capability | Needs |
 | --- | --- |
-| Agent dangerous tools / exec / file writes and sensitive reads, receiving owner approvals, restarting the instance, writing global / platform memory, high-trust scheduled runs, editing the project configuration from chat, cross-adapter account recovery | a **global** `owner` |
+| Agent dangerous tools / exec / file writes and sensitive reads, receiving owner approvals, restarting the instance (the chat `/restart` also needs a confirmation, see [Agent](../ai/agent.md)), writing global / platform memory, high-trust scheduled runs, editing the project configuration from chat, cross-adapter account recovery | a **global** `owner` |
 | Adding / removing adapter accounts (`<adapter> endpoint add\|remove`) | an `owner` at the **adapter level or above** |
 | Feature self-service, role management, subscriptions and other zhin functions | decided at the target scope |
 
@@ -138,7 +138,7 @@ export default defineCommand({
 
 List entries are ANDed; comma-separated values inside one entry are ORed. When unmet:
 
-- A command takes the existing denial path; `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (ask the owner / the Console Chat roles page — never which role is missing or who holds it), and tell a group owner / admin that platform standing is not a zhin role (ADR 0060 §5.3); conversation conditions keep the generic sentence; the command menu lists only commands the sender can run here.
+- A command takes the existing denial path; `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (ask the owner / the Console Chat roles page — never which role is missing or who holds it), and tell a group owner / admin that platform standing is not a zhin role (ADR 0060 §5.3); conversation conditions keep the generic sentence; the command menu lists only commands the sender can run here.
 - Agent tools / skills are never disclosed for the turn and are checked again at execution (with the sender's current role and the Bot's standing read again).
 - Middleware is skipped for that message and the chain continues (the Bot standing is read from the cache only; missing or expired counts as unknown). Permits therefore do not suit enforcement middleware that must act on every message (moderation, rate limits).
 - A button callback does not run and the clicker gets the reason.

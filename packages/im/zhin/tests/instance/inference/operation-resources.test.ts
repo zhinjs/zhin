@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SnapshotStore, rootPluginId, createCapabilitySlot, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { RuntimeMessage } from '@zhin.js/core/runtime';
+import { Scope, SnapshotStore, rootPluginId, childPluginId, createCapabilitySlot, createRootPrivateToken, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { RuntimeMessage, imOperationResourcesToken } from '@zhin.js/core/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import {
   aiInferenceClientToken,
@@ -17,8 +17,10 @@ import { createHostOperationResources } from '@zhin.js/agent/runtime';
 import { openAiProvider } from '../../../../ai/src/providers/api-key.js';
 import { CommandIndex, commandFeatureId, defineCommand } from '../../../../command/src/index.js';
 import { ToolIndex, toolFeatureId, defineAgentTool } from '../../../../tool/src/index.js';
+import { dispatchLeaseToken, dispatchLeaseWithheldToken } from '../../../../agent/src/plugin-runtime/inference/dispatch-lease.js';
+import { createRuntimeManagementCommands } from '../../../../agent/src/init/runtime-management-commands.js';
 
-async function fixture(native = false) {
+async function fixture(native = false, plugins: readonly string[] = []) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-capability-'));
   const db = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
   const root = rootPluginId(), requests = vi.fn(async () => native ? Response.json({ id: 'synthetic', object: 'chat.completion', created: 1,
@@ -35,8 +37,11 @@ async function fixture(native = false) {
       return { model: 'image', mimeType: 'image/png', base64: context.ownerId };
     } } }; },
   };
-  const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: directory, children: [] }]]),
-    config: new Map(), resources: new Map([[root, new Map([[aiProviderDefinitionsToken.id, [{ owner: root, definition }]]])]]), capabilities: new Map(), projections: new Map() };
+  const children = plugins.map(name => childPluginId(root, name));
+  const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: directory, children }],
+    ...children.map((id, index) => [id, { id, parent: root, instanceKey: plugins[index]!, packageName: plugins[index]!, packageRoot: join(directory, plugins[index]!), children: [] }] as const)]),
+    config: new Map(), resources: new Map([[root, new Map([[aiProviderDefinitionsToken.id, [{ owner: root, definition }]]])], ...children.map(id => [id, new Map()] as const)]),
+    capabilities: new Map(), projections: new Map() };
   const snapshots = new SnapshotStore(state), resolveSource = vi.fn();
   const host = new HostInference({ projectRoot: directory, database: db, snapshots: () => snapshots, resolveSource, personalOwners: [] });
   const graph: ProviderGraph = { rootId: host.rootId, revision: 1, services: { service: { id: 'service', rootId: host.rootId, ownerId: host.hostOwnerId, revision: 1,
@@ -73,6 +78,203 @@ it('does no model/secret/quota work for has/use, an unconsumed stream or a close
     expect(read).not.toHaveBeenCalled(); expect(f.requests).not.toHaveBeenCalled();
     expect(f.resolveSource).not.toHaveBeenCalled(); expect(f.quota.check).not.toHaveBeenCalled(); expect(f.quota.record).not.toHaveBeenCalled();
     expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('exposes the dispatching generation to an IM command operation only, by token identity (#1250 第 83 批)', async () => {
+  const f = await fixture(), lease = f.snapshots.acquire();
+  try {
+    const im = f.ports.im.open({ lease, snapshots: f.snapshots, message: f.message, owner: f.root, signal: f.signal })!;
+    const tool = f.ports.agent.open({ lease, snapshots: f.snapshots, request: f.turn, owner: f.root, signal: f.signal })!;
+    expect(im.has(dispatchLeaseToken)).toBe(true);
+    expect(tool.has(dispatchLeaseToken)).toBe(false);
+    // A look-alike token with the same id is not the dispatch lease.
+    const lookalike = createRootPrivateToken('zhin.agent.dispatch-lease');
+    expect(im.has(lookalike)).toBe(false);
+    expect(() => im.use(lookalike)).toThrow('Resource is not available in this operation');
+    const dispatched = lease.value.generation;
+    // A newer generation is published meanwhile: the command still retains the one that dispatched it.
+    f.snapshots.commit(dispatched, { snapshot: { ...lease.value, generation: dispatched + 1 } as never, dispose() {} });
+    expect(f.snapshots.current.generation).toBe(dispatched + 1);
+    const retained = im.use(dispatchLeaseToken).retain();
+    expect(retained.value.generation).toBe(dispatched);
+    expect(f.snapshots.owns(retained)).toBe(true);
+    retained.release();
+    expect(lease.active).toBe(true);
+    await im.close(); await tool.close();
+  } finally { lease.release(); await f.close(); }
+});
+
+it('offers the dispatch lease only to a Root-owned IM operation, never a plugin command (#1250 第 84 批)', async () => {
+  const f = await fixture(), lease = f.snapshots.acquire();
+  try {
+    const plugin = childPluginId(f.root, 'some-plugin');
+    const view = f.ports.im.open({ lease, snapshots: f.snapshots, message: f.message, owner: plugin, signal: f.signal })!;
+    expect(view.has(dispatchLeaseToken)).toBe(false);
+    expect(() => view.use(dispatchLeaseToken)).toThrow('Resource is not available in this operation');
+    // The plugin still gets its inference client.
+    expect(view.has(aiInferenceClientToken)).toBe(true);
+    await view.close();
+    expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('a plugin command that names the Root as owner still gets no dispatch lease (#1250 第 84 批)', async () => {
+  const f = await fixture(false, ['some-plugin']), lease = f.snapshots.acquire();
+  const plugin = childPluginId(f.root, 'some-plugin');
+  const opened: { owner: string; delegatedFrom?: string }[] = [];
+  const message = new RuntimeMessage({ conversation: f.message.conversation, content: 'grab', endpointId: 'account', sender: { id: 'alice', roles: ['user'] } }, {
+    generation: lease.value.generation, snapshot: lease.value, clientAdapter: 'qq', signal: f.signal, reply: vi.fn(),
+    createOperationResources: input => {
+      opened.push({ owner: input.owner, ...(input.delegatedFrom ? { delegatedFrom: input.delegatedFrom } : {}) });
+      return f.ports.im.open({ ...input, lease, snapshots: f.snapshots });
+    },
+  });
+  // The global symbols a plugin can reach; the command executor binds the view to the command's owner.
+  const snapshotHook = Symbol.for('zhin.operation-input-snapshot/1');
+  const resourcesHook = Symbol.for('zhin.operation-input-resources/1');
+  const bindingHook = Symbol.for('zhin.operation-input-binding/1');
+  type Hooked = Record<symbol, (...args: unknown[]) => unknown>;
+  type Created = { resources?: { has(token: unknown): boolean; close(): Promise<void> } };
+  const attempts: string[] = [];
+  const command = createCapabilitySlot({ owner: plugin, feature: commandFeatureId, localName: 'grab', source: '/commands/grab/index.ts',
+    definition: defineCommand({ execute: async context => {
+      const input = context.input as unknown as Hooked;
+      const snapshot = input[snapshotHook]!() as typeof lease.value;
+      // Its own operation (created by the executor for the plugin) has no dispatch lease.
+      expect(() => context.use(dispatchLeaseToken)).toThrow();
+      const factory = input[resourcesHook]!(snapshot) as { signal: AbortSignal; create(i: { owner: string; signal: AbortSignal }): Created };
+      // Naming the Root from its own view opens nothing at all (and never throws).
+      const own = factory.create({ owner: snapshot.root, signal: factory.signal });
+      attempts.push(`own view: ${own.resources === undefined ? 'no resources' : 'resources'}`);
+      // Rebinding its message to the Root does not launder the claim: the Root operation is delegated.
+      const rebound = input[bindingHook]!(snapshot.root, snapshot) as Hooked;
+      const reboundFactory = rebound[resourcesHook]!(snapshot) as typeof factory;
+      const laundered = reboundFactory.create({ owner: snapshot.root, signal: factory.signal });
+      attempts.push(`rebound: lease ${laundered.resources?.has(dispatchLeaseToken) ? 'granted' : 'withheld'}, `
+        + `marker ${laundered.resources?.has(dispatchLeaseWithheldToken)}, inference ${laundered.resources?.has(aiInferenceClientToken)}`);
+      await laundered.resources?.close();
+      return 'done';
+    } }) });
+  try {
+    const result = await new CommandIndex([command], lease.value).dispatch({ input: 'grab', source: message });
+    expect(result).toMatchObject({ status: 'executed', value: 'done' });
+    expect(attempts).toEqual(['own view: no resources', 'rebound: lease withheld, marker true, inference true']);
+    // The executor's operation for the plugin, then the laundered Root one — opened delegated.
+    expect(opened).toEqual([{ owner: plugin }, { owner: f.root, delegatedFrom: plugin }]);
+    expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('runs a Root command a plugin dispatched with the Root\'s resources but without the dispatch lease (#1250 第 84 批)', async () => {
+  const f = await fixture(false, ['p', 'q']), lease = f.snapshots.acquire();
+  const p = childPluginId(f.root, 'p'), q = childPluginId(f.root, 'q');
+  const opened: { owner: string; delegatedFrom?: string }[] = [];
+  const message = new RuntimeMessage({ conversation: f.message.conversation, content: 'x', endpointId: 'account', sender: { id: 'alice', roles: ['user'] } }, {
+    generation: lease.value.generation, snapshot: lease.value, clientAdapter: 'qq', signal: f.signal, reply: vi.fn(),
+    createOperationResources: input => {
+      opened.push({ owner: input.owner, ...(input.delegatedFrom ? { delegatedFrom: input.delegatedFrom } : {}) });
+      return f.ports.im.open({ ...input, lease, snapshots: f.snapshots });
+    },
+  });
+  const bindingHook = Symbol.for('zhin.operation-input-binding/1');
+  type Binder = Record<symbol, (owner: string, snapshot: unknown) => RuntimeMessage>;
+  const bind = (view: RuntimeMessage, owner: string) => (view as unknown as Binder)[bindingHook]!(owner, lease.value);
+  const seen: string[] = [];
+  const probe = (label: string) => defineCommand({ execute: context => {
+    seen.push(`${label}: lease ${context.has(dispatchLeaseToken)}, marker ${context.has(dispatchLeaseWithheldToken)}, inference ${context.has(aiInferenceClientToken)}`);
+    return label;
+  } });
+  const slots = [
+    createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'rootcmd', source: '/commands/rootcmd/index.ts', definition: probe('root') }),
+    createCapabilitySlot({ owner: q, feature: commandFeatureId, localName: 'qcmd', source: '/commands/qcmd/index.ts', definition: probe('q') }),
+  ];
+  const index = new CommandIndex(slots, lease.value);
+  try {
+    // Root's own dispatch (Core's dispatcher holds the unbound view): the lease is there.
+    await index.dispatch({ input: 'rootcmd', source: message });
+    // A plugin middleware dispatching a Root command: it runs, keeps the inference client, no lease.
+    await index.dispatch({ input: 'rootcmd', source: bind(message, p) });
+    // The same with an explicit snapshot that is the message's own: the same resources.
+    await index.dispatch({ input: 'rootcmd', source: bind(message, p), snapshot: lease.value });
+    // P → Q: Q's own command operation.
+    await index.dispatch({ input: 'qcmd', source: bind(message, p) });
+    // P → Q → Root and Root → P → Root: delegated, recorded as P.
+    const pq = bind(bind(message, p), q);
+    await index.dispatch({ input: 'rootcmd', source: pq });
+    const rootPRoot = bind(bind(message, f.root), p);
+    await index.dispatch({ input: 'rootcmd', source: rootPRoot });
+    // A Root middleware (its own view) dispatching a Root command keeps the lease.
+    await index.dispatch({ input: 'rootcmd', source: bind(message, f.root) });
+    expect(seen).toEqual([
+      'root: lease true, marker false, inference true',
+      'root: lease false, marker true, inference true',
+      'root: lease false, marker true, inference true',
+      'q: lease false, marker false, inference true',
+      'root: lease false, marker true, inference true',
+      'root: lease false, marker true, inference true',
+      'root: lease true, marker false, inference true',
+    ]);
+    // Multi-hop rebinding records the first plugin author: P → Q → Root and Root → P → Root are P's.
+    expect(opened).toEqual([
+      { owner: f.root }, { owner: f.root, delegatedFrom: p }, { owner: f.root, delegatedFrom: p },
+      { owner: q, delegatedFrom: p }, { owner: f.root, delegatedFrom: p }, { owner: f.root, delegatedFrom: p }, { owner: f.root },
+    ]);
+    expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('answers an Agent management command a plugin dispatched with a request to send it directly (#1250 第 84 批)', async () => {
+  const f = await fixture(false, ['buttons']), lease = f.snapshots.acquire();
+  const plugin = childPluginId(f.root, 'buttons');
+  const message = new RuntimeMessage({ conversation: f.message.conversation, content: 'btn', endpointId: 'account',
+    sender: { id: 'alice', roles: ['user'] } }, {
+    generation: lease.value.generation, snapshot: lease.value, clientAdapter: 'qq', signal: f.signal, reply: vi.fn(),
+    createOperationResources: input => f.ports.im.open({ ...input, lease, snapshots: f.snapshots }),
+  });
+  const open = vi.fn(), clear = vi.fn();
+  const slots = createRuntimeManagementCommands({ zhinAgent: {} as never, isDispatchLease: f.ports.isDispatchLease, open, clear }).map(command => createCapabilitySlot({
+    owner: f.root, feature: commandFeatureId, localName: command.name, source: `/agent/${command.name}`, definition: command.definition }));
+  const bindingHook = Symbol.for('zhin.operation-input-binding/1');
+  const pluginView = (message as unknown as Record<symbol, (owner: string, snapshot: unknown) => RuntimeMessage>)[bindingHook]!(plugin, lease.value);
+  try {
+    const index = new CommandIndex(slots, lease.value);
+    // `reset` has no permit (the others need a chat role, checked before they run).
+    const result = await index.dispatch({ input: 'reset', source: pluginView, locale: 'en' });
+    expect(result).toMatchObject({ matched: true, status: 'executed', refused: true, refusalReason: 'direct_command_required',
+      value: 'ℹ️ This command cannot run when a plugin forwards it. Send reset directly.' });
+    expect(open).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+    expect(lease.active).toBe(true);
+  } finally { lease.release(); await f.close(); }
+});
+
+it('answers a caller\'s own operation without resources on a Host-wired instance with the direct-send request (#1250 第 85 批)', async () => {
+  const f = await fixture(), lease = f.snapshots.acquire();
+  // `imOperationResourcesToken` is Root-private: a real Root Scope that provides it (as the Agent Host
+  // does) keeps it out of the run-time snapshot's public resources, so the commands cannot see it there.
+  const rootScope = new Scope(f.root);
+  rootScope.provide(imOperationResourcesToken, f.ports.im);
+  rootScope.seal();
+  expect(rootScope.snapshot().has(imOperationResourcesToken.id)).toBe(false);
+  const snapshot = { ...lease.value, resources: new Map(lease.value.resources).set(f.root, rootScope.snapshot()) } as typeof lease.value;
+  const open = vi.fn(), clear = vi.fn();
+  // An explicit factory that opens no resources at all (`resources: undefined`).
+  const operation = { signal: f.signal, create: ({ signal }: { signal: AbortSignal }) => ({ signal, resources: undefined }) };
+  try {
+    // The Host declares it wired its resources (`hostResourcesInstalled`); an embedder that did not answers `management_unavailable`.
+    for (const [installed, expected] of [[true, 'direct_command_required'], [undefined, 'management_unavailable']] as const) {
+      const definitions = createRuntimeManagementCommands({ zhinAgent: {} as never, isDispatchLease: f.ports.isDispatchLease,
+        ...(installed ? { hostResourcesInstalled: installed } : {}), open, clear });
+      const slots = definitions.map(command => createCapabilitySlot({
+        owner: f.root, feature: commandFeatureId, localName: command.name, source: `/agent/${command.name}`, definition: command.definition }));
+      const message = new RuntimeMessage({ conversation: f.message.conversation, content: 'reset', endpointId: 'account',
+        sender: { id: 'alice', roles: ['user'] } }, { generation: snapshot.generation, snapshot, clientAdapter: 'qq', signal: f.signal, reply: vi.fn() });
+      const result = await new CommandIndex(slots, snapshot).dispatch({ input: 'reset', source: message, operation, locale: 'en' });
+      expect(result).toMatchObject({ matched: true, status: 'executed', refused: true, refusalReason: expected });
+    }
+    expect(open).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
   } finally { lease.release(); await f.close(); }
 });
 

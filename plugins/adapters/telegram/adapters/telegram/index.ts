@@ -25,6 +25,9 @@ export default defineAdapter<TelegramEndpointConfig>({
           markdown: 'native',
         },
         quote: true,
+        // ADR 0067 D8：文本段只取 text / caption；回复带 replyTo，转发、inline bot 结果、跨会话引用带 forwarded 标记，
+        // 媒体、贴纸、按钮回调都是非文本段。
+        inboundTextAuthoredBySender: true,
         recall: { timeLimitSeconds: 172800 },
       },
       actions: {

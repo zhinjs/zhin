@@ -10,6 +10,8 @@ import {
   resolveOutboundCapabilities,
 } from '../../index.js';
 import { resolveToolHardGateImApproval } from '../../security/index.js';
+import type { AgentCommandPresentation } from '../../init/command-presentation.js';
+import { welcomePartsContent } from '../../session-ops.js';
 import type { AgentRuntime } from '../index.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { flattenOutputElements } from './content.js';
@@ -29,7 +31,7 @@ import {
 import { capabilityLocalName, deliveryOutcomeFromReceipt } from './request.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
-import { resolveTriggerTimeoutMs, sendOutputMessages } from './unified-mailbox-spine.js';
+import { resolveTriggerTimeoutMs, sendOutputMessages, type AgentTurnIngressRouteOptions } from './unified-mailbox-spine.js';
 
 const logger = getLogger('agent');
 
@@ -40,26 +42,39 @@ export function soleOnlineEndpoint(im: ImRuntime, platform: string): string | un
   return online.length === 1 ? online[0]!.name : undefined;
 }
 
+type ConversationPresentationResolver = NonNullable<AgentTurnIngressRouteOptions['resolveConversationPresentation']>;
+
 export function createGroupRuleChannel(input: Readonly<{
   im: ImRuntime;
   agent: AgentIngressFoundationPort;
+  resolvePresentation?: ConversationPresentationResolver;
 }>): GroupRuleImChannel {
-  const { im, agent } = input;
+  const { im, agent, resolvePresentation } = input;
   return new GroupRuleImChannel({
     // 构造时就订阅；测试桩可能不带 agent。
     rules: () => agent?.agent?.getGroupRules?.(),
     controlPlane: () => agent.agent.getControlPlane?.(),
     imApproval: () => resolveToolHardGateImApproval(agent.agent.config?.toolHardGate?.imApproval),
-    send: async (target, text) => {
+    send: async (target, content) => {
       const endpointKey = target.endpoint ?? soleOnlineEndpoint(im, target.platform);
       if (!endpointKey) throw new Error('endpoint_unresolved');
       await im.endpoints.send({
         adapter: target.platform,
         endpointKey,
         conversation: { kind: 'group', id: target.groupId },
-        content: text,
+        content,
       });
     },
+    ...(resolvePresentation
+      ? {
+          resolvePresentation: (target) => {
+            const endpoint = target.endpoint ?? soleOnlineEndpoint(im, target.platform);
+            return endpoint
+              ? resolvePresentation({ platform: target.platform, endpoint, conversation: { kind: 'group', id: target.groupId } })
+              : undefined;
+          },
+        }
+      : {}),
   });
 }
 
@@ -86,8 +101,10 @@ export function executeGroupRule(input: Readonly<{
   violation: GroupRuleViolation;
   conversation: ConversationRef;
   source: Readonly<{ client: unknown; signal: AbortSignal }>;
+  /** #1250: how the group's notices spell commands and in which language. */
+  presentation?: AgentCommandPresentation;
 }>): Promise<GroupRuleEnforcementResult> {
-  const { im, enforcer, violation, conversation, source } = input;
+  const { im, enforcer, violation, conversation, source, presentation } = input;
   const operation = im.endpoints.captureOperation({
     target: conversation,
     client: source.client,
@@ -132,6 +149,7 @@ export function executeGroupRule(input: Readonly<{
       await management.kickGroupMember({ groupId: conversation.id, userId: violation.memberId, signal });
     },
     release: operation.release,
+    ...(presentation ? { presentation } : {}),
   });
 }
 
@@ -146,8 +164,10 @@ export function observeFloodMessage(input: Readonly<{
   message: Message;
   platform: string;
   endpoint: string | undefined;
+  /** The group's presentation: its notices are public, so they use the project language (#1250). */
+  resolvePresentation?: ConversationPresentationResolver;
 }>): void {
-  const { im, enforcer, floodDetector, message, platform, endpoint } = input;
+  const { im, enforcer, floodDetector, message, platform, endpoint, resolvePresentation } = input;
   if (message.conversation.kind !== 'group') return;
   if (message.origin !== undefined && message.origin !== 'human') return;
   const memberId = message.sender?.id;
@@ -164,26 +184,42 @@ export function observeFloodMessage(input: Readonly<{
   if (!verdict.hit) return;
   const session = readOperationSession(message);
   if (!session) return;
-  void executeGroupRule({
-    im,
-    enforcer,
-    conversation: message.conversation,
-    source: { client: session.endpoint, signal: session.signal },
-    violation: {
-      platform,
-      ...(endpoint ? { endpoint } : {}),
-      groupId: message.conversation.id,
-      memberId,
-      ...(message.sender?.name ? { memberName: message.sender.name } : {}),
-      ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
-      ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
-      trigger: 'flood',
-      sentAt: at,
-      ...(message.message?.id ? { messageId: message.message.id } : {}),
-      evidence: verdict.samples,
-      detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
-    },
-  }).then((result) => {
+  void (async () => {
+    // Public group notices use the project language, never the offender's own preference (#1250); the
+    // prefix is the message's own command environment, the one this group's dispatcher strips.
+    let locale: AgentCommandPresentation['locale'];
+    try {
+      locale = (await resolvePresentation?.({
+        platform,
+        endpoint: message.conversation.endpoint.id,
+        conversation: { kind: 'group', id: message.conversation.id },
+      }))?.locale;
+    } catch { /* default language */ }
+    return executeGroupRule({
+      im,
+      enforcer,
+      conversation: message.conversation,
+      source: { client: session.endpoint, signal: session.signal },
+      presentation: {
+        ...(locale ? { locale } : {}),
+        ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
+      },
+      violation: {
+        platform,
+        ...(endpoint ? { endpoint } : {}),
+        groupId: message.conversation.id,
+        memberId,
+        ...(message.sender?.name ? { memberName: message.sender.name } : {}),
+        ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
+        ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
+        trigger: 'flood',
+        sentAt: at,
+        ...(message.message?.id ? { messageId: message.message.id } : {}),
+        evidence: verdict.samples,
+        detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
+      },
+    });
+  })().then((result) => {
     if (result.kind !== 'no_rule') logger.info(formatCompact({ op: 'group_rule_flood', conv: `${platform}:${message.conversation.id}`, result: result.kind }));
   });
 }
@@ -328,9 +364,9 @@ export function createMemberLifecycle(input: Readonly<{
     reader: () => im.conversationEventReader,
     decisionEvents: () => agent.agent.getDecisionEvents?.(),
     send: async (conversation, parts) => {
-      const content = parts.map((part) => (part.type === 'text'
-        ? { type: 'text', data: { text: part.text } }
-        : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
+      // #1250: the operator's template text is an outbound template; nicknames / group names filled
+      // into it are data, sent as untrusted text so `${bot.menu}` in a nickname stays as written.
+      const content = welcomePartsContent(parts);
       if (content.length === 0) return { status: 'suppressed' as const };
       return deliveryOutcomeFromReceipt(await im.send({ conversation, requester: rootPluginId(), content }));
     },

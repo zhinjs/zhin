@@ -8,7 +8,7 @@ export {
   ENDPOINT_RPC,
   SIDE_EVENT_NAMES,
 } from "./constants.js";
-import type { ConsolePageSection } from "@zhin.js/console-protocol";
+import type { ConsoleLocale, ConsolePageSection } from "@zhin.js/console-protocol";
 export type { ConsolePageSection } from "@zhin.js/console-protocol";
 
 export type RuntimeEnv = "development" | "production";
@@ -49,14 +49,14 @@ export type PluginAddRouteInput = {
   icon?: import('react').ReactNode | string;
   meta?: {
     hideInMenu?: boolean;
-    titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+    titleI18n?: Readonly<Partial<Record<ConsoleLocale, string>>>;
     order?: number;
     group?: string;
     fullWidth?: boolean;
     /** Console navigation section the Page declared (ADR 0052). */
     section?: ConsolePageSection;
     /** Command-palette aliases from `definePage({ keywords })`: one list, or lists per locale (ADR 0063). */
-    keywords?: readonly string[] | Readonly<Partial<Record<'zh-CN' | 'en', readonly string[]>>>;
+    keywords?: readonly string[] | Readonly<Partial<Record<ConsoleLocale, readonly string[]>>>;
   };
   requiredPermissions?: string[];
   requiredRoles?: string[];

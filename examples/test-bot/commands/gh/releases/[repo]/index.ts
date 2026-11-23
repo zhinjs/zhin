@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { ghApiMessage, resolveGhClient } from '../../../../lib/github-api.js';
+import { ghApiMessage, ghDate, resolveGhClient } from '../../../../lib/github-api.js';
 
 export default defineCommand({
   description: '查看发布列表',
@@ -19,7 +19,7 @@ export default defineCommand({
     }>;
     if (!releases.length) return '暂无发布';
     return releases.map((rel) =>
-      `${rel.prerelease ? '[pre] ' : ''}${rel.tag_name} — ${rel.name || '(no title)'}\n   ${rel.published_at?.split('T')[0]} | ${rel.author?.login ?? '?'}`,
+      `${rel.prerelease ? '[pre] ' : ''}${rel.tag_name} — ${rel.name || '(no title)'}\n   ${ghDate(rel.published_at)} | ${rel.author?.login ?? '?'}`,
     ).join('\n\n');
   },
 });

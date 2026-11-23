@@ -7,7 +7,7 @@ import {
   ConsoleRuntime,
   consoleRuntimeToken,
 } from '@zhin.js/pagemanager/plugin-runtime';
-import { jsonResponse, type ConsoleAccess, type HttpHandler, type HttpHost } from '@zhin.js/host-http';
+import { invalidLocaleResponse, jsonResponse, type ConsoleAccess, type HttpHandler, type HttpHost } from '@zhin.js/host-http';
 import {
   NativeDevelopmentModuleRuntime,
   type ModuleRuntime,
@@ -19,11 +19,13 @@ import { renderConsoleIndex, renderPageShell } from '@zhin.js/pagemanager';
 import { createTsxModuleLoader } from '@zhin.js/gateway/project';
 import {
   listPages,
+  pageTitleLocale,
   projectConsoleEntries,
   requestConsoleAccess,
   resolveLocalizedPageTitle,
   type ExtendedRuntimeConsolePage,
 } from './entry-projection.js';
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { internalErrorResponse } from './internal-error.js';
 
 const clientPublicBase = '/assets/client';
@@ -74,7 +76,8 @@ export function registerConsoleHttp(options: {
   ));
   http.route('GET', '/entries', async (request, context) => {
     try {
-      const locale = context.url.searchParams.get('locale') ?? undefined;
+      const locale = pageTitleLocale(context.url);
+      if (locale === null) return invalidLocaleResponse();
       const pages = await listPages(options.console, requestConsoleAccess(http, request, context), { locale });
       return jsonResponse(200, projectConsoleEntries(pages, { locale }), noStore);
     } catch (error) {
@@ -82,7 +85,8 @@ export function registerConsoleHttp(options: {
     }
   });
   http.route('GET', '/console/api/pages', async (request, context) => {
-    const locale = context.url.searchParams.get('locale') ?? undefined;
+    const locale = pageTitleLocale(context.url);
+    if (locale === null) return invalidLocaleResponse();
     // The list depends on the caller's token, so it must never be cached or shared.
     return jsonResponse(200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, context), locale) }, noStore);
   });
@@ -105,7 +109,8 @@ export function registerConsoleHttp(options: {
     }
   });
   const serveConsoleIndex: HttpHandler = async (request, context) => {
-    const locale = context.url.searchParams.get('locale') ?? undefined;
+    const locale = pageTitleLocale(context.url);
+    if (locale === null) return invalidLocaleResponse();
     return htmlResponse(renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, context), locale)));
   };
   http.route('GET', '/console', serveConsoleIndex);
@@ -144,7 +149,7 @@ export function installConsoleRuntime(consoleRuntime: ConsoleRuntime): RootResou
   };
 }
 
-async function readConsolePages(consoleRuntime: ConsoleRuntime, access: ConsoleAccess, locale?: string) {
+async function readConsolePages(consoleRuntime: ConsoleRuntime, access: ConsoleAccess, locale?: Locale) {
   try {
     const pages = await consoleRuntime.runView(access, (catalog) => catalog.pages());
     if (!locale) return pages;

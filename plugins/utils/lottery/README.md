@@ -118,6 +118,12 @@ lottery:
 | `lottery-stats <game>` | Single-game stats snapshot |
 | `lottery-history <game> [count]` | Historical draws |
 
+## 时区 / Time zone
+
+插件没有时区配置项，每日推荐日期、待评预测的 `predict_date` 与“今天是否已推荐”都按**进程时区**（`TZ` 环境变量，否则系统时区）取日历日。Docker 镜像与部署模板默认 `TZ=UTC`，此时北京时间 0–8 点仍会记作前一天；面向东八区时在 `.env` 或进程环境中设置 `TZ=Asia/Shanghai` 并重启。同样按进程时区取日的还有 Agent 每日笔记与好感度每日上限等，详见部署文档「进程时区（`TZ`）」一节。升级前在 0–8 点记下的待评预测仍是 UTC 日期。
+
+The plugin has no time-zone setting: the daily report date, the `predict_date` of pending predictions and the "already recommended today" check use the calendar day of the **process zone** (`TZ`, else the system zone). The Docker image and deployment templates default to `TZ=UTC`, where 00:00–08:00 in Beijing still counts as the previous day; set `TZ=Asia/Shanghai` in `.env` or the process environment and restart. See "Process time zone (`TZ`)" in the production deployment guide for the other features that take the day in the process zone.
+
 ## 免责声明
 
 本插件推荐仅供参考，不构成投注建议，不保证中奖。请理性购彩。

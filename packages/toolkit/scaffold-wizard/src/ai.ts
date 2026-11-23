@@ -1,5 +1,6 @@
+import { parseEnvironmentReference, type Locale } from '@zhin.js/plugin-runtime';
 import { wizardText } from './messages.js';
-import inquirer from 'inquirer';
+import { inquirer } from './inquirer.js';
 import chalk from 'chalk';
 import yaml from 'yaml';
 import { formatEnvValue } from './env.js';
@@ -270,10 +271,12 @@ export function materializeAIPlan(config: AISetupConfig): Record<string, unknown
         ];
       })),
     };
-    const env = provider.apiKey?.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u);
-    if (provider.apiKey && !env) throw new Error('AI setup keys must use an environment reference');
+    // The key becomes an `env://VAR` account source, which has no default: only a whole `${VAR}`.
+    const reference = provider.apiKey ? parseEnvironmentReference(provider.apiKey) : undefined;
+    const variable = reference?.default === undefined ? reference?.variable : undefined;
+    if (provider.apiKey && !variable) throw new Error('AI setup keys must use an environment reference');
     accounts[name] = { service: name, auth: driver === 'ollama' && !provider.apiKey
-      ? { method: 'none' } : { method: 'api-key', ...(env ? { source: `env://${env[1]}` } : {}) } };
+      ? { method: 'none' } : { method: 'api-key', ...(variable ? { source: `env://${variable}` } : {}) } };
     for (const model of models) {
       const profile = `${name}:${model}`; profiles[profile] = { account: name, model };
       if (name === primary && !chosen) chosen = profile;
@@ -320,7 +323,7 @@ export const RECOMMENDED_AI_DEFAULTS = {
 /**
  * AI 配置引导向导
  */
-export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AISetupConfig> {
+export async function configureAI(locale: Locale = 'zh-CN'): Promise<AISetupConfig> {
   console.log('');
   console.log(chalk.blue(wizardText(locale, "🤖 配置 AI 智能体")));
   console.log(chalk.gray(wizardText(locale, "  启用后将自动写入 package.json：@zhin.js/agent、zod、ai、所选 @ai-sdk/*（启用 memory MCP 时另加 @modelcontextprotocol/sdk）。")));
@@ -605,7 +608,7 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
 /**
  * 获取 AI 配置需要写入 .env 的环境变量
  */
-export function generateAIEnvVars(config: AISetupConfig, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+export function generateAIEnvVars(config: AISetupConfig, locale: Locale = 'zh-CN'): string {
   if (!config.enabled || !config.providers) return '';
 
   const envVars: string[] = ['', wizardText(locale, "# AI 配置")];

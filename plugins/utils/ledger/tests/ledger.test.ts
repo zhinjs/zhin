@@ -345,6 +345,7 @@ describe('period boundaries in the configured timezone', () => {
     const lateEveningUtc = Date.UTC(2026, 9, 20, 17, 0, 0);
     expect(localDateKey(lateEveningUtc, 'Asia/Shanghai')).toBe('2026-10-21');
     expect(localDateKey(lateEveningUtc, 'UTC')).toBe('2026-10-20');
+    expect(localDateKey(Date.parse('2026-01-05T17:00:00Z'), 'Asia/Shanghai')).toBe('2026-01-06');
     const now = Date.UTC(2026, 9, 21, 2, 0, 0);
     expect(isInPeriod(lateEveningUtc, now, 'today', 'Asia/Shanghai')).toBe(true);
     expect(isInPeriod(lateEveningUtc, now, 'today', 'UTC')).toBe(false);

@@ -27,6 +27,7 @@ import type {
 import { AsyncResource } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '@zhin.js/logger';
+import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { AgentCore } from '../core/agent-core.js';
 import type { InteractiveRun } from '../core/interactive-run.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -684,20 +685,51 @@ export function supplementPreface(earlier: string, options: Readonly<{ failure?:
 const SUPPLEMENT_LEAD = /^\s*(?:补充|更正|update\b|addendum\b|correction\b)/iu;
 
 /**
+ * #1250 第 81 批: what a request's background collaboration tells the human when it stops, fails or
+ * adds to an answer, in the turn's display language (one catalog, `createMessages`).
+ */
+const collaborationMessages = createMessages({
+  supplement: { 'zh-CN': '补充：{text}', en: 'Update: {text}' },
+  supplementFailed: { 'zh-CN': '补充：后台任务没有完成。', en: 'Update: the background task did not finish.' },
+  moreFailuresOne: { 'zh-CN': '另有 {count} 项后台任务没有完成。', en: '{count} more background task did not finish.' },
+  moreFailures: { 'zh-CN': '另有 {count} 项后台任务没有完成。', en: '{count} more background tasks did not finish.' },
+  collaborationStopped: {
+    'zh-CN': '后台任务已停止：这次请求的协作次数到了上限。',
+    en: 'The background task stopped: it reached the collaboration limit for this request.',
+  },
+  aggregation_failed: {
+    'zh-CN': '后台任务失败：汇总结果时出错了，请稍后再试。',
+    en: 'A background task failed while putting its result together. Please try again.',
+  },
+  budget_exhausted: {
+    'zh-CN': '后台任务的预算用完了，没能得出结果，请稍后再试。',
+    en: 'A background task ran out of its budget before it produced a result. Please try again.',
+  },
+  empty_result: { 'zh-CN': '后台任务结束了，但没有得出结果。', en: 'A background task finished without a result.' },
+  delivery_failed: {
+    'zh-CN': '后台任务完成了，但结果没能发出来，请稍后再试。',
+    en: 'A background task finished, but its result could not be delivered. Please try again.',
+  },
+  budgetStopped: {
+    'zh-CN': '（后台任务的预算用完了，以上是目前得到的结果。）',
+    en: '(The task ran out of its budget; this is as far as it got.)',
+  },
+});
+
+/**
  * The entry turn's outcome after an answered request, as the supplement the human may see; `undefined`
  * when there is nothing to send (the model declined with {@link NO_REPLY_MARKER}, said nothing, or was
  * stopped). A failed entry turn keeps its outcome: the human hears that the follow-up could not be put
  * together.
  */
-export function asSupplement(result: ActorTurnOutcome, locale: string | undefined): ActorTurnOutcome | undefined {
+export function asSupplement(result: ActorTurnOutcome, locale: Locale | undefined): ActorTurnOutcome | undefined {
   if (result.status === 'cancelled') return undefined;
   if (result.status === 'failed') return result;
   const reply = result.reply ?? '';
   if (!reply.trim() || isNoReply(reply)) return undefined;
   const text = stripNoReplyMarker(reply);
   if (!text) return undefined;
-  const lead = locale?.toLowerCase().startsWith('en') ? 'Update: ' : '补充：';
-  return Object.freeze({ ...result, reply: SUPPLEMENT_LEAD.test(text) ? text : `${lead}${text}` });
+  return Object.freeze({ ...result, reply: SUPPLEMENT_LEAD.test(text) ? text : collaborationMessages(locale, 'supplement', { text }) });
 }
 
 /** What a supplement turn (a result after the answer) sends: {@link planSupplement}. */
@@ -713,7 +745,7 @@ export type SupplementPlan =
  */
 export function planSupplement(
   result: ActorTurnOutcome,
-  input: Readonly<{ failures: boolean; locale: string | undefined }>,
+  input: Readonly<{ failures: boolean; locale: Locale | undefined }>,
 ): SupplementPlan {
   if (result.status === 'cancelled') return { kind: 'cancelled' };
   const supplement = asSupplement(result, input.locale);
@@ -723,56 +755,30 @@ export function planSupplement(
 }
 
 /** Fixed line when the entry model declined to tell a failure that arrived after the answer. */
-export function supplementFailureLine(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
-    ? 'Update: the background task did not finish.'
-    : '补充：后台任务没有完成。';
+export function supplementFailureLine(locale: Locale | undefined): string {
+  return collaborationMessages(locale, 'supplementFailed');
 }
 
 /** One line for further failures of a request whose first failure was already told. */
-function moreFailuresLine(count: number, locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
-    ? `${count} more background task${count === 1 ? '' : 's'} did not finish.`
-    : `另有 ${count} 项后台任务没有完成。`;
+function moreFailuresLine(count: number, locale: Locale | undefined): string {
+  return collaborationMessages(locale, count === 1 ? 'moreFailuresOne' : 'moreFailures', { count });
 }
 
 /** One line closing a request whose background collaboration the guard stopped. */
-function collaborationStoppedLine(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
-    ? 'The background task stopped: it reached the collaboration limit for this request.'
-    : '后台任务已停止：这次请求的协作次数到了上限。';
+function collaborationStoppedLine(locale: Locale | undefined): string {
+  return collaborationMessages(locale, 'collaborationStopped');
 }
 
 /** Why the human is told a background task did not reach them. */
 type BackgroundFailure = 'aggregation_failed' | 'delivery_failed' | 'budget_exhausted' | 'empty_result';
 
-function backgroundFailureNotice(reason: BackgroundFailure, locale: string | undefined): string {
-  const en = locale?.toLowerCase().startsWith('en');
-  switch (reason) {
-    case 'aggregation_failed':
-      return en
-        ? 'A background task failed while putting its result together. Please try again.'
-        : '后台任务失败：汇总结果时出错了，请稍后再试。';
-    case 'budget_exhausted':
-      return en
-        ? 'A background task ran out of its budget before it produced a result. Please try again.'
-        : '后台任务的预算用完了，没能得出结果，请稍后再试。';
-    case 'empty_result':
-      return en
-        ? 'A background task finished without a result.'
-        : '后台任务结束了，但没有得出结果。';
-    case 'delivery_failed':
-      return en
-        ? 'A background task finished, but its result could not be delivered. Please try again.'
-        : '后台任务完成了，但结果没能发出来，请稍后再试。';
-  }
+function backgroundFailureNotice(reason: BackgroundFailure, locale: Locale | undefined): string {
+  return collaborationMessages(locale, reason);
 }
 
 /** Short line after a partial answer whose turn ran out of budget. */
-function budgetStoppedLine(locale: string | undefined): string {
-  return locale?.toLowerCase().startsWith('en')
-    ? '(The task ran out of its budget; this is as far as it got.)'
-    : '（后台任务的预算用完了，以上是目前得到的结果。）';
+function budgetStoppedLine(locale: Locale | undefined): string {
+  return collaborationMessages(locale, 'budgetStopped');
 }
 
 /**

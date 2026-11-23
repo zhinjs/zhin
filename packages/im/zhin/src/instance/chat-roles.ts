@@ -25,6 +25,7 @@ import {
   type ChatRoleGrantStore,
 } from '@zhin.js/core';
 import type { DatabaseHost, DatabaseHostModel, FeatureConfigLevel } from '@zhin.js/plugin-runtime';
+import { CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, CHAT_ROLES_EXPORT_FORMAT, CHAT_ROLES_EXPORT_VERSION, chatRolesBackupFileName } from '@zhin.js/console-protocol';
 import { ChatPrincipalStore, type ChatIdentityLinkMethod } from './chat-principals.js';
 
 export {
@@ -37,6 +38,11 @@ export {
 /** Resolution over the instance's stored grants. */
 export type InstanceChatRoleService = ChatRoleService<ChatRoleStore>;
 
+/** Whether any global `owner` grant exists (the one check: claims, Console attention, chat hints). */
+export function hasGlobalOwner(roles: Pick<InstanceChatRoleService, 'store'>): boolean {
+  return roles.store.list().some(entry => entry.level === 'global' && entry.role === 'owner');
+}
+
 export const CHAT_ROLE_TABLE = 'chat_roles';
 const FIELDS = ['id', 'level', 'scope_key', 'adapter', 'user_id', 'principal_id', 'role', 'granted_by', 'granted_at'];
 const RELATIONAL = ['sqlite', 'mysql', 'pg'];
@@ -47,8 +53,6 @@ const rowId = (level: string, key: string, identity: ChatIdentity) =>
 /** Logical key `(level, scope_key, principal_id)` (ADR 0060 §2.3). */
 const logicalKey = (level: string, key: string, principalId: string) => JSON.stringify([level, key, principalId]);
 
-/** Where the pre-migration backup goes (ADR 0060 §4.5). */
-export const CHAT_ROLE_BACKUP_DIRECTORY = join('.zhin', 'backups');
 
 export function defineChatRoleTable(database: DatabaseHost): void {
   assertInstanceTable(CHAT_ROLE_TABLE);
@@ -262,9 +266,9 @@ export class ChatRoleStore implements ChatRoleGrantStore {
     const root = this.#options.projectRoot;
     if (!root) return undefined;
     const now = (this.#options.now ?? Date.now)();
-    const file = join(root, CHAT_ROLE_BACKUP_DIRECTORY, `chat-roles-${new Date(now).toISOString().replace(/[:.]/gu, '-')}.json`);
+    const file = join(root, ...CHAT_ROLES_BACKUP_DIRECTORY_SEGMENTS, chatRolesBackupFileName(now));
     const data = {
-      format: 'zhin.chat-roles', version: 1, exportedAt: now, reason: 'before-person-migration',
+      format: CHAT_ROLES_EXPORT_FORMAT, version: CHAT_ROLES_EXPORT_VERSION, exportedAt: now, reason: 'before-person-migration',
       principals: this.principals.principals(),
       identities: this.principals.identities().filter(identity => identity.principalId)
         .map(({ adapter, userId, principalId, linkMethod, linkedBy, linkedAt }) => ({ adapter, userId, principalId, linkMethod, linkedBy, linkedAt })),
