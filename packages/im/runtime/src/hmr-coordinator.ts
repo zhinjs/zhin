@@ -219,6 +219,8 @@ export class HmrCoordinator {
         const withManifests = (plan: ProcessInvalidationPlan): ProcessInvalidationPlan => (
           manifestChanges.length > 0 ? Object.freeze({ ...plan, manifestChanges: Object.freeze(manifestChanges) }) : plan
         );
+        // The dependency queries below are synchronous; a lazily tracking runtime builds its graph first.
+        await this.options.modules.prepareInvalidation?.();
         const forcedRestart = changed.filter((source) => (
           !this.options.runtime.handlesSource?.(source)
           && this.options.modules.requiresProcessRestart?.(source)

@@ -115,3 +115,75 @@ it('reloads explicitly written sources without a file watcher', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// #1250 `prod-runs-dependency-index`: under --no-watch the module runtime tracks imports lazily and
+// builds the graph on the first explicit reload, from the entries as they are on disk then.
+it.each(['helper', 'drift'] as const)('reloads a changed helper without a file watcher (lazy dependency tracking, %s)', async (mode) => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), `zhin-root-host-lazy-${mode}-`)));
+  const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+  try {
+    await symlink(join(cliRoot, 'node_modules'), join(root, 'node_modules'), 'junction');
+    await writeFile(join(root, 'package.json'), JSON.stringify({
+      name: '@test/root-host-lazy', type: 'module',
+      dependencies: { '@zhin.js/middleware': '1.1.1' },
+      zhin: {
+        protocol: 1, type: 'plugin', entry: './plugin.js',
+        features: [{ package: '@zhin.js/middleware', api: '^1.0.0' }],
+      },
+    }));
+    await writeFile(join(root, 'plugin.js'), `
+      import { definePlugin } from '@zhin.js/plugin-runtime';
+      export default definePlugin({ name: 'root' });
+    `);
+    await mkdir(join(root, 'middlewares/status'), { recursive: true });
+    await mkdir(join(root, 'src'), { recursive: true });
+    const helper = join(root, 'src/message.js');
+    const source = join(root, 'middlewares/status/index.js');
+    await writeFile(helper, "export const message = 'v1';\n");
+    await writeFile(join(root, 'src/other.js'), "export const message = 'other';\n");
+    await writeFile(source, "import { defineMiddleware } from '@zhin.js/middleware';\nimport { message } from '../../src/message.js';\nexport default defineMiddleware({ handle: () => message });\n");
+    await build({
+      entryPoints: [join(cliRoot, 'src/instance/root-host.ts')],
+      bundle: true, packages: 'external', platform: 'node', format: 'esm',
+      outfile: join(root, 'root-host.mjs'), logLevel: 'silent',
+    });
+    await writeFile(join(root, 'scenario.mjs'), `
+      import { writeFile } from 'node:fs/promises';
+      import { RootHost } from './root-host.mjs';
+      const host = new RootHost({ projectRoot: process.cwd(), config: { configVersion: 2 }, watch: false });
+      const handle = () => [...host.runtime.snapshot.capabilities.values()][0].definition.handle();
+      const out = {};
+      await host.start();
+      try {
+        out.before = await handle();
+        if (${JSON.stringify(mode)} === 'drift') {
+          // The entry is edited on disk (it now imports another helper) but not reloaded: the graph
+          // built now no longer links the loaded entry to the old helper, so only a restart is safe.
+          await writeFile(${JSON.stringify(source)}, "import { defineMiddleware } from '@zhin.js/middleware';\\nimport { message } from '../../src/other.js';\\nexport default defineMiddleware({ handle: () => message });\\n");
+        }
+        await writeFile(${JSON.stringify(helper)}, "export const message = 'v2';\\n");
+        out.outcome = await host.reloadSources([${JSON.stringify(helper)}]);
+        out.after = await handle();
+        if (${JSON.stringify(mode)} === 'helper') {
+          // Once built, the graph stays current for the next reload.
+          await writeFile(${JSON.stringify(helper)}, "export const message = 'v3';\\n");
+          out.outcome2 = await host.reloadSources([${JSON.stringify(helper)}]);
+          out.after2 = await handle();
+        }
+      } finally { await host.stop(); }
+      console.log(JSON.stringify(out));
+    `);
+    const { stdout } = await promisify(execFile)(process.execPath, [join(root, 'scenario.mjs')], {
+      cwd: root, env: { ...process.env, NODE_OPTIONS: '' },
+    });
+    const result = JSON.parse(stdout.trim().split('\n').pop() ?? '{}');
+    expect(result.before).toBe('v1');
+    if (mode === 'helper') {
+      expect(result).toMatchObject({ outcome: 'reloaded', after: 'v2', outcome2: 'reloaded', after2: 'v3' });
+    } else {
+      expect(result).toMatchObject({ outcome: 'restart', after: 'v1' });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);

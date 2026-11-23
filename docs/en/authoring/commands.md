@@ -278,6 +278,12 @@ export default defineCommand({
 });
 ```
 
+::: tip What a `.tsx` file costs in memory
+Node strips types from `.ts` files natively but cannot compile JSX. The first time the instance loads a `.tsx` file of your project, it registers the tsx loader to compile it; a project without `.tsx` files never registers it. Once registered, the instance process keeps the tsx modules and the esbuild child process tsx compiles with, about 16 MB together (about 15 MB of it the esbuild child).
+
+For a production deployment short on memory, write the command as `.ts` instead: render a component by name with `component('status-card', props)` (example below) or send a message segment with `raw()`. If the rendered component itself is a `components/*.tsx` file of the project, loading it registers the tsx loader just the same; to avoid tsx entirely, move the component into a separate plugin package compiled to `.js` before publishing, which needs no tsx at run time.
+:::
+
 You can also invoke a registered component by name:
 
 ```ts
