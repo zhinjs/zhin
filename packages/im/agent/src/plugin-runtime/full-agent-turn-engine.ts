@@ -284,12 +284,16 @@ async function* runInteractiveTurn(
   actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067 D7);
   // so is the initiator's own original message in this private chat (ADR 0067 D8).
-  if (background && unrepresentedConversationBlocks(pendingContext!.blocks,
+  const counted = background ? unrepresentedConversationBlocks(pendingContext!.blocks,
     ref => (host.toldLedger?.hasDelivered(prep.sessionId, ref) || host.toldLedger?.hasDelivered(sessionKeyLedgerId(context.turn.session.key), ref)
       || isOwnScheduledDelivery(host.toldLedger, context.turn, ref)) ?? false,
-    ownPrivateInbound(context.turn)).length) {
+    ownPrivateInbound(context.turn)) : [];
+  if (counted.length) {
+    // #1250 high-risk-rules-explain: the counts only describe the source on the approval card.
+    const messages = counted.filter(block => block.eventType === 'message.created' || block.eventType === 'message.updated').length;
     provenance.record({ kind: 'conversation_context',
-      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}) });
+      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}),
+      messages, events: counted.length - messages });
   }
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
