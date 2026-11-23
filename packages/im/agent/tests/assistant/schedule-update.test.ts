@@ -189,23 +189,22 @@ describe('schedule_update (#1250 b90)', () => {
     expect(classifyHighRiskAction({ name: add.name, tags: add.definition.tags })).toBe('schedule');
     expect(defaultHighRiskConfirmLevel('schedule_update', 'schedule')).toBe(defaultHighRiskConfirmLevel('schedule_add', 'schedule'));
     // #1250: like schedule_add, an admin may confirm it in their own private chat (admin-approvable).
-    expect(upd.definition.tags).toEqual(add.definition.tags);
+    expect(add.definition.tags).toContain(ADMIN_APPROVABLE_TOOL_TAG);
     expect(upd.definition.tags).toContain(ADMIN_APPROVABLE_TOOL_TAG);
   });
 
-  it('marks only the Host\'s schedule write tools as harness output; list and preview stay external (#1250 b98)', () => {
+  it('marks only the Host\'s schedule_update as harness output; the other schedule tools stay external (#1250 b98)', () => {
     const settings = { trustedOutputTools: [] };
     const view = (name: string) => {
       const definition = tool(name);
       return { name, ...(definition.tags ? { tags: definition.tags } : {}), ...(definition.readOnly ? { readOnly: true } : {}) };
     };
-    for (const name of ['schedule_add', 'schedule_update', 'schedule_remove', 'schedule_pause', 'schedule_resume']) {
-      expect(tool(name).tags, name).toEqual(expect.arrayContaining([TRUSTED_OUTPUT_TAG, UNTRUSTED_FAILURE_TAG]));
-      expect(classifyToolOutput(view(name), settings), name).toBe('none');
-      expect(classifyToolFailure(view(name), settings), name).toBe('external');
-    }
-    // `schedule_list` returns prompts and labels other people wrote; `schedule_preview` the run's reply.
-    for (const name of ['schedule_list', 'schedule_preview']) {
+    expect(tool('schedule_update').tags).toEqual(expect.arrayContaining([TRUSTED_OUTPUT_TAG, UNTRUSTED_FAILURE_TAG]));
+    expect(classifyToolOutput(view('schedule_update'), settings)).toBe('none');
+    expect(classifyToolFailure(view('schedule_update'), settings)).toBe('external');
+    // Only `schedule_update` was approved for the exemption. `schedule_list` returns prompts and labels
+    // other people wrote; `schedule_preview` the run's reply; the other write tools keep the default.
+    for (const name of ['schedule_add', 'schedule_remove', 'schedule_pause', 'schedule_resume', 'schedule_list', 'schedule_preview']) {
       expect(tool(name).tags ?? [], name).not.toContain(TRUSTED_OUTPUT_TAG);
       expect(classifyToolOutput(view(name), settings), name).toBe('external');
     }

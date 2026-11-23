@@ -29,11 +29,12 @@ import {
 import type { JobSchedule, ScheduleJob } from './assistant/types.js';
 
 /**
- * #1250 b98: tags of the Host's schedule write tools, whose successful results carry only what the
- * harness wrote (ids, the saved timing, the enabled state, fixed messages) and what the caller wrote in
- * this call, never text someone else wrote (a job's prompt or a label the call did not set). They are
- * trusted output (not a source for the provenance gate); a failure still counts as external content.
- * Only these definitions carry them: a plugin tool of the same name is judged by its own declaration.
+ * #1250 b98: tags of the Host's `schedule_update`, whose successful result carries only what the harness
+ * wrote (the id, the saved timing, the enabled state, fixed messages) and what the caller wrote in this
+ * call, never text someone else wrote (a job's prompt or a label the call did not set). It is trusted
+ * output (not a source for the provenance gate); a failure still counts as external content. Only this
+ * definition carries them (the exemption approved for #1250 covers `schedule_update` alone): a plugin
+ * tool of the same name is judged by its own declaration.
  */
 const HARNESS_RESULT_TAGS = Object.freeze([TRUSTED_OUTPUT_TAG, UNTRUSTED_FAILURE_TAG]);
 
@@ -207,8 +208,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         return { success: true, id: job.id, message: '已添加调度任务', ...(warning ? { warning } : {}) };
       },
       // #1250: an admin may confirm creating a scheduled task in their own private chat (allow once).
-      // b98: its result (the new id, fixed messages, the run time) is harness output; the prompt is not echoed.
-      [ADMIN_APPROVABLE_TOOL_TAG, ...HARNESS_RESULT_TAGS],
+      [ADMIN_APPROVABLE_TOOL_TAG],
     ),
     registration(
       'schedule_preview',
@@ -315,8 +315,6 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
             : await manager.engine.resumeJob(id);
         return changed ? { success: true } : { error: notFound };
       },
-      // #1250 b98: `{ success: true }` only (an error is fixed text with the id the caller gave).
-      HARNESS_RESULT_TAGS,
     )),
   ]);
 }
