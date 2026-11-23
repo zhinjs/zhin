@@ -1319,23 +1319,35 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     return log.mock.calls.flat().join('\n');
   };
 
-  it('writes no minimumReleaseAgeExclude with --include-pinned when the project sets no minimumReleaseAge (pnpm 10)', () => {
-    const output = run(bot(), '10.30.0');
+  it('writes no minimumReleaseAgeExclude with --include-pinned when the project sets no minimumReleaseAge (pnpm 10 pinned)', () => {
+    const output = run(bot({ packageManager: 'pnpm@10.30.0' }), '10.30.0');
     expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
-    expect(output).toContain('项目未设置 minimumReleaseAge（pnpm 10 默认不启用），不写 minimumReleaseAgeExclude');
+    expect(output).toContain('项目未设置 minimumReleaseAge（packageManager 固定的 pnpm 10 默认不启用），不写 minimumReleaseAgeExclude');
+  });
+
+  it('writes minimumReleaseAgeExclude without a packageManager pin although the local pnpm is 10 (CI may run pnpm 11)', () => {
+    const output = run(bot(), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    expect(output).not.toContain('不写 minimumReleaseAgeExclude');
+    // Unpinned, .npmrc / package.json#pnpm turn the gate off for pnpm 10 only: pnpm 11 ignores them.
+    run(bot({ pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    // A pnpm-workspace.yaml value of 0 is read by every pnpm that has the gate.
+    run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 0\n"), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
   });
 
   it('writes the exclusions where pnpm reads minimumReleaseAge: pnpm-workspace.yaml, .npmrc, package.json#pnpm', () => {
     run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 1440\n"), '10.30.0');
     expect(workspace().minimumReleaseAgeExclude).toEqual(['@zhin.js/adapter-icqq@9.4.2', '@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2']);
 
-    const npmrc = bot();
+    const npmrc = bot({ packageManager: 'pnpm@10.30.0' });
     fs.writeFileSync(path.join(tmp, '.npmrc'), 'registry=https://registry.npmjs.org/\nminimum-release-age=60\n');
     run(npmrc, '10.30.0');
     expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
     fs.rmSync(path.join(tmp, '.npmrc'));
 
-    run(bot({ pnpm: { minimumReleaseAge: 30 } }), '10.30.0');
+    run(bot({ packageManager: 'pnpm@10.30.0', pnpm: { minimumReleaseAge: 30 } }), '10.30.0');
     expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
   });
 
@@ -1352,8 +1364,8 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
     fs.rmSync(path.join(tmp, '.npmrc'));
 
-    // pnpm 10 still honours both.
-    run(bot({ pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    // A pinned pnpm 10 still honours both.
+    run(bot({ packageManager: 'pnpm@10.30.0', pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
     expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
   });
 
@@ -1365,15 +1377,22 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     expect(output).toContain('pnpm-workspace.yaml 的 minimumReleaseAge 为 0（不拦新版本），不写 minimumReleaseAgeExclude');
   });
 
-  it('writes no allowBuilds key under pnpm 10 for any gateway package an onlyBuiltDependencies list covers', () => {
-    const output = run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
+  it('writes no allowBuilds key under a pinned pnpm 10 for any gateway package an onlyBuiltDependencies list covers', () => {
+    const output = run(bot({ packageManager: 'pnpm@10.30.0' }, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
     // ssh2 / cpu-features follow the same rule as node-pty: appended to the list pnpm 10 reads.
     expect(workspace()).not.toHaveProperty('allowBuilds');
     expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
-    expect(output).toContain('node-pty: 已在 pnpm-workspace.yaml onlyBuiltDependencies 中，pnpm 10 会构建它，不再写 allowBuilds');
-    expect(output).toContain('ssh2: 加入 pnpm-workspace.yaml onlyBuiltDependencies，pnpm 10 会构建它，不再写 allowBuilds');
-    expect(output).toContain('cpu-features: 加入 pnpm-workspace.yaml onlyBuiltDependencies，pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('node-pty: 已在 pnpm-workspace.yaml onlyBuiltDependencies 中，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('ssh2: 加入 pnpm-workspace.yaml onlyBuiltDependencies，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('cpu-features: 加入 pnpm-workspace.yaml onlyBuiltDependencies，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
     expect(output).not.toContain('allowBuilds.');
+  });
+
+  it('still writes allowBuilds without a packageManager pin when the local pnpm is 10 (a deployment may run pnpm 11)', () => {
+    const output = run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+    expect(output).not.toContain('不再写 allowBuilds');
   });
 
   it('writes allowBuilds as before when the pnpm version is unknown (it may be pnpm 11)', () => {

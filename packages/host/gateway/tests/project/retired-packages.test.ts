@@ -205,6 +205,21 @@ describe('retired @zhin.js packages (#1250 retired-package-not-flagged)', () => 
     expect(findRetiredImports(source).map(use => use.line)).toEqual([5]);
   });
 
+  it('reads a regular expression literal whole, so a backtick or /* inside one hides no later import', () => {
+    const specifiers = (source: string) => findRetiredImports(source).map(use => [use.line, use.specifier]);
+    // A backtick in a regular expression would otherwise open a template literal up to the next one.
+    expect(specifiers("const r = /`/;\nimport a from '@zhin.js/isolate';\nconst t = `x`;\nimport b from '@zhin.js/hmr';"))
+      .toEqual([[2, '@zhin.js/isolate'], [4, '@zhin.js/hmr']]);
+    // `/*` inside one (after an escaped `/`) would otherwise open a block comment up to a later `*/`.
+    expect(specifiers("const r = /^\\/*$/;\nimport a from '@zhin.js/isolate';\nconst z = 1; // */\nimport b from '@zhin.js/hmr';"))
+      .toEqual([[2, '@zhin.js/isolate'], [4, '@zhin.js/hmr']]);
+    // Character classes, escapes, flags, and the tokens a literal may follow.
+    expect(specifiers("if (ok) return /[/`'\\]]/gu.test(s) || !/'/.test(t);\nimport a from '@zhin.js/isolate';")).toEqual([[2, '@zhin.js/isolate']]);
+    expect(specifiers("const q = a / b, w = c(d) / e[f] / 2; const s = '/';\nimport a from '@zhin.js/isolate';")).toEqual([[2, '@zhin.js/isolate']]);
+    // An unclosed `/` on a line is division; the next line scans as usual.
+    expect(specifiers("const x = (a /\n  b); import a from '@zhin.js/isolate';")).toEqual([[2, '@zhin.js/isolate']]);
+  });
+
   it('stays linear on large and adversarial inputs', () => {
     const inputs = [
       'import' + ' '.repeat(200_000) + 'x',
@@ -214,10 +229,12 @@ describe('retired @zhin.js packages (#1250 retired-package-not-flagged)', () => 
       "'".repeat(200_000),
       'a.'.repeat(100_000) + ' '.repeat(100_000),
       "import a from '@zhin.js/isolate';\n".repeat(20_000),
+      '(/['.repeat(100_000),
+      '= /a/ '.repeat(100_000),
     ];
     const started = performance.now();
     const counts = inputs.map(input => findRetiredImports(input).length);
-    expect(counts).toEqual([0, 0, 0, 0, 0, 0, 20_000]);
+    expect(counts).toEqual([0, 0, 0, 0, 0, 0, 20_000, 0, 0]);
     expect(performance.now() - started).toBeLessThan(2_000);
     expect(findRetiredImports("import a from '@zhin.js/isolate';\n".repeat(20_000)).at(-1)!.line).toBe(20_000);
   });

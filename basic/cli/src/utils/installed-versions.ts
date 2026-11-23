@@ -190,6 +190,20 @@ export function releaseAgeGateApplies(dir: string, pkg: Record<string, any>, pnp
   return configured ? configured.minutes > 0 : (pnpmMajor ?? 0) >= 11;
 }
 
+/**
+ * Whether pnpm may hold back fresh releases wherever this project installs — the question
+ * `zhin migrate` asks before writing `minimumReleaseAgeExclude`. `pinnedMajor` is the pnpm major
+ * `packageManager` pins: with a pin, see `releaseAgeGateApplies`. Without one, the pnpm of a
+ * deployment or CI may be 11 (default one-day gate, `pnpm-workspace.yaml` only) even when the local
+ * one is 10, so the gate counts as applying when it would under pnpm 11 or under pnpm 10: only a
+ * `pnpm-workspace.yaml` `minimumReleaseAge` of 0 (read by both) rules it out. A needless exclusion
+ * is a dead entry; a missing one keeps the old release installed.
+ */
+export function releaseAgeGateMayApply(dir: string, pkg: Record<string, any>, pinnedMajor: number | undefined): boolean {
+  if (pinnedMajor !== undefined) return releaseAgeGateApplies(dir, pkg, pinnedMajor);
+  return releaseAgeGateApplies(dir, pkg, 11) || releaseAgeGateApplies(dir, pkg, 10);
+}
+
 /** pnpm major version on PATH (undefined when pnpm is unavailable). */
 export function detectPnpmMajor(dir: string): number | undefined {
   try {

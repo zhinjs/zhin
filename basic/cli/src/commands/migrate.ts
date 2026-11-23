@@ -25,13 +25,22 @@ import {
   applyInstanceDeclarationMigration, CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, findRetiredZhinPackage,
   formatInstanceMigrationPreview, NODE_ENGINES_HINT, planInstanceDeclarationMigration, readConfig, recoverInstanceDeclarationMigration,
 } from '@zhin.js/gateway/project';
-import { findProjectRetiredDependencies, findProjectRetiredImports, formatRetiredDependency, formatRetiredImport } from '../utils/retired-packages-check.js';
+import {
+  findProjectRetiredDependencies,
+  formatRetiredDependency,
+  formatRetiredImport,
+  formatTruncatedScan,
+  scanProjectRetiredImports,
+  type ProjectRetiredDependency,
+  type ProjectRetiredImportScan,
+  type ProjectRetiredImportScanLimits,
+} from '../utils/retired-packages-check.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
 import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
-import { projectPnpmMajor, syncNativeBuildAllowance, usesPnpm, type PnpmVersionProbe } from '../utils/native-build-deps.js';
+import { pinnedPnpmMajor, syncNativeBuildAllowance, usesPnpm, type PnpmVersionProbe } from '../utils/native-build-deps.js';
 import { isExactVersionSpecifier, isLocalDependencySpecifier, isPinnedSpecifier } from '../utils/dependency-specifiers.js';
 import {
   compareInstalledVersions,
@@ -40,7 +49,7 @@ import {
   explainVersionMismatch,
   formatInstalledVersionRows,
   configuredReleaseAge,
-  releaseAgeGateApplies,
+  releaseAgeGateMayApply,
   snapshotInstalledVersions,
   syncReleaseAgeExclusions,
 } from '../utils/installed-versions.js';
@@ -288,16 +297,19 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
   // (possibly unchanged) specifiers now point at — pinned and local specifiers are never listed.
   // Only where the gate applies (#1250): a project that sets minimumReleaseAge, or pnpm 11+ without
   // one (default one day). Otherwise the exclusions are dead entries — dozens with --include-pinned.
+  // The pnpm version is the `packageManager` pin only: without one, the pnpm that installs the
+  // project elsewhere (deployment, CI) may be 11 whatever the local `pnpm --version` says, so the
+  // exclusions are written unless the gate is off under every pnpm (see releaseAgeGateMayApply).
   if (usesPnpm(path.dirname(pkgPath), pkg)) {
     const dir = path.dirname(pkgPath);
-    const pnpmMajor = projectPnpmMajor(dir, pkg, options.pnpmVersion);
-    if (releaseAgeGateApplies(dir, pkg, pnpmMajor)) {
+    const pnpmMajor = pinnedPnpmMajor(pkg);
+    if (releaseAgeGateMayApply(dir, pkg, pnpmMajor)) {
       syncReleaseAgeExclusions(dir, releases, options.dryRun);
     } else if (releases.size > 0 && fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
       const configured = configuredReleaseAge(dir, pkg, pnpmMajor);
       console.log(chalk.gray(configured
         ? `  · ${configured.source} 的 minimumReleaseAge 为 ${configured.minutes}（不拦新版本），不写 minimumReleaseAgeExclude`
-        : `  · 项目未设置 minimumReleaseAge${pnpmMajor === undefined ? '' : `（pnpm ${pnpmMajor} 默认不启用）`}，不写 minimumReleaseAgeExclude`));
+        : `  · 项目未设置 minimumReleaseAge${pnpmMajor === undefined ? '' : `（packageManager 固定的 pnpm ${pnpmMajor} 默认不启用）`}，不写 minimumReleaseAgeExclude`));
     }
   }
 
@@ -784,13 +796,28 @@ export function upgradeProjectDependencies(
  * root or a workspace member declares, and the imports of them in the project's sources, with the
  * edits to make. Nothing is rewritten — a retired package may export more than its successor took
  * over, so the edits are the user's (they are few and listed with file and line). Returns the
- * number of retired dependencies found.
+ * number of retired dependencies found. Like `zhin doctor`, a failing check (an unreadable
+ * workspace file, …) is a warning, never the end of the migration: it then returns 0.
  */
-export function reportRetiredPackages(dir: string, log: (line: string) => void = line => console.log(line)): number {
-  const dependencies = findProjectRetiredDependencies(dir);
-  const imports = findProjectRetiredImports(dir);
+export function reportRetiredPackages(
+  dir: string,
+  log: (line: string) => void = line => console.log(line),
+  limits: ProjectRetiredImportScanLimits = {},
+): number {
+  let dependencies: ProjectRetiredDependency[];
+  let scan: ProjectRetiredImportScan;
+  try {
+    dependencies = findProjectRetiredDependencies(dir);
+    scan = scanProjectRetiredImports(dir, limits);
+  } catch (error) {
+    log(chalk.yellow(`  ! 无法检查已并入或停更的 @zhin.js 包：${error instanceof Error ? error.message.split('\n')[0] : String(error)}（可运行 zhin doctor 重试）`));
+    return 0;
+  }
+  const imports = scan.uses;
+  const truncated = (): void => { if (scan.truncated) log(chalk.yellow(`  ! ${formatTruncatedScan(scan)}`)); };
   if (dependencies.length === 0 && imports.length === 0) {
     log(chalk.gray('  没有依赖已并入或停更的 @zhin.js 包'));
+    truncated();
     return 0;
   }
   for (const hit of dependencies) log(chalk.yellow(`  ! ${formatRetiredDependency(hit)}`));
@@ -801,6 +828,7 @@ export function reportRetiredPackages(dir: string, log: (line: string) => void =
   if (dependencies.length > 0) {
     log(chalk.gray('  改完 import 后删除上面的依赖并运行 pnpm install；不要用 pnpm.overrides 压住它们拖进的旧版本'));
   }
+  truncated();
   return dependencies.length;
 }
 

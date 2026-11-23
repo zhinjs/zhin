@@ -34,33 +34,88 @@ export function formatRetiredDependency(hit: ProjectRetiredDependency): string {
 }
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
-const SKIPPED_DIRECTORIES = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', '.zhin', '.turbo']);
-/** Upper bound on scanned files, so a huge checkout does not stall `zhin migrate`. */
+/** Dependency, build output and tool directories; `lib` too, unless it holds the package's own sources (see {@link libHoldsSources}). */
+const SKIPPED_DIRECTORIES = new Set(['node_modules', 'lib', 'dist', 'build', 'out', 'coverage', '.git', '.zhin', '.turbo']);
+/** Upper bound on scanned source files, so a huge checkout does not stall `zhin migrate`. */
 const MAX_SOURCE_FILES = 5000;
+/** Upper bound on visited directory entries (files and directories), for trees with few sources but many files. */
+const MAX_DIRECTORY_ENTRIES = 20_000;
 
 export interface ProjectRetiredImport extends RetiredImportUse {
   /** Project-relative path with `/` separators. */
   readonly file: string;
 }
 
+export interface ProjectRetiredImportScan {
+  readonly uses: readonly ProjectRetiredImport[];
+  /** Source files read. */
+  readonly scannedFiles: number;
+  /** Set when a limit stopped the walk: the uses cover only the first `scannedFiles` files. */
+  readonly truncated: boolean;
+}
+
+export interface ProjectRetiredImportScanLimits {
+  /** Default 5000. */
+  readonly maxSourceFiles?: number;
+  /** Default 20000. */
+  readonly maxDirectoryEntries?: number;
+}
+
+function collectStrings(value: unknown, out: string[]): void {
+  if (typeof value === 'string') out.push(value);
+  else if (Array.isArray(value)) for (const item of value) collectStrings(item, out);
+  else if (value && typeof value === 'object') for (const item of Object.values(value)) collectStrings(item, out);
+}
+
 /**
- * Imports of retired packages in the project's own sources (dependency and build directories and
- * hidden directories are skipped). Read only: the caller prints the edits.
+ * Whether `dir/lib` is where the package in `dir` keeps its own JavaScript sources rather than build
+ * output: its `package.json` `main` / `module` / `exports` point into `lib/` and `dir` has no `src`
+ * directory (a package written in plain JavaScript). Such a `lib` is scanned.
  */
-export function findProjectRetiredImports(root: string): ProjectRetiredImport[] {
+export function libHoldsSources(dir: string): boolean {
+  if (fs.existsSync(path.join(dir, 'src'))) return false;
+  const manifest = readManifest(path.join(dir, 'package.json')) as Record<string, unknown> | undefined;
+  if (!manifest || typeof manifest !== 'object') return false;
+  const targets: string[] = [];
+  collectStrings([manifest.main, manifest.module, manifest.exports], targets);
+  return targets.some(target => /^(?:\.\/)?lib\//u.test(target) && /\.[cm]?jsx?$/u.test(target));
+}
+
+/**
+ * Imports of retired packages in the project's own sources. Dependency, build output (`dist`,
+ * `build`, `out`, `lib` unless it holds the package's sources) and hidden directories are skipped;
+ * the walk stops after `maxSourceFiles` source files or `maxDirectoryEntries` visited entries and
+ * then reports `truncated`. Read only: the caller prints the edits.
+ */
+export function scanProjectRetiredImports(root: string, limits: ProjectRetiredImportScanLimits = {}): ProjectRetiredImportScan {
+  const maxFiles = limits.maxSourceFiles ?? MAX_SOURCE_FILES;
+  const maxEntries = limits.maxDirectoryEntries ?? MAX_DIRECTORY_ENTRIES;
   const uses: ProjectRetiredImport[] = [];
   let scanned = 0;
+  let visited = 0;
+  let truncated = false;
   const walk = (dir: string): void => {
     let entries: fs.Dirent[];
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (scanned >= MAX_SOURCE_FILES) return;
+      if (truncated) return;
+      if (visited >= maxEntries) {
+        truncated = true;
+        return;
+      }
+      visited += 1;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIPPED_DIRECTORIES.has(entry.name) && !entry.name.startsWith('.')) walk(full);
+        if (entry.name.startsWith('.')) continue;
+        if (SKIPPED_DIRECTORIES.has(entry.name) && !(entry.name === 'lib' && libHoldsSources(dir))) continue;
+        walk(full);
         continue;
       }
       if (!entry.isFile() || !SOURCE_EXTENSIONS.has(path.extname(entry.name)) || entry.name.endsWith('.d.ts')) continue;
+      if (scanned >= maxFiles) {
+        truncated = true;
+        return;
+      }
       scanned += 1;
       let text: string;
       try { text = fs.readFileSync(full, 'utf8'); } catch { continue; }
@@ -70,7 +125,12 @@ export function findProjectRetiredImports(root: string): ProjectRetiredImport[] 
     }
   };
   walk(root);
-  return uses;
+  return { uses, scannedFiles: scanned, truncated };
+}
+
+/** The doctor/migrate note for a truncated scan (Chinese). */
+export function formatTruncatedScan(scan: ProjectRetiredImportScan): string {
+  return `仅扫描了前 ${scan.scannedFiles} 个源文件（项目文件过多，已达扫描上限），其余文件里的 import 未检查：可在子目录中自行搜索 '@zhin.js/'`;
 }
 
 /**
@@ -90,18 +150,21 @@ const DOCTOR_IMPORT_LINES = 5;
  * `zhin doctor`'s check result (the `CheckResult` shape): warn per retired dependency and per
  * import of a deleted subpath or of a retired package no manifest declares; ok otherwise.
  */
-export function retiredPackagesResult(root: string): { name: string; status: 'ok' | 'warn'; message: string; fix?: string } {
+export function retiredPackagesResult(root: string, limits: ProjectRetiredImportScanLimits = {}): { name: string; status: 'ok' | 'warn'; message: string; fix?: string } {
   const name = '已停更的 Zhin 包';
   let hits: ProjectRetiredDependency[];
   let imports: ProjectRetiredImport[];
+  let scan: ProjectRetiredImportScan;
   try {
     hits = findProjectRetiredDependencies(root);
     const declared = new Set(hits.map(hit => hit.name));
-    imports = findProjectRetiredImports(root).filter(use => !use.retired || !declared.has(use.retired.name));
+    scan = scanProjectRetiredImports(root, limits);
+    imports = scan.uses.filter(use => !use.retired || !declared.has(use.retired.name));
   } catch (error) {
     return { name, status: 'warn', message: `无法检查：${error instanceof Error ? error.message.split('\n')[0] : String(error)}` };
   }
-  if (hits.length === 0 && imports.length === 0) return { name, status: 'ok', message: '没有依赖已并入或停更的 @zhin.js 包，也没有 import 已删除的子路径' };
+  const truncatedNote = scan.truncated ? `（${formatTruncatedScan(scan)}）` : '';
+  if (hits.length === 0 && imports.length === 0) return { name, status: 'ok', message: `没有依赖已并入或停更的 @zhin.js 包，也没有 import 已删除的子路径${truncatedNote}` };
   const messages: string[] = [];
   const fixes: string[] = [];
   if (hits.length > 0) {
@@ -114,5 +177,6 @@ export function retiredPackagesResult(root: string): { name: string; status: 'ok
     messages.push(`要改写的 import：${shown.join('；')}${more}`);
     if (hits.length === 0) fixes.push('按上面的提示改写 import（zhin migrate 会列出全部位置）');
   }
+  if (scan.truncated) messages.push(formatTruncatedScan(scan));
   return { name, status: 'warn', message: messages.join('。'), fix: fixes.join('；') };
 }

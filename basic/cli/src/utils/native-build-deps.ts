@@ -94,6 +94,16 @@ export function projectPnpmMajor(dir: string, pkg: Record<string, any>, probe: P
   return version === undefined ? undefined : majorOf(version);
 }
 
+/**
+ * The pnpm major `packageManager` pins; undefined when the project pins no pnpm release. Only a
+ * pin says which pnpm installs the project everywhere: the local `pnpm --version` may differ from
+ * the one a deployment or CI runs, so a decision to leave a setting out is made only on a pin.
+ */
+export function pinnedPnpmMajor(pkg: Record<string, any>): number | undefined {
+  const pinned = /^pnpm@(.+)$/u.exec(String(pkg.packageManager ?? ''));
+  return pinned ? majorOf(pinned[1]!) : undefined;
+}
+
 export interface NativeBuildAllowanceChange {
   readonly file: typeof WORKSPACE_FILE | 'package.json';
   /** Setting path, e.g. `allowBuilds.node-pty` or `onlyBuiltDependencies`. */
@@ -462,9 +472,10 @@ export function planNativeBuildAllowance(
   const allowedByOnlyBuilt: { name: string; source: string; appended: boolean }[] = [];
   // pnpm 10 builds what an onlyBuiltDependencies list it reads names, and this plan appends every
   // wanted package to such a list when one is there (or is created for a pnpm < 10.26 pin): those
-  // packages need no allowBuilds key. Only with pnpm < 11 confirmed — an unknown version may be 11,
-  // which reads allowBuilds only; writing the key then is harmless.
-  const pnpmMajor = projectPnpmMajor(dir, pkg, options.pnpmVersion);
+  // packages need no allowBuilds key. Only when `packageManager` pins pnpm < 11 — the local
+  // `pnpm --version` says nothing about the pnpm a deployment or CI runs, and pnpm 11 reads
+  // allowBuilds only; writing the key for an older pnpm is harmless (it ignores the key).
+  const pinnedMajor = pinnedPnpmMajor(pkg);
   const nestedWorkspaceFile = workspaceSkipReason?.kind === 'nested-workspace' ? workspaceSkipReason.workspaceFile : undefined;
   const existingWorkspaceList = workspaceSkipped ? undefined : doc.get('onlyBuiltDependencies');
   const appendedList = workspaceSkipped ? undefined
@@ -473,7 +484,7 @@ export function planNativeBuildAllowance(
       : Array.isArray(pkg.pnpm?.onlyBuiltDependencies) && nestedWorkspaceFile === undefined
         ? 'package.json pnpm.onlyBuiltDependencies'
         : undefined;
-  const readsOnlyBuilt = pnpmMajor !== undefined && pnpmMajor < 11;
+  const readsOnlyBuilt = pinnedMajor !== undefined && pinnedMajor < 11;
   let allowBuilds = workspaceSkipped ? undefined : doc.get('allowBuilds', true);
   // An empty `allowBuilds:` key holds a null scalar, which `setIn` cannot descend into.
   if (allowBuilds === null || (isScalar(allowBuilds) && allowBuilds.value === null)) {
@@ -626,7 +637,7 @@ export function syncNativeBuildAllowance(
     ));
   }
   for (const entry of plan.allowedByOnlyBuilt) {
-    console.log(chalk.gray(`  · ${entry.name}: ${entry.appended ? '加入' : '已在'} ${entry.source}${entry.appended ? '' : ' 中'}，pnpm 10 会构建它，不再写 allowBuilds（升级到 pnpm 11 后再运行 zhin migrate 补上）`));
+    console.log(chalk.gray(`  · ${entry.name}: ${entry.appended ? '加入' : '已在'} ${entry.source}${entry.appended ? '' : ' 中'}，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds（升级到 pnpm 11 后再运行 zhin migrate 补上）`));
   }
   for (const change of plan.changes) {
     const target = change.setting.startsWith('allowBuilds.')

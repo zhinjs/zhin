@@ -228,7 +228,8 @@ export const RETIRED_ZHIN_PACKAGES: readonly RetiredZhinPackage[] = Object.freez
     action: '已删除，栅格渲染统一由 @zhin.js/html-renderer 提供：改用 @zhin.js/html-renderer，然后删除 @zhin.js/satori 依赖',
   },
   {
-    // 20519bbfa5: replaced by the content-moderation hooks (ADR 0020 / 0021).
+    // 20519bbfa5: replaced by the content-moderation hooks of @zhin.js/plugin-content-moderation
+    // (see that plugin's README).
     name: '@zhin.js/sensitive-filter',
     status: 'removed',
     replacement: '@zhin.js/plugin-content-moderation',
@@ -345,10 +346,18 @@ function classify(specifier: string, line: number): RetiredImportUse | undefined
  * pass skips `//` line comments and `/* *\/` block comments and reads each string literal whole,
  * so a specifier inside a comment or inside another string is not reported. A literal counts when
  * it directly follows `from`, `import` or `import(` / `require(` (whitespace and comments between
- * them are allowed); a template literal counts only without `${`. The scan does not parse regular
- * expression literals: a quote inside one can hide or invent a match on that line (strings never
- * span lines, so the effect stops at the line end). Nothing is rewritten: `zhin migrate` lists
- * these as the edits to make by hand.
+ * them are allowed); a template literal counts only without `${`. A `/` where an expression starts
+ * (at the start of the text, or after an operator, `(`, `,`, `=`, `:`, `[`, `{`, `}`, `;` or a
+ * keyword such as `return` / `typeof`) is read as a regular expression literal up to its closing
+ * `/` (escapes and `[...]` character classes included), so a quote, backtick or `/*` inside one
+ * does not start a string or comment. After an identifier, a literal, `)` or `]` a `/` is division
+ * (JavaScript reads `a` + newline + `/b/` as division too, so the line start alone decides
+ * nothing). A regular expression literal never spans lines: one that is not closed on its line is
+ * read as division, and no further `/` on that line is read as one (this keeps the pass linear).
+ * Remaining limit: JSX text is read as code, so a quote or backtick in it (`<p>Don't</p>`) starts
+ * a string — a quote one ends at the line end, a backtick one runs to the next backtick and can
+ * hide or invent matches over several lines. Nothing is rewritten: `zhin migrate` lists these as
+ * the edits to make by hand.
  */
 export function findRetiredImports(source: string): RetiredImportUse[] {
   const uses: RetiredImportUse[] = [];
@@ -361,6 +370,9 @@ export function findRetiredImports(source: string): RetiredImportUse[] {
   const push = (token: string): void => { beforePrevious = previous; previous = token; };
   const takesSpecifier = (): boolean => previous === 'from' || previous === 'import'
     || (previous === '(' && (beforePrevious === 'import' || beforePrevious === 'require'));
+  // Set when a `/` read as a regular expression was not closed on its line: up to that line's end
+  // no `/` is read as one again.
+  let regexOffUntil = 0;
   let i = 0;
   while (i < length) {
     const code = source.charCodeAt(i);
@@ -377,6 +389,17 @@ export function findRetiredImports(source: string): RetiredImportUse[] {
       for (let j = i + 2; j < stop; j += 1) if (source.charCodeAt(j) === 0x0a) line += 1;
       i = stop;
       continue;
+    }
+    if (code === 0x2f && i >= regexOffUntil && startsExpression(previous)) {
+      const end = regexLiteralEnd(source, i);
+      if (end !== undefined) {
+        push('/re/');
+        i = end;
+        continue;
+      }
+      // Not closed on this line: division, and no other `/` on this line starts a literal.
+      const newline = source.indexOf('\n', i);
+      regexOffUntil = newline === -1 ? length : newline;
     }
     if (code === 0x27 || code === 0x22 || code === 0x60) {
       const startLine = line;
@@ -419,6 +442,50 @@ export function findRetiredImports(source: string): RetiredImportUse[] {
     i += 1;
   }
   return uses;
+}
+
+/** Keywords after which a `/` starts a regular expression literal, not a division. */
+const REGEX_AFTER_KEYWORDS = new Set([
+  'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await',
+]);
+
+/** Punctuation after which a `/` starts a regular expression literal. */
+const REGEX_AFTER_PUNCTUATION = new Set(['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^', '/']);
+
+/** Whether a `/` after the significant token `previous` starts an expression (a regular expression literal). */
+function startsExpression(previous: string): boolean {
+  return previous === '' || REGEX_AFTER_PUNCTUATION.has(previous) || REGEX_AFTER_KEYWORDS.has(previous);
+}
+
+/**
+ * The index just past the regular expression literal whose opening `/` is at `start` (flags
+ * included), or undefined when no closing `/` follows on the same line.
+ */
+function regexLiteralEnd(source: string, start: number): number | undefined {
+  const length = source.length;
+  let inClass = false;
+  let j = start + 1;
+  while (j < length) {
+    const c = source.charCodeAt(j);
+    if (c === 0x0a || c === 0x0d) return undefined;
+    if (c === 0x5c) {
+      const next = source.charCodeAt(j + 1);
+      if (next === 0x0a || next === 0x0d) return undefined;
+      j += 2;
+      continue;
+    }
+    if (inClass) {
+      if (c === 0x5d) inClass = false;
+    } else if (c === 0x5b) {
+      inClass = true;
+    } else if (c === 0x2f) {
+      j += 1;
+      while (j < length && isIdentifierChar(source.charCodeAt(j))) j += 1;
+      return j;
+    }
+    j += 1;
+  }
+  return undefined;
 }
 
 /** Whether the identifier starting at `index` is a property name (`.` right before it, spaces allowed). */
