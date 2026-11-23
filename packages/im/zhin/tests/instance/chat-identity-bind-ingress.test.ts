@@ -109,8 +109,12 @@ describe('bind messages at inbound (#1250 bind-hint-omits-command-prefix)', () =
     expect(await send('qq', 'private', 'bind username')).toBe('');
     expect(await send('qq', 'private', '绑定 82345678')).toBe('');
     expect(agent).toHaveBeenCalledTimes(2);
-    // Ordinary messages: recorded as sent (nothing secret in them).
-    expect(JSON.stringify(appended)).toContain('82345678');
+    // The Agent still gets the message as sent (routing is unchanged)…
+    expect(agent.mock.calls.map(([message]) => String(message.content))).toEqual(['bind username', '绑定 82345678']);
+    // …but the record shows a bind-shaped text as `绑定 ***` by its shape alone, open code or not
+    // (#1250 sandbox-transcript-shared-bind-code: records are read back by other Console users).
+    expect(JSON.stringify(appended)).not.toContain('82345678');
+    expect(JSON.stringify(appended)).toContain('绑定 ***');
     // Not counted: many of them never lock the sender out of a code created afterwards.
     for (let attempt = 0; attempt < 6; attempt += 1) await send('qq', 'private', '绑定 ZZZZ9999');
     codes.create({ consoleUserId: 'u1', canManageGlobal: false });

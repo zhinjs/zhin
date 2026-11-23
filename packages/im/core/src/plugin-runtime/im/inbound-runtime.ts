@@ -3,7 +3,7 @@ import type { CommandExecutionBudget, CommandOperationController } from '@zhin.j
 import type { OperationResourceView } from '@zhin.js/feature-kit';
 import { normalizePlatformStanding, type DeliveryReceipt, type UserInteraction } from '@zhin.js/im-contract';
 import { createErrorId, formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import { redactSecretText } from '@zhin.js/kernel';
+import { redactChatIdentityBindText, redactSecretText } from '@zhin.js/kernel';
 import type {
   CapabilityId,
   GenerationAdmissionGate,
@@ -245,7 +245,8 @@ export class InboundRuntime {
       this.context.diagnostics?.identify(conversation);
       // ADR 0060 §3.3: a one-time secret is recognized before it is logged, recorded or routed.
       const secret = this.#matchSecret(input, lease.value);
-      const visibleContent = secret ? secret.redacted : input.content;
+      // #1250: a bind message no guard took (no open code, a group) is still logged as `绑定 ***`.
+      const visibleContent = secret ? secret.redacted : redactChatIdentityBindText(input.content);
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),

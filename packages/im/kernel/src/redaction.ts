@@ -264,6 +264,50 @@ export function redactChatOwnerClaimText(text: string): string {
 }
 
 /**
+ * ADR 0060 §2.4 (#1250 sandbox-transcript-shared-bind-code): a chat-identity bind message — the keyword
+ * `绑定` / `綁定` / `bind` (any letter case; `码` / `code` may follow it) as the first word, after up to
+ * three punctuation marks (a command prefix such as `/` or `#`, a quote) or the adapter's `prefix`,
+ * then text that, folded like codes are compared (NFKC, upper case) with every non-letter, non-digit
+ * dropped, is exactly {@link CHAT_BIND_CODE_LENGTH} symbols of the bind-code alphabet. Decided by the
+ * shape alone, never by whether such a code is open: an expired code is shown no more than a live one.
+ * Keep the alphabet and length in sync with `zhin.js/instance` (chat-identity-bind).
+ */
+const CHAT_BIND_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CHAT_BIND_CODE_LENGTH = 8;
+const CHAT_BIND_HEAD = /^([^\p{L}\p{N}\s]{0,3}\s*(?:绑定|綁定|bind)(?:码|碼|\s*code)?)/iu;
+const CHAT_BIND_CODE_SHAPE = new RegExp(`^[${CHAT_BIND_CODE_ALPHABET}]{${CHAT_BIND_CODE_LENGTH}}$`, 'u');
+
+function bindHead(candidate: string): string | undefined {
+  const head = CHAT_BIND_HEAD.exec(candidate)?.[1];
+  if (!head) return undefined;
+  const rest = candidate.slice(head.length).normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  return CHAT_BIND_CODE_SHAPE.test(rest) ? head : undefined;
+}
+
+/**
+ * The bind message `text` with its code replaced by `***` (`绑定 ABCD2345` → `绑定 ***`, `/bind abcd-2345` →
+ * `/bind ***`), or `text` unchanged when it is not a bind message (see {@link CHAT_BIND_HEAD}). `prefix`
+ * (the adapter's command prefix, which may be a word) may precede the keyword and is kept.
+ */
+export function redactChatIdentityBindText(text: string, prefix = ''): string {
+  if (!text) return text;
+  const body = text.trim();
+  if (prefix && body.startsWith(prefix)) {
+    const rest = body.slice(prefix.length);
+    const lead = rest.length - rest.trimStart().length;
+    const head = bindHead(rest.trimStart());
+    if (head) return `${prefix}${rest.slice(0, lead)}${head} ***`;
+  }
+  const head = bindHead(body);
+  return head ? `${head} ***` : text;
+}
+
+/** Whether `text` is a chat-identity bind message ({@link redactChatIdentityBindText} would change it). */
+export function isChatIdentityBindText(text: string, prefix = ''): boolean {
+  return redactChatIdentityBindText(text, prefix) !== text;
+}
+
+/**
  * Display-only masking for approval prompts (#1250: they may be shown in a chat): secret-named keys and
  * token-shaped text are hidden. Execution, fingerprints and approval scope keys still use the exact arguments.
  */

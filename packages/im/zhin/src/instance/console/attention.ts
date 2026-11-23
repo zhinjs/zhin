@@ -42,6 +42,7 @@ import {
   compareAttentionItems,
   isConsoleAttentionRpcType,
   type ConsoleAttentionItem,
+  type ConsoleAttentionItemState,
   type ConsoleAttentionKind,
   type ConsoleAttentionList,
   type ConsoleAttentionReason,
@@ -897,6 +898,8 @@ interface AttentionDraft {
   readonly reason?: ConsoleAttentionReason;
   /** People a chat-roles item is about (#1250); not part of the id or the revision. */
   readonly links?: readonly ConsoleAttentionPersonLink[];
+  /** What of `state` the item publishes (`ConsoleAttentionItem.state`, #1250); `state` alone feeds the revision. */
+  readonly published?: ConsoleAttentionItemState;
 }
 
 interface ConfigRead {
@@ -965,6 +968,7 @@ export async function collectAttention(sources: AttentionSources, options: Colle
         source: name,
         ...(draft.reason ? { reason: Object.freeze({ ...draft.reason }) } : {}),
         ...(draft.links?.length ? { links: Object.freeze(draft.links.map(link => Object.freeze({ ...link }))) } : {}),
+        ...(draft.published ? { state: Object.freeze({ ...draft.published }) } : {}),
       }));
     }
     observations.settle(name, present);
@@ -1403,6 +1407,8 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       if (!state.hasGlobalOwner) {
         drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning',
           state: { claimOpen: state.claimOpen, ...(state.simulationOnly ? { simulationOnly: true } : {}) },
+          // #1250: the Console shows 「打开 Sandbox」 from this (the revision input above is unchanged).
+          published: { simulationOnly: state.simulationOnly === true },
           title: t('roles.noOwner.title'),
           detail: state.simulationOnly ? t('roles.noOwner.sandbox')
             : state.claimOpen ? `${t('roles.noOwner.detail')}${locale === 'en' ? ' ' : ''}${t('roles.noOwner.claim')}` : t('roles.noOwner.detail'),

@@ -26,6 +26,10 @@
  *   mistyped code is answered and counted). With no open code nothing is taken — `bind username`,
  *   `绑定 82345678` and a project's own `绑定 <QQ号>` reach commands and the Agent — and no failure
  *   is counted (the prefixed command answers 「不正确或已过期」 without counting either).
+ * - #1250 sandbox-transcript-shared-bind-code: whatever the guard does, a bind message is shown to
+ *   others only as `绑定 ***`, by its shape alone (`redactChatIdentityBindText`, `@zhin.js/kernel`):
+ *   the Sandbox hides it at its source, Core's records, Agent session messages, traces and inbound
+ *   logs hide it when written, and the conversation history route on replay.
  */
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';

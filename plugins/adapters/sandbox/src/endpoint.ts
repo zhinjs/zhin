@@ -24,6 +24,7 @@ import {
   type SandboxConversation,
 } from './protocol.js';
 import { SandboxClient } from './client.js';
+import { redactSandboxBindCode } from './bind-redaction.js';
 import { join } from 'node:path';
 import { SandboxMediaStore } from './media-store.js';
 import { mountSandboxMediaRoutes, sandboxMediaActor } from './media-routes.js';
@@ -547,7 +548,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             }));
             return;
           }
-          const parsed = frame.message;
+          // #1250 sandbox-transcript-shared-bind-code: every page subscribed to this conversation sees
+          // the echo and reads its records, so a bind code is hidden before anything echoes, logs,
+          // records or routes it (the Sandbox never accepts bind codes anyway).
+          const { message: parsed, raw: event } = redactSandboxBindCode(frame.message, raw);
           const sceneId = parsed.id || owner;
           // ADR 0064 D12 (revised): a hosted file may only be sent in the conversation it was uploaded
           // in, by its uploader, with a genuine unexpired link. Anything else is refused and audited.
@@ -563,7 +567,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             }));
             return;
           }
-          void this.#emitPlatformEvent('message', raw);
+          void this.#emitPlatformEvent('message', event);
           const conversation = { ...sandboxInboundConversation(String(this.#options.id), {
             type: parsed.type,
             id: sceneId,
@@ -607,7 +611,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             ...(standing && conversation.kind !== 'private' ? { platform: { standing } } : {}),
           };
           void this[endpointSpec].events.message({
-            event: raw,
+            event,
             ...(typeof parsed.timestamp === 'number' ? { platformSentAt: parsed.timestamp } : {}),
             conversation,
             message: { conversation, id: messageId },

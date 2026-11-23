@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyConfigPatches, type ConfigDocumentPort, type ConfigPatch } from '@zhin.js/plugin-runtime';
-import { grantsAllow, type ConsoleGrant, type ConsoleScopeTarget } from '@zhin.js/console-protocol';
+import { attentionRevision, grantsAllow, type ConsoleGrant, type ConsoleScopeTarget } from '@zhin.js/console-protocol';
 import { collectAttention, ATTENTION_PATHS, type AttentionChatRoles } from '../../../src/instance/console/attention.js';
 import { dispatchChatRoleImportsConsoleRpc } from '../../../src/instance/console/chat-role-imports-rpc.js';
 import { ChatRoleService, ChatRoleStore, type InstanceChatRoleService } from '../../../src/instance/chat-roles.js';
@@ -55,6 +55,23 @@ describe('chat role attention items (ADR 0060 §3 / §4)', () => {
     // Otherwise the bind hint says no prefix is needed.
     const usual = await collectAttention({ chatRoles: async () => state({ imported: undefined }) }, { allows: allowsFor(globalIam), now: () => 10 });
     expect(usual.items.find(item => item.kind === 'chat-roles.no-owner')!.detail).toContain('「绑定 <码>」，不需要命令前缀');
+  });
+
+  it('#1250: the no-owner item publishes state.simulationOnly (the Console shows 「打开 Sandbox」 from it), revision unchanged', async () => {
+    const sandboxOnly = await collectAttention({ chatRoles: async () => state({ imported: undefined, simulationOnly: true }) }, { allows: allowsFor(globalIam), now: () => 10 });
+    const item = sandboxOnly.items.find(entry => entry.kind === 'chat-roles.no-owner')!;
+    expect(item.state).toEqual({ simulationOnly: true });
+    // The revision still fingerprints the full internal state (a viewer's 「忽略」 keeps working).
+    expect(item.revision).toBe(attentionRevision({ claimOpen: true, simulationOnly: true }));
+    const usual = await collectAttention({ chatRoles: async () => state({ imported: undefined }) }, { allows: allowsFor(globalIam), now: () => 10 });
+    const plain = usual.items.find(entry => entry.kind === 'chat-roles.no-owner')!;
+    expect(plain.state).toEqual({ simulationOnly: false });
+    expect(plain.revision).toBe(attentionRevision({ claimOpen: true }));
+    // Only the published fields are sent: claimOpen stays internal; other items publish nothing.
+    expect(plain.state).not.toHaveProperty('claimOpen');
+    const mixed = await collectAttention({ chatRoles: async () => state({ pending: [{ id: 'a'.repeat(24), source: 'ai.trigger.masters', adapter: 'qq', userId: 'x', role: 'owner', seenAt: 9 }] }) },
+      { allows: allowsFor(globalIam), now: () => 10 });
+    for (const entry of mixed.items.filter(other => other.kind !== 'chat-roles.no-owner')) expect(entry).not.toHaveProperty('state');
   });
 
   it('says nothing once there is a global owner and the import was read', async () => {

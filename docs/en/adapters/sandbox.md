@@ -195,6 +195,10 @@ Unrecognised values fall back to the defaults.
 
 Clients merge optimistic messages and input echoes by conversation, direction, and `messageId`. Approval decisions remain on the existing server interaction path; submitting a button does not mean approval succeeded. This change does not add offline result storage, cross-browser history restoration, or multiple operator accounts.
 
+## Shared conversations and bind codes
+
+A Sandbox account's conversations are shared by every Console user who can open the Sandbox: each page that opens a conversation gets its messages echoed, and its records (`/api/conversations/history`) are replayed to them. So a message shaped like `bind <code>`, `/bind <code>` or `绑定 <码>` becomes `bind ***` as soon as the endpoint receives it (keyword and command prefix kept); the broadcast, the sender's own bubble, the logs, the native `platform.receive` event and the conversation records and their replay never carry the code. The shape alone decides, not whether the code is still valid. The Sandbox never accepts bind codes anyway, and `bind ***` still gets the "binding is not accepted on this adapter" reply. Everything else stays visible to every Console user. Planned: conversations isolated per Console user (see [ADR 0060](https://github.com/zhinjs/zhin/blob/main/docs/adr/0060-chat-identity-single-source.md), "Bind codes in the shared Sandbox").
+
 ## Use Cases
 
 - Local development and debugging of plugin logic

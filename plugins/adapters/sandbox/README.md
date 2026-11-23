@@ -284,3 +284,7 @@ MIT License
 ## 成员身份
 
 模拟器的发送者角色（`master` = 群主 / `admin` / `member`）在群聊、频道中作为 `sender.platform.standing`（`owner` / `admin` / `member`）上报，私聊不上报。它只模拟平台身份，不授予框架角色（主人等由账号配置或聊天角色决定）。能力画像：`group` / `channel` 的 `scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。
+
+## 会话共享与绑定码
+
+一个 Sandbox 账号的会话对所有能打开 Sandbox 的 Console 用户共享：同一会话的消息回显给每个打开它的页面，会话记录（`/api/conversations/history`）也对他们回放。因此形如「绑定 <码>」「/绑定 <码>」「bind <code>」的消息在端点收到时就改成 `绑定 ***`（关键词与命令前缀照写），之后的广播、发送者自己的气泡、日志、原生 `platform.receive` 事件、会话记录与回放里都没有码的原文；按形态判断，与码是否仍有效无关。Sandbox 本来就不接受绑定码，`绑定 ***` 仍会得到「这个适配器上不接受绑定」的回复。其它内容仍对所有 Console 用户可见。后续计划：会话按 Console 用户隔离（见 [ADR 0060](https://github.com/zhinjs/zhin/blob/main/docs/adr/0060-chat-identity-single-source.md)「共享 Sandbox 里的绑定码」）。

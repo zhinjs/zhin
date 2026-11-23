@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, isSecretLikeKey, matchChatOwnerClaimText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactDecisionPayload, redactSecretText } from '../src/index.js';
+import { containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, isChatIdentityBindText, isSecretLikeKey, matchChatOwnerClaimText, redactChatIdentityBindText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactDecisionPayload, redactSecretText } from '../src/index.js';
 
 describe('redaction (moved from @zhin.js/agent, ADR 0061 P1)', () => {
   it('masks secret keys, omits prompts and hides token-shaped text', () => {
@@ -135,5 +135,27 @@ describe('chat-owner claim text (ADR 0060 §3.3, zhinjs/zhin#1250)', () => {
     const scanner = createChatOwnerClaimCodeScanner('ABCD2345');
     expect(scanner.feed('ABCD2345')).toBe(true);
     expect(scanner.feed('nothing')).toBe(true);
+  });
+});
+
+describe('chat-identity bind text (ADR 0060 §2.4, #1250 sandbox-transcript-shared-bind-code)', () => {
+  it('hides the code of a bind message by its shape alone, with or without a command prefix', () => {
+    // Nothing registers bind codes: whether one is open (or expired) never decides.
+    expect(redactChatIdentityBindText('绑定 ABCD2345')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('  /绑定 ABCD2345 ')).toBe('/绑定 ***');
+    expect(redactChatIdentityBindText('#bind abcd-2345')).toBe('#bind ***');
+    expect(redactChatIdentityBindText('BIND <ABCD2345>')).toBe('BIND ***');
+    expect(redactChatIdentityBindText('绑定码：ABCD 2345')).toBe('绑定码 ***');
+    expect(redactChatIdentityBindText('綁定 ＡＢＣＤ２３４５')).toBe('綁定 ***');
+    expect(redactChatIdentityBindText('绑定 AB\u200BCD2345')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('zhin 绑定 ABCD2345', 'zhin')).toBe('zhin 绑定 ***');
+    expect(isChatIdentityBindText('绑定 ZZZZ9999')).toBe(true);
+  });
+
+  it('leaves other text as written', () => {
+    for (const text of ['绑定 ***', '我想绑定 ABCD2345', '绑定 ABCD2345 谢谢', '绑定 12345678', '绑定 ABCD234', '认领 ABCD2345', 'binding ABCD2345', '']) {
+      expect(redactChatIdentityBindText(text)).toBe(text);
+      expect(isChatIdentityBindText(text)).toBe(false);
+    }
   });
 });
