@@ -1,6 +1,6 @@
 ---
-"@zhin.js/runtime": patch
-"@zhin.js/gateway": patch
+"@zhin.js/runtime": minor
+"@zhin.js/gateway": minor
 "@zhin.js/pagemanager": patch
 "@zhin.js/testing": patch
 ---
