@@ -20,6 +20,8 @@ Use this for a single Bot, a multi-Bot collaboration venue, or Remote Console. T
 
 Use `/pub/health` and `/pub/ready` for health checks; see [6. Monitoring and alerts](#_6-monitoring-and-alerts).
 
+For rules deployers keep running into (yml accounts are only a first-start seed, `--watch` does not save re-logins, MCP servers must be bound to an Agent, when fallback models switch, and more) see [Gotchas and counter-intuitive behavior](./gotchas.md).
+
 ## 1. Release baseline
 
 - Use Node `>=22.19.0` (projects and the compiled IM library) and commit the lockfile.

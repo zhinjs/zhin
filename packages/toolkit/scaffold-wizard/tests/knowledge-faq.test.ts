@@ -15,3 +15,14 @@ describe('life-assistant knowledge/faq.md (#1250)', () => {
     expect(faq).toContain(locale === 'en' ? 'the database (Console) wins' : '以**数据库（Console）为准**');
   });
 });
+
+describe('generated BOT.md reminders section (#1250 b96)', () => {
+  it.each(['zh-CN', 'en'] as const)('names the real reminder / schedule tools, never cron_add (%s)', (locale) => {
+    const bot = wizardText(locale, 'templates.agentInstructions');
+    expect(bot).not.toContain('cron_add');
+    expect(bot).toContain('`reminder_create`');
+    expect(bot).toContain('`schedule_add`');
+    expect(bot).toContain('`schedule_update`');
+    expect(bot).toContain('Do NOT just write reminders to memory files');
+  });
+});

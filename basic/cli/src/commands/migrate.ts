@@ -497,7 +497,7 @@ You are a helpful AI assistant. Keep your replies concise, accurate, and action-
 
 ## Reminders
 
-Use \`cron_add\` for scheduled reminders — do NOT just write to memory files.
+A plain reminder message (once or at a fixed interval): \`reminder_create\`, when the reminder plugin is installed. A job the AI runs when due (generated content, tools) or a calendar cron (workdays, lunar dates): \`schedule_add\`; change it with \`schedule_update\` instead of deleting and recreating it. Do NOT just write reminders to memory files.
 
 ## Heartbeat
 

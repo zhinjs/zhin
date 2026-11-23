@@ -36,6 +36,27 @@ import type { ScheduleJob } from './assistant/types.js';
 export const SCHEDULE_PROMPT_DESCRIPTION = '到点要执行的内容（例如「提醒我喝水」），不是建任务的请求，不要包含时间安排'
   + '（时间放在 cron / delay_minutes 里）';
 
+/**
+ * #1250 b96: which tool a reminder belongs to. A fixed reminder message (once or at a fixed
+ * interval) is the reminder plugin's `reminder_create` when installed; a job whose content the AI
+ * produces when due, or on a calendar cron (workday, lunar…), is `schedule_add`. Older generated
+ * `BOT.md` files named a `cron_add` tool, which never existed; a reminder only written to memory
+ * never fires.
+ */
+export const SCHEDULE_ADD_DESCRIPTION = '添加持久化调度任务：到点由 AI 执行 prompt（生成内容、调用工具），或按日历 cron 运行。'
+  + '中国大陆工作日必须使用 workday；支持 6 段 cron 或 delay_minutes 一次性任务。'
+  + '只是到点发一条固定文案的提醒时，若有 reminder_create 优先用它。提醒必须真正建任务，不要只写进记忆；没有 cron_add 工具。'
+  + '要修改已有任务（改时间、标签、启用状态）请用 schedule_update，不要删除后重建：重建会丢掉隐藏的 Agent 等设置。';
+
+/**
+ * #1250 b96: what `tools` means when the job runs (`createScheduleCapabilityPlan`). Named: exactly
+ * these tools (skills add instructions, not tools). Omitted with no `skills` either: chosen by the
+ * prompt's keywords (#1250 b33), which can miss the one the job needs. Omitted while `skills` is
+ * given: the run has no tool at all.
+ */
+export const SCHEDULE_TOOLS_DESCRIPTION = '逗号分隔的工具名：到点运行只能用这些工具。省略且没给 skills 时按 prompt 关键词自动挑选，可能漏掉需要的工具；'
+  + '只给 skills 不给 tools 时到点没有任何工具。任务依赖特定工具（例如联网搜索）时请写明';
+
 /** #1250 b55: `schedule_list` shows an Agent the caller cannot see in this turn as this, unnamed. */
 export const HIDDEN_SCHEDULE_AGENT = '其他 Agent';
 
@@ -143,8 +164,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
     ),
     registration(
       'schedule_add',
-      '添加持久化调度任务。中国大陆工作日必须使用 workday；支持 6 段 cron 或 delay_minutes 一次性任务。'
-        + '要修改已有任务（改时间、标签、启用状态）请用 schedule_update，不要删除后重建：重建会丢掉隐藏的 Agent 等设置。',
+      SCHEDULE_ADD_DESCRIPTION,
       schema({
         schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday，默认 solar' },
         cron: { type: 'string', description: '6 段 cron（秒 分 时 日 月 周）' },
@@ -158,7 +178,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         budget_timeout_ms: { type: 'number', description: '执行超时毫秒数' },
         execution_plan: { type: 'object', description: '预演确认后的执行计划' },
         refined_prompt: { type: 'string', description: '预演 refine 后的 prompt' },
-        tools: { type: 'string', description: '逗号分隔的工具名' },
+        tools: { type: 'string', description: SCHEDULE_TOOLS_DESCRIPTION },
         skills: { type: 'string', description: '逗号分隔的技能名' },
         agent: { type: 'string', description: '可选：到点由哪个 Agent 执行（Agent 名称）；省略时用默认 Agent。只能指定当前用户可用的 Agent' },
       }, ['prompt']),
@@ -177,9 +197,12 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           ...(provenance ? { provenance } : {}) });
         // #1250 b33: a plan without tools or skills is accepted (it falls back to prompt-based selection
         // when the job runs), but the caller is told, so it can preview and pass the tools explicitly.
+        // #1250 b96: a plan naming skills but no tools runs with no tool at all; say so too.
         const warning = isEmptyExecutionPlan(job.executionPlan)
           ? '执行计划没有指定工具或技能：到点时将按提示词自动选择工具。建议先用 schedule_preview 预演，再把 execution_plan 一起传给 schedule_add。'
-          : undefined;
+          : job.executionPlan?.skills?.length && !job.executionPlan.tools?.length
+            ? '执行计划只指定了技能、没有指定工具：到点运行时没有任何工具可用。需要工具时请删除这个刚建的任务，带上 tools 重新创建。'
+            : undefined;
         if (job.schedule.kind === 'at') {
           // #1250: the repository's date format, in the process zone as before (`at` jobs carry no zone).
           const time = formatDateTime(job.schedule.atMs);
