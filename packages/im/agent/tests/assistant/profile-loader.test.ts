@@ -140,6 +140,25 @@ agents: |
     }
   });
 
+  it('skips a routine with an unknown time zone and still syncs the others (#1250 b99)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-tz-'));
+    try {
+      const store = new ScheduleJobStore({ dataDir: dir });
+      const count = await syncProfileRoutinesToStore(store, {
+        version: 1,
+        routines: {
+          morningBrief: { enabled: true, cron: '0 0 8 * * *', prompt: '早报', tz: 'Mars/Olympus' },
+          bedtimeCheck: { enabled: true, cron: '0 0 22 * * *', prompt: '睡前', tz: 'Asia/Shanghai' },
+        },
+      });
+      expect(count).toBe(1);
+      expect(await store.getJob(PROFILE_MORNING_BRIEF_JOB_ID)).toBeFalsy();
+      expect((await store.getJob(PROFILE_BEDTIME_CHECK_JOB_ID))?.schedule).toMatchObject({ tz: 'Asia/Shanghai' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('pruneStaleProfileCronJobs 移除 profile 中已删的 cron job', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-prune-'));
     try {

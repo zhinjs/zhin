@@ -248,7 +248,18 @@ export async function syncProfileRoutinesToStore(
         op: 'profile_routine_agent_missing', routine: key, job: jobId, agent, available: options.agents.join(','),
       }));
     }
-    await upsertProfileJob(store, buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults));
+    let job: ScheduleJob;
+    try {
+      job = buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults);
+    } catch (error) {
+      // #1250 b99: one invalid routine (e.g. an unknown time zone) is skipped with a warning; the others sync.
+      logger.warn(formatCompact({
+        op: 'profile_routine_invalid', routine: key, job: jobId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      continue;
+    }
+    await upsertProfileJob(store, job);
     synced++;
   }
   return synced;
