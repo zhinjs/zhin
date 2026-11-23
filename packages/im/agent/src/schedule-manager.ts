@@ -17,7 +17,7 @@ import {
 import { ADMIN_APPROVABLE_TOOL_TAG } from './security/admin-approvable.js';
 import type { TimerScheduler } from './assistant/timer-scheduler.js';
 import type { SchedulePreviewOptions, TaskExecutionResult } from './task-executor.js';
-import { currentTurnProvenance } from './security/provenance.js';
+import { TRUSTED_OUTPUT_TAG, UNTRUSTED_FAILURE_TAG, currentTurnProvenance } from './security/provenance.js';
 import type { ScheduleAuditRecord } from './schedule-domain/audit-logger.js';
 import { isEmptyExecutionPlan } from './plugin-runtime/schedule-capability-plan.js';
 import { checkScheduleAgent, usableScheduleAgents } from './assistant/schedule-agent.js';
@@ -26,7 +26,26 @@ import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import {
   isScheduleOwner, scheduleJobChangeRefusal, scheduleJobNotManageable, scheduleJobVisibleTo,
 } from './assistant/job-ownership.js';
-import type { ScheduleJob } from './assistant/types.js';
+import type { JobSchedule, ScheduleJob } from './assistant/types.js';
+
+/**
+ * #1250 b98: tags of the Host's schedule write tools, whose successful results carry only what the
+ * harness wrote (ids, the saved timing, the enabled state, fixed messages) and what the caller wrote in
+ * this call, never text someone else wrote (a job's prompt or a label the call did not set). They are
+ * trusted output (not a source for the provenance gate); a failure still counts as external content.
+ * Only these definitions carry them: a plugin tool of the same name is judged by its own declaration.
+ */
+const HARNESS_RESULT_TAGS = Object.freeze([TRUSTED_OUTPUT_TAG, UNTRUSTED_FAILURE_TAG]);
+
+/** Holiday names a schedule may filter on (`@zhin.js/schedule` `FestivalName`). */
+const FESTIVAL_NAMES: ReadonlySet<string> = new Set(['元旦', '春节', '清明节', '劳动节', '端午节', '中秋节', '国庆节']);
+/**
+ * One cron field: digits, `*`, `?`, `,`, `/`, `-`, `#`, `L`, `W` and the month / weekday names. A saved
+ * cron was already parsed by the scheduler; this only keeps anything else out of the result.
+ */
+const CRON_FIELD = /^(?:[0-9*?,/#-]|L|W|MON|TUE|WED|THU|FRI|SAT|SUN|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)+$/iu;
+/** An IANA zone name such as `Asia/Shanghai` or `Etc/GMT-8`. */
+const TIME_ZONE_TEXT = /^[A-Za-z0-9_+\-/]{1,64}$/u;
 
 /**
  * #1250 b55: `prompt` of `schedule_add` / `schedule_preview` is what runs when the job is due, not the
@@ -188,7 +207,8 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         return { success: true, id: job.id, message: '已添加调度任务', ...(warning ? { warning } : {}) };
       },
       // #1250: an admin may confirm creating a scheduled task in their own private chat (allow once).
-      [ADMIN_APPROVABLE_TOOL_TAG],
+      // b98: its result (the new id, fixed messages, the run time) is harness output; the prompt is not echoed.
+      [ADMIN_APPROVABLE_TOOL_TAG, ...HARNESS_RESULT_TAGS],
     ),
     registration(
       'schedule_preview',
@@ -255,11 +275,13 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           : undefined;
         // Enabled but never firing (e.g. a cron date that does not exist): saved, but say so.
         const stuck = updated.enabled && next === undefined && updated.schedule.kind !== 'event';
+        // #1250 b98: only what the harness wrote, plus the label this call set (`null`: cleared). A label
+        // this call did not set may be someone else's text (an owner may change anyone's job): not echoed.
         return {
           success: true,
           id,
-          schedule: updated.schedule,
-          ...(updated.label ? { label: updated.label } : {}),
+          schedule: scheduleResult(updated.schedule),
+          ...(update.label !== undefined ? { label: update.label } : {}),
           enabled: updated.enabled,
           ...(next ? { next_run: next } : {}),
           message: '已更新调度任务；Agent、提示词与投递目标保持不变',
@@ -267,7 +289,9 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         };
       },
       // #1250: like schedule_add, an admin may confirm changing a scheduled task in their own private chat.
-      [ADMIN_APPROVABLE_TOOL_TAG],
+      // b98: its result is harness output (see `HARNESS_RESULT_TAGS`), so a second change of the same job in
+      // the turn keeps the confirmation.
+      [ADMIN_APPROVABLE_TOOL_TAG, ...HARNESS_RESULT_TAGS],
     ),
     ...(['remove', 'pause', 'resume'] as const).map((operation) => registration(
       `schedule_${operation}`,
@@ -291,8 +315,53 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
             : await manager.engine.resumeJob(id);
         return changed ? { success: true } : { error: notFound };
       },
+      // #1250 b98: `{ success: true }` only (an error is fixed text with the id the caller gave).
+      HARNESS_RESULT_TAGS,
     )),
   ]);
+}
+
+/**
+ * #1250 b98: the saved timing as `schedule_update` reports it: structured fields only. Free text a job may
+ * carry in its timing (an event job's `eventId` / `source` / `eventType`, a scatter window) is left out,
+ * and so is a cron, zone or holiday name that does not look like one; `schedule_list` shows the whole job.
+ */
+function scheduleResult(schedule: JobSchedule): Record<string, unknown> {
+  switch (schedule.kind) {
+    case 'solar':
+    case 'lunar':
+    case 'workday':
+    case 'freeDay':
+    case 'holiday': {
+      const festivals = schedule.kind === 'holiday' ? schedule.festivals : undefined;
+      return {
+        kind: schedule.kind,
+        ...(isCronText(schedule.cron) ? { cron: schedule.cron } : {}),
+        ...(schedule.tz !== undefined && TIME_ZONE_TEXT.test(schedule.tz) ? { tz: schedule.tz } : {}),
+        ...(festivals === 'all' || (Array.isArray(festivals) && festivals.every(name => FESTIVAL_NAMES.has(name)))
+          ? { festivals } : {}),
+        ...(schedule.kind === 'holiday' && typeof schedule.everyDayOfHoliday === 'boolean'
+          ? { everyDayOfHoliday: schedule.everyDayOfHoliday } : {}),
+      };
+    }
+    case 'every':
+      return { kind: 'every', ...(Number.isFinite(schedule.everyMs) ? { everyMs: schedule.everyMs } : {}) };
+    case 'at':
+      return {
+        kind: 'at',
+        ...(Number.isFinite(schedule.atMs) ? { atMs: schedule.atMs } : {}),
+        ...(typeof schedule.deleteAfterRun === 'boolean' ? { deleteAfterRun: schedule.deleteAfterRun } : {}),
+      };
+    case 'scatter':
+    case 'event':
+      return { kind: schedule.kind };
+  }
+}
+
+function isCronText(cron: unknown): cron is string {
+  if (typeof cron !== 'string' || cron.length > 128) return false;
+  const fields = cron.trim().split(/\s+/u);
+  return fields.length >= 5 && fields.length <= 7 && fields.every(field => CRON_FIELD.test(field));
 }
 
 /**

@@ -169,6 +169,14 @@ const BUILTIN_EXTERNAL_CONTENT_TOOLS = new Set([
 export const EXTERNAL_CONTENT_TAG = 'external_content';
 /** Tag an author puts on a tool whose output is fully trusted (never recorded). */
 export const TRUSTED_OUTPUT_TAG = 'trusted_output';
+/**
+ * #1250 b98: put next to {@link TRUSTED_OUTPUT_TAG} on a tool whose successful results are written by
+ * the harness alone but whose failures may quote something else (a parser's or an upstream's text). Only
+ * its successful results are trusted; a failure, thrown or reported (`{ error }`, MCP `isError`), is
+ * recorded as external content (see {@link classifyToolFailure}). The Host's schedule write tools
+ * (`schedule_add`, `schedule_update`, `schedule_remove`, `schedule_pause`, `schedule_resume`) carry both.
+ */
+export const UNTRUSTED_FAILURE_TAG = 'untrusted_failure';
 
 const READ_VERB = /^(?:get|read|list|show|view|query|search|find|check)_/;
 /** #1250: `<noun>_<read verb>` names (`schedule_list`, `remind_list`, `config_get`) read too. */
@@ -304,6 +312,18 @@ export function classifyToolOutput(tool: ToolView, settings: Pick<InjectionGuard
     && tool.riskCategory === undefined
     && !hasOutputHighRiskCategory(tool)) return 'trusted';
   return 'external';
+}
+
+/**
+ * #1250 F8 / b98: how a failed call of `tool` (a thrown error, or a reported `{ error }` / MCP `isError`
+ * result) is recorded: never as trusted output. `none` only for a tool whose output is never recorded
+ * ({@link classifyToolOutput} `none`), unless it also carries {@link UNTRUSTED_FAILURE_TAG}.
+ */
+export function classifyToolFailure(tool: ToolView, settings: Pick<InjectionGuardSettings, 'trustedOutputTools'>): 'none' | 'external' {
+  if (classifyToolOutput(tool, settings) !== 'none') return 'external';
+  // Harness tools and a deployer's `trustedOutputTools` stay fully trusted: only an author's tag is narrowed.
+  if (HARNESS_OUTPUT_TOOLS.has(tool.name) || settings.trustedOutputTools.includes(tool.name)) return 'none';
+  return (tool.tags ?? []).includes(UNTRUSTED_FAILURE_TAG) ? 'external' : 'none';
 }
 
 /** Whether a completed call of `tool` brought lower-trust content into the turn (trusted output included). */
