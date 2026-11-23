@@ -151,7 +151,10 @@ describe('chat-identity bind text (ADR 0060 §2.4, #1250 sandbox-transcript-shar
     expect(redactChatIdentityBindText('zhin 绑定 ABCD2345', 'zhin')).toBe('zhin 绑定 ***');
     expect(isChatIdentityBindText('绑定 ZZZZ9999')).toBe(true);
     expect(redactChatIdentityBindText('bind zzzz-9999')).toBe('bind ***');
-    expect(redactChatIdentityBindText('绑定 ABCDEFGH')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('bind abcd-2345')).toBe('bind ***');
+    expect(redactChatIdentityBindText('绑定 abcd 2345')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('bind abcdefg2')).toBe('bind ***');
+    expect(redactChatIdentityBindText('绑定 ABCD EFG2')).toBe('绑定 ***');
     expect(redactChatIdentityBindText('绑定 A\u0336BCD2345')).toBe('绑定 ***');
   });
 
@@ -159,6 +162,13 @@ describe('chat-identity bind text (ADR 0060 §2.4, #1250 sandbox-transcript-shar
     // All 8 symbols are in the alphabet (no 0 / 1 / O / I): a QQ number like this is hidden too.
     expect(redactChatIdentityBindText('绑定 23456789')).toBe('绑定 ***');
     expect(isChatIdentityBindText('#绑定 23456789')).toBe(true);
+  });
+
+  it('keeps words without a digit: every bind code holds one (#1250 review)', () => {
+    for (const text of ['绑定 ABCDEFGH', 'bind abcdefgh', '绑定 ABCD EFGH', 'bind abcd-efgh', 'BIND <ABCDEFGH>', '綁定 ＡＢＣＤＥＦＧＨ']) {
+      expect(redactChatIdentityBindText(text)).toBe(text);
+      expect(isChatIdentityBindText(text)).toBe(false);
+    }
   });
 
   it('keeps names, several words and codes split into more than two parts (#1250 review)', () => {

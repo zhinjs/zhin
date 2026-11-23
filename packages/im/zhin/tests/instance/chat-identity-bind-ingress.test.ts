@@ -115,7 +115,7 @@ describe('bind messages at inbound (#1250 bind-hint-omits-command-prefix)', () =
     // (#1250 sandbox-transcript-shared-bind-code: records are read back by other Console users).
     // Known trade-off: `82345678` (8 symbols of the alphabet) cannot be told from a code, so a
     // project's own `绑定 <QQ号>` with such a number is recorded as `绑定 ***` too. `bind username`
-    // (a lower-case word without a digit) is a name to the redaction and is recorded as written.
+    // (a word without a digit: every bind code holds one) is recorded as written.
     expect(JSON.stringify(appended)).not.toContain('82345678');
     expect(JSON.stringify(appended)).toContain('绑定 ***');
     expect(JSON.stringify(appended)).toContain('bind username');
@@ -157,6 +157,20 @@ describe('bind messages at inbound (#1250 bind-hint-omits-command-prefix)', () =
     expect(await send('qq', 'group', '绑定 ZZZZ9999')).toBe('');
     codes.create({ consoleUserId: 'u1', canManageGlobal: false });
     expect(await send('sandbox', 'private', `绑定 ${CODE}`)).toContain('不接受绑定');
+  });
+
+  it('every generated code holds a digit and has the code shape (#1250: the redaction needs one)', () => {
+    const codes = new ChatIdentityBindCodes({ people: new ChatPeople({ store: new ChatRoleStore() }) });
+    const seen = new Set<string>();
+    for (let index = 0; index < 5_000; index += 1) {
+      const { code } = codes.create({ consoleUserId: `u${index}`, canManageGlobal: false });
+      expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/u);
+      expect(code).toMatch(/\d/u);
+      seen.add(code);
+    }
+    // Still drawn at random (no fixed digit position collapsing the space).
+    expect(seen.size).toBeGreaterThan(4_990);
+    expect(new Set([...seen].map(code => code.search(/\d/u))).size).toBeGreaterThan(4);
   });
 
   it('matches the bind shape only', () => {

@@ -282,11 +282,10 @@ function bindHead(candidate: string): string | undefined {
   const rest = candidate.slice(head.length).replace(/\p{Cf}/gu, '').normalize('NFKC').replace(/\p{M}/gu, '');
   const match = CHAT_BIND_REST.exec(rest);
   if (!match) return undefined;
-  const typed = `${match[1]}${match[2] ?? ''}`;
-  // Without a digit, only one word in upper case reads as a code: a word in lower or mixed case
-  // (`username`, `Mysterys`) is a name, and two words (`ME PLEASE`) are words.
-  if (!/\p{N}/u.test(typed) && (match[2] !== undefined || typed !== typed.toUpperCase())) return undefined;
-  return CHAT_BIND_CODE_SHAPE.test(typed.toUpperCase()) ? head : undefined;
+  const typed = `${match[1]}${match[2] ?? ''}`.toUpperCase();
+  // Every bind code holds a digit (`zhin.js/instance` redraws one without), so a word without one
+  // (`username`, `ABCDEFGH`, `ME PLEASE`) is never a code.
+  return /\p{N}/u.test(typed) && CHAT_BIND_CODE_SHAPE.test(typed) ? head : undefined;
 }
 
 /**
@@ -298,12 +297,13 @@ function bindHead(candidate: string): string | undefined {
  * be a word, and is kept) — then the code and nothing else: up to three punctuation marks around it
  * (`<ABCD2345>`), written as one word or as two words joined by whitespace or `-`, that are, once
  * folded (NFKC, zero-width characters and combining marks dropped, upper case), exactly 8 symbols
- * of the bind-code alphabet (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`). Without a digit only one word
- * typed in upper case counts (`ABCDEFGH`; not `username`, `Mysterys` or `ME PLEASE`).
+ * of the bind-code alphabet (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`), at least one of them a digit
+ * (every bind code holds one; `username`, `ABCDEFGH` and `ME PLEASE` are words, not codes).
  *
  * Decided by the shape alone, never by whether such a code is open: an expired code is shown no
  * more than a live one. So an argument with the shape of a code (`绑定 23456789`) is hidden too,
- * while `bind username`, `BIND ME PLEASE` and `bind a-b-c-d-e-f-g-h` are kept as written.
+ * while `bind username`, `绑定 ABCDEFGH`, `BIND ME PLEASE` and `bind a-b-c-d-e-f-g-h` are kept as
+ * written.
  */
 export function redactChatIdentityBindText(text: string, prefix = ''): string {
   if (!text) return text;

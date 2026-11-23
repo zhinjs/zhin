@@ -14,21 +14,58 @@
 import { redactChatIdentityBindText } from 'zhin.js';
 import type { MessageElement, SandboxParsedMessage } from './protocol.js';
 
-/** The message (and its raw frame) with a bind code hidden; the same objects when it carries none. */
+/**
+ * The message (and its raw frame) with a bind code hidden; the same objects when it carries none.
+ * An action (a clicked button) carries its text in `data.payload` (or `data.id`) of its segment and
+ * again in `message.action`: those strings are hidden too when they are themselves a bind message.
+ */
 export function redactSandboxBindCode(message: SandboxParsedMessage, raw: string): Readonly<{ message: SandboxParsedMessage; raw: string; redacted: boolean }> {
   const text = redactBindText(message.text);
-  if (text === message.text) return { message, raw, redacted: false };
+  const textChanged = text !== message.text;
+  let actionChanged = false;
   // The text was the bind message: its text segments become the one hidden text, other segments stay.
   // A frame without text segments (its text came from an action payload) gets none added: the page
-  // tells an action-only frame by `content.every(type === 'action')`, so only `text` changes.
+  // tells an action-only frame by `content.every(type === 'action')`, so its segments keep their kind.
   const content: MessageElement[] = [];
   let placed = false;
   for (const segment of message.content) {
-    if (segment.type !== 'text') { content.push(segment); continue; }
+    if (segment.type === 'action') {
+      const hidden = redactActionSegment(segment);
+      if (hidden !== segment) actionChanged = true;
+      content.push(hidden);
+      continue;
+    }
+    if (segment.type !== 'text' || !textChanged) { content.push(segment); continue; }
     if (!placed) content.push({ type: 'text', data: { text } });
     placed = true;
   }
-  return { message: { ...message, content, text }, raw: redactRawFrame(raw, content, text), redacted: true };
+  const action = message.action ? redactActionStrings(message.action) : undefined;
+  if (action !== message.action) actionChanged = true;
+  if (!textChanged && !actionChanged) return { message, raw, redacted: false };
+  return {
+    message: { ...message, content, text, ...(action ? { action } : {}) },
+    raw: redactRawFrame(raw, content, text),
+    redacted: true,
+  };
+}
+
+/** An action segment whose `data` strings that are bind messages (its payload, its id) are hidden. */
+function redactActionSegment(segment: MessageElement): MessageElement {
+  if (!segment.data || typeof segment.data !== 'object') return segment;
+  const data = redactActionStrings(segment.data);
+  return data === segment.data ? segment : { ...segment, data };
+}
+
+/** `value` with each string field that is a bind message hidden; the same object when none is. */
+function redactActionStrings<T extends object>(value: T): T {
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const hidden = typeof item === 'string' ? redactBindText(item) : item;
+    if (hidden !== item) changed = true;
+    next[key] = hidden;
+  }
+  return changed ? next as T : value;
 }
 
 /**

@@ -2,7 +2,7 @@
  * ADR 0060 §2.4 / §5.2: binding a chat identity to a Console user with a one-time code.
  *
  * - The Console user asks for a code (`chat-identities.bind-code.create`, permission
- *   `self.chat-identity`): 8 symbols, valid 10 minutes, single use; a new code replaces the user's
+ *   `self.chat-identity`): 8 symbols (at least one a digit), valid 10 minutes, single use; a new code replaces the user's
  *   previous one. The code is shown only to that user.
  * - The identity's holder sends `绑定 <码>` / `bind <code>` to the bot in a **private** chat: that
  *   proves control of the identity. In a group a correct code is revoked at once (bystanders saw
@@ -50,6 +50,19 @@ export const CHAT_BIND_CODE_TTL_MS = 10 * 60_000;
 export const CHAT_BIND_MAX_FAILURES = 5;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
+
+/**
+ * A fresh bind code: {@link CODE_LENGTH} symbols drawn uniformly (`randomInt`, no modulo bias) from
+ * {@link ALPHABET}, redrawn until it holds a digit (#1250: the shape-only redaction of `绑定 <码>`
+ * requires one, so no code reads as a plain word). Claim codes have their own generator.
+ */
+function generateBindCode(): string {
+  for (;;) {
+    let code = '';
+    for (let index = 0; index < CODE_LENGTH; index += 1) code += ALPHABET[randomInt(ALPHABET.length)];
+    if (/\d/u.test(code)) return code;
+  }
+}
 
 const normalizeCode = (text: string) => text.toUpperCase().replace(/[\s-]/gu, '');
 
@@ -102,11 +115,7 @@ export class ChatIdentityBindCodes {
   constructor(options: Readonly<{ people: ChatPeople; now?: () => number; code?: () => string }>) {
     this.#people = options.people;
     this.#now = options.now ?? Date.now;
-    this.#code = options.code ?? (() => {
-      let code = '';
-      for (let index = 0; index < CODE_LENGTH; index += 1) code += ALPHABET[randomInt(ALPHABET.length)];
-      return code;
-    });
+    this.#code = options.code ?? generateBindCode;
   }
 
   #sweep(): void {
