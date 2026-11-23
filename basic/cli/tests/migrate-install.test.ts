@@ -136,7 +136,8 @@ describe('migrate dry-run and config-version guidance', () => {
 
 describe('migrate verifies what the install actually installed (#1250)', () => {
   it('lists each package before → after and succeeds when every declared range is installed', async () => {
-    writeFileSync(join(directory, 'package.json'), JSON.stringify({ dependencies: { 'zhin.js': '^1.1.0' } }));
+    // pnpm 11 (release-age gate on by default) is pinned: the exclusion below depends on it.
+    writeFileSync(join(directory, 'package.json'), JSON.stringify({ packageManager: 'pnpm@11.27.1', dependencies: { 'zhin.js': '^1.1.0' } }));
     writeFileSync(join(directory, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
     writeFileSync(join(directory, 'pnpm-workspace.yaml'), "packages:\n  - '.'\n");
     mkdirSync(join(directory, 'node_modules', 'zhin.js'), { recursive: true });
