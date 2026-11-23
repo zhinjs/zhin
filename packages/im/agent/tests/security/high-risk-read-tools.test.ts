@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { classifyHighRiskAction, classifyToolOutput, resolveInjectionGuard } from '../../src/security/provenance.js';
-import { readOnlyDeclarationApplies } from '../../src/security/policy-facade.js';
+import { readOnlyDeclarationApplies, unattendedApprovalNeed } from '../../src/security/policy-facade.js';
 import { createScheduleTools } from '../../src/schedule-manager.js';
 import type { ApprovalOutcomePort } from '../../src/session/approval-port.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
@@ -30,6 +30,32 @@ describe('classifyHighRiskAction: reads are not high-risk writes (#1250)', () =>
     'install_plugin', 'create_reminder', 'schedule_add_list', 'remind_cancel_get', 'config_set_status',
   ])('keeps a write-verb name %s in its category, readOnly or read suffix notwithstanding', (name) => {
     expect(classifyHighRiskAction({ name, readOnly: true })).toBeDefined();
+  });
+
+  it.each([
+    // Case and separators: every spelling of the name is checked for a write verb.
+    'schedule_Add_list', 'schedule_ADD_get', 'schedule_addReminder_list', 'config_set-x_get', 'config_x-set_status', 'remind_Cancel_get',
+    // Verbs added in the #1250 review.
+    'schedule_snooze_status', 'config_toggle_status', 'settings_grant_get', 'settings_revoke_list', 'reminder_dismiss_list',
+    'config_allow_list', 'config_block_list', 'config_deny_get', 'config_enable_status', 'config_disable_get',
+    'schedule_clear_list', 'config_reset_status', 'schedule_cancel_get', 'settings_approve_list', 'settings_kick_list',
+    'settings_ban_get', 'settings_mute_status', 'schedule_skip_status', 'config_unblock_list',
+    // A list someone keeps: the read suffix may name the list being written.
+    'config_white_list', 'config_black_list', 'config_whitelist_get', 'schedule_allowlist_get', 'settings_blocklist_show',
+    'config_trust_list',
+  ])('keeps %s in its category (write verb or managed list), readOnly or read suffix notwithstanding', (name) => {
+    expect(classifyHighRiskAction({ name })).toBeDefined();
+    expect(classifyHighRiskAction({ name, readOnly: true })).toBeDefined();
+  });
+
+  it.each(['schedule_list', 'remind_list', 'config_get', 'settings_show', 'timer_status', 'reminder_get'])(
+    'still treats the plain read %s as a read (baseline regression)', (name) => {
+      expect(classifyHighRiskAction({ name })).toBeUndefined();
+      expect(classifyHighRiskAction({ name, readOnly: true })).toBeUndefined();
+    });
+
+  it('does not treat a non-ASCII spelling as a read', () => {
+    expect(classifyHighRiskAction({ name: 'schedule_ⅼist' })).toBeDefined();
   });
 
   it('keeps schedule_preview (it runs the prompt now) and other unmarked schedule names', () => {
@@ -60,12 +86,20 @@ describe('classifyHighRiskAction: reads are not high-risk writes (#1250)', () =>
 });
 
 describe('read-only schedule / config tools elsewhere (#1250)', () => {
-  it('lets a declared read-only schedule_list skip on-risk approval, but not a write-named variant', () => {
-    const tool = (name: string) => ({ name, readOnly: true });
-    expect(readOnlyDeclarationApplies(tool('schedule_list'))).toBe(true);
-    for (const name of ['addReminder', 'setConfig', 'schedule_add', 'scheduleRemove']) {
-      expect(readOnlyDeclarationApplies(tool(name))).toBe(false);
-    }
+  // #1250 review: the read exception is for the provenance confirmation only. The declarative approval
+  // of an on-risk tool (`readOnlyDeclarationApplies`) keeps its pre-#1250 rule, so the answers below are
+  // the ones 0595c96c5 gave.
+  it.each([
+    'config', 'schedule', 'schedule_snooze_status', 'config_toggle_status', 'settings_grant_get',
+    'schedule_list', 'config_get', 'remind_list', 'schedule_overview', 'config_dump',
+    'addReminder', 'setConfig', 'schedule_add', 'scheduleRemove',
+  ])('does not let a readOnly declaration skip on-risk approval for the config / schedule name %s', (name) => {
+    expect(readOnlyDeclarationApplies({ name, readOnly: true })).toBe(false);
+    expect(unattendedApprovalNeed({ name, readOnly: true, requiresApproval: 'on-risk' } as never)).toBe('approval');
+  });
+
+  it('still lets a readOnly declaration count for an ordinary lookup', () => {
+    expect(readOnlyDeclarationApplies({ name: 'weather', readOnly: true })).toBe(true);
   });
 
   it('keeps output trust unchanged: schedule_list rows (prompts other people wrote) stay external content', () => {
@@ -104,12 +138,16 @@ describe('TurnToolRuntime: schedule_list after external content (#1250)', () => 
       source: `/tools/${name}.ts`, execute: vi.fn(async () => 'ok'), ...extra };
   }
 
-  it('runs a declared read-only schedule_list without any card, while schedule_update still asks', async () => {
+  it('asks no provenance confirmation for a declared read-only schedule_list, while schedule_update still does', async () => {
     const asked: string[] = [];
     const approval: ApprovalOutcomePort = {
       available: true,
       requestApproval: async () => true,
-      requestApprovalOutcome: async (request) => { asked.push(request.toolName); return { status: 'approved', decision: 'approve-once' }; },
+      requestApprovalOutcome: async (request) => {
+        // The on-risk declarative approval of schedule_list is unchanged (see readOnlyDeclarationApplies).
+        if (request.purpose === 'intent') asked.push(request.toolName);
+        return { status: 'approved', decision: 'approve-once' };
+      },
     };
     const runtime = new TurnToolRuntime(turn(approval), [
       capability('schedule_list', { readOnly: true }),

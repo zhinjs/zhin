@@ -26,7 +26,7 @@ import { createScheduleAttempt, type ScheduleAttemptContext } from './schedule-d
 import { ScheduleAttemptFailure } from './schedule-domain/execution-failure.js';
 import { failedScheduleResult } from './schedule-domain/execution-result.js';
 import type { ScheduleActivityEvent, ScheduleActivityPort } from './schedule-domain/activity.js';
-import { scheduledDeliveryLedgerId, type SessionToldLedger } from './memory/told-ledger.js';
+import { scheduledDeliveryLedgerId, type ScheduledDeliveryAudience, type SessionToldLedger } from './memory/told-ledger.js';
 import { deliveredMessageContextRef, deliveredTextDigest } from './session/context-provenance.js';
 export type { ScheduleActivityEvent, ScheduleActivityPort } from './schedule-domain/activity.js';
 
@@ -264,9 +264,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
  * #1250 `scheduled-delivery-counts-as-background`: a due run's reply is this instance's own words only
  * when the run read no recorded content (`contentClean`), the job is not fed by an outside event, and
  * the platform confirmed exactly this text as one message. Then the message is recorded (process
- * memory, keyed by the platform message and its text digest, which message text cannot forge) under
- * the job creator, so a later turn of that person (or of anyone, for a job without a chat creator)
- * does not count it as background. Anything else stays background (fail closed).
+ * memory, keyed by the platform message and its text digest, which message text cannot forge) for the
+ * job's audience (`scheduledDeliveryAudience`), so a later turn of the job's chat creator (or of
+ * anyone, for an operator's job) does not count it as background. Anything else, including a job whose
+ * creator is unknown, stays background (fail closed).
  */
 export function recordCleanScheduledDelivery(
   ledger: Pick<SessionToldLedger, 'recordDelivered'>,
@@ -277,12 +278,29 @@ export function recordCleanScheduledDelivery(
 ): boolean {
   if (result.contentClean !== true || job.provenance) return false;
   if (job.source === 'event' || job.schedule.kind === 'event' || job.eventPayload !== undefined) return false;
+  const audience = scheduledDeliveryAudience(job);
+  if (!audience) return false;
   if (receipt.status !== 'sent' || !receipt.message || (receipt.parts?.length ?? 0) > 1) return false;
   const digest = deliveredTextDigest(content);
   if (receipt.outboundTextDigest !== digest) return false;
-  ledger.recordDelivered(scheduledDeliveryLedgerId(job.createdBy?.userId),
-    [deliveredMessageContextRef(receipt.message, digest)]);
+  ledger.recordDelivered(scheduledDeliveryLedgerId(audience), [deliveredMessageContextRef(receipt.message, digest)]);
   return true;
+}
+
+/**
+ * #1250: whose turns may treat a job's clean delivery as history. A job created in chat
+ * (`createdBy.chat`): its creator on the same adapter and endpoint (as `isScheduleJobCreator`). A job
+ * without `createdBy` created by the deployer: Console / CLI (`source: 'manual'`, which only those set
+ * without a creator) or a Profile routine (`source: 'profile'`): every turn. Anything else (a creator
+ * without a recorded chat, or a job from before `source` / `createdBy` were recorded): nobody.
+ */
+function scheduledDeliveryAudience(job: Pick<ScheduleJob, 'source' | 'createdBy'>): ScheduledDeliveryAudience | undefined {
+  const creator = job.createdBy;
+  if (creator) {
+    return creator.chat ? { kind: 'creator', userId: creator.userId,
+      adapter: creator.chat.conversation.endpoint.adapter, endpointId: creator.chat.endpointId } : undefined;
+  }
+  return job.source === 'manual' || job.source === 'profile' ? { kind: 'operator' } : undefined;
 }
 
 function missingScheduleTurnPort(): ScheduleTurnPort {

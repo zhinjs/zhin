@@ -28,13 +28,16 @@ import { DEFAULT_CONFIG } from '../../src/config/index.js';
 
 const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private', id: 'owner' } as const;
 const BRIEFING = '早报：今天晴，最高 25 度。';
+/** The IM origin of a turn in `conversation` (endpoint `main`). */
+const imOrigin = { kind: 'im', endpoint: 'main', conversation } as const;
+const ownerTurn = { principal: { subjectId: 'owner', origin: 'human' }, origin: imOrigin } as const;
 
 function job(extra: Partial<ScheduleJob> = {}): ScheduleJob {
   return {
     id: 'briefing', enabled: true, schedule: { kind: 'cron', expr: '0 0 9 * * *' },
     action: { kind: 'agent', prompt: '写早报' }, notify: { channel: 'silent' },
     createdAt: 1, updatedAt: 1, state: {}, source: 'manual',
-    createdBy: { userId: 'owner', roles: ['owner'] },
+    createdBy: { userId: 'owner', roles: ['owner'], chat: { conversation, endpointId: 'main' } },
     ...extra,
   } as ScheduleJob;
 }
@@ -57,19 +60,46 @@ describe('recordCleanScheduledDelivery (#1250)', () => {
   it('records a clean delivery under the job creator', () => {
     const ledger = new SessionToldLedger();
     expect(recordCleanScheduledDelivery(ledger, job(), clean, receipt(), BRIEFING)).toBe(true);
-    const turn = { principal: { subjectId: 'owner', origin: 'human' } };
+    const turn = ownerTurn;
     expect(isOwnScheduledDelivery(ledger, turn, refOf(scheduledBlock()))).toBe(true);
     // Someone else's turn, a non-human turn and a merged turn do not get the creator's exemption.
-    expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'bob', origin: 'human' } }, refOf(scheduledBlock()))).toBe(false);
-    expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'owner' } }, refOf(scheduledBlock()))).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, { ...turn, principal: { subjectId: 'bob', origin: 'human' } }, refOf(scheduledBlock()))).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, { ...turn, principal: { subjectId: 'owner' } }, refOf(scheduledBlock()))).toBe(false);
     expect(isOwnScheduledDelivery(ledger, { ...turn, input: { mergedSenders: [{}] } }, refOf(scheduledBlock()))).toBe(false);
   });
 
-  it('records a job without a chat creator (Console, CLI, Profile) for every turn', () => {
+  it('matches the creator on the same adapter and endpoint only, as isScheduleJobCreator does', () => {
     const ledger = new SessionToldLedger();
-    expect(recordCleanScheduledDelivery(ledger, job({ createdBy: undefined, source: 'profile' }), clean, receipt(), BRIEFING)).toBe(true);
-    expect(ledger.hasDelivered(scheduledDeliveryLedgerId(), refOf(scheduledBlock()))).toBe(true);
+    expect(recordCleanScheduledDelivery(ledger, job(), clean, receipt(), BRIEFING)).toBe(true);
+    // The same user id on another endpoint, or on another adapter, is another account.
+    const otherEndpoint = { ...ownerTurn, origin: { ...imOrigin, endpoint: 'second' } };
+    const otherAdapter = { ...ownerTurn, origin: { ...imOrigin, conversation: { ...conversation, endpoint: { adapter: 'root/other', id: 'main' } } } };
+    expect(isOwnScheduledDelivery(ledger, otherEndpoint, refOf(scheduledBlock()))).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, otherAdapter, refOf(scheduledBlock()))).toBe(false);
+    // A turn outside IM has no chat account to compare.
+    expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'owner', origin: 'human' }, origin: { kind: 'http' } }, refOf(scheduledBlock()))).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'owner', origin: 'human' } }, refOf(scheduledBlock()))).toBe(false);
+  });
+
+  it.each([
+    ['a Profile routine', 'profile'],
+    ['a Console / CLI job', 'manual'],
+  ] as const)('records %s (no chat creator) for every turn', (_label, source) => {
+    const ledger = new SessionToldLedger();
+    expect(recordCleanScheduledDelivery(ledger, job({ createdBy: undefined, source }), clean, receipt(), BRIEFING)).toBe(true);
+    expect(ledger.hasDelivered(scheduledDeliveryLedgerId({ kind: 'operator' }), refOf(scheduledBlock()))).toBe(true);
     expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'bob' } }, refOf(scheduledBlock()))).toBe(true);
+  });
+
+  it.each([
+    ['an old chat job without createdBy', { createdBy: undefined, source: 'schedule' as const }],
+    ['a job without createdBy or source', { createdBy: undefined, source: undefined }],
+    ['a creator without a recorded chat (A2A, MCP, before chat was recorded)', { createdBy: { userId: 'owner', roles: ['owner' as const] } }],
+  ] as const)('gives no exemption to %s', (_label, extra) => {
+    const ledger = new SessionToldLedger();
+    expect(recordCleanScheduledDelivery(ledger, job(extra as Partial<ScheduleJob>), clean, receipt(), BRIEFING)).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, ownerTurn, refOf(scheduledBlock()))).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'bob' } }, refOf(scheduledBlock()))).toBe(false);
   });
 
   it.each([
@@ -83,7 +113,7 @@ describe('recordCleanScheduledDelivery (#1250)', () => {
   ] as const)('records nothing for %s', (_label, scheduled, result, sent, content) => {
     const ledger = new SessionToldLedger();
     expect(recordCleanScheduledDelivery(ledger, scheduled, result, sent, content)).toBe(false);
-    expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'owner', origin: 'human' } }, refOf(scheduledBlock()))).toBe(false);
+    expect(isOwnScheduledDelivery(ledger, ownerTurn, refOf(scheduledBlock()))).toBe(false);
   });
 });
 
@@ -122,8 +152,7 @@ describe('task executor records clean deliveries (#1250)', () => {
       });
       await executor.execute(job({ notify: { channel: 'im', target: { channel: 'im', scene: {
         platform: 'sandbox', endpointKey: 'main', sceneId: 'owner', kind: 'private' } } } }));
-      expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'owner', origin: 'human' } }, refOf(scheduledBlock())))
-        .toBe(contentClean);
+      expect(isOwnScheduledDelivery(ledger, ownerTurn, refOf(scheduledBlock()))).toBe(contentClean);
       await executor.dispose();
     }
   });
@@ -265,7 +294,17 @@ describe('FullAgentTurnEngine: scheduled deliveries in the background (#1250)', 
 
   it("does not exempt another creator's clean delivery for this initiator", async () => {
     const ledger = new SessionToldLedger();
-    recordCleanScheduledDelivery(ledger, job({ createdBy: { userId: 'bob', roles: ['user'] } }), { contentClean: true }, receipt(), BRIEFING);
+    recordCleanScheduledDelivery(ledger, job({ createdBy: { userId: 'bob', roles: ['user'], chat: { conversation, endpointId: 'main' } } }),
+      { contentClean: true }, receipt(), BRIEFING);
+    const sources = recorded();
+    await harness(ledger, 'owner')([scheduledBlock()]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+  });
+
+  it("does not exempt the creator's clean delivery for the same user id on another endpoint", async () => {
+    const ledger = new SessionToldLedger();
+    recordCleanScheduledDelivery(ledger, job({ createdBy: { userId: 'owner', roles: ['owner'],
+      chat: { conversation, endpointId: 'second' } } }), { contentClean: true }, receipt(), BRIEFING);
     const sources = recorded();
     await harness(ledger, 'owner')([scheduledBlock()]);
     expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);

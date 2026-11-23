@@ -254,15 +254,18 @@ export class TurnToolRuntime {
         turnId: this.turn.identity.turnId,
         requesterId,
         kind: highRisk,
-        target: highRiskConfirmationTarget(tool, effectiveInput),
+        target: highRiskConfirmationTarget(tool, highRisk, effectiveInput),
       };
       // #1250 confirm-every-step-no-batch: authorization this call needs from an approver, if any.
       const neededAuthority = !authorizationRequired ? undefined
         : decision.status === 'approval_required' && decision.adminMayApprove ? 'admin' as const : 'owner' as const;
-      const covered = humanOnly ? undefined : this.#confirmations.covering(confirmationKey);
+      // The sources the model had read when it chose this call; a source read after an answer voids it.
+      const sources = this.provenance.sourceKeys;
+      const covered = humanOnly ? undefined : this.#confirmations.covering(confirmationKey, sources);
       if (covered !== undefined) {
-        // One answer covers the same initiator, category and target for the rest of this turn; it never
-        // settles more authority than it had (an intent-only answer leaves the ordinary approval to run).
+        // One answer covers the same initiator, tool, category and target for the rest of this turn while no
+        // new source arrived; it never settles more authority than it had (an intent-only answer leaves the
+        // ordinary approval to run).
         if (neededAuthority === undefined || confirmationCoversAuthority(covered, neededAuthority)) authorizationRequired = false;
       } else {
         const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
@@ -293,7 +296,7 @@ export class TurnToolRuntime {
         // #1250: an initiator-only confirmation proves intent, not authority; the ordinary approval still runs.
         // It covers later calls with only the authority this answer settled (none when the call needed none).
         this.#confirmations.record(confirmationKey, approval.scope === 'intent' || neededAuthority === undefined
-          ? 'intent' : neededAuthority);
+          ? 'intent' : neededAuthority, sources);
         if (approval.scope !== 'intent') authorizationRequired = false;
       }
     }

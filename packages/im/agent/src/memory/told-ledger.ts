@@ -92,32 +92,46 @@ export function sessionKeyLedgerId(sessionKey: string): string {
 }
 
 /**
- * #1250 `scheduled-delivery-counts-as-background`: the ledger id under which this instance records the
- * deliveries of its own scheduled jobs whose run read no recorded content. `creatorId`: the chat user
- * who created the job (only that person's turns skip the message); absent: a job with no chat creator
- * (Console, CLI, Profile), skipped for every turn. The `scheduled:` namespace never names a session.
+ * #1250: who a scheduled job's clean deliveries are recorded for. `operator`: the job was created by the
+ * deployer (Console or CLI `source: 'manual'`, or a Profile routine `source: 'profile'`) and has no chat
+ * creator; `creator`: an IM account created it in chat (`createdBy.chat`), identified like
+ * `isScheduleJobCreator`: the same user on the same adapter and endpoint.
  */
-export function scheduledDeliveryLedgerId(creatorId?: string): string {
-  return creatorId === undefined ? 'scheduled:operator' : `scheduled:user:${JSON.stringify(creatorId)}`;
+export type ScheduledDeliveryAudience =
+  | Readonly<{ kind: 'operator' }>
+  | Readonly<{ kind: 'creator'; userId: string; adapter: string; endpointId: string }>;
+
+/**
+ * #1250 `scheduled-delivery-counts-as-background`: the ledger id under which this instance records the
+ * deliveries of its own scheduled jobs whose run read no recorded content. The `scheduled:` namespace
+ * never names a session.
+ */
+export function scheduledDeliveryLedgerId(audience: ScheduledDeliveryAudience): string {
+  return audience.kind === 'operator' ? 'scheduled:operator'
+    : `scheduled:creator:${JSON.stringify([audience.adapter, audience.endpointId, audience.userId])}`;
 }
 
 /**
  * #1250: whether `contextRef` names a clean delivery of this instance's own scheduled job that the
- * turn may treat as history: a job without a chat creator for any turn; a creator's job only for a
- * single-sender, human-started turn of that same creator.
+ * turn may treat as history: an operator's job for any turn; a chat creator's job only for a
+ * single-sender, human-started IM turn of that same user on the same adapter and endpoint.
  */
 export function isOwnScheduledDelivery(
   ledger: Pick<SessionToldLedger, 'hasDelivered'> | undefined,
   turn: Readonly<{
     principal: Readonly<{ subjectId: string; origin?: string }>;
+    origin?: Readonly<{ kind: string; endpoint?: string; conversation?: Readonly<{ endpoint: Readonly<{ adapter: string }> }> }>;
     input?: Readonly<{ mergedSenders?: readonly unknown[] }>;
   }>,
   contextRef: string,
 ): boolean {
   if (!ledger) return false;
-  if (ledger.hasDelivered(scheduledDeliveryLedgerId(), contextRef)) return true;
+  if (ledger.hasDelivered(scheduledDeliveryLedgerId({ kind: 'operator' }), contextRef)) return true;
   if (turn.principal.origin !== 'human' || turn.input?.mergedSenders?.length) return false;
-  return ledger.hasDelivered(scheduledDeliveryLedgerId(turn.principal.subjectId), contextRef);
+  const origin = turn.origin;
+  if (origin?.kind !== 'im' || !origin.endpoint || !origin.conversation) return false;
+  return ledger.hasDelivered(scheduledDeliveryLedgerId({ kind: 'creator', userId: turn.principal.subjectId,
+    adapter: origin.conversation.endpoint.adapter, endpointId: origin.endpoint }), contextRef);
 }
 
 export class SessionToldLedger {
