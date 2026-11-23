@@ -85,7 +85,7 @@ function registration(
   inputSchema: ToolInputJsonObjectSchema,
   execute: (input: Record<string, unknown>, context: ToolExecutionContext) => unknown | Promise<unknown>,
   tags?: readonly string[],
-  options: Readonly<{ readOnly?: boolean }> = {},
+  options: Readonly<{ readOnly?: boolean; requiresApproval?: 'never' }> = {},
 ): ScheduleToolRegistration {
   return Object.freeze({
     name,
@@ -95,6 +95,7 @@ function registration(
       execute,
       ...(tags ? { tags } : {}),
       ...(options.readOnly ? { readOnly: true } : {}),
+      ...(options.requiresApproval ? { requiresApproval: options.requiresApproval } : {}),
     }),
   });
 }
@@ -132,8 +133,13 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         return { memory, persistent };
       },
       undefined,
-      // #1250: a lookup; it is not a schedule write and needs no confirmation of its own.
-      { readOnly: true },
+      // #1250: a lookup; it is not a schedule write and needs no confirmation of its own. #1250 b91: nor
+      // an approval: under `on-risk` its schedule name kept the declarative approval (a card for the owner
+      // with master shell `ask`, a refusal for a member nobody can approve for). `never` is set here, on
+      // the Host's own tool only; `readOnlyDeclarationApplies` keeps refusing the relaxation to plugin
+      // tools with config / schedule names. Rows stay filtered by `scheduleJobVisibleTo`, the tool stays
+      // `readOnly` and its output stays external content (a source for the provenance gate).
+      { readOnly: true, requiresApproval: 'never' },
     ),
     registration(
       'schedule_add',

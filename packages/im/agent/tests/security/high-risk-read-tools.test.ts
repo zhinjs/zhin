@@ -116,6 +116,16 @@ describe('read-only schedule / config tools elsewhere (#1250)', () => {
       expect(entry.definition.readOnly).not.toBe(true);
     }
   });
+
+  it('exempts only the Host schedule_list from approval (#1250 b91); every schedule write keeps on-risk', () => {
+    const tools = createScheduleTools({} as never);
+    expect(tools.find(entry => entry.name === 'schedule_list')!.definition.requiresApproval).toBe('never');
+    for (const entry of tools.filter(item => item.name !== 'schedule_list')) {
+      expect(entry.definition.requiresApproval, entry.name).toBe('on-risk');
+    }
+    // The relaxation is the Host tool's own declaration: a plugin tool of that name still gets none from readOnly.
+    expect(readOnlyDeclarationApplies({ name: 'schedule_list', readOnly: true })).toBe(false);
+  });
 });
 
 describe('TurnToolRuntime: schedule_list after external content (#1250)', () => {
