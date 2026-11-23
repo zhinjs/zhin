@@ -236,6 +236,8 @@ To use the Console SQL editor on PostgreSQL / MySQL, create the restricted accou
 
 Monitor the HTTP probe, restart count, Endpoint health, SSE recovery gaps, error rate, database capacity, collaborations (Engagements) frozen and waiting for a human, and Agent failure/cancellation ratio.
 
+Memory: what the instance's resident memory consists of, the measuring script and the V8 options to tune (`--max-semi-space-size`, `--max-old-space-size`) are in [Memory usage and measurement](./memory.md).
+
 In the foreground the instance logs go to stdout and `.zhin/logs/instance.log`; in the background the gateway's own output goes to `.zhin/logs/gateway.log` and the instance logs to `.zhin/logs/instance.log`, rotated past 10 MiB (5 files kept). Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
 
 ## 7. Release and rollback
