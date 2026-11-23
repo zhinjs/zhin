@@ -136,6 +136,8 @@ export function createAssistantScheduleRuntime(
     router: notificationRouter,
     defaultNotify,
     observations: history,
+    // #1250: a clean scheduled delivery is not background for the next turn of its creator.
+    deliveryLedger: agent.toldLedger,
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {

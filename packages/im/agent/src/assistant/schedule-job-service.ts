@@ -55,7 +55,8 @@ export async function addScheduleJob(
     schedule: input.schedule,
     action: { kind: 'agent', prompt: actionPrompt, ...(input.agent ? { agent: input.agent } : {}) },
     notify: input.notify,
-    source: input.source ?? 'manual',
+    // #1250: absent stays absent (see `TimerScheduler.addJob`); deployer paths pass `manual` themselves.
+    ...(input.source ? { source: input.source } : {}),
     createdBy: input.createdBy,
     executionPlan: input.executionPlan,
     activityFeedback: input.activityFeedback || undefined,
