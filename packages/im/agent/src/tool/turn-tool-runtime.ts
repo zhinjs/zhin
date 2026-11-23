@@ -259,8 +259,9 @@ export class TurnToolRuntime {
       // #1250 confirm-every-step-no-batch: authorization this call needs from an approver, if any.
       const neededAuthority = !authorizationRequired ? undefined
         : decision.status === 'approval_required' && decision.adminMayApprove ? 'admin' as const : 'owner' as const;
-      // The sources the model had read when it chose this call; a source read after an answer voids it.
-      const sources = this.provenance.sourceKeys;
+      // The sources the model had read when it chose this call; a source read after an answer voids it,
+      // and so does any external content read after it (another page of the same tool included).
+      const sources = { keys: this.provenance.sourceKeys, contentEntries: this.provenance.contentEntries };
       const covered = humanOnly ? undefined : this.#confirmations.covering(confirmationKey, sources);
       if (covered !== undefined) {
         // One answer covers the same initiator, tool, category and target for the rest of this turn while no

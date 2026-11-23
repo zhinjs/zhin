@@ -353,8 +353,12 @@ const ACTION_LABELS: Readonly<Record<HighRiskActionKind, string>> = Object.freez
 /** Records which lower-trust sources reached the model during one turn. */
 export class TurnProvenance {
   readonly #sources: ProvenanceSource[] = [];
+  #contentEntries = 0;
 
   record(source: ProvenanceSource): void {
+    // #1250: every arrival of external content counts, a repeated source and a trusted source that
+    // becomes external included (see `contentEntries`).
+    if (!(source.kind === 'tool_result' && source.trusted === true)) this.#contentEntries += 1;
     const key = sourceKey(source);
     const index = this.#sources.findIndex((existing) => sourceKey(existing) === key);
     if (index >= 0) {
@@ -371,8 +375,18 @@ export class TurnProvenance {
   /**
    * #1250: one key per recorded source (`tool:<name>`, `conversation_context`, ...), with `:trusted` for
    * a source recorded only as trusted first-party output. A confirmation given in this turn covers later
-   * calls only while no new key appears (see `TurnHighRiskConfirmations`).
+   * calls only while no new key appears and `contentEntries` has not grown (see `TurnHighRiskConfirmations`).
    */
+  /**
+   * #1250: how many times external content entered this turn (only grows). A source key names only the
+   * tool, so a second `web_fetch` of another page adds no key; this count grows with every external
+   * result (and when a trusted source becomes external), and a confirmation covers later calls only
+   * while it has not grown since the answer. Trusted first-party output is counted by its key only.
+   */
+  get contentEntries(): number {
+    return this.#contentEntries;
+  }
+
   get sourceKeys(): readonly string[] {
     return Object.freeze(this.#sources.map(source => source.kind === 'tool_result' && source.trusted === true
       ? `${sourceKey(source)}:trusted` : sourceKey(source)));

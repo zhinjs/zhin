@@ -93,7 +93,7 @@ export function sessionKeyLedgerId(sessionKey: string): string {
 
 /**
  * #1250: who a scheduled job's clean deliveries are recorded for. `operator`: the job was created by the
- * deployer (Console or CLI `source: 'manual'`, or a Profile routine `source: 'profile'`) and has no chat
+ * deployer (Console or CLI `source: 'manual'`, or a Profile routine `source: 'profile'`, set explicitly) and has no chat
  * creator; `creator`: an IM account created it in chat (`createdBy.chat`), identified like
  * `isScheduleJobCreator`: the same user on the same adapter and endpoint.
  */

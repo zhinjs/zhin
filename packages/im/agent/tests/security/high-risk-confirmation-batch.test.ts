@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
-import { PROVENANCE_POLICY, TRUSTED_OUTPUT_TAG } from '../../src/security/provenance.js';
+import { PROVENANCE_POLICY, TRUSTED_OUTPUT_TAG, TurnProvenance } from '../../src/security/provenance.js';
 import {
   TurnHighRiskConfirmations,
   confirmationCoversAuthority,
@@ -14,9 +14,12 @@ import {
 } from '../../src/security/high-risk-confirmation-batch.js';
 import type { ApprovalOutcome, ApprovalOutcomePort, ApprovalRequestInput } from '../../src/session/approval-port.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
+import { createScheduleTools } from '../../src/schedule-manager.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 
-const idSchema = { type: 'object', properties: { id: { type: 'string' }, cron: { type: 'string' } } };
+const idSchema = { type: 'object', properties: {
+  id: { type: 'string' }, cron: { type: 'string' }, enabled: { type: 'boolean' }, value: {},
+} };
 
 // `trusted_output`: the test tools' own results are not recorded sources, so only the batching rule decides.
 function capability(name: string, extra: Partial<ToolCapability> = {}): ToolCapability {
@@ -80,20 +83,38 @@ describe('TurnToolRuntime batches provenance confirmations within a turn (#1250)
     const { approval, requests } = port();
     const runtime = tainted(new TurnToolRuntime(turn(approval), [capability('schedule_update')]));
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'a');
-    // The same source again is nothing new.
+    // The same tool read again (another page of `web_fetch`) may carry new instructions: confirmed again.
     runtime.provenance.record({ kind: 'tool_result', toolName: 'web_fetch' });
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 7 * * *' }, 'b');
-    expect(requests).toHaveLength(1);
-    // A page read after the answer may have steered the next call: it is confirmed again ...
+    expect(requests).toHaveLength(2);
+    // A page of another tool read after the answer: confirmed again ...
     runtime.provenance.record({ kind: 'tool_result', toolName: 'web_search' });
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 6 * * *' }, 'c');
-    expect(requests).toHaveLength(2);
-    // ... and that answer covers the calls after it until the next new source.
+    expect(requests).toHaveLength(3);
+    // ... and that answer covers the calls after it until the next external content.
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 5 * * *' }, 'd');
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     runtime.provenance.record({ kind: 'conversation_context', scene: 'group' });
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 4 * * *' }, 'e');
-    expect(requests).toHaveLength(3);
+    expect(requests).toHaveLength(4);
+  });
+
+  it('asks again after the same tool read other external content (a page fetch of another URL)', async () => {
+    const { approval, requests } = port();
+    // A fetch-like tool whose results are external content (`web_fetch` itself needs network authority here).
+    const fetch = capability('page_fetch', { tags: ['external_content'],
+      inputSchema: { type: 'object', properties: { url: { type: 'string' } } } as never });
+    const runtime = new TurnToolRuntime(turn(approval), [fetch, capability('update_config')]);
+    await expect(runtime.execute('page_fetch', { url: 'https://a.example' }, 'f1')).resolves.toMatchObject({ status: 'completed' });
+    await runtime.execute('update_config', { id: 'x', value: 1 }, 'a');
+    expect(requests).toHaveLength(1);
+    await expect(runtime.execute('page_fetch', { url: 'https://b.example' }, 'f2')).resolves.toMatchObject({ status: 'completed' });
+    expect(runtime.provenance.sourceKeys).toEqual(['tool:page_fetch']);
+    await runtime.execute('update_config', { id: 'x', value: 2 }, 'b');
+    expect(requests).toHaveLength(2);
+    // Nothing new since that answer: covered.
+    await runtime.execute('update_config', { id: 'x', value: 3 }, 'c');
+    expect(requests).toHaveLength(2);
   });
 
   it('counts a trusted source that becomes external content as new', async () => {
@@ -116,8 +137,9 @@ describe('TurnToolRuntime batches provenance confirmations within a turn (#1250)
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'a');
     // a's own result (`tool:schedule_update`, external content) arrived after the answer.
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 7 * * *' }, 'b');
+    // b's own result is external content again (same key, new content): c asks too.
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 6 * * *' }, 'c');
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
   });
 
   it.each([
@@ -259,10 +281,28 @@ describe('merged turns: each initiator confirms for themselves (#1250)', () => {
   });
 });
 
+describe('TurnProvenance.contentEntries (#1250)', () => {
+  it('grows with every external arrival, a repeated source and a trusted-to-external upgrade included', () => {
+    const provenance = new TurnProvenance();
+    provenance.record({ kind: 'tool_result', toolName: 'weather', trusted: true });
+    provenance.record({ kind: 'tool_result', toolName: 'weather', trusted: true });
+    expect(provenance.contentEntries).toBe(0);
+    provenance.record({ kind: 'tool_result', toolName: 'weather' });
+    expect(provenance.contentEntries).toBe(1);
+    provenance.record({ kind: 'tool_result', toolName: 'web_fetch' });
+    provenance.record({ kind: 'tool_result', toolName: 'web_fetch' });
+    provenance.record({ kind: 'conversation_context', scene: 'group' });
+    expect(provenance.contentEntries).toBe(4);
+    expect(provenance.sourceKeys).toEqual(['tool:weather', 'tool:web_fetch', 'conversation_context']);
+  });
+});
+
 describe('TurnHighRiskConfirmations', () => {
   const base = { turnId: 't', requesterId: 'u', kind: 'schedule' as const, target: 'x' };
 
-  const read = ['tool:web_fetch'];
+  const read = { keys: ['tool:web_fetch'], contentEntries: 1 };
+  const plus = (keys: readonly string[], entries = 0) =>
+    ({ keys: [...read.keys, ...keys], contentEntries: read.contentEntries + entries });
 
   it('keys on turn, initiator, category and target', () => {
     const confirmations = new TurnHighRiskConfirmations();
@@ -276,11 +316,19 @@ describe('TurnHighRiskConfirmations', () => {
   it('is voided by a source recorded after the answer', () => {
     const confirmations = new TurnHighRiskConfirmations();
     confirmations.record(base, 'admin', read);
-    expect(confirmations.covering(base, [])).toBe('admin');
-    expect(confirmations.covering(base, [...read, 'tool:web_search'])).toBeUndefined();
+    expect(confirmations.covering(base, { keys: [], contentEntries: 1 })).toBe('admin');
+    expect(confirmations.covering(base, plus(['tool:web_search'], 1))).toBeUndefined();
     // A later answer given with the new source replaces the voided one, even a weaker one.
-    confirmations.record(base, 'intent', [...read, 'tool:web_search']);
-    expect(confirmations.covering(base, [...read, 'tool:web_search'])).toBe('intent');
+    confirmations.record(base, 'intent', plus(['tool:web_search'], 1));
+    expect(confirmations.covering(base, plus(['tool:web_search'], 1))).toBe('intent');
+  });
+
+  it('is voided by external content recorded after the answer under a key it already had', () => {
+    const confirmations = new TurnHighRiskConfirmations();
+    confirmations.record(base, 'admin', read);
+    expect(confirmations.covering(base, plus([], 1))).toBeUndefined();
+    confirmations.record(base, 'intent', plus([], 1));
+    expect(confirmations.covering(base, plus([], 1))).toBe('intent');
   });
 
   it('never weakens a stronger record that still covers the sources', () => {
@@ -314,13 +362,62 @@ describe('TurnHighRiskConfirmations', () => {
   });
 
   it('uses the whole call for shell, outbound and file_write, whatever identifying arguments they declare', () => {
-    const tool = { name: 'x', owner: 'p', inputSchema: { properties: { target: {}, user_id: {}, path: {}, command: {}, text: {} } } };
+    const tool = { name: 'x', owner: 'p', inputSchema: { properties: { target: { type: 'string' }, command: {}, text: {} } } };
     for (const kind of ['shell', 'outbound', 'file_write'] as const) {
       expect(highRiskConfirmationTarget(tool, kind, { target: 'h', command: 'ls' })).toMatch(/^call:/);
       expect(highRiskConfirmationTarget(tool, kind, { target: 'h', command: 'ls' }))
         .not.toBe(highRiskConfirmationTarget(tool, kind, { target: 'h', command: 'rm -rf /' }));
     }
-    expect(highRiskConfirmationTarget(tool, 'config', { target: 'h', command: 'ls' })).toMatch(/^target:/);
+    // Even for config, `command` / `text` are not known value arguments.
+    expect(highRiskConfirmationTarget(tool, 'config', { target: 'h', command: 'ls' })).toMatch(/^call:/);
+    const config = { name: 'x', owner: 'p', inputSchema: { properties: { target: { type: 'string' }, value: {} } } };
+    expect(highRiskConfirmationTarget(config, 'config', { target: 'h', value: 1 })).toMatch(/^target:/);
+  });
+
+  it.each([
+    ['a differently cased key', { id: { type: 'string' }, Key: { type: 'string' }, value: {} }, { Key: 'a' }, { Key: 'b' }],
+    ['field', { id: { type: 'string' }, field: { type: 'string' }, value: {} }, { field: 'token' }, { field: 'admin' }],
+    ['jobName', { id: { type: 'string' }, jobName: { type: 'string' } }, { jobName: 'a' }, { jobName: 'b' }],
+    ['option', { id: { type: 'string' }, option: { type: 'string' } }, { option: 'a' }, { option: 'b' }],
+    ['property', { id: { type: 'string' }, property: { type: 'string' } }, { property: 'a' }, { property: 'b' }],
+    ['slug', { id: { type: 'string' }, slug: { type: 'string' } }, { slug: 'a' }, { slug: 'b' }],
+    ['uuid', { id: { type: 'string' }, uuid: { type: 'string' } }, { uuid: 'a' }, { uuid: 'b' }],
+    ['ref', { id: { type: 'string' }, ref: { type: 'string' } }, { ref: 'a' }, { ref: 'b' }],
+    ['index', { id: { type: 'string' }, index: { type: 'number' } }, { index: 0 }, { index: 1 }],
+    ['two identifying arguments', { id: { type: 'string' }, user_id: { type: 'string' } }, { user_id: 'a' }, { user_id: 'b' }],
+    ['two spellings of one identifier', { id: { type: 'string' }, ID: { type: 'string' } }, { ID: 'a' }, { ID: 'b' }],
+  ])('does not let calls that differ in %s share a target', (_label, properties, first, second) => {
+    const tool = { name: 'config_update', owner: 'p', inputSchema: { type: 'object', properties } };
+    const one = highRiskConfirmationTarget(tool, 'config', { id: 'x', ...first });
+    expect(one).toMatch(/^call:/);
+    expect(one).not.toBe(highRiskConfirmationTarget(tool, 'config', { id: 'x', ...second }));
+  });
+
+  it.each([
+    ['a $ref', { $ref: '#/defs/id' }],
+    ['no type', {}],
+    ['an object type', { type: 'object' }],
+    ['a type list', { type: ['string', 'array'] }],
+    ['allOf', { allOf: [{ type: 'string' }] }],
+  ])('uses the whole call when the identifying argument is declared with %s', (_label, schema) => {
+    const tool = { name: 'config_update', owner: 'p', inputSchema: { type: 'object', properties: { id: schema, value: {} } } };
+    expect(highRiskConfirmationTarget(tool, 'config', { id: 'x', value: 1 })).toMatch(/^call:/);
+  });
+
+  it('uses the whole call when the input carries an argument the tool does not declare', () => {
+    const tool = { name: 'config_update', owner: 'p', inputSchema: { type: 'object', properties: { id: { type: 'string' }, value: {} } } };
+    expect(highRiskConfirmationTarget(tool, 'config', { id: 'x', value: 1, field: 'a' }))
+      .not.toBe(highRiskConfirmationTarget(tool, 'config', { id: 'x', value: 1, field: 'b' }));
+  });
+
+  it("batches the Host's schedule_update by its job id", () => {
+    const manager = { scheduleFeature: { getStatus: () => [] }, engine: {} as never, agents: () => [] };
+    const update = createScheduleTools(manager as never).find(entry => entry.name === 'schedule_update')!;
+    const tool = { name: 'schedule_update', owner: 'root', inputSchema: update.definition.inputSchema };
+    const target = (input: Record<string, unknown>) => highRiskConfirmationTarget(tool, 'schedule', input);
+    expect(target({ id: 'job-1', cron: '0 0 8 * * *' })).toMatch(/^target:/);
+    expect(target({ id: 'job-1', cron: '0 0 8 * * *' })).toBe(target({ id: 'job-1', label: 'x', enabled: false }));
+    expect(target({ id: 'job-1' })).not.toBe(target({ id: 'job-2' }));
   });
 
   it.each([

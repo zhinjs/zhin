@@ -4,6 +4,9 @@
  * of its creator, is history. A run that read outside content, an outside-event job, a rewritten
  * delivery and anything a user can type stay background.
  */
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import type { ConversationContextBlock, DeliveryReceipt } from '@zhin.js/im-contract';
@@ -25,6 +28,9 @@ import type { ScheduleJob } from '../../src/assistant/types.js';
 import { ScheduleExecutionDomainImpl } from '../../src/schedule-domain/execution-domain.js';
 import { ScheduleExecutionHistory } from '../../src/schedule-domain/execution-history-store.js';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
+import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
+import { ScheduleJobStore } from '../../src/assistant/job-store.js';
+import { addScheduleJob } from '../../src/assistant/schedule-job-service.js';
 
 const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private', id: 'owner' } as const;
 const BRIEFING = '早报：今天晴，最高 25 度。';
@@ -100,6 +106,33 @@ describe('recordCleanScheduledDelivery (#1250)', () => {
     expect(recordCleanScheduledDelivery(ledger, job(extra as Partial<ScheduleJob>), clean, receipt(), BRIEFING)).toBe(false);
     expect(isOwnScheduledDelivery(ledger, ownerTurn, refOf(scheduledBlock()))).toBe(false);
     expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'bob' } }, refOf(scheduledBlock()))).toBe(false);
+  });
+
+  it('gives no exemption to a job added without source (the scheduler does not default it to manual)', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'zhin-sched-source-'));
+    const engine = new TimerScheduler({ store: new ScheduleJobStore({ dataDir }), due: { run: vi.fn() } as never,
+      router: createNotificationRouter({ resolveAdapter: () => undefined }) });
+    try {
+      const direct = await engine.addJob({ id: 'plugin-job', enabled: true, schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+        action: { kind: 'agent', prompt: '写早报' }, notify: { channel: 'silent' } });
+      const viaService = await addScheduleJob(engine, { id: 'service-job', prompt: '写早报',
+        schedule: { kind: 'solar', cron: '0 0 9 * * *' }, notify: { channel: 'silent' } });
+      for (const added of [direct, viaService]) {
+        const stored = (await engine.listJobs()).find(entry => entry.id === added.id)!;
+        expect(stored.source).toBeUndefined();
+        const ledger = new SessionToldLedger();
+        expect(recordCleanScheduledDelivery(ledger, stored, clean, receipt(), BRIEFING)).toBe(false);
+        expect(isOwnScheduledDelivery(ledger, { principal: { subjectId: 'bob' } }, refOf(scheduledBlock()))).toBe(false);
+      }
+      // An explicit manual source (Console / CLI) still is the deployer's job.
+      const manual = await engine.addJob({ id: 'console-job', enabled: true, source: 'manual',
+        schedule: { kind: 'solar', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: '写早报' }, notify: { channel: 'silent' } });
+      expect(recordCleanScheduledDelivery(new SessionToldLedger(), manual, clean, receipt(), BRIEFING)).toBe(true);
+    } finally {
+      engine.unload();
+      await engine.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 
   it.each([

@@ -291,8 +291,10 @@ export function recordCleanScheduledDelivery(
  * #1250: whose turns may treat a job's clean delivery as history. A job created in chat
  * (`createdBy.chat`): its creator on the same adapter and endpoint (as `isScheduleJobCreator`). A job
  * without `createdBy` created by the deployer: Console / CLI (`source: 'manual'`, which only those set
- * without a creator) or a Profile routine (`source: 'profile'`): every turn. Anything else (a creator
- * without a recorded chat, or a job from before `source` / `createdBy` were recorded): nobody.
+ * without a creator) or a Profile routine (`source: 'profile'`), set explicitly (the scheduler no
+ * longer defaults a missing `source` to `manual`): every turn. Anything else (a creator without a
+ * recorded chat, a job added without `source`, or a job from before `source` / `createdBy` were
+ * recorded): nobody.
  */
 function scheduledDeliveryAudience(job: Pick<ScheduleJob, 'source' | 'createdBy'>): ScheduledDeliveryAudience | undefined {
   const creator = job.createdBy;
