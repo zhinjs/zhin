@@ -123,10 +123,14 @@ describe('admin initiator self-approval (#1250 review S1)', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('declares the Host schedule_add tool admin-approvable (the case the admin path was built for)', () => {
+  it('declares the Host schedule_add and schedule_update tools admin-approvable (the case the admin path was built for)', () => {
     const tools = createScheduleTools({} as never);
-    expect(tools.find(entry => entry.name === 'schedule_add')!.definition.tags).toContain(ADMIN_APPROVABLE_TOOL_TAG);
-    for (const entry of tools.filter(item => item.name !== 'schedule_add')) {
+    // #1250: changing a task may be confirmed by an admin in their own private chat, like creating one.
+    const approvable = ['schedule_add', 'schedule_update'];
+    for (const name of approvable) {
+      expect(tools.find(entry => entry.name === name)!.definition.tags).toContain(ADMIN_APPROVABLE_TOOL_TAG);
+    }
+    for (const entry of tools.filter(item => !approvable.includes(item.name))) {
       expect(entry.definition.tags ?? []).not.toContain(ADMIN_APPROVABLE_TOOL_TAG);
     }
   });

@@ -85,6 +85,7 @@ function registration(
   inputSchema: ToolInputJsonObjectSchema,
   execute: (input: Record<string, unknown>, context: ToolExecutionContext) => unknown | Promise<unknown>,
   tags?: readonly string[],
+  options: Readonly<{ readOnly?: boolean; requiresApproval?: 'never' }> = {},
 ): ScheduleToolRegistration {
   return Object.freeze({
     name,
@@ -93,6 +94,8 @@ function registration(
       inputSchema,
       execute,
       ...(tags ? { tags } : {}),
+      ...(options.readOnly ? { readOnly: true } : {}),
+      ...(options.requiresApproval ? { requiresApproval: options.requiresApproval } : {}),
     }),
   });
 }
@@ -129,6 +132,14 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           : [];
         return { memory, persistent };
       },
+      undefined,
+      // #1250: a lookup; it is not a schedule write and needs no confirmation of its own. #1250 b91: nor
+      // an approval: under `on-risk` its schedule name kept the declarative approval (a card for the owner
+      // with master shell `ask`, a refusal for a member nobody can approve for). `never` is set here, on
+      // the Host's own tool only; `readOnlyDeclarationApplies` keeps refusing the relaxation to plugin
+      // tools with config / schedule names. Rows stay filtered by `scheduleJobVisibleTo`, the tool stays
+      // `readOnly` and its output stays external content (a source for the provenance gate).
+      { readOnly: true, requiresApproval: 'never' },
     ),
     registration(
       'schedule_add',
@@ -255,6 +266,8 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           ...(stuck ? { warning: '任务已启用，但按新计划算不出下次运行时间，它不会自动执行；请检查 cron 或改用其他计划' } : {}),
         };
       },
+      // #1250: like schedule_add, an admin may confirm changing a scheduled task in their own private chat.
+      [ADMIN_APPROVABLE_TOOL_TAG],
     ),
     ...(['remove', 'pause', 'resume'] as const).map((operation) => registration(
       `schedule_${operation}`,

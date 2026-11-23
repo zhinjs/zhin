@@ -21,7 +21,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { InitiatorTrustLevel } from './trust-level.js';
-import { isFileWriteToolName, isOutboundToolName } from './trust-level.js';
+import { hasNonAsciiToolName, isFileWriteToolName, isOutboundToolName, toolNameSpellings } from './trust-level.js';
 
 /** ADR 0067 D2: the high-risk categories the provenance gate confirms. */
 export type HighRiskActionKind = 'shell' | 'file_write' | 'outbound' | 'config' | 'schedule';
@@ -171,6 +171,31 @@ export const EXTERNAL_CONTENT_TAG = 'external_content';
 export const TRUSTED_OUTPUT_TAG = 'trusted_output';
 
 const READ_VERB = /^(?:get|read|list|show|view|query|search|find|check)_/;
+/** #1250: `<noun>_<read verb>` names (`schedule_list`, `remind_list`, `config_get`) read too. */
+const READ_SUFFIX = /_(?:list|get|show|status)$/;
+/**
+ * #1250: a write verb anywhere in the name is a write marker. It outranks a `readOnly` declaration and
+ * the read suffix, so neither can lift a config / schedule name such as `schedule_add_list` out of its
+ * category. Matched against every spelling of the name (`toolNameSpellings`: lower-cased, camelCase and
+ * `-` split into `_`), so `schedule_Add_list` and `config_set-x_get` keep their category too.
+ */
+const WRITE_VERB = new RegExp(`(?:^|_)(?:${[
+  'add', 'create', 'new', 'insert', 'register', 'unregister', 'set', 'unset', 'update', 'edit', 'modify', 'change',
+  'patch', 'put', 'write', 'save', 'upsert', 'replace', 'override', 'remove', 'delete', 'del', 'rm', 'drop', 'erase',
+  'wipe', 'clear', 'reset', 'purge', 'flush', 'cancel', 'enable', 'disable', 'toggle', 'activate', 'deactivate',
+  'pause', 'resume', 'snooze', 'postpone', 'defer', 'delay', 'reschedule', 'skip', 'dismiss', 'ack', 'acknowledge',
+  'complete', 'finish', 'done', 'mark', 'start', 'stop', 'restart', 'kill', 'run', 'exec', 'execute', 'trigger',
+  'fire', 'install', 'uninstall', 'apply', 'import', 'restore', 'reload', 'sync', 'push', 'publish', 'commit',
+  'merge', 'move', 'rename', 'assign', 'unassign', 'transfer', 'send', 'grant', 'revoke', 'allow', 'disallow',
+  'block', 'unblock', 'deny', 'approve', 'reject', 'accept', 'kick', 'ban', 'unban', 'mute', 'unmute', 'lock',
+  'unlock', 'invite', 'join', 'leave', 'promote', 'demote', 'subscribe', 'unsubscribe', 'archive', 'unarchive',
+  'confirm', 'bind', 'unbind', 'attach', 'detach', 'link', 'unlink',
+].join('|')})(?:_|$)`, 'u');
+/**
+ * #1250: names that are a list someone keeps (`config_white_list`, `schedule_allowlist_get`): a read
+ * suffix after one of these may name the list being written, so it does not make the tool a read.
+ */
+const MANAGED_LIST_NOUN = /(?:^|_)(?:white|black|allow|block|deny|ban|mute|trust|ignore|safe)_?lists?(?:_|$)|(?:^|_)(?:white|black|allow|block|deny|ban|mute|trust|ignore|safe)_(?:list|get|show|status)$/u;
 const CONFIG_NAME = /(?:^|_)(?:config|configs|configuration|setting|settings|plugin_install|install_plugin|uninstall_plugin)(?:_|$)/;
 const SCHEDULE_NAME = /(?:^|_)(?:schedule|schedules|cron|crons|reminder|reminders|remind|timer|timers|alarm|alarms)(?:_|$)/;
 
@@ -198,18 +223,66 @@ export function defaultHighRiskConfirmLevel(toolName: string, kind: HighRiskActi
   return kind === 'schedule' && toolName === SCHEDULE_PREVIEW_TOOL ? 'any_content' : DEFAULT_HIGH_RISK_CONFIRM[kind];
 }
 
-/** The high-risk category of a tool call, or undefined for ordinary tools. */
-export function classifyHighRiskAction(tool: Pick<ToolView, 'name' | 'tags'>): HighRiskActionKind | undefined {
+/**
+ * The high-risk category of a tool call, or undefined for ordinary tools.
+ *
+ * #1250 `schedule-list-classified-high-risk`: a config / schedule category that comes only from the
+ * tool's name is dropped for a tool that reads: one whose code declares `readOnly: true`, or whose
+ * name ends in a read verb (`_list`, `_get`, `_show`, `_status`). The stricter declaration wins: a
+ * category tag, a built-in shell / file-write / outbound name, `risk: 'dangerous'`, a `riskCategory`
+ * or a write verb in the name keeps the category. `readOnly` comes from the tool definition (code),
+ * never from call arguments.
+ */
+export function classifyHighRiskAction(
+  tool: Pick<ToolView, 'name' | 'tags'> & Partial<Pick<ToolView, 'readOnly' | 'risk' | 'riskCategory'>>,
+): HighRiskActionKind | undefined {
+  const kind = nameHighRiskCategory(tool);
+  if (kind === undefined) return undefined;
+  // Only a category that comes from the config / schedule name rule may be dropped for a read.
+  if (nameCategory(tool.name) === kind && !hasCategoryTag(tool, kind) && readsOnlyByDeclaration(tool)) return undefined;
+  return kind;
+}
+
+function hasCategoryTag(tool: Pick<ToolView, 'tags'>, kind: HighRiskActionKind): boolean {
+  return (tool.tags ?? []).includes(kind);
+}
+
+/** The pre-#1250 name rule: config / schedule names, except the ones that start with a read verb. */
+function nameCategory(name: string): HighRiskActionKind | undefined {
+  if (READ_VERB.test(name)) return undefined;
+  if (CONFIG_NAME.test(name)) return 'config';
+  if (SCHEDULE_NAME.test(name)) return 'schedule';
+  return undefined;
+}
+
+/**
+ * The pre-#1250 category rule: tags, built-in names and config / schedule names, with no exception for
+ * tools that read (`readOnly`, a read suffix). Output trust (ADR 0067 D1) and the `readOnly`
+ * declaration of the declarative approval (`readOnlyDeclarationApplies`) keep using it: a config /
+ * schedule tool that reads (such as `schedule_list`, whose rows carry prompts other people wrote) is
+ * neither trusted output nor relieved of its declarative approval because of #1250. Only the
+ * provenance confirmation (`classifyHighRiskAction`) drops the category for reads.
+ */
+export function nameHighRiskCategory(tool: Pick<ToolView, 'name' | 'tags'>): HighRiskActionKind | undefined {
   const tags = tool.tags ?? [];
   if (tool.name === 'bash' || tags.includes('shell')) return 'shell';
   if (tags.includes('outbound') || isOutboundToolName(tool.name)) return 'outbound';
   if (tags.includes('file_write') || isFileWriteToolName(tool.name)) return 'file_write';
   if (tags.includes('config')) return 'config';
   if (tags.includes('schedule')) return 'schedule';
-  if (READ_VERB.test(tool.name)) return undefined;
-  if (CONFIG_NAME.test(tool.name)) return 'config';
-  if (SCHEDULE_NAME.test(tool.name)) return 'schedule';
-  return undefined;
+  return nameCategory(tool.name);
+}
+
+function hasOutputHighRiskCategory(tool: Pick<ToolView, 'name' | 'tags'>): boolean {
+  return nameHighRiskCategory(tool) !== undefined;
+}
+
+/** #1250: whether a config / schedule-named tool is a read (see `classifyHighRiskAction`). */
+function readsOnlyByDeclaration(tool: Pick<ToolView, 'name'> & Partial<Pick<ToolView, 'readOnly' | 'risk' | 'riskCategory'>>): boolean {
+  if (tool.risk === 'dangerous' || tool.riskCategory !== undefined) return false;
+  if (hasNonAsciiToolName(tool.name)) return false;
+  if (toolNameSpellings(tool.name).some(name => WRITE_VERB.test(name) || MANAGED_LIST_NOUN.test(name))) return false;
+  return tool.readOnly === true || READ_SUFFIX.test(tool.name);
 }
 
 /**
@@ -229,7 +302,7 @@ export function classifyToolOutput(tool: ToolView, settings: Pick<InjectionGuard
     && tool.readOnly === true
     && tool.risk !== 'dangerous'
     && tool.riskCategory === undefined
-    && classifyHighRiskAction(tool) === undefined) return 'trusted';
+    && !hasOutputHighRiskCategory(tool)) return 'trusted';
   return 'external';
 }
 
@@ -280,8 +353,12 @@ const ACTION_LABELS: Readonly<Record<HighRiskActionKind, string>> = Object.freez
 /** Records which lower-trust sources reached the model during one turn. */
 export class TurnProvenance {
   readonly #sources: ProvenanceSource[] = [];
+  #contentEntries = 0;
 
   record(source: ProvenanceSource): void {
+    // #1250: every arrival of external content counts, a repeated source and a trusted source that
+    // becomes external included (see `contentEntries`).
+    if (!(source.kind === 'tool_result' && source.trusted === true)) this.#contentEntries += 1;
     const key = sourceKey(source);
     const index = this.#sources.findIndex((existing) => sourceKey(existing) === key);
     if (index >= 0) {
@@ -293,6 +370,26 @@ export class TurnProvenance {
       return;
     }
     this.#sources.push(Object.freeze({ ...source }));
+  }
+
+  /**
+   * #1250: how many times external content entered this turn (only grows). A source key names only the
+   * tool, so a second `web_fetch` of another page adds no key; this count grows with every external
+   * result (and when a trusted source becomes external), and a confirmation covers later calls only
+   * while it has not grown since the answer. Trusted first-party output is counted by its key only.
+   */
+  get contentEntries(): number {
+    return this.#contentEntries;
+  }
+
+  /**
+   * #1250: one key per recorded source (`tool:<name>`, `conversation_context`, ...), with `:trusted` for
+   * a source recorded only as trusted first-party output. A confirmation given in this turn covers later
+   * calls only while no new key appears and `contentEntries` has not grown (see `TurnHighRiskConfirmations`).
+   */
+  get sourceKeys(): readonly string[] {
+    return Object.freeze(this.#sources.map(source => source.kind === 'tool_result' && source.trusted === true
+      ? `${sourceKey(source)}:trusted` : sourceKey(source)));
   }
 
   /** Any recorded source, trusted first-party output included. */
