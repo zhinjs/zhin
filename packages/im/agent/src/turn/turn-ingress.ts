@@ -428,7 +428,11 @@ export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'poli
 }>;
 
 export type TurnOutcome =
-  | Readonly<{ status: 'completed'; output: readonly AgentOutputElement[]; usage: Usage }>
+  | Readonly<{
+    status: 'completed'; output: readonly AgentOutputElement[]; usage: Usage;
+    /** #1250: the turn read no recorded content (see `TurnEndEvent.contentProvenance`); absent: it did. */
+    contentProvenance?: 'clean';
+  }>
   | Readonly<{ status: 'failed'; error: Readonly<{ code: string; message: string; retryable: boolean }>; usage: Usage }>
   | Readonly<{ status: 'cancelled'; reason: string; usage: Usage }>
   | Readonly<{ status: 'budget_exceeded'; budget: string; usage: Usage }>;

@@ -91,6 +91,35 @@ export function sessionKeyLedgerId(sessionKey: string): string {
   return `key:${sessionKey}`;
 }
 
+/**
+ * #1250 `scheduled-delivery-counts-as-background`: the ledger id under which this instance records the
+ * deliveries of its own scheduled jobs whose run read no recorded content. `creatorId`: the chat user
+ * who created the job (only that person's turns skip the message); absent: a job with no chat creator
+ * (Console, CLI, Profile), skipped for every turn. The `scheduled:` namespace never names a session.
+ */
+export function scheduledDeliveryLedgerId(creatorId?: string): string {
+  return creatorId === undefined ? 'scheduled:operator' : `scheduled:user:${JSON.stringify(creatorId)}`;
+}
+
+/**
+ * #1250: whether `contextRef` names a clean delivery of this instance's own scheduled job that the
+ * turn may treat as history: a job without a chat creator for any turn; a creator's job only for a
+ * single-sender, human-started turn of that same creator.
+ */
+export function isOwnScheduledDelivery(
+  ledger: Pick<SessionToldLedger, 'hasDelivered'> | undefined,
+  turn: Readonly<{
+    principal: Readonly<{ subjectId: string; origin?: string }>;
+    input?: Readonly<{ mergedSenders?: readonly unknown[] }>;
+  }>,
+  contextRef: string,
+): boolean {
+  if (!ledger) return false;
+  if (ledger.hasDelivered(scheduledDeliveryLedgerId(), contextRef)) return true;
+  if (turn.principal.origin !== 'human' || turn.input?.mergedSenders?.length) return false;
+  return ledger.hasDelivered(scheduledDeliveryLedgerId(turn.principal.subjectId), contextRef);
+}
+
 export class SessionToldLedger {
   readonly #sessions = new Map<string, ToldEntry[]>();
   /** `delivered-message:` references of replies this agent delivered with exact text evidence. */

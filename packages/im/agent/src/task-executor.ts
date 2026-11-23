@@ -26,6 +26,8 @@ import { createScheduleAttempt, type ScheduleAttemptContext } from './schedule-d
 import { ScheduleAttemptFailure } from './schedule-domain/execution-failure.js';
 import { failedScheduleResult } from './schedule-domain/execution-result.js';
 import type { ScheduleActivityEvent, ScheduleActivityPort } from './schedule-domain/activity.js';
+import { scheduledDeliveryLedgerId, type SessionToldLedger } from './memory/told-ledger.js';
+import { deliveredMessageContextRef, deliveredTextDigest } from './session/context-provenance.js';
 export type { ScheduleActivityEvent, ScheduleActivityPort } from './schedule-domain/activity.js';
 
 const logger = getLogger('task-executor');
@@ -55,6 +57,11 @@ export interface TaskExecutorDeps {
   dataDir?: string;
   history?: ScheduleHistoryObserver;
   observations?: ScheduleObservationOwner;
+  /**
+   * #1250: where clean deliveries of this instance's scheduled jobs are recorded, so the next turn in
+   * the target conversation does not count them as background (see `recordCleanScheduledDelivery`).
+   */
+  deliveryLedger?: Pick<SessionToldLedger, 'recordDelivered'>;
 }
 
 /** Options of {@link createTaskExecutor}'s `preview`. */
@@ -170,6 +177,9 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
               source: 'scheduled',
               locale: resolveLocale(job.locale),
             });
+            if (deps.deliveryLedger && sent.receipt) {
+              recordCleanScheduledDelivery(deps.deliveryLedger, job, result, sent.receipt, result.output);
+            }
             delivery = sent.receipt ? deliveryFromReceipt(sent.receipt, sent.channel)
               : { status: effectiveNotify.channel === 'silent' || effectiveNotify.channel === 'log'
                 ? 'not_requested' : sent.delivered ? sent.channel === 'ha' ? 'unknown' : 'delivered' : 'not_sent', channel: sent.channel };
@@ -248,6 +258,31 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   }
 
   return { execute, preview, dispose, observations };
+}
+
+/**
+ * #1250 `scheduled-delivery-counts-as-background`: a due run's reply is this instance's own words only
+ * when the run read no recorded content (`contentClean`), the job is not fed by an outside event, and
+ * the platform confirmed exactly this text as one message. Then the message is recorded (process
+ * memory, keyed by the platform message and its text digest, which message text cannot forge) under
+ * the job creator, so a later turn of that person (or of anyone, for a job without a chat creator)
+ * does not count it as background. Anything else stays background (fail closed).
+ */
+export function recordCleanScheduledDelivery(
+  ledger: Pick<SessionToldLedger, 'recordDelivered'>,
+  job: Pick<ScheduleJob, 'source' | 'schedule' | 'eventPayload' | 'createdBy' | 'provenance'>,
+  result: Pick<ScheduleExecutionResult, 'contentClean'>,
+  receipt: DeliveryReceipt,
+  content: string,
+): boolean {
+  if (result.contentClean !== true || job.provenance) return false;
+  if (job.source === 'event' || job.schedule.kind === 'event' || job.eventPayload !== undefined) return false;
+  if (receipt.status !== 'sent' || !receipt.message || (receipt.parts?.length ?? 0) > 1) return false;
+  const digest = deliveredTextDigest(content);
+  if (receipt.outboundTextDigest !== digest) return false;
+  ledger.recordDelivered(scheduledDeliveryLedgerId(job.createdBy?.userId),
+    [deliveredMessageContextRef(receipt.message, digest)]);
+  return true;
 }
 
 function missingScheduleTurnPort(): ScheduleTurnPort {

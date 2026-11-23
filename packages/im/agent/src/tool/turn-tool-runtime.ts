@@ -52,6 +52,12 @@ import {
   type ToolHardGateControlSource,
   type ToolHardGateLocation,
 } from '../security/tool-hard-gate.js';
+import {
+  TurnHighRiskConfirmations,
+  confirmationCoversAuthority,
+  highRiskConfirmationTarget,
+  type HighRiskConfirmationKey,
+} from '../security/high-risk-confirmation-batch.js';
 import { ToolApprovalQueueClosedError, type ToolApprovalOrigin, type ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import type { OpsCooldownView } from '../security/ops-cooldown.js';
 import { ON_BEHALF_OF_ARG, resolveOnBehalfOf } from '../turn/merged-principal.js';
@@ -103,6 +109,8 @@ export class TurnToolRuntime {
   readonly #messageAliases?: Pick<MessageAliasTable, 'resolve'>;
   readonly #hardGate: ToolHardGate;
   readonly #decisionAudit?: DecisionAuditSink;
+  /** #1250: provenance confirmations given in this turn (memory only, see TurnHighRiskConfirmations). */
+  readonly #confirmations = new TurnHighRiskConfirmations();
   /** Lower-trust sources that reached the model during this turn (#727). */
   readonly provenance: TurnProvenance;
 
@@ -241,35 +249,53 @@ export class TurnToolRuntime {
           ? PROVENANCE_UNATTENDED_REASON
           : PROVENANCE_NO_CHANNEL_REASON} ${formatApprovalBlocked(blocked, denial)}`, causedBy);
       }
-      const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
-      const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
-        ...(humanOnly ? { humanOnly: true } : {}),
-        requestId: `${this.turn.identity.turnId}:${toolUseId}`,
-        sessionKey: this.turn.session.key,
-        ...(this.turn.origin.kind === 'im'
-          ? { conversationScope: this.turn.origin.scope }
-          : {}),
-        requesterId: actingFor ?? this.turn.principal.subjectId,
-        toolName: name,
-        // Never matches a remembered approval: each tainted call is confirmed on its own.
-        scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
-        purpose: 'intent',
-        // #1250 review: an admin's own answer may cover the call only when the call itself needs no
-        // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
-        ...(!authorizationRequired || (decision.status === 'approval_required' && decision.adminMayApprove)
-          ? { adminMayApprove: true }
-          : { requiresOwner: true }),
-        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain, this.provenance.tainted), effectiveInput,
-          humanOnly, tool.description),
-        signal: this.turn.signal,
-      });
-      if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
-      this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval);
-      if (approval.status !== 'approved') {
-        return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval, denial), causedBy);
+      const requesterId = actingFor ?? this.turn.principal.subjectId;
+      const confirmationKey: HighRiskConfirmationKey = {
+        turnId: this.turn.identity.turnId,
+        requesterId,
+        kind: highRisk,
+        target: highRiskConfirmationTarget(tool, effectiveInput),
+      };
+      // #1250 confirm-every-step-no-batch: authorization this call needs from an approver, if any.
+      const neededAuthority = !authorizationRequired ? undefined
+        : decision.status === 'approval_required' && decision.adminMayApprove ? 'admin' as const : 'owner' as const;
+      const covered = humanOnly ? undefined : this.#confirmations.covering(confirmationKey);
+      if (covered !== undefined) {
+        // One answer covers the same initiator, category and target for the rest of this turn; it never
+        // settles more authority than it had (an intent-only answer leaves the ordinary approval to run).
+        if (neededAuthority === undefined || confirmationCoversAuthority(covered, neededAuthority)) authorizationRequired = false;
+      } else {
+        const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
+        const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
+          ...(humanOnly ? { humanOnly: true } : {}),
+          requestId: `${this.turn.identity.turnId}:${toolUseId}`,
+          sessionKey: this.turn.session.key,
+          ...(this.turn.origin.kind === 'im'
+            ? { conversationScope: this.turn.origin.scope }
+            : {}),
+          requesterId,
+          toolName: name,
+          // Never matches a remembered approval: each tainted call is confirmed on its own.
+          scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
+          purpose: 'intent',
+          // #1250 review: an admin's own answer may cover the call only when the call itself needs no
+          // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
+          ...(neededAuthority !== 'owner' ? { adminMayApprove: true } : { requiresOwner: true }),
+          question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain, this.provenance.tainted), effectiveInput,
+            humanOnly, tool.description),
+          signal: this.turn.signal,
+        });
+        if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
+        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval);
+        if (approval.status !== 'approved') {
+          return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval, denial), causedBy);
+        }
+        // #1250: an initiator-only confirmation proves intent, not authority; the ordinary approval still runs.
+        // It covers later calls with only the authority this answer settled (none when the call needed none).
+        this.#confirmations.record(confirmationKey, approval.scope === 'intent' || neededAuthority === undefined
+          ? 'intent' : neededAuthority);
+        if (approval.scope !== 'intent') authorizationRequired = false;
       }
-      // #1250: an initiator-only confirmation proves intent, not authority; the ordinary approval still runs.
-      if (approval.scope !== 'intent') authorizationRequired = false;
     }
     if (authorizationRequired && decision.status === 'approval_required') {
       // #1250 review: some policies only need the initiator to confirm their own intent (memory poisoning guard).

@@ -85,6 +85,7 @@ function registration(
   inputSchema: ToolInputJsonObjectSchema,
   execute: (input: Record<string, unknown>, context: ToolExecutionContext) => unknown | Promise<unknown>,
   tags?: readonly string[],
+  options: Readonly<{ readOnly?: boolean }> = {},
 ): ScheduleToolRegistration {
   return Object.freeze({
     name,
@@ -93,6 +94,7 @@ function registration(
       inputSchema,
       execute,
       ...(tags ? { tags } : {}),
+      ...(options.readOnly ? { readOnly: true } : {}),
     }),
   });
 }
@@ -129,6 +131,9 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           : [];
         return { memory, persistent };
       },
+      undefined,
+      // #1250: a lookup; it is not a schedule write and needs no confirmation of its own.
+      { readOnly: true },
     ),
     registration(
       'schedule_add',
@@ -255,6 +260,8 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           ...(stuck ? { warning: '任务已启用，但按新计划算不出下次运行时间，它不会自动执行；请检查 cron 或改用其他计划' } : {}),
         };
       },
+      // #1250: like schedule_add, an admin may confirm changing a scheduled task in their own private chat.
+      [ADMIN_APPROVABLE_TOOL_TAG],
     ),
     ...(['remove', 'pause', 'resume'] as const).map((operation) => registration(
       `schedule_${operation}`,

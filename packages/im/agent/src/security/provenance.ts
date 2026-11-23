@@ -171,6 +171,13 @@ export const EXTERNAL_CONTENT_TAG = 'external_content';
 export const TRUSTED_OUTPUT_TAG = 'trusted_output';
 
 const READ_VERB = /^(?:get|read|list|show|view|query|search|find|check)_/;
+/** #1250: `<noun>_<read verb>` names (`schedule_list`, `remind_list`, `config_get`) read too. */
+const READ_SUFFIX = /_(?:list|get|show|status)$/;
+/**
+ * #1250: a write verb anywhere in the name is a write marker. It outranks a `readOnly` declaration and
+ * the read suffix, so neither can lift a config / schedule name such as `schedule_add_list` out of its category.
+ */
+const WRITE_VERB = /(?:^|_)(?:add|create|new|set|update|edit|modify|change|patch|put|write|save|upsert|remove|delete|del|rm|drop|clear|reset|purge|cancel|enable|disable|pause|resume|start|stop|run|exec|execute|trigger|fire|install|uninstall|apply|import|restore|reload|move|rename|send)(?:_|$)/;
 const CONFIG_NAME = /(?:^|_)(?:config|configs|configuration|setting|settings|plugin_install|install_plugin|uninstall_plugin)(?:_|$)/;
 const SCHEDULE_NAME = /(?:^|_)(?:schedule|schedules|cron|crons|reminder|reminders|remind|timer|timers|alarm|alarms)(?:_|$)/;
 
@@ -198,18 +205,53 @@ export function defaultHighRiskConfirmLevel(toolName: string, kind: HighRiskActi
   return kind === 'schedule' && toolName === SCHEDULE_PREVIEW_TOOL ? 'any_content' : DEFAULT_HIGH_RISK_CONFIRM[kind];
 }
 
-/** The high-risk category of a tool call, or undefined for ordinary tools. */
-export function classifyHighRiskAction(tool: Pick<ToolView, 'name' | 'tags'>): HighRiskActionKind | undefined {
+/**
+ * The high-risk category of a tool call, or undefined for ordinary tools.
+ *
+ * #1250 `schedule-list-classified-high-risk`: a config / schedule category that comes only from the
+ * tool's name is dropped for a tool that reads: one whose code declares `readOnly: true`, or whose
+ * name ends in a read verb (`_list`, `_get`, `_show`, `_status`). The stricter declaration wins: a
+ * category tag, a built-in shell / file-write / outbound name, `risk: 'dangerous'`, a `riskCategory`
+ * or a write verb in the name keeps the category. `readOnly` comes from the tool definition (code),
+ * never from call arguments.
+ */
+export function classifyHighRiskAction(
+  tool: Pick<ToolView, 'name' | 'tags'> & Partial<Pick<ToolView, 'readOnly' | 'risk' | 'riskCategory'>>,
+): HighRiskActionKind | undefined {
   const tags = tool.tags ?? [];
   if (tool.name === 'bash' || tags.includes('shell')) return 'shell';
   if (tags.includes('outbound') || isOutboundToolName(tool.name)) return 'outbound';
   if (tags.includes('file_write') || isFileWriteToolName(tool.name)) return 'file_write';
   if (tags.includes('config')) return 'config';
   if (tags.includes('schedule')) return 'schedule';
-  if (READ_VERB.test(tool.name)) return undefined;
-  if (CONFIG_NAME.test(tool.name)) return 'config';
-  if (SCHEDULE_NAME.test(tool.name)) return 'schedule';
+  const kind = nameCategory(tool.name);
+  if (kind === undefined || readsOnlyByDeclaration(tool)) return undefined;
+  return kind;
+}
+
+/** The pre-#1250 name rule: config / schedule names, except the ones that start with a read verb. */
+function nameCategory(name: string): HighRiskActionKind | undefined {
+  if (READ_VERB.test(name)) return undefined;
+  if (CONFIG_NAME.test(name)) return 'config';
+  if (SCHEDULE_NAME.test(name)) return 'schedule';
   return undefined;
+}
+
+/**
+ * Output trust (ADR 0067 D1) keeps the category rule it had before #1250: a config / schedule tool
+ * that reads (such as `schedule_list`, whose rows carry prompts other people wrote) is not trusted
+ * output because of a `readOnly` declaration or a read suffix alone.
+ */
+function hasOutputHighRiskCategory(tool: Pick<ToolView, 'name' | 'tags'>): boolean {
+  const tags = tool.tags ?? [];
+  return classifyHighRiskAction({ name: tool.name, tags }) !== undefined || nameCategory(tool.name) !== undefined;
+}
+
+/** #1250: whether a config / schedule-named tool is a read (see `classifyHighRiskAction`). */
+function readsOnlyByDeclaration(tool: Pick<ToolView, 'name'> & Partial<Pick<ToolView, 'readOnly' | 'risk' | 'riskCategory'>>): boolean {
+  if (tool.risk === 'dangerous' || tool.riskCategory !== undefined) return false;
+  if (WRITE_VERB.test(tool.name)) return false;
+  return tool.readOnly === true || READ_SUFFIX.test(tool.name);
 }
 
 /**
@@ -229,7 +271,7 @@ export function classifyToolOutput(tool: ToolView, settings: Pick<InjectionGuard
     && tool.readOnly === true
     && tool.risk !== 'dangerous'
     && tool.riskCategory === undefined
-    && classifyHighRiskAction(tool) === undefined) return 'trusted';
+    && !hasOutputHighRiskCategory(tool)) return 'trusted';
   return 'external';
 }
 

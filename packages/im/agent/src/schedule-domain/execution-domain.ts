@@ -47,6 +47,12 @@ export interface ScheduleExecutionResult {
    * the model service was temporarily unavailable (network, 5xx, timeout), so a later retry may succeed.
    */
   modelFailure?: ScheduleModelFailure;
+  /**
+   * #1250 `scheduled-delivery-counts-as-background`: the run's turn completed without reading any
+   * recorded content (`TurnOutcome.contentProvenance`), and the job was not created after recorded
+   * content. Absent: its output may carry outside content.
+   */
+  contentClean?: true;
 }
 
 
@@ -295,6 +301,8 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
         : audit.success ? degraded ? 'degraded' : 'succeeded' : 'failed',
       ...(degraded ? { degraded } : {}),
       ...(modelFailure ? { modelFailure } : {}),
+      ...(outcome?.status === 'completed' && outcome.contentProvenance === 'clean' && !job.provenance && !guarded.terminatedBy
+        ? { contentClean: true as const } : {}),
     };
   }
 
