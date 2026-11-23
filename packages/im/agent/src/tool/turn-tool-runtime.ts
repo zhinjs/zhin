@@ -31,16 +31,25 @@ import {
   PROVENANCE_UNATTENDED_REASON,
   TurnProvenance,
   classifyHighRiskAction,
+  classifyToolFailure,
   classifyToolOutput,
   defaultHighRiskConfirmLevel,
-  formatProvenanceReason,
   highRiskConfirmLevel,
   resolveInjectionGuard,
   runWithTurnProvenance,
   stricterConfirmLevel,
   type InjectionGuardConfig,
   type InjectionGuardSettings,
+  type ProvenanceSource,
 } from '../security/provenance.js';
+import {
+  formatProvenanceCardReason,
+  highRiskRuleBasis,
+  highRiskRuleId,
+  provenanceSourceKinds,
+  type HighRiskRuleExplanation,
+} from '../security/high-risk-explain.js';
+import { createMessages, isLocale, type Locale } from '@zhin.js/plugin-runtime';
 import type { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import { safeSessionKey } from '../memory-layers.js';
@@ -65,6 +74,9 @@ import { logToolErrorResult, toolErrorResultMessage } from './tool-error-result.
 
 /** `TurnToolOutcome.denied.policy` for a merged-turn call that failed its `onBehalfOf` re-check. */
 export const MERGE_ON_BEHALF_POLICY = 'merge-on-behalf';
+
+/** #1250 b95: the rule and the source snapshot a provenance card showed, for its `tool_approval` row. */
+type ProvenanceAuditExplanation = Readonly<{ rule: HighRiskRuleExplanation; sources: readonly ProvenanceSource[] }>;
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -235,6 +247,17 @@ export class TurnToolRuntime {
     const provenanceGate = highRisk !== undefined
       && this.provenance.requiresConfirmation(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk));
     const denial: ApprovalDenialContext = { toolName: name, ...(highRisk ? { action: highRisk } : {}) };
+    // #1250 high-risk-rules-explain: which rule and which sources, for the card and the audit row only.
+    const rule: HighRiskRuleExplanation | undefined = highRisk === undefined ? undefined : Object.freeze({
+      kind: highRisk,
+      basis: highRiskRuleBasis(tool, highRisk),
+      level: highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk),
+      configuredLevel: this.#guard.confirmHighRisk[highRisk],
+    });
+    // #1250 b95 review: one snapshot of the sources for the card and its audit row, taken before the card
+    // waits, so a source another call records meanwhile appears in neither (it voids the answer instead).
+    const explanation: ProvenanceAuditExplanation | undefined = rule === undefined ? undefined
+      : Object.freeze({ rule, sources: this.provenance.sources });
     // A fresh human hard-gate approval, or an authority's provenance approval, covers the ordinary prompt.
     let authorizationRequired = decision.status === 'approval_required';
     if (hardGate.status === 'approved') {
@@ -244,7 +267,7 @@ export class TurnToolRuntime {
       // first, even when the configured policy would allow it outright.
       const blocked = this.#approvalBlocked('intent');
       if (blocked) {
-        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', { status: 'unavailable', reason: blocked });
+        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', { status: 'unavailable', reason: blocked }, explanation);
         return this.#deny(name, toolUseId, PROVENANCE_POLICY, `${blocked === 'unattended'
           ? PROVENANCE_UNATTENDED_REASON
           : PROVENANCE_NO_CHANNEL_REASON} ${formatApprovalBlocked(blocked, denial)}`, causedBy);
@@ -269,7 +292,14 @@ export class TurnToolRuntime {
         // ordinary approval to run).
         if (neededAuthority === undefined || confirmationCoversAuthority(covered, neededAuthority)) authorizationRequired = false;
       } else {
-        const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
+        const reason = formatProvenanceCardReason({
+          toolName: name,
+          rule: explanation!.rule,
+          sources: explanation!.sources,
+          initiator: resolveTurnTrustLevel(this.turn),
+          tainted: this.provenance.tainted,
+          ...(isLocale(this.turn.input.locale) ? { locale: this.turn.input.locale } : {}),
+        });
         const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
           ...(humanOnly ? { humanOnly: true } : {}),
           requestId: `${this.turn.identity.turnId}:${toolUseId}`,
@@ -285,12 +315,11 @@ export class TurnToolRuntime {
           // #1250 review: an admin's own answer may cover the call only when the call itself needs no
           // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
           ...(neededAuthority !== 'owner' ? { adminMayApprove: true } : { requiresOwner: true }),
-          question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain, this.provenance.tainted), effectiveInput,
-            humanOnly, tool.description),
+          question: formatApprovalQuestion(name, reason, effectiveInput, humanOnly, tool.description, this.turn.input.locale),
           signal: this.turn.signal,
         });
         if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
-        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval);
+        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval, explanation);
         if (approval.status !== 'approved') {
           return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval, denial), causedBy);
         }
@@ -311,7 +340,10 @@ export class TurnToolRuntime {
       if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.requiresConfirmation(
         stricterConfirmLevel(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk),
           defaultHighRiskConfirmLevel(name, highRisk)))) {
-        this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' });
+        this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' }, explanation && {
+          ...explanation,
+          rule: { ...explanation.rule, level: stricterConfirmLevel(explanation.rule.level, defaultHighRiskConfirmLevel(name, highRisk)) },
+        });
         return this.#deny(name, toolUseId, PROVENANCE_POLICY,
           `${PROVENANCE_UNATTENDED_REASON} ${formatApprovalBlocked('unattended', denial)}`, causedBy);
       }
@@ -342,7 +374,7 @@ export class TurnToolRuntime {
         purpose,
         ...(decision.requiresOwner ? { requiresOwner: true } : {}),
         ...(decision.adminMayApprove ? { adminMayApprove: true } : {}),
-        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool.description),
+        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool.description, this.turn.input.locale),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -436,6 +468,7 @@ export class TurnToolRuntime {
     policy: string,
     purpose: 'authorization' | 'intent',
     outcome: ApprovalOutcome | Readonly<{ status: 'unavailable'; reason: string }>,
+    explanation?: ProvenanceAuditExplanation,
   ): void {
     const sink = this.#decisionAudit;
     if (!sink) return;
@@ -465,6 +498,12 @@ export class TurnToolRuntime {
           channel: 'turn_prompt',
           ...(outcome.status === 'approved' ? { decision: outcome.decision, ...(outcome.scope ? { scope: outcome.scope } : {}) } : {}),
           ...(outcome.status === 'denied' ? { by: outcome.by } : {}),
+          // #1250 high-risk-rules-explain: metadata only (rule id, level, source kinds), never source content.
+          ...(explanation ? {
+            rule: highRiskRuleId(explanation.rule),
+            confirmLevel: explanation.rule.level,
+            sourceKinds: [...provenanceSourceKinds(explanation.sources)],
+          } : {}),
         },
         actor: 'system',
       });
@@ -477,10 +516,12 @@ export class TurnToolRuntime {
   /** Records where the result came from, and which parts are another session's memory. */
   #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown, reportedError = false): void {
     const source = classifyToolOutput(tool, this.#guard);
-    if (source !== 'none') {
+    // #1250 b98: a reported failure of a tool tagged `untrusted_failure` counts though its results do not.
+    if (source !== 'none' || (reportedError && classifyToolFailure(tool, this.#guard) === 'external')) {
       // #1250 F8: a reported failure (`{ error }`, MCP `isError`) may quote upstream text, as a thrown error does.
       const trusted = source === 'trusted' && !reportedError;
-      this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(trusted ? { trusted: true } : {}) });
+      this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(trusted ? { trusted: true } : {}),
+        ...(tool.mcpServer !== undefined ? { mcpServer: tool.mcpServer } : {}) });
     }
     if (this.#leakInspector && readsOtherSessionMemory(input, this.turn.session.key)) {
       this.#leakInspector.protectOtherSessionMemory(collectText(output));
@@ -491,12 +532,15 @@ export class TurnToolRuntime {
    * #1250 F8 (ADR 0067 D1): a thrown error's text reaches the model like a result, and often quotes the
    * other side (an HTTP reason phrase, a JSON-RPC error message, an upstream API's text). A tool whose output
    * counts therefore records the failure as external content, even one whose results count as trusted
-   * first-party output. Errors the harness wrote itself (cancellation, local policy refusals) are not sources.
+   * first-party output, and so does a tool tagged `untrusted_failure` whose results are trusted output
+   * (#1250 b98, `classifyToolFailure`). Errors the harness wrote itself (cancellation, local policy
+   * refusals) are not sources.
    */
   #observeFailure(tool: ToolCapability, error: unknown): void {
     if (isHarnessGeneratedError(error)) return;
-    if (classifyToolOutput(tool, this.#guard) === 'none') return;
-    this.provenance.record({ kind: 'tool_result', toolName: tool.name });
+    if (classifyToolFailure(tool, this.#guard) === 'none') return;
+    this.provenance.record({ kind: 'tool_result', toolName: tool.name,
+      ...(tool.mcpServer !== undefined ? { mcpServer: tool.mcpServer } : {}) });
   }
 
   async #deny(toolName: string, toolUseId: string, policy: string, reason: string, causedBy?: ToolExecutionCause): Promise<TurnToolOutcome> {
@@ -575,26 +619,37 @@ function hardGateLocation(turn: TurnIngress): ToolHardGateLocation {
   };
 }
 
+/** #1250 high-risk-rules-explain: field labels of the approval question, in the turn's display language. */
+const approvalQuestionMessages = createMessages({
+  command: { 'zh-CN': '命令：{value}', en: 'Command: {value}' },
+  cwd: { 'zh-CN': '工作目录：{value}', en: 'Working directory: {value}' },
+  path: { 'zh-CN': '目标文件：{value}', en: 'Target file: {value}' },
+  args: { 'zh-CN': '本次参数：{value}', en: 'Arguments: {value}' },
+  risk: { 'zh-CN': '风险：{value}', en: 'Risk: {value}' },
+});
+
 function formatApprovalQuestion(
   toolName: string,
   reason: string,
   input: Readonly<Record<string, unknown>>,
   humanOnly: boolean,
   description?: string,
+  locale?: Locale,
 ): string {
+  const label = (key: Parameters<typeof approvalQuestionMessages>[1], value: string) => approvalQuestionMessages(locale, key, { value });
   const command = typeof input.command === 'string' ? redactSecretText(input.command.trim()) : '';
   const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
   const path = ['file_path', 'path'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
   return [
     approvalActionLabel(toolName, description),
-    command ? `命令：${command}` : undefined,
-    cwd ? `工作目录：${cwd}` : undefined,
-    path ? `目标文件：${path}` : undefined,
+    command ? label('command', command) : undefined,
+    cwd ? label('cwd', cwd) : undefined,
+    path ? label('path', path) : undefined,
     humanOnly || (!command && !path && Object.keys(input).length > 0)
-      ? `本次参数：${stableApprovalValue(redactApprovalDisplay(input))}`
+      ? label('args', stableApprovalValue(redactApprovalDisplay(input)))
       : undefined,
     // #1250 review: policy reasons can quote the raw command (exec-policy); mask secrets like the arguments.
-    reason.startsWith('tool approval policy is ') ? undefined : `风险：${redactSecretText(reason)}`,
+    reason.startsWith('tool approval policy is ') ? undefined : label('risk', redactSecretText(reason)),
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
