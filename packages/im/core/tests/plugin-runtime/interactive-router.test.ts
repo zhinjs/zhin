@@ -119,6 +119,21 @@ describe('Interactive fallback numbering', () => {
     expect(router.resolvePayload(message('2'))).toBe('d:no');
   });
 
+  it('settles a keyboard sent on another conversation key than the one it was asked in (#1250 b90 review)', () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const thread = { ...conversation, id: `${conversation.id}-thread` };
+    expect(router.rememberFallback(thread, 1, { '1': 'a:yes', '2': 'a:no' })).toEqual({ '1': 'a:yes', '2': 'a:no' });
+    // Nothing in the asking conversation carries the payloads: every conversation is searched.
+    router.settleFallback(['a:yes', 'a:no'], conversation);
+    expect(router.rememberFallback(thread, 1, { '1': 'b:yes' })).toEqual({ '1': 'b:yes' });
+    // A match in the asking conversation does not settle another conversation's keyboard.
+    expect(router.rememberFallback(conversation, 1, { '1': 'c:yes' })).toEqual({ '1': 'c:yes' });
+    expect(router.rememberFallback(thread, 1, { '1': 'c:yes' })).toEqual({ '2': 'c:yes' });
+    router.settleFallback(['c:yes'], conversation);
+    expect(router.rememberFallback(thread, 1, { '1': 'd:yes' })).toEqual({ '3': 'd:yes' });
+    expect(router.rememberFallback(conversation, 1, { '1': 'e:yes' })).toEqual({ '1': 'e:yes' });
+  });
+
   it('survives HMR of an unrelated plugin while evicting when the owning plugin reloads', () => {
     const root = rootPluginId();
     const gamePlugin = childPluginId(root, 'game');

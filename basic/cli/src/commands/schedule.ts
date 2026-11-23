@@ -42,6 +42,16 @@ export type ScheduleWriteAction =
 
 const AGENT_NOT_FOUND = /Agent 不存在：(.+?)。可用的 Agent：(.*)$/u;
 
+/** Calendar kinds by lower-cased spelling: `--kind` is matched case-insensitively (#1250 b90). */
+const CRON_KINDS = new Map<string, string>([
+  ['solar', 'solar'], ['lunar', 'lunar'], ['workday', 'workday'], ['freeday', 'freeDay'], ['holiday', 'holiday'],
+]);
+const CRON_KIND_LIST = 'solar | lunar | workday | freeDay | holiday';
+
+/** Hint for a cron its calendar kind cannot evaluate (`schedule_invalid`, #1250 b90 review). */
+const SCHEDULE_INVALID_HINT = '工作日（workday）、休息日（freeDay）、节假日（holiday）计划只取 Cron 的时分秒，日、月、周三段须为 *（如 "0 0 9 * * *"）；'
+  + '改回公历（solar）时请用 --kind solar --cron 给出完整的 Cron（如 "0 0 9 * * 1-5"），原来的周一至周五不会自动恢复';
+
 function names(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((name): name is string => typeof name === 'string').map(name => name.trim()).filter(Boolean))];
@@ -88,6 +98,12 @@ export function describeScheduleRefusal(result: HostFetchResult<unknown>, action
     return [
       `无法创建任务：你没有权限向投递目标发消息${need}`,
       '请让管理员授予你该账号的 endpoint.operate 权限，或用 --target 改投你有权限的账号',
+    ];
+  }
+  if (code === 'schedule_invalid') {
+    return [
+      action.kind === 'add' ? `无法创建任务：${message}` : `无法修改任务 ${action.id}：${message}`,
+      SCHEDULE_INVALID_HINT,
     ];
   }
   const parsed = AGENT_NOT_FOUND.exec(message);
@@ -169,7 +185,7 @@ function scheduleSummary(s: JobScheduleCli): string {
     if (h < 24) return `every ${h}h`;
     return `every ${h / 24}d`;
   }
-  // The Host may also return kinds the CLI cannot create (holiday/scatter/event).
+  // The Host may also return kinds the CLI cannot create (scatter/event).
   return `${s.kind} ${(s as { cron?: string }).cron ?? ''}`.trimEnd();
 }
 
@@ -228,7 +244,7 @@ const addCommand = new Command('add')
   .argument('[cronExpression]', 'Cron 表达式，如 "0 0 9 * * *"（与 --at/--every 二选一）')
   .option('--prompt <prompt>', '到点触发时发给 AI 的提示词（必填）')
   .option('-l, --label <label>', '可选标签')
-  .option('--kind <kind>', 'solar|lunar|workday|freeDay（默认 solar）', 'solar')
+  .option('--kind <kind>', 'solar|lunar|workday|freeDay|holiday（不区分大小写，默认 solar）', 'solar')
   .option('--notify-channel <channel>', '结果投递：im | silent | log（默认 silent；指定 --target 时为 im）')
   .option('--target <target>', 'im 投递目标 <adapter>:<endpoint>:<kind>:<id>，kind 为 private | group | channel；省略时沿用 assistant / profile 的 defaults.notify')
   .option('--at <iso8601>', '单次执行时间，ISO8601')
@@ -281,9 +297,9 @@ const addCommand = new Command('add')
           logger.error('请提供 Cron 表达式，或使用 --at / --every');
           process.exit(1);
         }
-        const kind = (opts.kind ?? 'solar').trim() as JobScheduleCli['kind'];
-        if (!['solar', 'lunar', 'workday', 'freeDay'].includes(kind)) {
-          logger.error('--kind 无效');
+        const kind = CRON_KINDS.get((opts.kind ?? 'solar').trim().toLowerCase()) as JobScheduleCli['kind'] | undefined;
+        if (!kind) {
+          logger.error(`--kind 无效，可选 ${CRON_KIND_LIST}`);
           process.exit(1);
         }
         const cron = normalizeCronExpression(cronExpression);
@@ -322,7 +338,8 @@ const updateCommand = new Command('update')
   .argument('<id>', '任务 ID')
   .argument('[cronExpression]', '新的 Cron 表达式（与 --cron 相同）')
   .option('--cron <expression>', '新的 Cron 表达式，如 "0 0 8 * * *"；省略 --kind 时沿用任务原来的计划类型')
-  .option('--kind <kind>', '新的计划类型 solar|lunar|workday|freeDay；省略 --cron 时沿用原来的 Cron')
+  .option('--kind <kind>', '新的计划类型 solar|lunar|workday|freeDay|holiday（不区分大小写）；省略 --cron 时沿用原来的 Cron。'
+    + '从 workday 等改回 solar 时请同时给出完整的 --cron（原来的周一至周五不会恢复）')
   .option('--at <iso8601>', '改为单次执行，ISO8601')
   .option('--every <interval>', '改为固定间隔，如 30m, 1h, 1d')
   .option('-l, --label <label>', '新标签；传空字符串清除标签')
@@ -353,9 +370,9 @@ const updateCommand = new Command('update')
       process.exit(1);
     }
 
-    const kind = opts.kind?.trim();
-    if (kind !== undefined && !['solar', 'lunar', 'workday', 'freeDay'].includes(kind)) {
-      logger.error('--kind 无效，可选 solar | lunar | workday | freeDay');
+    const kind = opts.kind === undefined ? undefined : CRON_KINDS.get(opts.kind.trim().toLowerCase());
+    if (opts.kind !== undefined && !kind) {
+      logger.error(`--kind 无效，可选 ${CRON_KIND_LIST}`);
       process.exit(1);
     }
     const atMs = opts.at === undefined ? undefined : new Date(opts.at).getTime();
@@ -389,7 +406,7 @@ const updateCommand = new Command('update')
       process.exit(1);
     }
 
-    const data = await requireOk(await hostPost<{ job?: ScheduleJobRecordCli }>(
+    const data = await requireOk(await hostPost<{ job?: ScheduleJobRecordCli; warning?: string }>(
       await requireHost(),
       '/assistant/jobs/update',
       { id, ...(schedule ? { schedule } : {}), ...(label !== undefined ? { label } : {}), ...(enabled !== undefined ? { enabled } : {}) },
@@ -401,6 +418,8 @@ const updateCommand = new Command('update')
     if (job?.label) output.line(`  标签:   ${job.label}`);
     const next = job?.state ? nextRunSummary(job) : undefined;
     if (next) output.line(`  下次:   ${next}`);
+    // Saved, but enabled without a next run: it will not fire until changed (#1250 b90 review).
+    if (typeof data?.warning === 'string' && data.warning) logger.warn(data.warning);
   });
 
 const removeCommand = new Command('remove')

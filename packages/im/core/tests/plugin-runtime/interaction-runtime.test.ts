@@ -213,6 +213,114 @@ describe('UserInteraction via ImRuntime', () => {
     }
   });
 
+  it('keeps the native buttons of the card on screen answering through the reminder phase (#1250 b90 review)', async () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const interactions = new RuntimeInteractionCoordinator(router);
+    const conversation = { endpoint: { adapter: 'test', id: 'main' }, kind: 'private' as const, id: 'alice' };
+    const cards: string[][] = [];
+    const texts: string[] = [];
+    const reply = vi.fn(async (content: unknown) => {
+      const payloads = [...new Set([...JSON.stringify(content).matchAll(/zhin:ask:[^"\\]+/gu)].map(match => match[0]))];
+      if (payloads.length) cards.push(payloads);
+      else texts.push(JSON.stringify(content));
+      return { status: 'sent' as const };
+    });
+    const message = (content: string, segments?: Message['segments']) =>
+      new Message({ conversation, content, sender: { id: 'alice' }, ...(segments ? { segments } : {}) }, { generation: 1, reply });
+    const press = (payload: string) => message('', [{ type: 'action', data: { payload } }]);
+    const abort = new AbortController();
+    try {
+      const answer = interactions.create(message('go')).ask({
+        type: 'select', title: '确认', options: [{ label: '允许', value: 'yes' }, { label: '拒绝', value: 'no' }], signal: abort.signal,
+      });
+      await vi.waitFor(() => expect(cards).toHaveLength(1));
+      // First invalid answer: the card is sent again with new actions.
+      await vi.waitFor(() => expect(interactions.resolveClaim(message('9'))).toBe(true));
+      await vi.waitFor(() => expect(cards).toHaveLength(2));
+      expect(cards[1]).not.toEqual(cards[0]);
+      // Second invalid answer: a reminder only; the second card stays on screen.
+      const before = texts.length;
+      await vi.waitFor(() => expect(interactions.resolveClaim(message('9'))).toBe(true));
+      await vi.waitFor(() => expect(texts.length).toBeGreaterThan(before));
+      expect(cards).toHaveLength(2);
+      // The first card was replaced: its button no longer answers.
+      expect(interactions.resolveClaim(press(cards[0]![0]!))).toBe(false);
+      // The button of the card on screen still answers (it used to be told the question expired).
+      await vi.waitFor(() => expect(interactions.resolveClaim(press(cards[1]![1]!))).toBe(true));
+      await expect(answer).resolves.toBe('no');
+    } finally {
+      abort.abort();
+    }
+  });
+
+  describe('settles the card when the question ends, also when it went out on another conversation key (#1250 b90 review)', () => {
+    const source = { endpoint: { adapter: 'test', id: 'main' }, kind: 'group' as const, id: 'room' };
+    // The renderer delivered the card on a different conversation key (e.g. a thread of the room).
+    const outbound = { ...source, id: 'room-thread' };
+    const select = (signal: AbortSignal, extra: Record<string, unknown> = {}) => ({
+      type: 'select' as const, title: '确认', options: [{ label: '允许', value: 'yes' }, { label: '拒绝', value: 'no' }], signal, ...extra,
+    });
+    function fixture() {
+      const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+      const interactions = new RuntimeInteractionCoordinator(router);
+      const labels: Record<string, string>[] = [];
+      const reply = vi.fn(async (content: unknown) => {
+        const payloads = [...new Set([...JSON.stringify(content).matchAll(/zhin:ask:[^"\\]+/gu)].map(match => match[0]))];
+        if (payloads.length) labels.push(router.rememberFallback(outbound, 1, Object.fromEntries(payloads.map((payload, index) => [String(index + 1), payload]))));
+        return { status: 'sent' as const };
+      });
+      const from = (sender: string, content: string) => new Message({ conversation: source, content, sender: { id: sender } }, { generation: 1, reply });
+      // Nothing waits there any more: the next keyboard starts at 1 again.
+      const restartsAtOne = () => expect(router.rememberFallback(outbound, 1, { '1': 'probe:a' })).toEqual({ '1': 'probe:a' });
+      return { interactions, labels, from, restartsAtOne };
+    }
+
+    it('on timeout', async () => {
+      const { interactions, labels, from, restartsAtOne } = fixture();
+      const abort = new AbortController();
+      try {
+        const outcome = interactions.create(from('alice', 'go')).ask(select(abort.signal, { timeout: 50 })).catch(error => error);
+        await vi.waitFor(() => expect(labels).toHaveLength(1));
+        expect((await outcome)?.constructor?.name).toBe('UserInteractionTimeoutError');
+        restartsAtOne();
+      } finally {
+        abort.abort();
+      }
+    });
+
+    it('on cancel', async () => {
+      const { interactions, labels, from, restartsAtOne } = fixture();
+      const abort = new AbortController();
+      try {
+        const outcome = interactions.create(from('alice', 'go')).ask(select(abort.signal)).catch(error => error);
+        await vi.waitFor(() => expect(labels).toHaveLength(1));
+        await vi.waitFor(() => expect(interactions.resolveClaim(from('alice', '取消'))).toBe(true));
+        expect((await outcome)?.constructor?.name).toBe('UserInteractionCancelledError');
+        restartsAtOne();
+      } finally {
+        abort.abort();
+      }
+    });
+
+    it('when a new question replaces it', async () => {
+      const { interactions, labels, from, restartsAtOne } = fixture();
+      const abort = new AbortController();
+      try {
+        const first = interactions.create(from('alice', 'go')).ask(select(abort.signal)).catch(error => error);
+        await vi.waitFor(() => expect(labels).toHaveLength(1));
+        const second = interactions.create(from('alice', 'again')).ask(select(abort.signal));
+        expect((await first)?.constructor?.name).toBe('UserInteractionSupersededError');
+        await vi.waitFor(() => expect(labels).toHaveLength(2));
+        await vi.waitFor(() => expect(interactions.resolveClaim(from('alice', '允许'))).toBe(true));
+        await expect(second).resolves.toBe('yes');
+        // Both the replaced card and the answered one are settled.
+        restartsAtOne();
+      } finally {
+        abort.abort();
+      }
+    });
+  });
+
   async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean; detached?: boolean } = {}) {
     const sent: unknown[] = [];
     const events: string[] = [];

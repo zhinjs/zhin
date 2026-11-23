@@ -240,14 +240,51 @@ function buildScheduleUpdate(args: Record<string, unknown>, current: JobSchedule
     return { kind: 'at', atMs: Date.now() + delay * 60 * 1000, deleteAfterRun: true };
   }
   if (kindArg === 'at') return { error: '改为一次性任务请提供 delay_minutes（从现在起延迟的分钟数）' };
-  const currentCron = 'cron' in current ? current : undefined;
-  const cron = given(args.cron) ? String(args.cron) : currentCron?.cron;
-  if (!cron) return { error: '该任务当前不是 cron 计划：请同时提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
+  const built = buildCronJobSchedule({ kind: kindArg, cron: given(args.cron) ? String(args.cron) : undefined }, current);
+  return 'error' in built ? { error: built.error } : built;
+}
+
+/** Lower-cased spelling → canonical calendar kind (#1250 b90). */
+const CRON_SCHEDULE_KINDS = new Map<string, CronScheduleKind>([
+  ['solar', 'solar'], ['lunar', 'lunar'], ['workday', 'workday'], ['freeday', 'freeDay'], ['holiday', 'holiday'],
+]);
+
+/** Why `buildCronJobSchedule` refused: a bad input, or a cron the kind cannot evaluate. */
+export type CronJobScheduleErrorCode = 'invalid_argument' | 'schedule_invalid';
+
+/**
+ * A calendar (cron) schedule built and checked the way `schedule_update` does it (#1250 b90), for
+ * the tool and the `POST /assistant/jobs[/update]` routes alike. `kind` is matched case-insensitively
+ * (`solar | lunar | workday | freeDay | holiday`); with `current` (an update), a missing `cron` keeps
+ * the job's cron, a missing `kind` keeps its calendar kind (and time zone, holiday settings). An
+ * explicit or kept kind is taken as is (a solar job given `1-5` stays solar); only without one is a
+ * Monday–Friday cron read as workday. Calendar kinds keep only the time of the cron (`0 0 9 * * 1-5`
+ * as workday is `0 0 9 * * *`). The result is evaluated like the scheduler evaluates it, so a cron
+ * that could never fire is an error, not a stored job.
+ */
+export function buildCronJobSchedule(
+  input: Readonly<{ kind?: string; cron?: string }>,
+  current?: JobSchedule,
+): JobSchedule | { error: string; code: CronJobScheduleErrorCode } {
+  const kindRaw = input.kind?.trim() || undefined;
+  const kindArg = kindRaw === undefined ? undefined : CRON_SCHEDULE_KINDS.get(kindRaw.toLowerCase());
+  if (kindRaw !== undefined && kindArg === undefined) {
+    return { error: `计划类型无效: ${kindRaw}，可选 solar | lunar | workday | freeDay | holiday`, code: 'invalid_argument' };
+  }
+  const currentCron = current && 'cron' in current ? current : undefined;
+  const cron = input.cron?.trim() || currentCron?.cron;
+  if (!cron) {
+    return {
+      error: current
+        ? '该任务当前不是 cron 计划：请同时提供 6 段 cron 表达式（秒 分 时 日 月 周）'
+        : '请提供 6 段 cron 表达式（秒 分 时 日 月 周）',
+      code: 'invalid_argument',
+    };
+  }
   const kind = kindArg ?? currentCron?.kind;
-  // An explicit or kept kind is taken as is: a solar job given `1-5` stays solar (#1250 b90).
   const built = buildJobScheduleFromCronInput(kind, cron, currentCron?.tz, { inferWorkday: kind === undefined });
-  if ('error' in built) return built;
-  const schedule: JobSchedule = built.kind === 'holiday' && current.kind === 'holiday'
+  if ('error' in built) return { error: built.error, code: 'invalid_argument' };
+  const schedule: JobSchedule = built.kind === 'holiday' && current?.kind === 'holiday'
     ? {
         ...built,
         ...(current.festivals ? { festivals: current.festivals } : {}),
@@ -255,7 +292,7 @@ function buildScheduleUpdate(args: Record<string, unknown>, current: JobSchedule
       }
     : built;
   const invalid = cronScheduleError(schedule);
-  return invalid ? { error: invalid } : schedule;
+  return invalid ? { error: invalid, code: 'schedule_invalid' } : schedule;
 }
 
 /**

@@ -7,7 +7,40 @@ import { consoleFeatureDisabled, type ConsoleApiErrorCode, type ConsoleFeatureDi
 import { expectedErrorResponse, internalErrorResponse } from './internal-error.js';
 import { describeScheduleTarget, parseScheduleTargetSpec, type ScheduleEndpointLookup } from './schedule-target.js';
 
-const CRON_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay']);
+/** Lower-cased spelling → canonical calendar kind: matched case-insensitively, like `schedule_update` (#1250 b90). */
+const CRON_KINDS = new Map([
+  ['solar', 'solar'], ['lunar', 'lunar'], ['workday', 'workday'], ['freeday', 'freeDay'], ['holiday', 'holiday'],
+]);
+const SCHEDULE_KIND_LIST = 'solar | lunar | workday | freeDay | holiday | every | at';
+
+/**
+ * `buildCronJobSchedule` of `@zhin.js/agent` (#1250 b90 review): the calendar schedule built and
+ * evaluated exactly like `schedule_update` does it. Loaded on first use (the Agent package is an
+ * optional peer; these routes only run while its assistant is live); `undefined` from an older
+ * Agent package without it, which keeps the cron syntax check below.
+ */
+type CronScheduleBuilder = (
+  input: Readonly<{ kind?: string; cron?: string }>,
+  current?: Record<string, unknown>,
+) => Record<string, unknown> | { error: string; code: string };
+let cronScheduleBuilder: Promise<CronScheduleBuilder | undefined> | undefined;
+function loadCronScheduleBuilder(): Promise<CronScheduleBuilder | undefined> {
+  cronScheduleBuilder ??= import('@zhin.js/agent').then(
+    (agent) => {
+      const build = (agent as { buildCronJobSchedule?: unknown }).buildCronJobSchedule;
+      return typeof build === 'function' ? build as CronScheduleBuilder : undefined;
+    },
+    () => undefined,
+  );
+  return cronScheduleBuilder;
+}
+
+/** A refused calendar schedule: `schedule_invalid` when the cron cannot be evaluated for its kind. */
+function cronScheduleError(built: { error: string; code: string }): AssistantJobInputError {
+  return { error: built.error, code: built.code === 'schedule_invalid' ? 'schedule_invalid' : 'invalid_argument' };
+}
+
+const WARNING_NO_NEXT_RUN = '任务已启用，但按新计划算不出下次运行时间，它不会自动执行；请检查 cron 或改用其他计划';
 const NOTIFY_CHANNELS = new Set(['im', 'silent', 'log']);
 /** Legacy error string of a disabled assistant; `zhin schedule` (older CLIs too) matches it. */
 export const ASSISTANT_DISABLED_ERROR = 'assistant.enabled is false';
@@ -44,7 +77,9 @@ export type AssistantJobInputErrorCode =
   | 'schedule_target_forbidden'
   | 'schedule_agent_not_found'
   | 'schedule_agent_heartbeat'
-  | 'schedule_agent_profile';
+  | 'schedule_agent_profile'
+  /** #1250 b90 review: a cron its calendar kind cannot evaluate (e.g. workday with `1-5` or `30 2`). */
+  | 'schedule_invalid';
 
 const DEFAULT_AGENT = 'zhin';
 
@@ -88,35 +123,47 @@ function parseTarget(value: unknown): { target?: Record<string, unknown> } | { e
   return { target: { channel: 'im', scene: { platform, endpointKey, sceneId, kind } } };
 }
 
-/** `schedule` of a job body: `at` / `every`, or a cron kind with a valid cron. */
+/**
+ * `schedule` of a job body: `at` / `every`, or a calendar kind (case-insensitive) with a cron that
+ * kind can evaluate (`buildCron`; without it, a cron syntax check only).
+ */
 function parseScheduleBody(
   input: Record<string, unknown>,
   now: number,
+  buildCron?: CronScheduleBuilder,
 ): { schedule: Record<string, unknown> } | AssistantJobInputError {
-  if (input.kind === 'at') {
+  const kind = typeof input.kind === 'string' ? input.kind.trim().toLowerCase() : undefined;
+  if (kind === 'at') {
     const atMs = input.atMs;
     if (typeof atMs !== 'number' || !Number.isSafeInteger(atMs) || atMs <= now) {
       return invalidInput('执行时间（schedule.atMs）必须是未来的时间');
     }
     return { schedule: { kind: 'at', atMs, deleteAfterRun: true } };
   }
-  if (input.kind === 'every') {
+  if (kind === 'every') {
     const everyMs = input.everyMs;
     if (typeof everyMs !== 'number' || !Number.isSafeInteger(everyMs) || everyMs < 1000) {
       return invalidInput('执行间隔（schedule.everyMs）必须是不小于 1000 的整数毫秒');
     }
     return { schedule: { kind: 'every', everyMs } };
   }
-  if (typeof input.kind === 'string' && CRON_KINDS.has(input.kind)) {
+  const cronKind = kind === undefined ? undefined : CRON_KINDS.get(kind);
+  if (cronKind) {
     const cron = typeof input.cron === 'string' ? input.cron.trim() : '';
+    if (buildCron) {
+      const built = buildCron({ kind: cronKind, cron });
+      return 'error' in built && typeof built.error === 'string'
+        ? cronScheduleError(built as { error: string; code: string })
+        : { schedule: built };
+    }
     try {
       parseCron(cron);
     } catch (error) {
       return invalidInput(`Cron 表达式无效: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return { schedule: { kind: input.kind, cron } };
+    return { schedule: { kind: cronKind, cron } };
   }
-  return invalidInput('计划类型（schedule.kind）只能是 solar | lunar | workday | freeDay | every | at');
+  return invalidInput(`计划类型（schedule.kind）只能是 ${SCHEDULE_KIND_LIST}`);
 }
 
 /**
@@ -128,11 +175,25 @@ function parseScheduleUpdateBody(
   input: Record<string, unknown>,
   current: Record<string, unknown>,
   now = Date.now(),
+  buildCron?: CronScheduleBuilder,
 ): { schedule: Record<string, unknown> } | AssistantJobInputError {
-  if (input.kind === 'at' || input.kind === 'every') return parseScheduleBody(input, now);
-  if (input.kind !== undefined && (typeof input.kind !== 'string' || !CRON_KINDS.has(input.kind))) {
-    return parseScheduleBody(input, now);
+  // `at` / `every`, or an unknown kind (refused there).
+  if (input.kind !== undefined && (typeof input.kind !== 'string' || !CRON_KINDS.has(input.kind.trim().toLowerCase()))) {
+    return parseScheduleBody(input, now, buildCron);
   }
+  if (buildCron) {
+    // The same construction and evaluation as `schedule_update`: a kept or explicit kind is taken as
+    // is, calendar kinds keep only the time of the cron, and a cron that could never fire is a 400.
+    const built = buildCron({
+      ...(typeof input.kind === 'string' ? { kind: input.kind } : {}),
+      ...(typeof input.cron === 'string' && input.cron.trim() ? { cron: input.cron } : {}),
+    }, current);
+    return 'error' in built && typeof built.error === 'string'
+      ? cronScheduleError(built as { error: string; code: string })
+      : { schedule: built };
+  }
+  // Older Agent package: cron syntax only.
+  const canonicalKind = typeof input.kind === 'string' ? CRON_KINDS.get(input.kind.trim().toLowerCase()) : undefined;
   const currentCron = typeof current.cron === 'string' ? current.cron : undefined;
   const cron = typeof input.cron === 'string' && input.cron.trim() ? input.cron : currentCron;
   if (!cron) return invalidInput('该任务当前不是 cron 计划：请同时提供 Cron 表达式（schedule.cron）');
@@ -144,7 +205,7 @@ function parseScheduleUpdateBody(
     }
     return { schedule: { ...current, cron: cron.trim() } };
   }
-  const kind = input.kind ?? (typeof current.kind === 'string' && CRON_KINDS.has(current.kind) ? current.kind : 'solar');
+  const kind = canonicalKind ?? (typeof current.kind === 'string' && CRON_KINDS.has(current.kind.toLowerCase()) ? current.kind : 'solar');
   const parsed = parseScheduleBody({ kind, cron }, now);
   if ('error' in parsed) return parsed;
   const tz = currentCron !== undefined && typeof current.tz === 'string' ? current.tz : undefined;
@@ -155,6 +216,7 @@ function parseScheduleUpdateBody(
 export function parseAssistantJobInput(
   body: unknown,
   now = Date.now(),
+  buildCron?: CronScheduleBuilder,
 ): { job: Record<string, unknown> } | AssistantJobInputError {
   const data = record(body);
   const prompt = typeof data.prompt === 'string' ? data.prompt.trim() : '';
@@ -165,7 +227,7 @@ export function parseAssistantJobInput(
   }
   const target = channel === 'im' ? parseTarget(record(data.notify).target) : {};
   if ('error' in target) return { error: target.error, code: 'schedule_target_invalid' };
-  const schedule = parseScheduleBody(record(data.schedule), now);
+  const schedule = parseScheduleBody(record(data.schedule), now, buildCron);
   if ('error' in schedule) return schedule;
   const label = typeof data.label === 'string' && data.label.trim() ? data.label.trim() : undefined;
   if (data.agent !== undefined && data.agent !== null && typeof data.agent !== 'string') {
@@ -256,7 +318,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
   };
 
   http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body, principal) => {
-    const parsed = parseAssistantJobInput(body);
+    const parsed = parseAssistantJobInput(body, Date.now(), await loadCronScheduleBuilder());
     if ('error' in parsed) {
       return { status: 400, body: { success: false, error: parsed.error, code: parsed.code } };
     }
@@ -398,7 +460,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     }
     const update: { schedule?: Record<string, unknown>; label?: string | null; enabled?: boolean } = {};
     if (hasSchedule) {
-      const schedule = parseScheduleUpdateBody(record(data.schedule), record(existing.schedule));
+      const schedule = parseScheduleUpdateBody(record(data.schedule), record(existing.schedule), Date.now(), await loadCronScheduleBuilder());
       if ('error' in schedule) return { status: 400, body: { success: false, error: schedule.error, code: schedule.code } };
       update.schedule = schedule.schedule;
     }
@@ -410,9 +472,19 @@ export function registerAssistantJobRoutes(options: Readonly<{
     const notify = record(existing.notify);
     const target = notify.channel === 'im' ? notify.target : undefined;
     if (runs && target && !mayDeliverTo(principal, target)) return { status: 403, body: targetForbiddenBody(target) };
-    const job = await jobs.update(id, update);
-    return job
-      ? { status: 200, body: { success: true, data: { job } } }
-      : { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
+    let job: Record<string, unknown> | null;
+    try {
+      job = await jobs.update(id, update);
+    } catch (error) {
+      // The scheduler refuses a schedule it cannot evaluate before changing anything: a 400.
+      if ((error as { code?: unknown } | null)?.code === 'schedule_invalid') {
+        return { status: 400, body: { success: false, code: 'schedule_invalid', error: `计划无效，任务未修改: ${error instanceof Error ? error.message : String(error)}` } };
+      }
+      throw error;
+    }
+    if (!job) return { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
+    // Enabled but never firing (e.g. a cron date that does not exist): saved, but say so, like the tool.
+    const stuck = job.enabled === true && typeof record(job.state).nextRunAtMs !== 'number' && record(job.schedule).kind !== 'event';
+    return { status: 200, body: { success: true, data: { job, ...(stuck ? { warning: WARNING_NO_NEXT_RUN } : {}) } } };
   }), { summary: 'Update the schedule, label or enabled state of an assistant job', tags: ['assistant'] });
 }

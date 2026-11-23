@@ -315,6 +315,92 @@ describe('TimerScheduler.updateJob vs. timers and running jobs (#1250 b90 review
     expect(shanghaiTime(state.nextRunAtMs!)).toBe('07:30');
   });
 
+  /**
+   * #1250 b90 review M-a: runs `change` right after the run's own `method` store call returns (its
+   * re-read of the job, or its state write), and lets it go as far as it can before the run goes on.
+   * Without the per-job lock the change completes in that window; with it, it waits for the run's
+   * remaining writes and is applied after them.
+   */
+  function interleaveAfterRun(method: 'getJob' | 'updateJobState', change: () => Promise<unknown>): () => Promise<unknown> {
+    const original = store[method].bind(store) as (...args: unknown[]) => Promise<unknown>;
+    let pending: Promise<unknown> | undefined;
+    vi.spyOn(store, method).mockImplementation((async (...args: unknown[]) => {
+      const value = await original(...args);
+      if (!pending) {
+        pending = change();
+        await Promise.race([pending, new Promise(resolve => setTimeout(resolve, 50))]);
+      }
+      return value;
+    }) as never);
+    return () => pending ?? Promise.resolve();
+  }
+
+  for (const method of ['getJob', 'updateJobState'] as const) {
+    it(`never leaves a one-shot job changed right after the run's ${method} half removed`, async () => {
+      await engine.addJob({ id: 'once', enabled: true, source: 'schedule', schedule: { kind: 'at', atMs: Date.now() + 60 * 60_000, deleteAfterRun: true },
+        action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+      const running = run('once');
+      await started;
+      const changed = interleaveAfterRun(method, () => engine.updateJob('once', { schedule: { kind: 'solar', cron: '0 0 8 * * *' } }));
+      release();
+      await running;
+      // The change waited for the finished one-shot's removal and then found no job: it says so
+      // (`null`: no such job) instead of answering success for a job that was then deleted with the
+      // new timer it had registered.
+      await expect(changed()).resolves.toBeNull();
+      vi.restoreAllMocks();
+      expect(await store.getJob('once')).toBeUndefined();
+      const asCron = { id: 'once', enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' }, state: {} } as never;
+      expect(engine.nextRunAt(asCron)).toBeUndefined();
+      expect(engine.listUnschedulable()).toEqual([]);
+    });
+
+    it(`records the new cron's next run when it changes right after the run's ${method}`, async () => {
+      await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+        action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+      const running = run('daily');
+      await started;
+      const changed = interleaveAfterRun(method, () => engine.updateJob('daily', { schedule: { kind: 'solar', cron: '0 30 7 * * *' } }));
+      release();
+      await running;
+      await changed();
+      vi.restoreAllMocks();
+      const job = (await store.getJob('daily'))!;
+      expect(job.state.lastStatus).toBe('ok');
+      expect(shanghaiTime(job.state.nextRunAtMs!)).toBe('07:30');
+      expect(engine.nextRunAt(job)).toBe(job.state.nextRunAtMs);
+    });
+
+    it(`leaves a job paused right after the run's ${method} without a next run`, async () => {
+      await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+        action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+      const running = run('daily');
+      await started;
+      const changed = interleaveAfterRun(method, () => engine.pauseJob('daily'));
+      release();
+      await running;
+      await changed();
+      vi.restoreAllMocks();
+      const job = (await store.getJob('daily'))!;
+      expect(job.enabled).toBe(false);
+      expect(job.state.lastStatus).toBe('ok');
+      expect(job.state.nextRunAtMs).toBeUndefined();
+    });
+  }
+
+  it('does not hold a change made while the job runs until the run ends', async () => {
+    await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const running = run('daily');
+    await started;
+    // The Agent turn is still running (gate closed): the change goes through right away.
+    const updated = await engine.updateJob('daily', { label: '早上' });
+    expect(updated?.label).toBe('早上');
+    release();
+    await running;
+    expect((await store.getJob('daily'))?.label).toBe('早上');
+  });
+
   it('keeps the timer of an `every` job when only the label changes', async () => {
     await engine.addJob({ id: 'tick', enabled: true, source: 'schedule', schedule: { kind: 'every', everyMs: 60 * 60_000 },
       action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });

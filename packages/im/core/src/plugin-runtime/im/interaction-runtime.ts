@@ -62,6 +62,12 @@ interface InteractionClaimRequest {
   readonly classify?: (raw: string, action: boolean) => boolean;
   /** Plugin that asked, when known. */
   readonly owner?: string;
+  /**
+   * Claim id to reuse (#1250 b90 review): a reminder re-claims the question without sending its
+   * card again, so the card on screen keeps its `zhin:ask:<id>:<index>` actions and its native
+   * buttons still answer. Absent: a new id, for a card that is (re)sent.
+   */
+  readonly id?: string;
 }
 
 /** Authority belongs to the participant and captured operation, never to rendered text. */
@@ -75,6 +81,8 @@ interface InteractionClaimAuthority {
 }
 
 interface UserInteractionClaim {
+  /** Id of the claim's actions (`zhin:ask:<id>:<index>`). */
+  readonly id: string;
   readonly generation?: number;
   readonly incarnation?: PluginIncarnationRef;
   readonly isLiveFor: (generation: number, currentSnapshot?: RuntimeSnapshot) => boolean;
@@ -466,24 +474,30 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       // conversation's button numbers until a new card replaces it or the question really ends
       // (answered, cancelled, timed out, superseded).
       let shown: readonly string[] = [];
+      // Claim id of the card on screen: a reminder re-claims with it, so that card's native buttons
+      // keep answering instead of being told they expired (#1250 b90 review).
+      let shownId: string | undefined;
       const settleShown = () => {
         if (shown.length) this.#router.settleFallback(shown, source.conversation);
         shown = [];
       };
       try {
         while (true) {
+          const resend = invalidAnswers <= 1;
           const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions, classify,
-            ...(operation?.owner ? { owner: String(operation.owner) } : {}) }, {
+            ...(operation?.owner ? { owner: String(operation.owner) } : {}),
+            ...(!resend && shownId !== undefined ? { id: shownId } : {}) }, {
             conversation: source.conversation, subjectId: answeredBy ?? subjectId ?? source.sender?.id ?? '',
             generation: source.generation, signal: request.signal, operation, source: retained,
           });
           try {
             claim.check();
-            if (invalidAnswers <= 1) {
+            if (resend) {
               const actions = [...claim.actions.keys()];
               // The new card replaces the previous one, which no longer waits for an answer.
               settleShown();
               shown = actions;
+              shownId = claim.id;
               const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
               assertLifetime();
               if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
@@ -587,7 +601,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const { conversation, subjectId, generation: sourceGeneration, signal, operation, source } = authority;
     const key = `${conversationRefKey(conversation)}:${subjectId}`;
     this.#claims.get(key)?.reject(new UserInteractionSupersededError());
-    const id = randomUUID();
+    const id = request.id ?? randomUUID();
     const generation = operation?.snapshot.generation ?? sourceGeneration;
     const incarnation: PluginIncarnationRef | undefined = operation
       ? {
@@ -634,6 +648,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       return source ? !source.signal.aborted : generation === candidate;
     };
     const claim: UserInteractionClaim = {
+      id,
       generation,
       ...(incarnation ? { incarnation } : {}),
       isLiveFor,
