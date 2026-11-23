@@ -373,11 +373,6 @@ export class TurnProvenance {
   }
 
   /**
-   * #1250: one key per recorded source (`tool:<name>`, `conversation_context`, ...), with `:trusted` for
-   * a source recorded only as trusted first-party output. A confirmation given in this turn covers later
-   * calls only while no new key appears and `contentEntries` has not grown (see `TurnHighRiskConfirmations`).
-   */
-  /**
    * #1250: how many times external content entered this turn (only grows). A source key names only the
    * tool, so a second `web_fetch` of another page adds no key; this count grows with every external
    * result (and when a trusted source becomes external), and a confirmation covers later calls only
@@ -387,6 +382,11 @@ export class TurnProvenance {
     return this.#contentEntries;
   }
 
+  /**
+   * #1250: one key per recorded source (`tool:<name>`, `conversation_context`, ...), with `:trusted` for
+   * a source recorded only as trusted first-party output. A confirmation given in this turn covers later
+   * calls only while no new key appears and `contentEntries` has not grown (see `TurnHighRiskConfirmations`).
+   */
   get sourceKeys(): readonly string[] {
     return Object.freeze(this.#sources.map(source => source.kind === 'tool_result' && source.trusted === true
       ? `${sourceKey(source)}:trusted` : sourceKey(source)));

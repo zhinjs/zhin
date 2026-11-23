@@ -410,6 +410,16 @@ describe('TurnHighRiskConfirmations', () => {
       .not.toBe(highRiskConfirmationTarget(tool, 'config', { id: 'x', value: 1, field: 'b' }));
   });
 
+  it.each(['prompt', 'description'])('never batches a tool that can rewrite a job\'s %s by target', (field) => {
+    const tool = { name: 'schedule_edit', owner: 'p', inputSchema: { type: 'object', properties: {
+      id: { type: 'string' }, label: { type: 'string' }, [field]: { type: 'string' },
+    } } };
+    // A confirmed label change must not cover a later rewrite of what the job does.
+    expect(highRiskConfirmationTarget(tool, 'schedule', { id: 'job-1', label: 'a' })).toMatch(/^call:/);
+    expect(highRiskConfirmationTarget(tool, 'schedule', { id: 'job-1', [field]: 'evil' }))
+      .not.toBe(highRiskConfirmationTarget(tool, 'schedule', { id: 'job-1', label: 'a' }));
+  });
+
   it("batches the Host's schedule_update by its job id", () => {
     const manager = { scheduleFeature: { getStatus: () => [] }, engine: {} as never, agents: () => [] };
     const update = createScheduleTools(manager as never).find(entry => entry.name === 'schedule_update')!;

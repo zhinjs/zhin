@@ -46,10 +46,12 @@ const TARGET_ARGUMENTS: ReadonlySet<string> = new Set([
  * `schedule_update` and the config / schedule tools: a cron, a label, a value), compared like
  * `TARGET_ARGUMENTS`. A tool is batched by target only when every argument it declares is one target
  * argument or one of these: any other argument (a `field`, a `slug`, an `index`, ...) might pick another
- * object under the same id, so such a tool is batched only by the whole call.
+ * object under the same id, so such a tool is batched only by the whole call. Free text that the job
+ * or setting runs or shows (`prompt`, `description`) is not listed: a confirmed label or cron change
+ * must not cover a later rewrite of what the job does.
  */
 const VALUE_ARGUMENTS: ReadonlySet<string> = new Set([
-  'cron', 'schedulekind', 'delayminutes', 'label', 'enabled', 'value', 'description', 'prompt',
+  'cron', 'schedulekind', 'delayminutes', 'label', 'enabled', 'value',
 ]);
 
 type ToolView = Readonly<{ name: string; owner: string; mcpServer?: string; inputSchema?: unknown }>;
