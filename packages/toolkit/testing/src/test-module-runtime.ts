@@ -41,7 +41,10 @@ export function withTestEndpoints(
           }) as T;
         },
     ...(delegate.invalidate ? { invalidate: delegate.invalidate.bind(delegate) } : {}),
+    ...(delegate.prepareInvalidation ? { prepareInvalidation: delegate.prepareInvalidation.bind(delegate) } : {}),
     ...(delegate.affectedSources ? { affectedSources: delegate.affectedSources.bind(delegate) } : {}),
+    ...(delegate.staleDependents ? { staleDependents: delegate.staleDependents.bind(delegate) } : {}),
+    ...(delegate.updateRevisionableRoots ? { updateRevisionableRoots: delegate.updateRevisionableRoots.bind(delegate) } : {}),
     ...(delegate.requiresProcessRestart ? { requiresProcessRestart: delegate.requiresProcessRestart.bind(delegate) } : {}),
     ...(delegate.beginGeneration ? { beginGeneration: delegate.beginGeneration.bind(delegate) } : {}),
     ...(delegate.commitGeneration ? { commitGeneration: delegate.commitGeneration.bind(delegate) } : {}),

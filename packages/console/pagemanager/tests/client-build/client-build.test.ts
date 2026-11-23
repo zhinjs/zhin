@@ -267,6 +267,55 @@ describe('Client build adapter', () => {
     expect(serverLoads).toBe(1);
   });
 
+  it('forwards every server ModuleRuntime port, including the cross-package ones (#1250)', async () => {
+    // Every optional port the server may implement, besides the client loader this adapter owns.
+    // Adding a port to ModuleRuntime fails the exhaustiveness check below until it is listed here.
+    const ports = [
+      'invalidate', 'prepareInvalidation', 'affectedSources', 'staleDependents', 'updateRevisionableRoots',
+      'requiresProcessRestart', 'beginGeneration', 'commitGeneration', 'rollbackGeneration',
+      'updateWatchRoots', 'watch',
+    ] as const;
+    const exhaustive: Exclude<keyof ModuleRuntime, (typeof ports)[number] | 'load' | 'loadClientModule' | 'close'> extends never
+      ? true : never = true;
+    expect(exhaustive).toBe(true);
+    const calls: [string, unknown[]][] = [];
+    const results: Record<string, unknown> = {
+      affectedSources: ['/project/src/helper.ts', '/project/commands/status/index.ts'],
+      staleDependents: ['/project/plugins/qq-ops/plugin.ts'],
+      requiresProcessRestart: true,
+    };
+    const server = {
+      async load<T>(): Promise<T> { return {} as T; },
+      async close() { calls.push(['close', []]); },
+    } as Record<string, unknown> as unknown as ModuleRuntime;
+    for (const port of ports) {
+      (server as unknown as Record<string, unknown>)[port] = (...args: unknown[]) => {
+        calls.push([port, args]);
+        return port === 'watch' ? () => undefined : port === 'prepareInvalidation' ? Promise.resolve() : results[port];
+      };
+    }
+    const modules = new ClientBuildModuleRuntime(server, { async load<T>(): Promise<T> { return {} as T; } });
+    const forwarded = modules as unknown as Record<string, (...args: unknown[]) => unknown>;
+    for (const port of ports) {
+      expect(typeof forwarded[port], port).toBe('function');
+      const noArgs = port === 'prepareInvalidation' || port === 'beginGeneration' || port === 'rollbackGeneration';
+      const result = await forwarded[port]!(...(noArgs ? [] : [`arg:${port}`]));
+      expect(calls.at(-1), port).toEqual([port, noArgs ? [] : [`arg:${port}`]]);
+      if (port in results) expect(result, port).toEqual(results[port]);
+    }
+    await modules.close();
+    expect(calls.at(-1)).toEqual(['close', []]);
+  });
+
+  it('answers the cross-package ports safely when the server lacks them', () => {
+    const modules = new ClientBuildModuleRuntime({
+      async load<T>(): Promise<T> { return {} as T; },
+      async close() {},
+    }, { async load<T>(): Promise<T> { return {} as T; } });
+    expect(modules.staleDependents('/project/src/helper.ts')).toEqual([]);
+    expect(() => modules.updateRevisionableRoots(['/project/plugins/weather'])).not.toThrow();
+  });
+
   it('preserves server dependency and generation invalidation ports', async () => {
     const generations: unknown[] = [];
     const roots: unknown[] = [];
