@@ -31,8 +31,10 @@ export interface NativeDevelopmentModuleRuntimeOptions {
    * entries at once. `lazy` loads entries without analysis and without loading `es-module-lexer`;
    * the graph is built from the loaded entries the first time `prepareInvalidation()` runs (an
    * explicit reload under `--no-watch`) and kept up to date from then on; each later call also
-   * analyzes any committed entry the graph does not know yet. An entry whose analysis fails makes
-   * `requiresProcessRestart()` answer true for every other source while it stays loaded.
+   * analyzes any committed entry the graph does not know yet. An entry whose analysis fails is
+   * reported as a `ZhinModuleRuntimeWarning` process warning (code `ZHIN_DEPENDENCY_ANALYSIS_FAILED`)
+   * and makes `requiresProcessRestart()` answer true for every other importable source (not
+   * Markdown or YAML) while it stays loaded.
    * Defaults to `eager` with `watch` and `lazy` without it.
    */
   readonly dependencyTracking?: 'eager' | 'lazy';
@@ -189,9 +191,12 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
         let analysis: ModuleDependencyAnalysis;
         try {
           analysis = await index.analyze(entry);
-        } catch {
+        } catch (error) {
           // Kept as unknown: `requiresProcessRestart` falls back to a restart while it is loaded.
-          if (this.#committedRevisions.has(entry)) this.#unanalyzedEntries.add(entry);
+          if (this.#committedRevisions.has(entry) && !this.#unanalyzedEntries.has(entry)) {
+            this.#unanalyzedEntries.add(entry);
+            emitDependencyAnalysisWarning(entry, error);
+          }
           continue;
         }
         this.#unanalyzedEntries.delete(entry);
@@ -277,7 +282,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
     if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
     // Lazy tracking: an entry whose analysis failed may import this source; only a restart is safe.
-    if (this.#hasUnanalyzedEntryBesides(normalized)) return true;
+    // Sources no JS import can reach (Markdown, YAML) keep their normal reload decision below.
+    if (isModuleImportableSource(normalized) && this.#hasUnanalyzedEntryBesides(normalized)) return true;
     // Native ESM query revisions do not invalidate CommonJS require.cache.
     // Keep .cjs/.cts entries and their statically discovered closure on the
     // process boundary until the module runtime owns a CJS cache transaction.
@@ -647,6 +653,29 @@ function isIgnoredSource(root: string, source: string): boolean {
 
 function isExecutableSource(source: string): boolean {
   return ['.cjs', '.cts', '.js', '.mjs', '.mts', '.ts', '.tsx'].includes(extname(source));
+}
+
+/**
+ * Watched source types that no `import` can load: Node has no loader for them and the module
+ * runtime registers none. JSON stays importable (`with { type: 'json' }`), as does any unknown type.
+ */
+const nonImportableExtensions = new Set(['.md', '.yaml', '.yml']);
+
+function isModuleImportableSource(source: string): boolean {
+  return !nonImportableExtensions.has(extname(source));
+}
+
+/**
+ * Lazy tracking: reports an entry whose import analysis failed, once per failure (#1250). While it
+ * stays loaded, every reload of another importable source falls back to a process restart.
+ */
+function emitDependencyAnalysisWarning(entry: string, error: unknown): void {
+  const reason = error instanceof Error ? error.message : String(error);
+  process.emitWarning(
+    `Cannot analyze the imports of ${entry}: ${reason}. Until it is analyzed, reloading any other `
+      + 'module source restarts the process instead of reloading in place.',
+    { type: 'ZhinModuleRuntimeWarning', code: 'ZHIN_DEPENDENCY_ANALYSIS_FAILED', detail: JSON.stringify({ entry }) },
+  );
 }
 
 function isNativeTypeScriptSource(source: string): boolean {

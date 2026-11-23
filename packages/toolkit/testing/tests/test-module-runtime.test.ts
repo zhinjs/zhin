@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import type { ModuleRuntime } from '@zhin.js/runtime';
 import { withTestEndpoints } from '../src/test-module-runtime.js';
 
