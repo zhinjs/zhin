@@ -1,6 +1,6 @@
 import { runTurnToolPolicies } from '../security/policy-facade.js';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
-import { approvalActionLabel } from './approval-presentation.js';
+import { describeApprovalAction, type ApprovalActionTool } from './approval-presentation.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
@@ -315,7 +315,7 @@ export class TurnToolRuntime {
           // #1250 review: an admin's own answer may cover the call only when the call itself needs no
           // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
           ...(neededAuthority !== 'owner' ? { adminMayApprove: true } : { requiresOwner: true }),
-          question: formatApprovalQuestion(name, reason, effectiveInput, humanOnly, tool.description, this.turn.input.locale),
+          question: formatApprovalQuestion(name, reason, effectiveInput, humanOnly, tool, this.turn.input.locale),
           signal: this.turn.signal,
         });
         if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -374,7 +374,7 @@ export class TurnToolRuntime {
         purpose,
         ...(decision.requiresOwner ? { requiresOwner: true } : {}),
         ...(decision.adminMayApprove ? { adminMayApprove: true } : {}),
-        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool.description, this.turn.input.locale),
+        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool, this.turn.input.locale),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -633,7 +633,7 @@ function formatApprovalQuestion(
   reason: string,
   input: Readonly<Record<string, unknown>>,
   humanOnly: boolean,
-  description?: string,
+  tool?: ApprovalActionTool,
   locale?: Locale,
 ): string {
   const label = (key: Parameters<typeof approvalQuestionMessages>[1], value: string) => approvalQuestionMessages(locale, key, { value });
@@ -641,7 +641,8 @@ function formatApprovalQuestion(
   const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
   const path = ['file_path', 'path'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
   return [
-    approvalActionLabel(toolName, description),
+    // #1250 b100: an MCP tool's description is upstream text; the first line says so (one line, capped).
+    describeApprovalAction(tool ?? { name: toolName }, locale),
     command ? label('command', command) : undefined,
     cwd ? label('cwd', cwd) : undefined,
     path ? label('path', path) : undefined,

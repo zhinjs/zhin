@@ -50,6 +50,11 @@ export interface ToolCapability extends ToolDescriptor {
   /** MCP connection identity for catalog grouping; ownership still governs execution. */
   readonly mcpServer?: string;
   /**
+   * #1250 b100: set on MCP tools; `false` when the server wrote no description and `description` is the
+   * harness fallback. The approval question labels an upstream description as such (`describeApprovalAction`).
+   */
+  readonly mcpDescriptionFromUpstream?: boolean;
+  /**
    * Upstream MCP annotations (ADR 0065 D1). They only decide the permission tier; they never set
    * `readOnly` and never relax approval.
    */

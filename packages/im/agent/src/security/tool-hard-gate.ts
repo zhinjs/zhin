@@ -24,7 +24,7 @@
  * 审计写 `tool_approval` / `tool_hard_gate` / `ops_cooldown`（`ai_decision_events`）；审计写失败不影响判定。
  */
 import { redactApprovalDisplay, type DecisionEventInput, type DecisionReasonCode } from '../decision-events.js';
-import { approvalActionLabel } from '../tool/approval-presentation.js';
+import { describeApprovalAction, type ApprovalActionTool } from '../tool/approval-presentation.js';
 import {
   isApprovalPortAvailable,
   requestApprovalOutcome,
@@ -266,6 +266,11 @@ export interface ToolRiskView {
   readonly qualifiedName?: string;
   readonly risk?: ToolRisk;
   readonly riskCategory?: DangerousToolCategory;
+  /** #1250 b100: MCP connection identity; the approval question labels the description as upstream text. */
+  readonly mcpServer?: string;
+  readonly mcpDescriptionFromUpstream?: boolean;
+  /** The legacy MCP bridge's marker (`McpAgentTool.mcpOrigin`), read when `mcpServer` is absent. */
+  readonly mcpOrigin?: { readonly server: string; readonly descriptionFromUpstream?: boolean };
 }
 
 export interface ToolRiskAssessment {
@@ -555,7 +560,7 @@ export class ToolHardGate {
         entry ? pendingCardHint(imDeliverable) : '当前没有可用的人工审批渠道');
     }
 
-    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry, tool.description, requesterId);
+    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry, tool, requesterId);
     if (settled.kind === 'cancelled') return CANCELLED;
     const withId = {
       ...payload,
@@ -710,7 +715,7 @@ export class ToolHardGate {
     input: Readonly<Record<string, unknown>>,
     toolUseId: string,
     entry: ToolApprovalEntry | undefined,
-    description: string | undefined,
+    tool: ApprovalActionTool,
     requesterId: string | undefined,
   ): Promise<
     | { kind: 'approved'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
@@ -737,7 +742,7 @@ export class ToolHardGate {
         toolName,
         // Never matches a remembered grant: every dangerous call is confirmed on its own.
         scopeKey: `${TOOL_HARD_GATE_POLICY}:${this.#context.turnId}:${toolUseId}`,
-        question: formatHardGateQuestion(toolName, category, input, entry, description),
+        question: formatHardGateQuestion(toolName, category, input, entry, tool),
         timeoutMs,
         signal: controller.signal,
       }).then(
@@ -936,10 +941,12 @@ export function formatHardGateQuestion(
   category: DangerousToolCategory | null,
   input: Readonly<Record<string, unknown>>,
   entry?: ToolApprovalEntry,
-  description?: string,
+  tool?: Omit<ApprovalActionTool, 'name'>,
 ): string {
   return [
-    `危险操作：${approvalActionLabel(toolName, description)}${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}`,
+    // #1250 b100 review: the category comes before the (possibly upstream) action text, so the text cannot
+    // append a look-alike category of its own after the real one.
+    `危险操作${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}：${describeApprovalAction({ ...tool, name: toolName }, 'zh-CN')}`,
     // #1250 review: the prompt may be shown in a chat; mask secrets. The Console card and the
     // same-argument fingerprint keep the exact arguments.
     `本次参数：${stableJson(redactApprovalDisplay(input))}`,
