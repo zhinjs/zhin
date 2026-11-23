@@ -232,6 +232,8 @@ PostgreSQL / MySQL 部署要用 Console 的 SQL 控制台时，运行 `zhin db c
 
 监控至少覆盖 HTTP 探针、进程重启次数、Endpoint 在线状态、SSE recovery gap、日志错误率、数据库容量、被冻结待人处理的协作（Engagement）和 Agent 失败/取消比例。
 
+内存：实例常驻内存的构成、测量脚本和可调的 V8 参数（`--max-semi-space-size`、`--max-old-space-size`）见 [内存占用与测量](./memory.md)。
+
 前台运行时实例日志同时进入 stdout 与 `.zhin/logs/instance.log`；后台运行时网关自身输出写 `.zhin/logs/gateway.log`，实例日志写 `.zhin/logs/instance.log`，超过 10 MiB 自动轮转（保留 5 份）。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
 
 Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避免未观察的后台 Promise 拒绝按 Node 默认策略直接结束整个进程；操作恢复仍由对应适配器负责，例如 ICQQ 心跳超时走网络断线与重连流程。启动、命令和消息发送中被调用方观察到的拒绝仍按原链路报错。停止 Runtime 时移除该监听器，不接管 `uncaughtException`；显式配置 Node `--unhandled-rejections=strict` 时仍遵循该严格退出策略。
