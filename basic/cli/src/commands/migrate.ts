@@ -6,6 +6,7 @@
  * - pnpm 工作区（pnpm-workspace.yaml 的 packages）里的每个包也升级 zhin 依赖：精确版本同样升级（保持精确），
  *   只跳过 workspace: / link: / file: 等本地来源
  * - 在 pnpm-workspace.yaml 的 allowBuilds 中补齐网关原生依赖（node-pty、ssh2、cpu-features），已有条目保留
+ * - 列出仍依赖的已并入或停更的 @zhin.js 包（如 @zhin.js/config-yaml）及要改写的 import（不自动改源码）
  * - 补全缺失的推荐 scripts、engines
  * - 确保 data、plugins 等目录存在
  * - 执行 pnpm install
@@ -22,13 +23,14 @@ import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
 import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
-import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, readConfig } from '@zhin.js/gateway/project';
+import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, findRetiredZhinPackage, readConfig } from '@zhin.js/gateway/project';
+import { findProjectRetiredDependencies, findProjectRetiredImports, formatRetiredDependency, formatRetiredImport } from '../utils/retired-packages-check.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
 import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
-import { syncNativeBuildAllowance, usesPnpm } from '../utils/native-build-deps.js';
+import { projectPnpmMajor, syncNativeBuildAllowance, usesPnpm, type PnpmVersionProbe } from '../utils/native-build-deps.js';
 import { isExactVersionSpecifier, isLocalDependencySpecifier, isPinnedSpecifier } from '../utils/dependency-specifiers.js';
 import {
   compareInstalledVersions,
@@ -36,6 +38,8 @@ import {
   detectPnpmMajor,
   explainVersionMismatch,
   formatInstalledVersionRows,
+  configuredReleaseAge,
+  releaseAgeGateApplies,
   snapshotInstalledVersions,
   syncReleaseAgeExclusions,
 } from '../utils/installed-versions.js';
@@ -116,6 +120,8 @@ export interface UpgradePackageJsonOptions {
   rootKept?: ReadonlySet<string>;
   /** Receives `pnpm-workspace.yaml` when this (root) upgrade rewrote its overrides. */
   yamlChanged?: Set<string>;
+  /** Installed pnpm version, when `packageManager` does not pin pnpm (default: `pnpm --version`). */
+  pnpmVersion?: PnpmVersionProbe;
 }
 
 export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonOptions): boolean {
@@ -181,6 +187,12 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     const key = inDev ? 'devDependencies' : 'dependencies';
     const existing = pkg[key]?.[dep];
     if (existing === undefined) continue;
+    // A retired package's last release still pins old Zhin packages: upgrading it changes nothing.
+    // The step after the upgrade lists it with its replacement (#1250 retired-package-not-flagged).
+    if (findRetiredZhinPackage(dep)) {
+      console.log(chalk.yellow(`  ! ${label}${dep}: 已并入或停更，不升级（见下方「已停更的 Zhin 包」）`));
+      continue;
+    }
     // The explicit dependency source is authoritative, including in nested packages.
     if (String(existing).startsWith('workspace:')) {
       continue;
@@ -267,14 +279,25 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
 
   // pnpm 10+ skips dependency build scripts: allow the gateway's native ones (node-pty for the
   // Console terminal) in pnpm-workspace.yaml; the install below then builds them.
-  if (syncNativeBuildAllowance(path.dirname(pkgPath), pkg, options.dryRun)) changed = true;
+  if (syncNativeBuildAllowance(path.dirname(pkgPath), pkg, options.dryRun, options.pnpmVersion ? { pnpmVersion: options.pnpmVersion } : {})) changed = true;
 
   // pnpm 11 holds back releases younger than minimumReleaseAge (one day by default) and would keep
   // the old version ("Already up to date"): list the targets in minimumReleaseAgeExclude, as pnpm
   // itself does in a fresh scaffold. Only for pnpm projects, and only the registry releases the
   // (possibly unchanged) specifiers now point at — pinned and local specifiers are never listed.
+  // Only where the gate applies (#1250): a project that sets minimumReleaseAge, or pnpm 11+ without
+  // one (default one day). Otherwise the exclusions are dead entries — dozens with --include-pinned.
   if (usesPnpm(path.dirname(pkgPath), pkg)) {
-    syncReleaseAgeExclusions(path.dirname(pkgPath), releases, options.dryRun);
+    const dir = path.dirname(pkgPath);
+    const pnpmMajor = projectPnpmMajor(dir, pkg, options.pnpmVersion);
+    if (releaseAgeGateApplies(dir, pkg, pnpmMajor)) {
+      syncReleaseAgeExclusions(dir, releases, options.dryRun);
+    } else if (releases.size > 0 && fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
+      const configured = configuredReleaseAge(dir, pkg);
+      console.log(chalk.gray(configured
+        ? `  · ${configured.source} 的 minimumReleaseAge 为 ${configured.minutes}（不拦新版本），不写 minimumReleaseAgeExclude`
+        : `  · 项目未设置 minimumReleaseAge${pnpmMajor === undefined ? '' : `（pnpm ${pnpmMajor} 默认不启用）`}，不写 minimumReleaseAgeExclude`));
+    }
   }
 
   // 替换已失效的启动入口，同时保留用户自定义 scripts。
@@ -755,6 +778,31 @@ export function upgradeProjectDependencies(
   return { pkgChanged, members, updatedFiles: [...(pkgChanged ? ['package.json'] : []), ...members.map(member => `${member}/package.json`), ...yamlChanged] };
 }
 
+/**
+ * `zhin migrate` step 1b (#1250 retired-package-not-flagged): retired `@zhin.js/*` packages the
+ * root or a workspace member declares, and the imports of them in the project's sources, with the
+ * edits to make. Nothing is rewritten — a retired package may export more than its successor took
+ * over, so the edits are the user's (they are few and listed with file and line). Returns the
+ * number of retired dependencies found.
+ */
+export function reportRetiredPackages(dir: string, log: (line: string) => void = line => console.log(line)): number {
+  const dependencies = findProjectRetiredDependencies(dir);
+  const imports = findProjectRetiredImports(dir);
+  if (dependencies.length === 0 && imports.length === 0) {
+    log(chalk.gray('  没有依赖已并入或停更的 @zhin.js 包'));
+    return 0;
+  }
+  for (const hit of dependencies) log(chalk.yellow(`  ! ${formatRetiredDependency(hit)}`));
+  if (imports.length > 0) {
+    log(chalk.yellow('  要改写的 import（zhin migrate 不自动改写源码）：'));
+    for (const use of imports) log(chalk.cyan(`    ${formatRetiredImport(use)}`));
+  }
+  if (dependencies.length > 0) {
+    log(chalk.gray('  改完 import 后删除上面的依赖并运行 pnpm install；不要用 pnpm.overrides 压住它们拖进的旧版本'));
+  }
+  return dependencies.length;
+}
+
 export const migrateCommand = new Command('migrate')
   .description('升级项目依赖、scripts 与目录结构；v1 配置（缺少 configVersion: 2）请用 zhin migrate instances')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
@@ -802,6 +850,11 @@ Note: "zhin runtime migrate" migrates legacy plugin capability code, not the con
     } else if (dryRun && collectZhinDeps(fs.readJsonSync(pkgPath)).length > 0) {
       console.log(chalk.gray('  (见上方 [dry-run] 变更)'));
     }
+    console.log('');
+
+    // 1b. 已并入或停更的 @zhin.js 包：只列出改法，不改源码
+    console.log(chalk.bold.blue('1b. 已停更的 Zhin 包'));
+    reportRetiredPackages(cwd);
     console.log('');
 
     // 2. 目录结构：只补当前脚手架也会创建的目录
