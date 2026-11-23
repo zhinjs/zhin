@@ -53,6 +53,21 @@ export function normalizeCronForScheduleKind(kind: CronScheduleKind, cron: strin
 }
 
 /**
+ * #1250 b99: whether `tz` is a time zone this runtime knows (an IANA name such as `Asia/Shanghai`,
+ * `Etc/GMT-8` or `UTC`). The scheduler resolves zones through `Intl` as well, so a zone accepted here is
+ * one it can run; anything else used to be saved and only fail when the job was registered.
+ */
+export function isValidScheduleTimeZone(tz: string): boolean {
+  if (!tz || tz.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * @param options.inferWorkday `false`: take `kindInput` as given (an explicit or kept kind on
  *   `schedule_update`, #1250 b90), without turning solar `1-5` into workday. Default `true`.
  */
@@ -64,6 +79,10 @@ export function buildJobScheduleFromCronInput(
 ): JobSchedule | { error: string } {
   const trimmed = cron?.trim();
   if (!trimmed) return { error: '请提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
+  // #1250 b99: an unknown zone is refused before anything is saved (it may also be arbitrary text).
+  if (tz !== undefined && tz !== '' && !isValidScheduleTimeZone(tz)) {
+    return { error: '时区无效：请使用 IANA 时区名，例如 Asia/Shanghai、Etc/GMT-8 或 UTC' };
+  }
 
   const kind = options.inferWorkday === false && kindInput
     ? canonicalScheduleKind(kindInput)
