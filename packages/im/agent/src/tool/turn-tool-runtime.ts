@@ -39,6 +39,7 @@ import {
   stricterConfirmLevel,
   type InjectionGuardConfig,
   type InjectionGuardSettings,
+  type ProvenanceSource,
 } from '../security/provenance.js';
 import {
   formatProvenanceCardReason,
@@ -47,7 +48,7 @@ import {
   provenanceSourceKinds,
   type HighRiskRuleExplanation,
 } from '../security/high-risk-explain.js';
-import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
+import { createMessages, isLocale, type Locale } from '@zhin.js/plugin-runtime';
 import type { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import { safeSessionKey } from '../memory-layers.js';
@@ -72,6 +73,9 @@ import { logToolErrorResult, toolErrorResultMessage } from './tool-error-result.
 
 /** `TurnToolOutcome.denied.policy` for a merged-turn call that failed its `onBehalfOf` re-check. */
 export const MERGE_ON_BEHALF_POLICY = 'merge-on-behalf';
+
+/** #1250 b95: the rule and the source snapshot a provenance card showed, for its `tool_approval` row. */
+type ProvenanceAuditExplanation = Readonly<{ rule: HighRiskRuleExplanation; sources: readonly ProvenanceSource[] }>;
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -249,6 +253,10 @@ export class TurnToolRuntime {
       level: highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk),
       configuredLevel: this.#guard.confirmHighRisk[highRisk],
     });
+    // #1250 b95 review: one snapshot of the sources for the card and its audit row, taken before the card
+    // waits, so a source another call records meanwhile appears in neither (it voids the answer instead).
+    const explanation: ProvenanceAuditExplanation | undefined = rule === undefined ? undefined
+      : Object.freeze({ rule, sources: this.provenance.sources });
     // A fresh human hard-gate approval, or an authority's provenance approval, covers the ordinary prompt.
     let authorizationRequired = decision.status === 'approval_required';
     if (hardGate.status === 'approved') {
@@ -258,7 +266,7 @@ export class TurnToolRuntime {
       // first, even when the configured policy would allow it outright.
       const blocked = this.#approvalBlocked('intent');
       if (blocked) {
-        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', { status: 'unavailable', reason: blocked }, rule);
+        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', { status: 'unavailable', reason: blocked }, explanation);
         return this.#deny(name, toolUseId, PROVENANCE_POLICY, `${blocked === 'unattended'
           ? PROVENANCE_UNATTENDED_REASON
           : PROVENANCE_NO_CHANNEL_REASON} ${formatApprovalBlocked(blocked, denial)}`, causedBy);
@@ -285,11 +293,11 @@ export class TurnToolRuntime {
       } else {
         const reason = formatProvenanceCardReason({
           toolName: name,
-          rule: rule!,
-          sources: this.provenance.sources,
+          rule: explanation!.rule,
+          sources: explanation!.sources,
           initiator: resolveTurnTrustLevel(this.turn),
           tainted: this.provenance.tainted,
-          ...(this.turn.input.locale ? { locale: this.turn.input.locale } : {}),
+          ...(isLocale(this.turn.input.locale) ? { locale: this.turn.input.locale } : {}),
         });
         const approval = await requestApprovalOutcome(this.turn.ports.approval!, {
           ...(humanOnly ? { humanOnly: true } : {}),
@@ -310,7 +318,7 @@ export class TurnToolRuntime {
           signal: this.turn.signal,
         });
         if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
-        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval, rule);
+        this.#auditApproval(name, PROVENANCE_POLICY, 'intent', approval, explanation);
         if (approval.status !== 'approved') {
           return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval, denial), causedBy);
         }
@@ -331,8 +339,10 @@ export class TurnToolRuntime {
       if (this.turn.policy.unattended && highRisk !== undefined && this.provenance.requiresConfirmation(
         stricterConfirmLevel(highRiskConfirmLevel(name, highRisk, this.#guard.confirmHighRisk),
           defaultHighRiskConfirmLevel(name, highRisk)))) {
-        this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' }, rule && {
-          ...rule, level: stricterConfirmLevel(rule.level, defaultHighRiskConfirmLevel(name, highRisk)) });
+        this.#auditApproval(name, PROVENANCE_POLICY, purpose, { status: 'unavailable', reason: 'unattended' }, explanation && {
+          ...explanation,
+          rule: { ...explanation.rule, level: stricterConfirmLevel(explanation.rule.level, defaultHighRiskConfirmLevel(name, highRisk)) },
+        });
         return this.#deny(name, toolUseId, PROVENANCE_POLICY,
           `${PROVENANCE_UNATTENDED_REASON} ${formatApprovalBlocked('unattended', denial)}`, causedBy);
       }
@@ -457,7 +467,7 @@ export class TurnToolRuntime {
     policy: string,
     purpose: 'authorization' | 'intent',
     outcome: ApprovalOutcome | Readonly<{ status: 'unavailable'; reason: string }>,
-    rule?: HighRiskRuleExplanation,
+    explanation?: ProvenanceAuditExplanation,
   ): void {
     const sink = this.#decisionAudit;
     if (!sink) return;
@@ -488,10 +498,10 @@ export class TurnToolRuntime {
           ...(outcome.status === 'approved' ? { decision: outcome.decision, ...(outcome.scope ? { scope: outcome.scope } : {}) } : {}),
           ...(outcome.status === 'denied' ? { by: outcome.by } : {}),
           // #1250 high-risk-rules-explain: metadata only (rule id, level, source kinds), never source content.
-          ...(rule ? {
-            rule: highRiskRuleId(rule),
-            confirmLevel: rule.level,
-            sourceKinds: [...provenanceSourceKinds(this.provenance.sources)],
+          ...(explanation ? {
+            rule: highRiskRuleId(explanation.rule),
+            confirmLevel: explanation.rule.level,
+            sourceKinds: [...provenanceSourceKinds(explanation.sources)],
           } : {}),
         },
         actor: 'system',

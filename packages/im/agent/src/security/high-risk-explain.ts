@@ -6,7 +6,8 @@
  * This module only says which rule put the call in its category and which sources made the turn count
  * as having read content. It names sources by metadata only (source kind, tool name, MCP server name,
  * counts): the card never quotes the content itself, so text from a web page or a background message
- * cannot reach the approver through it, and names are reduced to a safe character set.
+ * cannot reach the approver through it, and names (which an MCP server chooses) are reduced to a safe
+ * character set, with non-ASCII shown escaped.
  */
 import { createMessages, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import type { HighRiskActionKind, HighRiskConfirmLevel, ProvenanceSource } from './provenance.js';
@@ -47,6 +48,7 @@ const messages = createMessages({
   chain: { 'zh-CN': '来源链：{chain}', en: 'Source chain: {chain}' },
   chainSeparator: { 'zh-CN': ' → ', en: ' → ' },
   chainHidden: { 'zh-CN': '另外 {count} 个来源', en: '{count} more sources' },
+  chainHiddenOne: { 'zh-CN': '另外 {count} 个来源', en: '{count} more source' },
   chainCall: { 'zh-CN': '本次调用 {tool}', en: 'this call: {tool}' },
   // Chain items (short)
   chainTool: { 'zh-CN': '工具 {tool} 的结果', en: 'result of tool {tool}' },
@@ -88,6 +90,7 @@ const messages = createMessages({
   sources: { 'zh-CN': '来源：{list}', en: 'Sources: {list}' },
   sourcesSeparator: { 'zh-CN': '；', en: '; ' },
   sourcesHidden: { 'zh-CN': '另外 {count} 个来源', en: '{count} more sources' },
+  sourcesHiddenOne: { 'zh-CN': '另外 {count} 个来源', en: '{count} more source' },
   srcWebPage: { 'zh-CN': '{tool} 读取的网页', en: 'web page read by {tool}' },
   srcWebSearch: { 'zh-CN': '{tool} 的网页搜索结果', en: 'web search results from {tool}' },
   srcFiles: { 'zh-CN': '{tool} 读取的工作区文件', en: 'workspace files read by {tool}' },
@@ -102,7 +105,11 @@ const messages = createMessages({
   srcSceneGroup: { 'zh-CN': '群聊', en: 'group ' },
   srcSceneChannel: { 'zh-CN': '频道', en: 'channel ' },
   srcSceneNone: { 'zh-CN': '', en: '' },
-  srcCounts: { 'zh-CN': '（{messages} 条消息、{events} 个其他事件）', en: ' ({messages} messages, {events} other events)' },
+  srcCounts: { 'zh-CN': '（{messages}、{events}）', en: ' ({messages}, {events})' },
+  countMessages: { 'zh-CN': '{count} 条消息', en: '{count} messages' },
+  countMessagesOne: { 'zh-CN': '{count} 条消息', en: '{count} message' },
+  countEvents: { 'zh-CN': '{count} 个其他事件', en: '{count} other events' },
+  countEventsOne: { 'zh-CN': '{count} 个其他事件', en: '{count} other event' },
   srcMedia: { 'zh-CN': '识图模型对本条消息里图片/媒体的自动描述', en: 'automatic description of this message\'s images or media by the perception model' },
   srcScheduled: {
     'zh-CN': '本次运行的定时任务提示词：任务是在读过内容之后创建的（创建时读过{sources}）',
@@ -112,10 +119,44 @@ const messages = createMessages({
 
 type MessageKey = Parameters<typeof messages>[1];
 
-/** Tool names, MCP server names and stored keys are shown with a safe character set only. */
+/**
+ * Tool names, MCP server names and stored keys are shown with a safe character set only. An MCP server
+ * chooses its own tool names, so a name is untrusted text: ASCII names keep `[A-Za-z0-9_.:-]` (anything
+ * else becomes `_`), and every non-ASCII UTF-16 unit is shown as a `\uXXXX` escape, so a name can neither
+ * write a sentence in another script nor pass for a built-in tool (no NFKC folding: full-width
+ * `ｗｅｂ＿ｆｅｔｃｈ` stays distinct from `web_fetch`, Cyrillic `а` from Latin `a`). A long name keeps its
+ * head and tail around `…`, never cutting an escape in half.
+ */
 export function safeDisplayName(name: string): string {
-  const cleaned = name.normalize('NFKC').replace(/[^\p{L}\p{N}_.:\-]/gu, '_');
-  return cleaned.length > MAX_NAME_CHARS ? `${cleaned.slice(0, MAX_NAME_CHARS)}…` : cleaned;
+  const units: string[] = [];
+  for (let index = 0; index < name.length; index += 1) {
+    const code = name.charCodeAt(index);
+    if (code >= 0x80) units.push(`\\u${code.toString(16).padStart(4, '0')}`);
+    else units.push(/[A-Za-z0-9_.:-]/u.test(name[index]!) ? name[index]! : '_');
+  }
+  const total = units.reduce((length, unit) => length + unit.length, 0);
+  if (total <= MAX_NAME_CHARS) return units.join('');
+  const budget = MAX_NAME_CHARS - 1;
+  const tailBudget = Math.floor(budget / 2);
+  const tail: string[] = [];
+  let tailLength = 0;
+  for (let index = units.length - 1; index >= 0 && tailLength + units[index]!.length <= tailBudget; index -= 1) {
+    tail.unshift(units[index]!);
+    tailLength += units[index]!.length;
+  }
+  const head: string[] = [];
+  let headLength = 0;
+  for (const unit of units) {
+    if (headLength + unit.length > budget - tailLength) break;
+    head.push(unit);
+    headLength += unit.length;
+  }
+  return `${head.join('')}…${tail.join('')}`;
+}
+
+/** English needs a singular form; the Chinese text is the same for any count. */
+function plural(locale: Locale | undefined, one: MessageKey, many: MessageKey, count: number): string {
+  return t(locale, count === 1 ? one : many, { count });
 }
 
 const WEB_PAGE_TOOLS = new Set(['web_fetch']);
@@ -157,7 +198,7 @@ export function describeProvenanceChain(
   return [
     t(locale, `initiator_${initiator}`),
     ...shown,
-    ...(hidden > 0 ? [t(locale, 'chainHidden', { count: hidden })] : []),
+    ...(hidden > 0 ? [plural(locale, 'chainHiddenOne', 'chainHidden', hidden)] : []),
     t(locale, 'chainCall', { tool: safeDisplayName(toolName) }),
   ].join(t(locale, 'chainSeparator'));
 }
@@ -188,7 +229,7 @@ export function describeProvenanceSources(sources: readonly ProvenanceSource[], 
   const shown = sources.slice(0, MAX_SHOWN_SOURCES).map(source => sourceDetail(source, locale));
   const hidden = sources.length - shown.length;
   return t(locale, 'sources', {
-    list: [...shown, ...(hidden > 0 ? [t(locale, 'sourcesHidden', { count: hidden })] : [])].join(t(locale, 'sourcesSeparator')),
+    list: [...shown, ...(hidden > 0 ? [plural(locale, 'sourcesHiddenOne', 'sourcesHidden', hidden)] : [])].join(t(locale, 'sourcesSeparator')),
   });
 }
 
@@ -270,7 +311,10 @@ function sourceDetail(source: ProvenanceSource, locale?: Locale): string {
         : source.scene === 'group' ? 'srcSceneGroup'
           : source.scene === 'channel' ? 'srcSceneChannel' : 'srcSceneNone';
       const counts = source.messages !== undefined || source.events !== undefined
-        ? t(locale, 'srcCounts', { messages: source.messages ?? 0, events: source.events ?? 0 }) : '';
+        ? t(locale, 'srcCounts', {
+          messages: plural(locale, 'countMessagesOne', 'countMessages', source.messages ?? 0),
+          events: plural(locale, 'countEventsOne', 'countEvents', source.events ?? 0),
+        }) : '';
       return t(locale, 'srcBackground', { scene: t(locale, scene), counts });
     }
     case 'media_perception': return t(locale, 'srcMedia');
