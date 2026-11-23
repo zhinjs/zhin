@@ -269,6 +269,8 @@ export interface ToolRiskView {
   /** #1250 b100: MCP connection identity; the approval question labels the description as upstream text. */
   readonly mcpServer?: string;
   readonly mcpDescriptionFromUpstream?: boolean;
+  /** The legacy MCP bridge's marker (`McpAgentTool.mcpOrigin`), read when `mcpServer` is absent. */
+  readonly mcpOrigin?: { readonly server: string; readonly descriptionFromUpstream?: boolean };
 }
 
 export interface ToolRiskAssessment {
@@ -942,7 +944,9 @@ export function formatHardGateQuestion(
   tool?: Omit<ApprovalActionTool, 'name'>,
 ): string {
   return [
-    `危险操作：${describeApprovalAction({ ...tool, name: toolName }, 'zh-CN')}${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}`,
+    // #1250 b100 review: the category comes before the (possibly upstream) action text, so the text cannot
+    // append a look-alike category of its own after the real one.
+    `危险操作${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}：${describeApprovalAction({ ...tool, name: toolName }, 'zh-CN')}`,
     // #1250 review: the prompt may be shown in a chat; mask secrets. The Console card and the
     // same-argument fingerprint keep the exact arguments.
     `本次参数：${stableJson(redactApprovalDisplay(input))}`,

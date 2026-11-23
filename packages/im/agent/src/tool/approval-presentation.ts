@@ -15,6 +15,11 @@ export interface ApprovalActionTool {
   readonly mcpServer?: string;
   /** `false` when the MCP server wrote no description and `description` is the harness fallback. */
   readonly mcpDescriptionFromUpstream?: boolean;
+  /**
+   * The legacy MCP bridge (`mcp-client/bridge.ts`) marks its tools with `mcpOrigin` instead of
+   * `mcpServer`; read as a fallback so those tools are labelled too (#1250 b100 review).
+   */
+  readonly mcpOrigin?: { readonly server: string; readonly descriptionFromUpstream?: boolean };
 }
 
 /** #1250 b100: longest upstream description shown on the first line, in code points (before `…`). */
@@ -31,13 +36,26 @@ const actionMessages = createMessages({
   },
 });
 
+/** Every line terminator, including the ones `\n`-splitting misses (`\r`, `\v`, `\f`, NEL, LS, PS). */
+const LINE_TERMINATORS = /\r\n|[\r\v\f\u0085\u2028\u2029]/gu;
 /**
- * Upstream text on one line: line breaks, other control characters, format characters (bidi overrides,
- * zero-width) and every run of whitespace become one space, so the text can neither start a line of its own
- * (a fake "Rule:" / "Sources:" line) nor reorder what is shown around it.
+ * Folded to one space: other control and format characters (bidi overrides, zero-width, tag characters),
+ * unassigned, private-use and lone surrogate code points, default-ignorable characters (Hangul fillers,
+ * the combining grapheme joiner, variation selectors), the braille blank and every run of whitespace — so
+ * upstream text can neither pad itself to a soft line break nor reorder what is shown around it.
+ */
+const FOLDED = /[\p{Cc}\p{Cf}\p{Cn}\p{Co}\p{Cs}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}\u2800\s]+/gu;
+/** More than two combining marks in a row (stacked "Zalgo" text that draws over the lines around it). */
+const STACKED_MARKS = /(\p{M}{2})\p{M}+/gu;
+
+/**
+ * Upstream text as the first line shows it: only its first line (as before b100, now for every line
+ * terminator), then folded to one line, so it can never start a line of its own (a fake "Rule:" /
+ * "Sources:" line), and stacked combining marks are cut to two.
  */
 function oneLine(text: string): string {
-  return text.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]+/gu, ' ').trim();
+  const first = text.replace(LINE_TERMINATORS, '\n').split('\n')[0] ?? '';
+  return first.replace(FOLDED, ' ').replace(STACKED_MARKS, '$1').trim();
 }
 
 function truncate(text: string, max: number): string {
@@ -54,9 +72,10 @@ function truncate(text: string, max: number): string {
  * "calling tool Y of MCP server X", both names escaped, so no upstream text appears at all.
  */
 export function describeApprovalAction(tool: ApprovalActionTool, locale?: Locale): string {
-  const server = tool.mcpServer;
+  const server = tool.mcpServer ?? tool.mcpOrigin?.server;
   if (server === undefined) return approvalActionLabel(tool.name, tool.description);
-  const text = tool.mcpDescriptionFromUpstream === false ? '' : oneLine(tool.description ?? '');
+  const fromUpstream = tool.mcpServer !== undefined ? tool.mcpDescriptionFromUpstream : tool.mcpOrigin?.descriptionFromUpstream;
+  const text = fromUpstream === false ? '' : oneLine(tool.description ?? '');
   const first = text.split(/[。；;]/u)[0]?.trim() ?? '';
   if (!first) {
     const prefix = `${server}__`;

@@ -27,6 +27,8 @@ export interface McpAgentToolOrigin {
   readonly server: string;
   readonly tool: string;
   readonly hints?: McpToolHints;
+  /** #1250 b100: whether the server wrote the description (the approval card labels it as upstream text). */
+  readonly descriptionFromUpstream?: boolean;
 }
 
 export type McpAgentTool = AgentTool & { readonly mcpOrigin?: McpAgentToolOrigin };
@@ -57,6 +59,7 @@ export function mcpToolToAgentTool(
       server: serverName,
       tool: mcpTool.name,
       ...(hints ? { hints } : {}),
+      descriptionFromUpstream: typeof mcpTool.description === 'string' && mcpTool.description.trim() !== '',
     }),
   };
 }
