@@ -175,8 +175,9 @@ export const TRUSTED_OUTPUT_TAG = 'trusted_output';
  * #1250 b98: put next to {@link TRUSTED_OUTPUT_TAG} on a tool whose successful results are written by
  * the harness alone but whose failures may quote something else (a parser's or an upstream's text). Only
  * its successful results are trusted; a failure, thrown or reported (`{ error }`, MCP `isError`), is
- * recorded as external content (see {@link classifyToolFailure}). The Host's schedule write tools
- * (`schedule_add`, `schedule_update`, `schedule_remove`, `schedule_pause`, `schedule_resume`) carry both.
+ * recorded as external content (see {@link classifyToolFailure}). The Host's `schedule_update` carries both.
+ * A tool listed in `injectionGuard.trustedOutputTools` (deployer configuration) or a harness tool is not
+ * a source either way: the configuration takes precedence over this tag.
  */
 export const UNTRUSTED_FAILURE_TAG = 'untrusted_failure';
 

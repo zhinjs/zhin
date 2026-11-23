@@ -45,8 +45,6 @@ const FESTIVAL_NAMES: ReadonlySet<string> = new Set(['元旦', '春节', '清明
  * cron was already parsed by the scheduler; this only keeps anything else out of the result.
  */
 const CRON_FIELD = /^(?:[0-9*?,/#-]|L|W|MON|TUE|WED|THU|FRI|SAT|SUN|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)+$/iu;
-/** An IANA zone name such as `Asia/Shanghai` or `Etc/GMT-8`. */
-const TIME_ZONE_TEXT = /^[A-Za-z0-9_+\-/]{1,64}$/u;
 
 /**
  * #1250 b55: `prompt` of `schedule_add` / `schedule_preview` is what runs when the job is due, not the
@@ -277,10 +275,11 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         const stuck = updated.enabled && next === undefined && updated.schedule.kind !== 'event';
         // #1250 b98: only what the harness wrote, plus the label this call set (`null`: cleared). A label
         // this call did not set may be someone else's text (an owner may change anyone's job): not echoed.
+        // Likewise the saved timing is echoed only when this call changed it; otherwise only its kind.
         return {
           success: true,
           id,
-          schedule: scheduleResult(updated.schedule),
+          schedule: update.schedule !== undefined ? scheduleResult(updated.schedule) : { kind: updated.schedule.kind },
           ...(update.label !== undefined ? { label: update.label } : {}),
           enabled: updated.enabled,
           ...(next ? { next_run: next } : {}),
@@ -320,9 +319,11 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
 }
 
 /**
- * #1250 b98: the saved timing as `schedule_update` reports it: structured fields only. Free text a job may
- * carry in its timing (an event job's `eventId` / `source` / `eventType`, a scatter window) is left out,
- * and so is a cron, zone or holiday name that does not look like one; `schedule_list` shows the whole job.
+ * #1250 b98: the saved timing as `schedule_update` reports it after this call changed it: structured
+ * fields only. Free text a job may carry in its timing (an event job's `eventId` / `source` / `eventType`,
+ * a scatter window) is left out, and so is the time zone (a stored `tz` is not validated as a real zone and
+ * may be text someone else wrote), a cron that does not look like one and a holiday name outside the known
+ * set; `schedule_list` shows the whole job.
  */
 function scheduleResult(schedule: JobSchedule): Record<string, unknown> {
   switch (schedule.kind) {
@@ -335,7 +336,6 @@ function scheduleResult(schedule: JobSchedule): Record<string, unknown> {
       return {
         kind: schedule.kind,
         ...(isCronText(schedule.cron) ? { cron: schedule.cron } : {}),
-        ...(schedule.tz !== undefined && TIME_ZONE_TEXT.test(schedule.tz) ? { tz: schedule.tz } : {}),
         ...(festivals === 'all' || (Array.isArray(festivals) && festivals.every(name => FESTIVAL_NAMES.has(name)))
           ? { festivals } : {}),
         ...(schedule.kind === 'holiday' && typeof schedule.everyDayOfHoliday === 'boolean'
