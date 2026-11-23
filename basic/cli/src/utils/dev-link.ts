@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { readApplicationPluginDeclaration, readSourcePluginOrder } from '@zhin.js/runtime';
-import { findConfigFile } from '@zhin.js/gateway/project';
+import { findConfigFile, findRetiredZhinPackage } from '@zhin.js/gateway/project';
 import { listWorkspacePackageDirs } from './workspace-packages.js';
 
 export const STATE_DIR = '.zhin-local';
@@ -389,10 +389,31 @@ export interface ZhinInstanceDependent {
   readonly local: boolean;
 }
 
+/**
+ * A direct dependency of the root project or a workspace member that pulls in one copy of a Zhin
+ * package through other installed packages (#1250): `project` declares `direct`, and `path` leads
+ * from `direct` down to the copy (`name@version` labels, both ends included).
+ */
+export interface ZhinInstanceOrigin {
+  /** `根项目` or a workspace member path (`plugins/foo`). */
+  readonly project: string;
+  /** `name@version` of the dependency `project` declares. */
+  readonly direct: string;
+  /** The package name of `direct`. */
+  readonly directName: string;
+  readonly path: readonly string[];
+}
+
 export interface ZhinInstanceCopy {
   readonly dir: string;
   readonly version?: string;
   readonly requiredBy: readonly ZhinInstanceDependent[];
+  /**
+   * Direct dependencies (of the root or a member) that reach this copy through other installed
+   * packages. Kept when a project directory also requires the copy itself, so a retired package
+   * that drags the same copy in is still named (#1250).
+   */
+  readonly origins: readonly ZhinInstanceOrigin[];
 }
 
 /** 项目依赖树中可达的每个 zhin 包 → 它解析到的物理位置（realpath，已排序）。 */
@@ -419,6 +440,10 @@ export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinIn
   if (!fs.existsSync(root)) return new Map();
   const found = new Map<string, Map<string, { version?: string; requiredBy: Map<string, ZhinInstanceDependent> }>>();
   const seen = new Set<string>();
+  // Reverse edges of every followed dependency (realpath → the realpaths that require it), and the
+  // label of each installed package, to walk a copy back to a direct dependency of the project.
+  const parents = new Map<string, Set<string>>();
+  const labels = new Map<string, { label: string; name?: string; local: boolean }>();
   const projectReal = fs.realpathSync(projectDir);
   const nodeModulesSegment = `${path.sep}node_modules${path.sep}`;
   const labelOf = (realDir: string, manifest: Manifest): { by: string; local: boolean } => {
@@ -460,10 +485,13 @@ export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinIn
       record(manifest.name, realDir, typeof manifest.version === 'string' ? manifest.version : undefined);
     }
     const dependent = labelOf(realDir, manifest);
+    labels.set(realDir, { label: dependent.by, ...(typeof manifest.name === 'string' ? { name: manifest.name } : {}), local: dependent.local });
     for (const field of CLOSURE_FIELDS) {
       for (const [dep, specifier] of Object.entries(manifest[field] ?? {})) {
         const resolved = resolveFrom(realDir, dep);
         if (!resolved) continue;
+        if (!parents.has(resolved)) parents.set(resolved, new Set());
+        parents.get(resolved)!.add(realDir);
         if (isZhinPackage(dep)) {
           const target = readManifest(resolved);
           record(dep, resolved, typeof target?.version === 'string' ? target.version : undefined,
@@ -492,11 +520,47 @@ export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinIn
     const dir = path.join(root, name);
     if (fs.existsSync(path.join(dir, 'package.json'))) visit(fs.realpathSync(dir));
   }
+  /** Breadth-first up the reverse edges: the nearest project directories and the path to each. */
+  const originsOf = (copyDir: string): ZhinInstanceOrigin[] => {
+    const origins = new Map<string, ZhinInstanceOrigin>();
+    const queue: string[][] = [[copyDir]];
+    const visited = new Set([copyDir]);
+    while (queue.length > 0) {
+      const chain = queue.shift()!;
+      for (const parent of [...(parents.get(chain[0]!) ?? [])].sort()) {
+        const info = labels.get(parent);
+        if (info?.local) {
+          // `chain[0]` is the project's direct dependency; a chain of one is the copy itself.
+          if (chain.length < 2) continue;
+          const direct = labels.get(chain[0]!);
+          if (!direct) continue;
+          const key = `${info.label}\0${direct.label}`;
+          if (!origins.has(key)) {
+            origins.set(key, {
+              project: info.label,
+              direct: direct.label,
+              directName: direct.name ?? direct.label,
+              path: chain.map(dir => labels.get(dir)?.label ?? dir),
+            });
+          }
+          continue;
+        }
+        if (visited.has(parent)) continue;
+        visited.add(parent);
+        queue.push([parent, ...chain]);
+      }
+    }
+    return [...origins.values()];
+  };
   const graph = new Map<string, ZhinInstanceCopy[]>();
   for (const [name, copies] of [...found].sort(([a], [b]) => a.localeCompare(b))) {
-    graph.set(name, [...copies].sort(([a], [b]) => a.localeCompare(b)).map(([dir, copy]) => ({
-      dir, ...(copy.version ? { version: copy.version } : {}), requiredBy: [...copy.requiredBy.values()],
-    })));
+    graph.set(name, [...copies].sort(([a], [b]) => a.localeCompare(b)).map(([dir, copy]) => {
+      const requiredBy = [...copy.requiredBy.values()];
+      return {
+        dir, ...(copy.version ? { version: copy.version } : {}), requiredBy,
+        origins: originsOf(dir),
+      };
+    }));
   }
   return graph;
 }
@@ -507,7 +571,12 @@ export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinIn
  */
 export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, readonly ZhinInstanceCopy[]>): { lines: string[]; fixes: string[] } {
   const lines: string[] = [];
+  // #1250: the direct dependency that drags a copy in comes first (often a retired package such as
+  // @zhin.js/config-yaml); the per-package fixes follow; pnpm.overrides is the last resort. One fix
+  // per (project, direct dependency): a retired package that drags in several copies is named once.
+  const originFixes = new Map<string, { owner: string; direct: string; directName: string; copies: string[]; chains: string[] }>();
   const fixes = new Set<string>();
+  const overrideNames = new Set<string>();
   for (const [name, copies] of duplicates) {
     const parts = copies.map(copy => {
       const by = copy.requiredBy.length
@@ -520,8 +589,19 @@ export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, rea
     const target = rootCopy?.version ? `^${rootCopy.version}` : '与根项目相同的版本';
     for (const copy of copies) {
       if (copy === rootCopy) continue;
+      for (const origin of copy.origins) {
+        const owner = origin.project === '根项目' ? '根项目' : `${origin.project}/package.json`;
+        const key = `${owner}\0${origin.direct}`;
+        const entry = originFixes.get(key) ?? { owner, direct: origin.direct, directName: origin.directName, copies: [], chains: [] };
+        originFixes.set(key, entry);
+        const dragged = `${name}@${copy.version ?? '?'}`;
+        if (!entry.copies.includes(dragged)) entry.copies.push(dragged);
+        const chain = origin.path.join(' → ');
+        if (!entry.chains.includes(chain)) entry.chains.push(chain);
+      }
       for (const dependent of copy.requiredBy) {
         if (dependent.by === '根项目') continue;
+        if (!dependent.local) overrideNames.add(name);
         fixes.add(dependent.local
           // A project directory (workspace member): its own package.json pins the other copy.
           ? `把 ${dependent.by}/package.json 的 ${name} 改成 ${target}（或运行 zhin migrate，一并升级工作区里的包）`
@@ -529,5 +609,14 @@ export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, rea
       }
     }
   }
-  return { lines, fixes: [...fixes] };
+  const all = [...originFixes.values()].map(entry => {
+    const retired = findRetiredZhinPackage(entry.directName);
+    return `${entry.owner} 的直接依赖 ${entry.direct} 拖进了 ${entry.copies.join('、')}（${entry.chains.join('；')}）：`
+      + (retired ? retired.action : `先升级或删除 ${entry.directName}`);
+  });
+  all.push(...fixes);
+  if (overrideNames.size > 0) {
+    all.push(`以上都处理后仍有重复，再在 package.json 的 pnpm.overrides 中统一 ${[...overrideNames].join('、')} 的版本`);
+  }
+  return { lines, fixes: all };
 }
