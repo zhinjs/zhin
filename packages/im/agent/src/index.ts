@@ -686,6 +686,7 @@ export type {
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
   ScheduleJobProvenance,
+  ScheduleJobUpdate,
   ScheduleInvocationContext,
   AssistantEventRequest,
   AssistantEventResult,

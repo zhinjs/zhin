@@ -597,7 +597,12 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       if (this.#claims.get(key) === claim) this.#claims.delete(key);
       clearTimeout(timer);
       for (const unsubscribe of unsubscribers.splice(0)) unsubscribe();
-      if (!ended) { ended = true; this.#rememberEnded(answers.keys(), conversationRefKey(conversation), subjectId); }
+      if (!ended) {
+        ended = true;
+        this.#rememberEnded(answers.keys(), conversationRefKey(conversation), subjectId);
+        // #1250 b90: the prompt's keyboard no longer holds the conversation's button numbers.
+        this.#router.settleFallback(answers.keys());
+      }
     };
     const fail = (error: Error) => {
       if (failure) return;

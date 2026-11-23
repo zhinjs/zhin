@@ -131,6 +131,47 @@ describe('UserInteraction via ImRuntime', () => {
       clock.mockRestore();
     }
   });
+  it('numbers the next confirmation card from 1 once the previous one was answered (#1250 b90)', async () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const interactions = new RuntimeInteractionCoordinator(router);
+    const conversation = { endpoint: { adapter: 'test', id: 'main' }, kind: 'private' as const, id: 'alice' };
+    const labels: Record<string, string>[] = [];
+    // Stands in for the outbound renderer: each delivered card's buttons become numbered text fallbacks.
+    const reply = vi.fn(async (content: unknown) => {
+      const payloads = [...new Set([...JSON.stringify(content).matchAll(/zhin:ask:[^"\\]+/gu)].map(match => match[0]))];
+      if (payloads.length) labels.push(router.rememberFallback(conversation, 1, Object.fromEntries(payloads.map((payload, index) => [String(index + 1), payload]))));
+      return { status: 'sent' as const };
+    });
+    const message = (content: string) => new Message({ conversation, content, sender: { id: 'alice' } }, { generation: 1, reply });
+    const abort = new AbortController();
+    try {
+      const ask = () => interactions.create(message('go')).ask({
+        type: 'select', title: '确认', options: [{ label: '允许', value: 'yes' }, { label: '拒绝', value: 'no' }], signal: abort.signal,
+      });
+      for (let card = 0; card < 3; card += 1) {
+        const answer = ask();
+        await vi.waitFor(() => expect(labels).toHaveLength(card + 1));
+        expect(Object.keys(labels[card]!)).toEqual(['1', '2']);
+        await vi.waitFor(() => expect(interactions.resolveClaim(message('1'))).toBe(true));
+        await expect(answer).resolves.toBe('yes');
+      }
+      // Two cards waiting at once never share a number.
+      const first = ask().catch(error => error);
+      await vi.waitFor(() => expect(labels).toHaveLength(4));
+      const second = interactions.create(new Message({ conversation, content: 'go', sender: { id: 'bob' } }, { generation: 1, reply }))
+        .ask({ type: 'select', title: '确认', options: [{ label: '允许', value: 'yes' }, { label: '拒绝', value: 'no' }], signal: abort.signal })
+        .catch(error => error);
+      await vi.waitFor(() => expect(labels).toHaveLength(5));
+      expect(Object.keys(labels[3]!)).toEqual(['1', '2']);
+      expect(Object.keys(labels[4]!)).toEqual(['3', '4']);
+      abort.abort();
+      await first;
+      await second;
+    } finally {
+      abort.abort();
+    }
+  });
+
   async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean; detached?: boolean } = {}) {
     const sent: unknown[] = [];
     const events: string[] = [];

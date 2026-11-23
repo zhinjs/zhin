@@ -22,7 +22,10 @@ export function inferScheduleKindFromCron(
   kind: string | undefined,
   cron: string,
 ): CronScheduleKind {
-  const normalized = (kind || 'solar').toLowerCase() as CronScheduleKind;
+  // Case-insensitive, but the kind keeps its canonical spelling: `freeDay` lowercased used to fall
+  // through to `solar` (#1250 b90).
+  const lower = (kind || 'solar').toLowerCase();
+  const normalized: CronScheduleKind = lower === 'freeday' ? 'freeDay' : lower as CronScheduleKind;
   if (normalized !== 'solar') return normalized;
   const parts = splitCronFields(cron);
   const dow = parts.length === 6 ? parts[5] : parts.length === 5 ? parts[4] : '';

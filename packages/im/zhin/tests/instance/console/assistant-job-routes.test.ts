@@ -266,6 +266,24 @@ describe('schedule delivery target permission (#1250)', () => {
     expect((await post('scheduler', { id: 'im' }, '/remove')).status).toBe(200);
   });
 
+  it('update needs endpoint.operate on the delivery account while the job keeps running; disabling does not (#1250 b90)', async () => {
+    const target = { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', sceneId: 'g1', kind: 'group' } };
+    const update = vi.fn(async (id: string) => ({ id }));
+    state.assistant = { jobs: { ...jobs, update, list: async () => [
+      { id: 'im', enabled: true, schedule: { kind: 'solar', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target } },
+      { id: 'paused', enabled: false, schedule: { kind: 'solar', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target } },
+    ] } };
+    const post = await startAs();
+    expect(await post('scheduler', { id: 'im', schedule: { cron: '0 0 8 * * *' } }, '/update')).toMatchObject({
+      status: 403, body: { code: 'schedule_target_forbidden' } });
+    expect(await post('scheduler', { id: 'paused', enabled: true }, '/update')).toMatchObject({ status: 403 });
+    expect(update).not.toHaveBeenCalled();
+    expect((await post('scheduler', { id: 'im', enabled: false }, '/update')).status).toBe(200);
+    expect((await post('scheduler', { id: 'paused', label: 'x' }, '/update')).status).toBe(200);
+    expect((await post('scoped', { id: 'im', schedule: { cron: '0 0 8 * * *' } }, '/update')).status).toBe(200);
+    expect(update).toHaveBeenCalledTimes(3);
+  });
+
   it('a delivery target without an account is refused without naming an "undefined" account (#1250 b61)', async () => {
     const accountless = { channel: 'im', scene: { kind: 'group', sceneId: 'g1' } };
     const resume = vi.fn(async () => true);
@@ -387,5 +405,57 @@ describe('job Agent (#1250 b52)', () => {
     const post = await start();
     expect((await post('/set-agent', { id: 'known', agent: 'news' }, 'demo')).status).toBe(403);
     expect(agentJobs.setAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /assistant/jobs/update (#1250 b90)', () => {
+  const target = { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', sceneId: 'g1', kind: 'group' } };
+  const stored = () => [
+    { id: 'brief', enabled: true, label: '早报', schedule: { kind: 'solar', cron: '0 0 9 * * *', tz: 'Asia/Tokyo' },
+      action: { kind: 'agent', prompt: 'p', agent: 'briefing' }, notify: { channel: 'im', target } },
+    { id: 'tick', enabled: false, schedule: { kind: 'every', everyMs: 60_000 }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } },
+    { id: 'assistant-profile-morning-brief', enabled: true, source: 'profile', schedule: { kind: 'solar', cron: '0 0 7 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } },
+  ];
+  const update = vi.fn(async (id: string, patch: Record<string, unknown>) => {
+    const job = stored().find(entry => entry.id === id);
+    return job ? { ...job, ...(patch.schedule ? { schedule: patch.schedule } : {}), ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}) } : null;
+  });
+  beforeEach(() => { state.assistant = { jobs: { ...jobs, list: async () => stored(), update } }; });
+
+  it('changes the schedule, keeping the kind and time zone when only the cron is given, and the label and enabled state', async () => {
+    const post = await start();
+    const response = await post('/update', { id: 'brief', schedule: { cron: '0 0 8 * * *' } });
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('brief', { schedule: { kind: 'solar', cron: '0 0 8 * * *', tz: 'Asia/Tokyo' } });
+    expect((await response.json()).data.job.action).toEqual({ kind: 'agent', prompt: 'p', agent: 'briefing' });
+    expect((await post('/update', { id: 'brief', schedule: { kind: 'workday' } })).status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('brief', { schedule: { kind: 'workday', cron: '0 0 9 * * *', tz: 'Asia/Tokyo' } });
+    expect((await post('/update', { id: 'tick', label: ' 心跳 ', enabled: true })).status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('tick', { label: '心跳', enabled: true });
+    expect((await post('/update', { id: 'tick', label: null, schedule: { kind: 'every', everyMs: 120_000 } })).status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('tick', { schedule: { kind: 'every', everyMs: 120_000 }, label: null });
+  });
+
+  it('rejects bad bodies, unknown jobs and profile routines without calling the scheduler', async () => {
+    const post = await start();
+    const answer = async (body: unknown) => { const response = await post('/update', body); return { status: response.status, body: await response.json() }; };
+    expect(await answer({ schedule: { cron: '0 0 8 * * *' } })).toMatchObject({ status: 400, body: { code: 'invalid_argument' } });
+    expect(await answer({ id: 'brief' })).toMatchObject({ status: 400, body: { code: 'invalid_argument', error: expect.stringContaining('没有要修改的内容') } });
+    expect(await answer({ id: 'brief', enabled: 'yes' })).toMatchObject({ status: 400 });
+    expect(await answer({ id: 'brief', schedule: { cron: 'not a cron' } })).toMatchObject({ status: 400, body: { error: expect.stringContaining('Cron') } });
+    expect(await answer({ id: 'tick', schedule: { kind: 'solar' } })).toMatchObject({ status: 400, body: { error: expect.stringContaining('不是 cron 计划') } });
+    expect(await answer({ id: 'ghost', enabled: false })).toMatchObject({ status: 404, body: { code: 'not_found' } });
+    expect(await answer({ id: 'assistant-profile-morning-brief', schedule: { cron: '0 0 8 * * *' } }))
+      .toMatchObject({ status: 400, body: { code: 'schedule_update_profile', error: expect.stringContaining('assistant.profile.yml') } });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('is unavailable on an Agent package without update, and needs ops.schedule.write', async () => {
+    const post = await start();
+    expect((await post('/update', { id: 'brief', enabled: false }, 'demo')).status).toBe(403);
+    state.assistant = { jobs };
+    expect(await (await post('/update', { id: 'known', enabled: false })).json()).toMatchObject({ code: 'unavailable' });
+    expect(update).not.toHaveBeenCalled();
   });
 });

@@ -85,6 +85,18 @@ export interface ScheduleJob {
   provenance?: ScheduleJobProvenance;
 }
 
+/**
+ * In-place change of a persistent job (`schedule_update`, `zhin schedule update`, #1250 b90): only
+ * the timing, the label and whether it is enabled. Everything else (Agent, prompt, delivery target,
+ * creator, execution plan, budget, provenance) is kept as stored.
+ */
+export interface ScheduleJobUpdate {
+  readonly schedule?: JobSchedule;
+  /** `null`: remove the label. */
+  readonly label?: string | null;
+  readonly enabled?: boolean;
+}
+
 /** ADR 0067 D2.1: what the creating turn had read when the job was created. */
 export interface ScheduleJobProvenance {
   readonly tainted: true;

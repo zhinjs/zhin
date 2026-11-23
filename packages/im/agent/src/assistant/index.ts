@@ -82,6 +82,7 @@ export type {
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
   ScheduleJobProvenance,
+  ScheduleJobUpdate,
   JobAction,
   JobNotify,
   JobSchedule,

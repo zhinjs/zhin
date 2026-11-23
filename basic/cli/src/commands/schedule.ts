@@ -38,7 +38,7 @@ async function requireHost(): Promise<HostHttpConfig> {
 /** Which write a refusal answers, for {@link describeScheduleRefusal}. */
 export type ScheduleWriteAction =
   | { readonly kind: 'add' }
-  | { readonly kind: 'resume' | 'set-agent'; readonly id: string };
+  | { readonly kind: 'resume' | 'set-agent' | 'update'; readonly id: string };
 
 const AGENT_NOT_FOUND = /Agent 不存在：(.+?)。可用的 Agent：(.*)$/u;
 
@@ -76,6 +76,12 @@ export function describeScheduleRefusal(result: HostFetchResult<unknown>, action
       return [
         `无法修改任务 ${action.id} 的 Agent：你没有权限向它的投递目标发消息${need}`,
         '请让管理员授予你投递账号的 endpoint.operate 权限',
+      ];
+    }
+    if (action.kind === 'update') {
+      return [
+        `无法修改任务 ${action.id}：你没有权限向它的投递目标发消息${need}`,
+        '请让管理员授予你投递账号的 endpoint.operate 权限；只停用任务（--disable）不需要该权限',
       ];
     }
     return [
@@ -310,6 +316,92 @@ const setAgentCommand = new Command('set-agent')
     output.line(opts.clear ? `已恢复默认 Agent: ${id}` : `已将任务 ${id} 的 Agent 设为: ${agent}`);
   });
 
+const updateCommand = new Command('update')
+  .description('按 ID 修改任务的计划时间、标签或启用状态；Agent、提示词与投递目标保持不变（不要删除后重建）')
+  .argument('<id>', '任务 ID')
+  .argument('[cronExpression]', '新的 Cron 表达式（与 --cron 相同）')
+  .option('--cron <expression>', '新的 Cron 表达式，如 "0 0 8 * * *"；省略 --kind 时沿用任务原来的计划类型')
+  .option('--kind <kind>', '新的计划类型 solar|lunar|workday|freeDay；省略 --cron 时沿用原来的 Cron')
+  .option('--at <iso8601>', '改为单次执行，ISO8601')
+  .option('--every <interval>', '改为固定间隔，如 30m, 1h, 1d')
+  .option('-l, --label <label>', '新标签；传空字符串清除标签')
+  .option('--enable', '启用任务')
+  .option('--disable', '停用任务')
+  .action(async (id: string, cronExpression: string | undefined, opts: {
+    cron?: string;
+    kind?: string;
+    at?: string;
+    every?: string;
+    label?: string;
+    enable?: boolean;
+    disable?: boolean;
+  }) => {
+    if (cronExpression !== undefined && opts.cron !== undefined) {
+      logger.error('Cron 表达式只能给一次（位置参数或 --cron）');
+      process.exit(1);
+    }
+    const cronInput = opts.cron ?? cronExpression;
+    if (opts.enable && opts.disable) {
+      logger.error('--enable 与 --disable 只能二选一');
+      process.exit(1);
+    }
+    const timing = [cronInput !== undefined || opts.kind !== undefined, opts.at !== undefined, opts.every !== undefined]
+      .filter(Boolean).length;
+    if (timing > 1) {
+      logger.error('--cron / --kind、--at 与 --every 只能选一种');
+      process.exit(1);
+    }
+
+    const kind = opts.kind?.trim();
+    if (kind !== undefined && !['solar', 'lunar', 'workday', 'freeDay'].includes(kind)) {
+      logger.error('--kind 无效，可选 solar | lunar | workday | freeDay');
+      process.exit(1);
+    }
+    const atMs = opts.at === undefined ? undefined : new Date(opts.at).getTime();
+    if (atMs !== undefined && (Number.isNaN(atMs) || atMs <= Date.now())) {
+      logger.error('--at 必须是未来的有效 ISO8601 时间');
+      process.exit(1);
+    }
+    let schedule: Record<string, unknown> | undefined;
+    let invalid: string | undefined;
+    try {
+      if (atMs !== undefined) schedule = { kind: 'at', atMs };
+      else if (opts.every !== undefined) schedule = { kind: 'every', everyMs: parseEveryMs(opts.every) };
+      else if (cronInput !== undefined || kind !== undefined) {
+        schedule = {
+          ...(kind ? { kind } : {}),
+          ...(cronInput !== undefined ? { cron: normalizeCronExpression(cronInput) } : {}),
+        };
+      }
+    } catch (e) {
+      invalid = (e as Error).message;
+    }
+    if (invalid !== undefined) {
+      logger.error(invalid);
+      process.exit(1);
+    }
+
+    const label = opts.label === undefined ? undefined : opts.label.trim() || null;
+    const enabled = opts.enable ? true : opts.disable ? false : undefined;
+    if (!schedule && label === undefined && enabled === undefined) {
+      logger.error('请至少指定一项修改：--cron / --kind / --at / --every / --label / --enable / --disable');
+      process.exit(1);
+    }
+
+    const data = await requireOk(await hostPost<{ job?: ScheduleJobRecordCli }>(
+      await requireHost(),
+      '/assistant/jobs/update',
+      { id, ...(schedule ? { schedule } : {}), ...(label !== undefined ? { label } : {}), ...(enabled !== undefined ? { enabled } : {}) },
+    ), { kind: 'update', id });
+    output.line(`已更新任务: ${id}（Agent、提示词与投递目标保持不变）`);
+    const job = data?.job;
+    if (job?.schedule) output.line(`  计划:   ${scheduleSummary(job.schedule)}`);
+    if (job && typeof job.enabled === 'boolean') output.line(`  状态:   ${job.enabled ? '启用' : '暂停'}`);
+    if (job?.label) output.line(`  标签:   ${job.label}`);
+    const next = job?.state ? nextRunSummary(job) : undefined;
+    if (next) output.line(`  下次:   ${next}`);
+  });
+
 const removeCommand = new Command('remove')
   .description('按 ID 删除持久化调度任务')
   .argument('<id>', '任务 ID')
@@ -341,6 +433,7 @@ export const scheduleCommand = new Command('schedule')
   .addCommand(listCommand)
   .addCommand(addCommand)
   .addCommand(setAgentCommand)
+  .addCommand(updateCommand)
   .addCommand(removeCommand)
   .addCommand(pauseCommand)
   .addCommand(resumeCommand);

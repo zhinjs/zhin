@@ -35,7 +35,7 @@ import type {
 } from '../schedule-domain/execution-history.js';
 import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
-import type { ScheduleJob, ScheduleJobState, JobSchedule } from './types.js';
+import type { ScheduleJob, ScheduleJobState, ScheduleJobUpdate, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
 import { ScheduleJobAgentError, profileJobAgentMessage } from './schedule-agent.js';
 import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
@@ -620,6 +620,36 @@ export class TimerScheduler {
     // Resume always recomputes the next run (the paused job had none).
     await this.#syncNextRun({ ...job, state: { ...job.state, nextRunAtMs: undefined } });
     return true;
+  }
+
+  /**
+   * Changes a job in place (#1250 b90): its schedule, label and whether it is enabled; every other
+   * field (Agent, prompt, delivery, creator, plan) stays as stored. `null`: no such job. The job is
+   * re-registered with its new timing and its next run recomputed; disabling it works like
+   * `pauseJob`. Callers refuse profile routines (re-declared from the Profile on every start).
+   */
+  async updateJob(id: string, update: ScheduleJobUpdate): Promise<ScheduleJob | null> {
+    const job = await this.store.getJob(id);
+    if (!job) return null;
+    if (update.schedule) job.schedule = update.schedule;
+    if (update.label === null) delete job.label;
+    else if (update.label !== undefined) job.label = update.label;
+    if (update.enabled !== undefined) job.enabled = update.enabled;
+    job.updatedAt = Date.now();
+    const dispose = this.disposes.get(id);
+    if (dispose) {
+      dispose();
+      this.disposes.delete(id);
+    }
+    // A pending automatic retry belongs to the old timing (#1250 b40).
+    if (update.schedule || !job.enabled) {
+      this.#cancelModelRetry(id);
+      job.state = { ...withoutPendingModelRetry(job.state), nextRunAtMs: undefined };
+    }
+    await this.store.upsertJob(job);
+    if (isRuntimeSchedulable(job)) this.registerOne(job);
+    const next = await this.#syncNextRun(job);
+    return { ...job, state: { ...job.state, nextRunAtMs: next } };
   }
 
   /**

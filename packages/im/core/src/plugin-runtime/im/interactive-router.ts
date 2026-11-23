@@ -230,6 +230,8 @@ export class RuntimeInteractiveRouter<Admission = never> {
   readonly #fallbacks = new Map<string, InteractiveFallbackEntry[]>();
   readonly #expired: ExpiredFallbackEntry[] = [];
   readonly #conversationNumbers = new Map<string, number>();
+  /** Keyboards whose prompt ended (answered, cancelled, timed out): no longer waiting for an answer. */
+  readonly #settled = new WeakSet<InteractiveFallbackEntry>();
   readonly #fallbackTtlMs: number;
   readonly #numberingScope: 'router' | 'conversation';
 
@@ -285,8 +287,10 @@ export class RuntimeInteractiveRouter<Admission = never> {
       : undefined;
     const key = conversationRefKey(conversation);
     const entries = this.#fallbacks.get(key) ?? [];
+    // #1250 b90: numbering restarts at 1 once no keyboard in the conversation is still waiting for an
+    // answer (expired, retired, or its prompt ended); while one is, new labels continue after it.
     if (this.#numberingScope === 'conversation'
-      && !entries.some(entry => this.#isEntryLive(entry, generation, incarnation?.snapshot))) {
+      && !entries.some(entry => !this.#settled.has(entry) && this.#isEntryLive(entry, generation, incarnation?.snapshot))) {
       this.#conversationNumbers.delete(key);
     }
     const allocated: Record<string, string> = {};
@@ -301,6 +305,23 @@ export class RuntimeInteractiveRouter<Admission = never> {
     }));
     this.#fallbacks.set(key, entries);
     return allocated;
+  }
+
+  /**
+   * Marks the keyboards carrying any of `payloads` as no longer waiting for an answer (their prompt
+   * ended), #1250 b90. Their labels keep resolving until they expire (a late reply to an ended
+   * prompt is told it expired), but they no longer hold back per-conversation numbering: the next
+   * keyboard in a conversation with nothing pending starts at 1 again, and a newer keyboard's labels
+   * take precedence over a settled one's.
+   */
+  settleFallback(payloads: Iterable<string>): void {
+    const ended = new Set(payloads);
+    if (ended.size === 0) return;
+    for (const entries of this.#fallbacks.values()) {
+      for (const entry of entries) {
+        if (Object.values(entry.map).some(payload => ended.has(payload))) this.#settled.add(entry);
+      }
+    }
   }
 
   /**

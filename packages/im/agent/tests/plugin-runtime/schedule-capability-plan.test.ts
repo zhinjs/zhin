@@ -108,7 +108,7 @@ describe('schedule_preview runs offer no schedule_* tool (#1250 b55)', () => {
     expect(plan.allTools.map(t => t.name)).toEqual(['mcp__srv__schedule_meeting', 'send_reminder']);
     expect(isScheduleManagementTool('mcp__srv__schedule_meeting')).toBe(false);
     expect(isScheduleManagementTool('schedule_meeting')).toBe(false);
-    for (const name of ['schedule_list', 'schedule_add', 'schedule_preview', 'schedule_remove', 'schedule_pause', 'schedule_resume']) {
+    for (const name of ['schedule_list', 'schedule_add', 'schedule_preview', 'schedule_update', 'schedule_remove', 'schedule_pause', 'schedule_resume']) {
       expect(isScheduleManagementTool(name)).toBe(true);
       expect(isScheduleManagementTool(`plugin__tools__${name}`)).toBe(true);
     }

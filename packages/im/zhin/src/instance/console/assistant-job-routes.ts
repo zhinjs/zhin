@@ -88,6 +88,69 @@ function parseTarget(value: unknown): { target?: Record<string, unknown> } | { e
   return { target: { channel: 'im', scene: { platform, endpointKey, sceneId, kind } } };
 }
 
+/** `schedule` of a job body: `at` / `every`, or a cron kind with a valid cron. */
+function parseScheduleBody(
+  input: Record<string, unknown>,
+  now: number,
+): { schedule: Record<string, unknown> } | AssistantJobInputError {
+  if (input.kind === 'at') {
+    const atMs = input.atMs;
+    if (typeof atMs !== 'number' || !Number.isSafeInteger(atMs) || atMs <= now) {
+      return invalidInput('执行时间（schedule.atMs）必须是未来的时间');
+    }
+    return { schedule: { kind: 'at', atMs, deleteAfterRun: true } };
+  }
+  if (input.kind === 'every') {
+    const everyMs = input.everyMs;
+    if (typeof everyMs !== 'number' || !Number.isSafeInteger(everyMs) || everyMs < 1000) {
+      return invalidInput('执行间隔（schedule.everyMs）必须是不小于 1000 的整数毫秒');
+    }
+    return { schedule: { kind: 'every', everyMs } };
+  }
+  if (typeof input.kind === 'string' && CRON_KINDS.has(input.kind)) {
+    const cron = typeof input.cron === 'string' ? input.cron.trim() : '';
+    try {
+      parseCron(cron);
+    } catch (error) {
+      return invalidInput(`Cron 表达式无效: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { schedule: { kind: input.kind, cron } };
+  }
+  return invalidInput('计划类型（schedule.kind）只能是 solar | lunar | workday | freeDay | every | at');
+}
+
+/**
+ * `schedule` of `POST /assistant/jobs/update` (#1250 b90), merged with the job's current one: a
+ * `cron` without `kind` keeps the job's calendar kind (solar for an `at` / `every` job), a `kind`
+ * without `cron` keeps its cron, and a cron job keeps its time zone (and holiday settings).
+ */
+function parseScheduleUpdateBody(
+  input: Record<string, unknown>,
+  current: Record<string, unknown>,
+  now = Date.now(),
+): { schedule: Record<string, unknown> } | AssistantJobInputError {
+  if (input.kind === 'at' || input.kind === 'every') return parseScheduleBody(input, now);
+  if (input.kind !== undefined && (typeof input.kind !== 'string' || !CRON_KINDS.has(input.kind))) {
+    return parseScheduleBody(input, now);
+  }
+  const currentCron = typeof current.cron === 'string' ? current.cron : undefined;
+  const cron = typeof input.cron === 'string' && input.cron.trim() ? input.cron : currentCron;
+  if (!cron) return invalidInput('该任务当前不是 cron 计划：请同时提供 Cron 表达式（schedule.cron）');
+  if (input.kind === undefined && current.kind === 'holiday') {
+    try {
+      parseCron(cron.trim());
+    } catch (error) {
+      return invalidInput(`Cron 表达式无效: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return { schedule: { ...current, cron: cron.trim() } };
+  }
+  const kind = input.kind ?? (typeof current.kind === 'string' && CRON_KINDS.has(current.kind) ? current.kind : 'solar');
+  const parsed = parseScheduleBody({ kind, cron }, now);
+  if ('error' in parsed) return parsed;
+  const tz = currentCron !== undefined && typeof current.tz === 'string' ? current.tz : undefined;
+  return tz ? { schedule: { ...parsed.schedule, tz } } : parsed;
+}
+
 /** Validates the operator job body and rebuilds it from known fields only. */
 export function parseAssistantJobInput(
   body: unknown,
@@ -102,31 +165,8 @@ export function parseAssistantJobInput(
   }
   const target = channel === 'im' ? parseTarget(record(data.notify).target) : {};
   if ('error' in target) return { error: target.error, code: 'schedule_target_invalid' };
-  const input = record(data.schedule);
-  let schedule: Record<string, unknown>;
-  if (input.kind === 'at') {
-    const atMs = input.atMs;
-    if (typeof atMs !== 'number' || !Number.isSafeInteger(atMs) || atMs <= now) {
-      return invalidInput('执行时间（schedule.atMs）必须是未来的时间');
-    }
-    schedule = { kind: 'at', atMs, deleteAfterRun: true };
-  } else if (input.kind === 'every') {
-    const everyMs = input.everyMs;
-    if (typeof everyMs !== 'number' || !Number.isSafeInteger(everyMs) || everyMs < 1000) {
-      return invalidInput('执行间隔（schedule.everyMs）必须是不小于 1000 的整数毫秒');
-    }
-    schedule = { kind: 'every', everyMs };
-  } else if (typeof input.kind === 'string' && CRON_KINDS.has(input.kind)) {
-    const cron = typeof input.cron === 'string' ? input.cron.trim() : '';
-    try {
-      parseCron(cron);
-    } catch (error) {
-      return invalidInput(`Cron 表达式无效: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    schedule = { kind: input.kind, cron };
-  } else {
-    return invalidInput('计划类型（schedule.kind）只能是 solar | lunar | workday | freeDay | every | at');
-  }
+  const schedule = parseScheduleBody(record(data.schedule), now);
+  if ('error' in schedule) return schedule;
   const label = typeof data.label === 'string' && data.label.trim() ? data.label.trim() : undefined;
   if (data.agent !== undefined && data.agent !== null && typeof data.agent !== 'string') {
     return invalidInput('Agent（agent）必须是 Agent 名称');
@@ -138,7 +178,7 @@ export function parseAssistantJobInput(
       id: `sched_${now.toString(36)}_${randomUUID().slice(0, 8)}`,
       ...(label ? { label } : {}),
       enabled: true,
-      schedule,
+      schedule: schedule.schedule,
       action: { kind: 'agent', prompt, ...(agent ? { agent } : {}) },
       notify: target.target ? { channel, target: target.target } : { channel },
       source: 'manual',
@@ -194,6 +234,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
         list?(): Promise<readonly Record<string, unknown>[]>;
         agents?(): readonly string[];
         setAgent?(id: string, agent: string | undefined): Promise<Record<string, unknown> | null>;
+        update?(id: string, update: { schedule?: Record<string, unknown>; label?: string | null; enabled?: boolean }): Promise<Record<string, unknown> | null>;
       },
       body: unknown,
       principal: ConsolePrincipal | undefined,
@@ -324,4 +365,54 @@ export function registerAssistantJobRoutes(options: Readonly<{
       ? { status: 200, body: { success: true, data: { job } } }
       : { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
   }), { summary: 'Set the Agent of an assistant job', tags: ['assistant'] });
+
+  // #1250 b90: `zhin schedule update` — the schedule, label and enabled state of a job, in place;
+  // its Agent, prompt, delivery target and creator are kept.
+  http.route('POST', `${base}/assistant/jobs/update`, guarded(async (jobs, body, principal) => {
+    const data = record(body);
+    const id = typeof data.id === 'string' ? data.id.trim() : '';
+    if (!id) return { status: 400, body: { success: false, code: 'invalid_argument', error: '缺少任务 ID（id）' } };
+    if (!jobs.update || !jobs.list) {
+      return { status: 404, body: { success: false, code: 'unavailable', error: '运行中的 Agent 包不支持修改任务，请升级 @zhin.js/agent' } };
+    }
+    const hasSchedule = data.schedule !== undefined && data.schedule !== null;
+    if (hasSchedule && (typeof data.schedule !== 'object' || Array.isArray(data.schedule))) {
+      return { status: 400, body: { success: false, code: 'invalid_argument', error: '计划（schedule）必须是对象' } };
+    }
+    if (data.label !== undefined && data.label !== null && typeof data.label !== 'string') {
+      return { status: 400, body: { success: false, code: 'invalid_argument', error: '标签（label）必须是字符串；清除时传 null' } };
+    }
+    if (data.enabled !== undefined && typeof data.enabled !== 'boolean') {
+      return { status: 400, body: { success: false, code: 'invalid_argument', error: '启用状态（enabled）必须是 true 或 false' } };
+    }
+    if (!hasSchedule && data.label === undefined && data.enabled === undefined) {
+      return { status: 400, body: { success: false, code: 'invalid_argument', error: '没有要修改的内容：需要 schedule、label 或 enabled' } };
+    }
+    const existing = (await jobs.list()).find(job => job.id === id);
+    if (!existing) return { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
+    if (existing.source === 'profile') {
+      // Re-declared from the Assistant Profile on every start: a change here would be reverted.
+      return { status: 400, body: { success: false, code: 'schedule_update_profile',
+        error: `任务 ${id} 来自 Assistant Profile（routines），每次启动都会按 Profile 重新声明，在这里修改会被还原。`
+          + '请在 Profile 文件（assistant.profile.file，默认 assistant.profile.yml）中修改该 routine' } };
+    }
+    const update: { schedule?: Record<string, unknown>; label?: string | null; enabled?: boolean } = {};
+    if (hasSchedule) {
+      const schedule = parseScheduleUpdateBody(record(data.schedule), record(existing.schedule));
+      if ('error' in schedule) return { status: 400, body: { success: false, error: schedule.error, code: schedule.code } };
+      update.schedule = schedule.schedule;
+    }
+    if (data.label !== undefined) update.label = typeof data.label === 'string' && data.label.trim() ? data.label.trim() : null;
+    if (data.enabled !== undefined) update.enabled = data.enabled as boolean;
+    // A job that stays enabled keeps delivering to its explicit target on every run (at a new time,
+    // or again after being disabled): the same `endpoint.operate` `resume` and `set-agent` require.
+    const runs = update.enabled ?? existing.enabled === true;
+    const notify = record(existing.notify);
+    const target = notify.channel === 'im' ? notify.target : undefined;
+    if (runs && target && !mayDeliverTo(principal, target)) return { status: 403, body: targetForbiddenBody(target) };
+    const job = await jobs.update(id, update);
+    return job
+      ? { status: 200, body: { success: true, data: { job } } }
+      : { status: 404, body: { success: false, code: 'not_found', error: `任务不存在: ${id}` } };
+  }), { summary: 'Update the schedule, label or enabled state of an assistant job', tags: ['assistant'] });
 }

@@ -12,6 +12,7 @@ import type {
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
   ScheduleJobProvenance,
+  ScheduleJobUpdate,
 } from './types.js';
 export function generateScheduleJobId(): string {
   return `sched_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -183,6 +184,68 @@ export function parseScheduleAddFromToolArgs(
     activityFeedback: args.activity_feedback === true ? true : undefined,
     budget: parseScheduleBudget(args),
   };
+}
+
+const UPDATE_TIMING_FIELDS = ['schedule_kind', 'cron', 'delay_minutes', 'at_ms', 'tz'] as const;
+const UPDATE_SCHEDULE_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay', 'holiday', 'at']);
+
+function given(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== '';
+}
+
+/**
+ * The new timing of a `schedule_update` (#1250 b90), merged with the job's current one: a new
+ * `cron` keeps the job's calendar kind (and time zone, holiday settings) unless `schedule_kind` is
+ * given, and a new `schedule_kind` keeps its cron. `delay_minutes` turns it into a one-shot job.
+ */
+function buildScheduleUpdate(args: Record<string, unknown>, current: JobSchedule): JobSchedule | { error: string } {
+  const kindArg = given(args.schedule_kind) ? String(args.schedule_kind) : undefined;
+  if (kindArg !== undefined && !UPDATE_SCHEDULE_KINDS.has(kindArg)) {
+    return { error: `schedule_kind 无效: ${kindArg}，可选 solar | lunar | workday | freeDay | holiday` };
+  }
+  if (kindArg === 'at' || given(args.delay_minutes) || given(args.at_ms)) return buildScheduleFromRecord(args);
+  const currentCron = 'cron' in current ? current : undefined;
+  const cron = given(args.cron) ? String(args.cron) : currentCron?.cron;
+  if (!cron) return { error: '该任务当前不是 cron 计划：请同时提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
+  const kind = kindArg ?? currentCron?.kind;
+  const tz = given(args.tz) ? String(args.tz) : currentCron?.tz;
+  const holiday = current.kind === 'holiday' ? current : undefined;
+  return buildScheduleFromRecord({
+    schedule_kind: kind,
+    cron,
+    ...(tz ? { tz } : {}),
+    festivals: args.festivals ?? holiday?.festivals,
+    every_day_of_holiday: args.every_day_of_holiday ?? holiday?.everyDayOfHoliday,
+  });
+}
+
+/**
+ * `schedule_update` arguments (#1250 b90): the new timing (`cron` / `schedule_kind` /
+ * `delay_minutes`), `label` (empty: removed) and `enabled`. Nothing else of the job can be changed
+ * here, so its Agent, prompt, delivery target and creator stay as they are.
+ */
+export function parseScheduleUpdateFromToolArgs(
+  args: Record<string, unknown>,
+  current: Pick<ScheduleJob, 'schedule'>,
+): ScheduleJobUpdate | { error: string } {
+  const update: { schedule?: JobSchedule; label?: string | null; enabled?: boolean } = {};
+  if (UPDATE_TIMING_FIELDS.some(field => given(args[field]))) {
+    const schedule = buildScheduleUpdate(args, current.schedule);
+    if ('error' in schedule) return schedule;
+    update.schedule = schedule;
+  }
+  if (args.label !== undefined && args.label !== null) {
+    const label = String(args.label).trim();
+    update.label = label ? label : null;
+  }
+  if (args.enabled !== undefined && args.enabled !== null) {
+    if (typeof args.enabled !== 'boolean') return { error: 'enabled 必须是 true 或 false' };
+    update.enabled = args.enabled;
+  }
+  if (Object.keys(update).length === 0) {
+    return { error: '请至少提供一项修改：cron、schedule_kind、delay_minutes、label 或 enabled' };
+  }
+  return update;
 }
 
 export function parseScheduleAddFromRpcMessage(

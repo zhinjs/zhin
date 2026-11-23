@@ -19,6 +19,12 @@ describe('schedule-cron', () => {
     });
   });
 
+  it('freeDay 不因大小写退回 solar (#1250 b90)', () => {
+    expect(inferScheduleKindFromCron('freeDay', '0 0 10 * * *')).toBe('freeDay');
+    expect(inferScheduleKindFromCron('FREEDAY', '0 0 10 * * *')).toBe('freeDay');
+    expect(buildJobScheduleFromCronInput('freeDay', '0 0 10 * * *')).toEqual({ kind: 'freeDay', cron: '0 0 10 * * *' });
+  });
+
   it('solar 周一 cron 不自动改 kind', () => {
     expect(inferScheduleKindFromCron('solar', '0 0 9 * * 1')).toBe('solar');
   });

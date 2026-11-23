@@ -11,6 +11,7 @@ import {
   addScheduleJob,
   generateScheduleJobId,
   parseScheduleAddFromToolArgs,
+  parseScheduleUpdateFromToolArgs,
   type ScheduleInvocationContext,
 } from './assistant/schedule-job-service.js';
 import { ADMIN_APPROVABLE_TOOL_TAG } from './security/admin-approvable.js';
@@ -131,7 +132,8 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
     ),
     registration(
       'schedule_add',
-      '添加持久化调度任务。中国大陆工作日必须使用 workday；支持 6 段 cron 或 delay_minutes 一次性任务。',
+      '添加持久化调度任务。中国大陆工作日必须使用 workday；支持 6 段 cron 或 delay_minutes 一次性任务。'
+        + '要修改已有任务（改时间、标签、启用状态）请用 schedule_update，不要删除后重建：重建会丢掉隐藏的 Agent 等设置。',
       schema({
         schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday，默认 solar' },
         cron: { type: 'string', description: '6 段 cron（秒 分 时 日 月 周）' },
@@ -203,6 +205,46 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           ...(result.status === 'degraded' ? { warning: `预演没有完成任务：${result.error ?? ''}` } : {}),
           message: ['预演完成。确认无误后使用 schedule_add 并传入 execution_plan 创建正式任务。', unattended?.message]
             .filter(Boolean).join(''),
+        };
+      },
+    ),
+    registration(
+      'schedule_update',
+      '修改持久化调度任务（按任务 ID）：只改计划时间（cron / schedule_kind / delay_minutes）、标签和启用状态；'
+        + '任务的 Agent、提示词、投递目标与创建者保持不变。修改已有任务请用它，不要删除后重建。'
+        + '只给 cron 时沿用任务原来的 schedule_kind，只给 schedule_kind 时沿用原来的 cron。',
+      schema({
+        id: { type: 'string', description: '任务 ID' },
+        cron: { type: 'string', description: '新的 6 段 cron（秒 分 时 日 月 周）' },
+        schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday；省略时沿用原来的' },
+        delay_minutes: { type: 'number', description: '改为一次性任务：从现在起延迟的分钟数' },
+        label: { type: 'string', description: '新标签；空字符串清除标签' },
+        enabled: { type: 'boolean', description: 'true 启用，false 停用' },
+      }, ['id']),
+      async (input, context) => {
+        if (!manager?.engine) return { error: '引擎不可用' };
+        const id = String(input.id ?? '');
+        // #1250 b55 / b90: the same ownership rules as schedule_remove / pause / resume.
+        const notFound = isScheduleOwner(context) ? '未找到' : scheduleJobNotManageable(id);
+        const job = (await manager.engine.listJobs()).find((entry) => entry.id === id);
+        if (!job) return { error: notFound };
+        const refusal = scheduleJobChangeRefusal(job, context);
+        if (refusal) return { error: refusal };
+        const update = parseScheduleUpdateFromToolArgs(input, job);
+        if ('error' in update) return { error: update.error };
+        const updated = await manager.engine.updateJob(id, update);
+        if (!updated) return { error: notFound };
+        const next = updated.enabled && typeof updated.state?.nextRunAtMs === 'number'
+          ? formatDateTime(updated.state.nextRunAtMs)
+          : undefined;
+        return {
+          success: true,
+          id,
+          schedule: updated.schedule,
+          ...(updated.label ? { label: updated.label } : {}),
+          enabled: updated.enabled,
+          ...(next ? { next_run: next } : {}),
+          message: '已更新调度任务；Agent、提示词与投递目标保持不变',
         };
       },
     ),

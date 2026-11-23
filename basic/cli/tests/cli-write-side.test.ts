@@ -1059,6 +1059,57 @@ describe('schedule (running Host)', () => {
     expect(requests[1].body).toEqual({ id: 'j1', agent: null });
   });
 
+  it('update 只发送指定的修改并输出新的计划；Agent 等保持不变 (#1250 b90)', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { job: {
+      id: 'brief', label: '早报', enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+      action: { kind: 'agent', prompt: '早报', agent: 'briefing' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 2,
+      state: { nextRunAtMs: Date.UTC(2026, 10, 24, 0) } } } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'workday', '--label', '每日早报', '--disable']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '0 0 7 * * *', '--enable', '--label', '']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--every', '1h']);
+    expect(requests.map(request => [new URL(request.url).pathname, request.body])).toEqual([
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { cron: '0 0 8 * * *' } }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { kind: 'workday' }, label: '每日早报', enabled: false }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { cron: '0 0 7 * * *' }, label: null, enabled: true }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { kind: 'every', everyMs: 60 * 60 * 1000 } }],
+    ]);
+    const output = lines.join('\n');
+    expect(output).toContain('已更新任务: brief（Agent、提示词与投递目标保持不变）');
+    expect(output).toContain('计划:   solar 0 0 8 * * *');
+    expect(output).toContain(`下次:   ${formatDateTime(Date.UTC(2026, 10, 24, 0))}`);
+  });
+
+  it('update 参数无效时不发请求；Host 拒绝时说明原因并以 1 退出 (#1250 b90)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    const invalid: [string[], string][] = [
+      [['update', 'brief'], '请至少指定一项修改'],
+      [['update', 'brief', '--enable', '--disable'], '--enable 与 --disable 只能二选一'],
+      [['update', 'brief', '--cron', '0 8 * * *', '--every', '1h'], '只能选一种'],
+      [['update', 'brief', '--kind', 'weekly'], '--kind 无效'],
+      [['update', 'brief', '--cron', '8 * *'], 'cron 须为 5 或 6 段'],
+      [['update', 'brief', '--at', '2000-01-01T00:00:00Z'], '--at 必须是未来'],
+    ];
+    for (const [args, message] of invalid) {
+      await expect(scheduleCommand.parseAsync(['node', 'zhin', ...args])).rejects.toThrow('process.exit:1');
+      expect(String(error.mock.calls.at(-1)?.[0])).toContain(message);
+    }
+    expect(requests).toHaveLength(0);
+    stubHost(() => ({ status: 404, body: { success: false, code: 'not_found', error: '任务不存在: ghost' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'ghost', '--disable'])).rejects.toThrow('process.exit:1');
+    expect(requests.map(request => new URL(request.url).pathname)).toEqual(['/api/assistant/jobs/update']);
+    stubHost(() => ({ status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '没有向该账号投递的权限：需要 icqq / bot-1 上的 endpoint.operate' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('无法修改任务 brief：你没有权限向它的投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
+    expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('--disable');
+  });
+
   it('resume 被投递目标拒绝（403 schedule_target_forbidden）时说明原因并以 1 退出 (#1250 b61)', async () => {
     const { logger } = await import('../src/utils/logger.js');
     const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
