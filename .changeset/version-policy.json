@@ -1,4 +1,41 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": []
+  "approvedNonPatchReleases": [
+    {
+      "package": "@zhin.js/kernel",
+      "type": "minor",
+      "version": "1.7.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-23）：第 89 批——新增导出 `redactChatIdentityBindText()`、`isChatIdentityBindText()`（按形态隐藏聊天身份绑定码）。1.6.0 已发布，本次为 1.7.0。"
+    },
+    {
+      "package": "@zhin.js/core",
+      "type": "minor",
+      "version": "1.15.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-23）：第 89 批——再导出 `redactChatIdentityBindText()`、`isChatIdentityBindText()`；第 90 批——确认卡提问结束后释放编号（行为变更）。1.14.0 已发布，本次为 1.15.0。"
+    },
+    {
+      "package": "zhin.js",
+      "type": "minor",
+      "version": "1.11.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-23）：第 89 批——主入口再导出绑定码脱敏函数，`attention.list` 的 `chat-roles.no-owner` 条目下发 `state.simulationOnly`，会话记录与回放按形态隐藏绑定码；第 90 批——新增路由 `POST /api/assistant/jobs/update`，任务新建路由的计划类型不区分大小写、支持 `holiday` 并按工具同一规则校验。1.10.0 已发布，本次为 1.11.0。"
+    },
+    {
+      "package": "@zhin.js/console-protocol",
+      "type": "minor",
+      "version": "1.10.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-23）：第 89 批——`ConsoleAttentionItem` 新增可选字段 `state`（类型 `ConsoleAttentionItemState`，含 `simulationOnly`）。1.9.0 已发布，本次为 1.10.0。"
+    },
+    {
+      "package": "@zhin.js/agent",
+      "type": "minor",
+      "version": "1.11.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-23）：第 90 批——新增 Agent 工具 `schedule_update`，`TimerScheduler.updateJob()`，导出 `ScheduleJobUpdate`、`buildCronJobSchedule()`、`CronJobScheduleErrorCode`，Assistant 运行时 `jobs` 端口新增可选 `update`。1.10.0 已发布，本次为 1.11.0。"
+    },
+    {
+      "package": "@zhin.js/cli",
+      "type": "minor",
+      "version": "1.10.0",
+      "reason": "所有者已批准（zhinjs/zhin#1250，2026-11-23）：第 90 批——新增命令 `zhin schedule update`，`zhin schedule add` 的 `--kind` 不区分大小写并支持 `holiday`。1.9.2 已发布，本次为 1.10.0。"
+    }
+  ]
 }
