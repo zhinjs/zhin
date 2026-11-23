@@ -598,6 +598,8 @@ zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
 zhin schedule add "0 0 8 * * *" --prompt "整理今日早报" --agent news
 zhin schedule set-agent <id> <agent>     # 修改任务由哪个 Agent 执行
 zhin schedule set-agent <id> --clear     # 恢复默认 Agent（zhin）
+zhin schedule update <id> --cron "0 0 8 * * *"   # 改时间，其余设置不变
+zhin schedule update <id> [--kind <kind>] [--at <iso8601> | --every <interval>] [--label <label>] [--enable | --disable]
 zhin schedule remove <id>
 zhin schedule pause <id>
 zhin schedule resume <id>
@@ -614,6 +616,10 @@ zhin schedule resume <id>
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
 已有任务改用别的 Agent 用 `zhin schedule set-agent <id> <agent>`，`--clear` 恢复默认 Agent；不必停服改数据库。名称同样按 `ai.agents` 校验，心跳任务始终由默认 Agent 执行、不能修改；Profile 例程会被拒绝（每次启动按 Profile 重新声明，请改 `assistant.profile.yml` 中该 routine 的 `agent` 字段）；任务有投递目标时需要该账号上的 `endpoint.operate`，否则 403。`zhin schedule list` 对 Agent 已从 `ai.agents` 删除的任务标出「⚠ Agent 不存在」。修改在下次运行时生效。两条命令都需要 `ops.schedule.write`（经 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent`；Console 对应 `cron:add` 的 `agent` 字段与 `cron:set-agent`）。
+
+修改已有任务的时间、标签或启用状态用 `zhin schedule update <id>`，不要删除后重建（重建会丢掉任务的 Agent、投递目标、创建者和执行计划）。`--cron`（或位置参数）给新的 cron，省略 `--kind` 时沿用任务原来的计划类型；只给 `--kind` 时沿用原来的 cron；`--at` / `--every` 改为单次或固定间隔（三类只能选一种）；`--label` 改标签，`--label ""` 清除；`--enable` / `--disable` 启用或停用。Agent、提示词、投递目标与创建者保持不变，修改后按新计划重新计算下次运行时间。至少要给一项修改，否则不发请求并以非零状态退出。经 `POST /api/assistant/jobs/update`，需要 `ops.schedule.write`；任务修改后仍会运行且有 IM 投递目标时，与 `resume` / `set-agent` 一样要求该账号上的 `endpoint.operate`：改时间、改标签或启用都需要，只有 `--disable` 不需要，被拒绝时 CLI 的提示也会这样说明。Profile 例程会被拒绝（400 `schedule_update_profile`，请改 `assistant.profile.yml`）。聊天里对应的工具是 `schedule_update`。
+
+`--kind` 可选 `solar`、`lunar`、`workday`、`freeDay`、`holiday`，不区分大小写。实例按与 `schedule_update` 相同的规则构造并校验计划：`workday`、`freeDay`、`holiday` 只取 cron 的时分秒（日、月、周写成 `*`，`--cron "0 0 9 * * 1-5"` 会存成 `0 0 9 * * *`）；cron 本身写错（字段数不对、取值越界，例如 `0 0 9 32 * *`）时返回 400 `schedule_invalid`，任务不变，CLI 说明原因并以非零状态退出。cron 语法正确但按该计划类型算不出运行时间（例如 `0 0 9 30 2 *`）时不算错误：`update` 照常保存并在响应里带 `warning`，`add` 照常保存。**从 `workday` 改回 `solar` 时请同时给出完整的 cron**，例如 `zhin schedule update <id> --kind solar --cron "0 0 9 * * 1-5"`：只给 `--kind solar` 会沿用 `0 0 9 * * *`、变成每天执行，原来的周一至周五不会恢复。保存后任务仍启用却算不出下次运行时间时，实例在响应里带 `warning`，CLI 会打印出来。`zhin schedule add` 的 `--kind` 同样不区分大小写、支持 `holiday`，并按同一规则校验。
 
 `zhin schedule resume`（`POST /api/assistant/jobs/resume`，Console 的 `cron:resume`）恢复后任务会再次向投递目标发送，因此与 `add` / `set-agent` 一样，任务有 IM 投递目标时要求该账号上的 `endpoint.operate`，否则 403 `schedule_target_forbidden`（Console RPC 在 `data.code` / `data.status` 中给出）；`pause` / `remove` 只停止投递，仍只需要 `ops.schedule.write`。被拒绝时 CLI 以非零状态退出并说明原因，例如「无法恢复任务 `<id>`：你没有权限向它的投递目标发消息（需要 `<adapter>` / `<endpoint>` 上的 endpoint.operate）」，并提示请管理员授权，或删除后以自己有权限的目标重新创建。`add` / `set-agent` 遇到 `schedule_agent_not_found` 时列出实例返回的可用 Agent（`data.available`），并提示用 `--agent` 或 `zhin schedule set-agent <id> <名称>` 改选；没有可用 Agent 时提示先在 `ai.agents` 中添加。
 

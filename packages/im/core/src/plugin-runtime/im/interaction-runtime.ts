@@ -62,6 +62,12 @@ interface InteractionClaimRequest {
   readonly classify?: (raw: string, action: boolean) => boolean;
   /** Plugin that asked, when known. */
   readonly owner?: string;
+  /**
+   * Claim id to reuse (#1250 b90 review): a reminder re-claims the question without sending its
+   * card again, so the card on screen keeps its `zhin:ask:<id>:<index>` actions and its native
+   * buttons still answer. Absent: a new id, for a card that is (re)sent.
+   */
+  readonly id?: string;
 }
 
 /** Authority belongs to the participant and captured operation, never to rendered text. */
@@ -75,6 +81,8 @@ interface InteractionClaimAuthority {
 }
 
 interface UserInteractionClaim {
+  /** Id of the claim's actions (`zhin:ask:<id>:<index>`). */
+  readonly id: string;
   readonly generation?: number;
   readonly incarnation?: PluginIncarnationRef;
   readonly isLiveFor: (generation: number, currentSnapshot?: RuntimeSnapshot) => boolean;
@@ -461,64 +469,86 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       const classify = (raw: string, action: boolean) => parseUserInteractionAnswer(request, raw, locale, action).ok
         || isInteractionCancelReply(request, raw, action);
       const answeredBy = request.answeredBy === 'anyone' ? ANYONE_SUBJECT : undefined;
-      while (true) {
-        const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions, classify,
-          ...(operation?.owner ? { owner: String(operation.owner) } : {}) }, {
-          conversation: source.conversation, subjectId: answeredBy ?? subjectId ?? source.sender?.id ?? '',
-          generation: source.generation, signal: request.signal, operation, source: retained,
-        });
-        try {
-          claim.check();
-          if (invalidAnswers <= 1) {
-            const actions = [...claim.actions.keys()];
-            const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
+      // #1250 b90: the actions of the card on screen. A claim ends on every invalid answer, but the
+      // card stays on screen through the reminder phase (no card is re-sent): it keeps holding the
+      // conversation's button numbers until a new card replaces it or the question really ends
+      // (answered, cancelled, timed out, superseded).
+      let shown: readonly string[] = [];
+      // Claim id of the card on screen: a reminder re-claims with it, so that card's native buttons
+      // keep answering instead of being told they expired (#1250 b90 review).
+      let shownId: string | undefined;
+      const settleShown = () => {
+        if (shown.length) this.#router.settleFallback(shown, source.conversation);
+        shown = [];
+      };
+      try {
+        while (true) {
+          const resend = invalidAnswers <= 1;
+          const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions, classify,
+            ...(operation?.owner ? { owner: String(operation.owner) } : {}),
+            ...(!resend && shownId !== undefined ? { id: shownId } : {}) }, {
+            conversation: source.conversation, subjectId: answeredBy ?? subjectId ?? source.sender?.id ?? '',
+            generation: source.generation, signal: request.signal, operation, source: retained,
+          });
+          try {
+            claim.check();
+            if (resend) {
+              const actions = [...claim.actions.keys()];
+              // The new card replaces the previous one, which no longer waits for an answer.
+              settleShown();
+              shown = actions;
+              shownId = claim.id;
+              const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
+              assertLifetime();
+              if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
+              if (receipt.message) this.#markPrompt?.(receipt.message);
+            } else if (reminders < REMINDER_LIMIT && Date.now() - lastReminderAt >= REMINDER_INTERVAL_MS) {
+              reminders += 1;
+              lastReminderAt = Date.now();
+              // A lost reminder is not a failed prompt: the question itself was delivered already.
+              const receipt = await reply(reminderText);
+              assertLifetime();
+              if (receipt.status === 'sent' && receipt.message) this.#markPrompt?.(receipt.message);
+            }
+            claim.delivered();
+            const raw = await claim.answer;
+            claim.check();
+            // A list would read a lone `取消` as the item `['取消']`: the prompt said it cancels (#1250).
+            if (isInteractionCancelFirst(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
+            const result = parseUserInteractionAnswer(request, raw.value, locale, raw.action);
+            if (result.ok) return result.value as UserInteractionValue<Request>;
+            if (isInteractionCancelReply(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
+            invalidAnswers += 1;
+            prompt = {
+              ...view,
+              tip: [request.invalidText ?? result.message, view.tip].filter(Boolean).join('\n'),
+            };
+          } catch (error) {
+            claim.reject(error instanceof Error ? error : new Error('User interaction failed'));
+            // The timeout may have fired while outbound I/O was still pending.
+            // A subsequently retired operation must never apply its default.
             assertLifetime();
-            if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
-            if (receipt.message) this.#markPrompt?.(receipt.message);
-          } else if (reminders < REMINDER_LIMIT && Date.now() - lastReminderAt >= REMINDER_INTERVAL_MS) {
-            reminders += 1;
-            lastReminderAt = Date.now();
-            // A lost reminder is not a failed prompt: the question itself was delivered already.
-            const receipt = await reply(reminderText);
-            assertLifetime();
-            if (receipt.status === 'sent' && receipt.message) this.#markPrompt?.(receipt.message);
+            if (error instanceof UserInteractionTimeoutError
+              && 'default' in request
+              && request.default !== undefined) {
+              return request.default as UserInteractionValue<Request>;
+            }
+            if (error instanceof UserInteractionTimeoutError) {
+              await reply(renderUserInteraction({ title: t(locale, 'ended'), description: error.message }, undefined, locale));
+            }
+            // An interrupted prompt is announced by the inbound runtime before the new message runs.
+            if (error instanceof UserInteractionCancelledError && error.reason === 'cancelled') await reply(t(locale, 'cancelled'));
+            // Timeout and cancellation are expected ends: the inbound runtime records them as
+            // `interaction_timeout` / `interaction_cancelled`, never as `internal_error` (#1250),
+            // naming the plugin that asked.
+            tagInteractionOwner(error, operation?.owner !== undefined ? String(operation.owner) : undefined);
+            throw error;
+          } finally {
+            claim.dispose();
           }
-          claim.delivered();
-          const raw = await claim.answer;
-          claim.check();
-          // A list would read a lone `取消` as the item `['取消']`: the prompt said it cancels (#1250).
-          if (isInteractionCancelFirst(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
-          const result = parseUserInteractionAnswer(request, raw.value, locale, raw.action);
-          if (result.ok) return result.value as UserInteractionValue<Request>;
-          if (isInteractionCancelReply(request, raw.value, raw.action)) throw new UserInteractionCancelledError('cancelled');
-          invalidAnswers += 1;
-          prompt = {
-            ...view,
-            tip: [request.invalidText ?? result.message, view.tip].filter(Boolean).join('\n'),
-          };
-        } catch (error) {
-          claim.reject(error instanceof Error ? error : new Error('User interaction failed'));
-          // The timeout may have fired while outbound I/O was still pending.
-          // A subsequently retired operation must never apply its default.
-          assertLifetime();
-          if (error instanceof UserInteractionTimeoutError
-            && 'default' in request
-            && request.default !== undefined) {
-            return request.default as UserInteractionValue<Request>;
-          }
-          if (error instanceof UserInteractionTimeoutError) {
-            await reply(renderUserInteraction({ title: t(locale, 'ended'), description: error.message }, undefined, locale));
-          }
-          // An interrupted prompt is announced by the inbound runtime before the new message runs.
-          if (error instanceof UserInteractionCancelledError && error.reason === 'cancelled') await reply(t(locale, 'cancelled'));
-          // Timeout and cancellation are expected ends: the inbound runtime records them as
-          // `interaction_timeout` / `interaction_cancelled`, never as `internal_error` (#1250),
-          // naming the plugin that asked.
-          tagInteractionOwner(error, operation?.owner !== undefined ? String(operation.owner) : undefined);
-          throw error;
-        } finally {
-          claim.dispose();
         }
+      } finally {
+        settleShown();
       }
     };
 
@@ -571,7 +601,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const { conversation, subjectId, generation: sourceGeneration, signal, operation, source } = authority;
     const key = `${conversationRefKey(conversation)}:${subjectId}`;
     this.#claims.get(key)?.reject(new UserInteractionSupersededError());
-    const id = randomUUID();
+    const id = request.id ?? randomUUID();
     const generation = operation?.snapshot.generation ?? sourceGeneration;
     const incarnation: PluginIncarnationRef | undefined = operation
       ? {
@@ -618,6 +648,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       return source ? !source.signal.aborted : generation === candidate;
     };
     const claim: UserInteractionClaim = {
+      id,
       generation,
       ...(incarnation ? { incarnation } : {}),
       isLiveFor,

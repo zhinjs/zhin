@@ -1,5 +1,5 @@
 import type { AssistantEventResult } from './event-types.js';
-import type { JobNotify, ScheduleJob } from './types.js';
+import type { JobNotify, ScheduleJob, ScheduleJobUpdate } from './types.js';
 import type { UnschedulableJob } from './timer-scheduler.js';
 
 export type AssistantScheduleJobInput = Omit<
@@ -40,5 +40,10 @@ export interface AssistantRuntimeHandle {
      * heartbeat job. Callers validate the name against {@link agents} first.
      */
     setAgent?(id: string, agent: string | undefined): Promise<ScheduleJob | null>;
+    /**
+     * Changes a job's schedule, label or enabled state in place (#1250 b90), keeping everything
+     * else; `null` = no such job. Callers refuse profile routines and check delivery permission.
+     */
+    update?(id: string, update: ScheduleJobUpdate): Promise<ScheduleJob | null>;
   };
 }

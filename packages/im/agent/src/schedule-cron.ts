@@ -15,6 +15,15 @@ function splitCronFields(cron: string): string[] {
 }
 
 /**
+ * Case-insensitive, but the kind keeps its canonical spelling: `freeDay` lowercased used to fall
+ * through to `solar` (#1250 b90).
+ */
+function canonicalScheduleKind(kind: string): CronScheduleKind {
+  const lower = kind.toLowerCase();
+  return lower === 'freeday' ? 'freeDay' : lower as CronScheduleKind;
+}
+
+/**
  * 未显式指定 schedule_kind 时：solar + 周一段 `1-5` → workday
  * （中国大陆法定工作日，含调休上班日，不是公历周一至周五）
  */
@@ -22,7 +31,7 @@ export function inferScheduleKindFromCron(
   kind: string | undefined,
   cron: string,
 ): CronScheduleKind {
-  const normalized = (kind || 'solar').toLowerCase() as CronScheduleKind;
+  const normalized = canonicalScheduleKind(kind || 'solar');
   if (normalized !== 'solar') return normalized;
   const parts = splitCronFields(cron);
   const dow = parts.length === 6 ? parts[5] : parts.length === 5 ? parts[4] : '';
@@ -43,15 +52,22 @@ export function normalizeCronForScheduleKind(kind: CronScheduleKind, cron: strin
   return parts.join(' ');
 }
 
+/**
+ * @param options.inferWorkday `false`: take `kindInput` as given (an explicit or kept kind on
+ *   `schedule_update`, #1250 b90), without turning solar `1-5` into workday. Default `true`.
+ */
 export function buildJobScheduleFromCronInput(
   kindInput: string | undefined,
   cron: string,
   tz?: string,
+  options: Readonly<{ inferWorkday?: boolean }> = {},
 ): JobSchedule | { error: string } {
   const trimmed = cron?.trim();
   if (!trimmed) return { error: '请提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
 
-  const kind = inferScheduleKindFromCron(kindInput, trimmed);
+  const kind = options.inferWorkday === false && kindInput
+    ? canonicalScheduleKind(kindInput)
+    : inferScheduleKindFromCron(kindInput, trimmed);
   const normalizedCron = normalizeCronForScheduleKind(kind, trimmed);
   const tzOpt = tz ? { tz } : {};
 

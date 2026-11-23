@@ -36,6 +36,7 @@ export const RESERVED_TOOL_NAMES = [
   'schedule_list',
   'schedule_add',
   'schedule_preview',
+  'schedule_update',
   'schedule_remove',
   'schedule_pause',
   'schedule_resume',

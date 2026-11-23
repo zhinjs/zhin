@@ -1059,6 +1059,97 @@ describe('schedule (running Host)', () => {
     expect(requests[1].body).toEqual({ id: 'j1', agent: null });
   });
 
+  it('update 只发送指定的修改并输出新的计划；Agent 等保持不变 (#1250 b90)', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { job: {
+      id: 'brief', label: '早报', enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+      action: { kind: 'agent', prompt: '早报', agent: 'briefing' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 2,
+      state: { nextRunAtMs: Date.UTC(2026, 10, 24, 0) } } } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'workday', '--label', '每日早报', '--disable']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '0 0 7 * * *', '--enable', '--label', '']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--every', '1h']);
+    expect(requests.map(request => [new URL(request.url).pathname, request.body])).toEqual([
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { cron: '0 0 8 * * *' } }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { kind: 'workday' }, label: '每日早报', enabled: false }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { cron: '0 0 7 * * *' }, label: null, enabled: true }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { kind: 'every', everyMs: 60 * 60 * 1000 } }],
+    ]);
+    const output = lines.join('\n');
+    expect(output).toContain('已更新任务: brief（Agent、提示词与投递目标保持不变）');
+    expect(output).toContain('计划:   solar 0 0 8 * * *');
+    expect(output).toContain(`下次:   ${formatDateTime(Date.UTC(2026, 10, 24, 0))}`);
+  });
+
+  it('update 参数无效时不发请求；Host 拒绝时说明原因并以 1 退出 (#1250 b90)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    const invalid: [string[], string][] = [
+      [['update', 'brief'], '请至少指定一项修改'],
+      [['update', 'brief', '--enable', '--disable'], '--enable 与 --disable 只能二选一'],
+      [['update', 'brief', '--cron', '0 8 * * *', '--every', '1h'], '只能选一种'],
+      [['update', 'brief', '--kind', 'weekly'], '--kind 无效'],
+      [['update', 'brief', '--cron', '8 * *'], 'cron 须为 5 或 6 段'],
+      [['update', 'brief', '--at', '2000-01-01T00:00:00Z'], '--at 必须是未来'],
+    ];
+    for (const [args, message] of invalid) {
+      await expect(scheduleCommand.parseAsync(['node', 'zhin', ...args])).rejects.toThrow('process.exit:1');
+      expect(String(error.mock.calls.at(-1)?.[0])).toContain(message);
+    }
+    expect(requests).toHaveLength(0);
+    stubHost(() => ({ status: 404, body: { success: false, code: 'not_found', error: '任务不存在: ghost' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'ghost', '--disable'])).rejects.toThrow('process.exit:1');
+    expect(requests.map(request => new URL(request.url).pathname)).toEqual(['/api/assistant/jobs/update']);
+    stubHost(() => ({ status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '没有向该账号投递的权限：需要 icqq / bot-1 上的 endpoint.operate' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('无法修改任务 brief：你没有权限向它的投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
+    expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('--disable');
+    // A label change on a job that stays enabled needs the same permission: the hint says so.
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--label', '新标签'])).rejects.toThrow('process.exit:1');
+    expect(String(info.mock.calls.at(-1)?.[0])).toContain('改标签');
+    expect(String(info.mock.calls.at(-1)?.[0])).toContain('只有停用任务（--disable）不需要');
+  });
+
+  it('update：--kind 不区分大小写并支持 holiday；打印实例返回的 warning (#1250 b90 review)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    stubHost(() => ({ status: 200, body: { success: true, data: {
+      job: { id: 'brief', enabled: true, schedule: { kind: 'holiday', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: '早报' },
+        notify: { channel: 'silent' }, createdAt: 1, updatedAt: 2, state: {} },
+      warning: '任务已启用，但按新计划算不出下次运行时间，它不会自动执行；请检查 cron 或改用其他计划' } } }));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'HOLIDAY']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'freeday']);
+    expect(requests.map(request => request.body.schedule)).toEqual([{ kind: 'holiday' }, { kind: 'freeDay' }]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('算不出下次运行时间'));
+    // add: the same kinds.
+    stubHost(() => ({ status: 201, body: { success: true, data: { job: { id: 'sched_1' } } } }));
+    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '0 0 9 * * *', '--kind', 'Holiday', '--prompt', '节日']);
+    expect(requests[0]!.body.schedule).toEqual({ kind: 'holiday', cron: '0 0 9 * * *' });
+  });
+
+  it('update：实例以 400 schedule_invalid 拒绝计划时说明原因、提示改回 solar 要给完整 cron，并以 1 退出 (#1250 b90 review)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    stubHost(() => ({ status: 400, body: { success: false, code: 'schedule_invalid',
+      error: 'cron 表达式无效: Calendar cron requires * for day, month, and weekday fields' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'water', '--cron', '0 0 9 * * 1-5'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('无法修改任务 water：cron 表达式无效: Calendar cron requires * for day, month, and weekday fields');
+    const hints = info.mock.calls.map(call => String(call[0])).join('\n');
+    expect(hints).toContain('--kind solar --cron');
+    expect(hints).toContain('不会自动恢复');
+    // A plain 400 (invalid_argument) shows the instance's explanation as it is.
+    stubHost(() => ({ status: 400, body: { success: false, code: 'invalid_argument', error: '计划类型无效: weekly，可选 solar | lunar | workday | freeDay | holiday' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'water', '--kind', 'solar'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('计划类型无效: weekly，可选 solar | lunar | workday | freeDay | holiday');
+  });
+
   it('resume 被投递目标拒绝（403 schedule_target_forbidden）时说明原因并以 1 退出 (#1250 b61)', async () => {
     const { logger } = await import('../src/utils/logger.js');
     const error = vi.spyOn(logger, 'error').mockImplementation(() => {});

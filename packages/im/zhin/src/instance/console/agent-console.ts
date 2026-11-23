@@ -192,6 +192,8 @@ type AssistantRuntime = {
     agents?(): readonly string[];
     /** #1250 b52: sets or clears a job's Agent; `null` = no such job. */
     setAgent?(id: string, agent: string | undefined): Promise<Record<string, unknown> | null>;
+    /** #1250 b90: changes a job's schedule, label or enabled state; `null` = no such job. */
+    update?(id: string, update: { schedule?: Record<string, unknown>; label?: string | null; enabled?: boolean }): Promise<Record<string, unknown> | null>;
   };
 };
 

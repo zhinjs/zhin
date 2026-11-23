@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ScheduleJobStore, TimerScheduler, createNotificationRouter } from '@zhin.js/agent';
 import type { ConsolePermission } from '@zhin.js/console-protocol';
 import type { ConsoleUserPrincipal } from '@zhin.js/host-http';
 import { testUser, withTestUsers } from '../utils/console-users.js';
@@ -266,6 +270,24 @@ describe('schedule delivery target permission (#1250)', () => {
     expect((await post('scheduler', { id: 'im' }, '/remove')).status).toBe(200);
   });
 
+  it('update needs endpoint.operate on the delivery account while the job keeps running; disabling does not (#1250 b90)', async () => {
+    const target = { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', sceneId: 'g1', kind: 'group' } };
+    const update = vi.fn(async (id: string) => ({ id }));
+    state.assistant = { jobs: { ...jobs, update, list: async () => [
+      { id: 'im', enabled: true, schedule: { kind: 'solar', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target } },
+      { id: 'paused', enabled: false, schedule: { kind: 'solar', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'im', target } },
+    ] } };
+    const post = await startAs();
+    expect(await post('scheduler', { id: 'im', schedule: { cron: '0 0 8 * * *' } }, '/update')).toMatchObject({
+      status: 403, body: { code: 'schedule_target_forbidden' } });
+    expect(await post('scheduler', { id: 'paused', enabled: true }, '/update')).toMatchObject({ status: 403 });
+    expect(update).not.toHaveBeenCalled();
+    expect((await post('scheduler', { id: 'im', enabled: false }, '/update')).status).toBe(200);
+    expect((await post('scheduler', { id: 'paused', label: 'x' }, '/update')).status).toBe(200);
+    expect((await post('scoped', { id: 'im', schedule: { cron: '0 0 8 * * *' } }, '/update')).status).toBe(200);
+    expect(update).toHaveBeenCalledTimes(3);
+  });
+
   it('a delivery target without an account is refused without naming an "undefined" account (#1250 b61)', async () => {
     const accountless = { channel: 'im', scene: { kind: 'group', sceneId: 'g1' } };
     const resume = vi.fn(async () => true);
@@ -387,5 +409,143 @@ describe('job Agent (#1250 b52)', () => {
     const post = await start();
     expect((await post('/set-agent', { id: 'known', agent: 'news' }, 'demo')).status).toBe(403);
     expect(agentJobs.setAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /assistant/jobs/update (#1250 b90)', () => {
+  const target = { channel: 'im', scene: { platform: 'sandbox', endpointKey: 'sandbox-bot', sceneId: 'g1', kind: 'group' } };
+  const stored = () => [
+    { id: 'brief', enabled: true, label: '早报', schedule: { kind: 'solar', cron: '0 0 9 * * *', tz: 'Asia/Tokyo' },
+      action: { kind: 'agent', prompt: 'p', agent: 'briefing' }, notify: { channel: 'im', target } },
+    { id: 'tick', enabled: false, schedule: { kind: 'every', everyMs: 60_000 }, action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } },
+    { id: 'assistant-profile-morning-brief', enabled: true, source: 'profile', schedule: { kind: 'solar', cron: '0 0 7 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } },
+  ];
+  const update = vi.fn(async (id: string, patch: Record<string, unknown>) => {
+    const job = stored().find(entry => entry.id === id);
+    return job ? { ...job, ...(patch.schedule ? { schedule: patch.schedule } : {}), ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}) } : null;
+  });
+  beforeEach(() => { state.assistant = { jobs: { ...jobs, list: async () => stored(), update } }; });
+
+  it('changes the schedule, keeping the kind and time zone when only the cron is given, and the label and enabled state', async () => {
+    const post = await start();
+    const response = await post('/update', { id: 'brief', schedule: { cron: '0 0 8 * * *' } });
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('brief', { schedule: { kind: 'solar', cron: '0 0 8 * * *', tz: 'Asia/Tokyo' } });
+    expect((await response.json()).data.job.action).toEqual({ kind: 'agent', prompt: 'p', agent: 'briefing' });
+    expect((await post('/update', { id: 'brief', schedule: { kind: 'workday' } })).status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('brief', { schedule: { kind: 'workday', cron: '0 0 9 * * *', tz: 'Asia/Tokyo' } });
+    expect((await post('/update', { id: 'tick', label: ' 心跳 ', enabled: true })).status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('tick', { label: '心跳', enabled: true });
+    expect((await post('/update', { id: 'tick', label: null, schedule: { kind: 'every', everyMs: 120_000 } })).status).toBe(200);
+    expect(update).toHaveBeenLastCalledWith('tick', { schedule: { kind: 'every', everyMs: 120_000 }, label: null });
+  });
+
+  it('rejects bad bodies, unknown jobs and profile routines without calling the scheduler', async () => {
+    const post = await start();
+    const answer = async (body: unknown) => { const response = await post('/update', body); return { status: response.status, body: await response.json() }; };
+    expect(await answer({ schedule: { cron: '0 0 8 * * *' } })).toMatchObject({ status: 400, body: { code: 'invalid_argument' } });
+    expect(await answer({ id: 'brief' })).toMatchObject({ status: 400, body: { code: 'invalid_argument', error: expect.stringContaining('没有要修改的内容') } });
+    expect(await answer({ id: 'brief', enabled: 'yes' })).toMatchObject({ status: 400 });
+    expect(await answer({ id: 'brief', schedule: { cron: 'not a cron' } })).toMatchObject({ status: 400, body: { error: expect.stringMatching(/cron 表达式无效/iu) } });
+    expect(await answer({ id: 'tick', schedule: { kind: 'solar' } })).toMatchObject({ status: 400, body: { error: expect.stringContaining('不是 cron 计划') } });
+    expect(await answer({ id: 'ghost', enabled: false })).toMatchObject({ status: 404, body: { code: 'not_found' } });
+    expect(await answer({ id: 'assistant-profile-morning-brief', schedule: { cron: '0 0 8 * * *' } }))
+      .toMatchObject({ status: 400, body: { code: 'schedule_update_profile', error: expect.stringContaining('assistant.profile.yml') } });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('is unavailable on an Agent package without update, and needs ops.schedule.write', async () => {
+    const post = await start();
+    expect((await post('/update', { id: 'brief', enabled: false }, 'demo')).status).toBe(403);
+    state.assistant = { jobs };
+    expect(await (await post('/update', { id: 'known', enabled: false })).json()).toMatchObject({ code: 'unavailable' });
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /assistant/jobs[/update] build schedules like schedule_update (#1250 b90 review)', () => {
+  let dataDir: string;
+  let engine: TimerScheduler;
+  beforeEach(async () => {
+    dataDir = await mkdtemp(join(tmpdir(), 'zhin-job-routes-'));
+    engine = new TimerScheduler({ store: new ScheduleJobStore({ dataDir }), due: { run: vi.fn() } as never,
+      router: createNotificationRouter({ resolveAdapter: () => undefined }) });
+    await engine.addJob({ id: 'water', enabled: true, source: 'manual', schedule: { kind: 'workday', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: '喝水' }, notify: { channel: 'silent' } });
+    await engine.addJob({ id: 'brief', enabled: true, source: 'manual', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: '早报' }, notify: { channel: 'silent' } });
+    state.assistant = { jobs: {
+      ...jobs,
+      add: vi.fn(async (job: Record<string, unknown>) => engine.addJob(job as never)),
+      list: async () => engine.listJobs(),
+      update: vi.fn((id: string, patch: Record<string, unknown>) => engine.updateJob(id, patch as never)),
+    } };
+  });
+  afterEach(async () => {
+    engine.unload();
+    await engine.stop();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  const answer = async (post: Awaited<ReturnType<typeof start>>, path: string, body: unknown) => {
+    const response = await post(path, body);
+    return { status: response.status, body: await response.json() as Record<string, any> };
+  };
+
+  it('keeps only the time of a workday cron instead of failing in the scheduler with a 500', async () => {
+    const post = await start();
+    for (const cron of ['0 0 9 * * 1-5', '0 0 9 30 2 *']) {
+      const result = await answer(post, '/update', { id: 'water', schedule: { cron } });
+      expect(result, cron).toMatchObject({ status: 200, body: { success: true, data: { job: { schedule: { kind: 'workday', cron: '0 0 9 * * *' } } } } });
+      expect(result.body.data.job.state.nextRunAtMs).toEqual(expect.any(Number));
+      expect(result.body.data).not.toHaveProperty('warning');
+    }
+    expect((await engine.listJobs()).find(job => job.id === 'water')?.schedule).toEqual({ kind: 'workday', cron: '0 0 9 * * *' });
+    expect(engine.listUnschedulable()).toEqual([]);
+  });
+
+  it('matches kind case-insensitively, accepts holiday, and keeps an explicit solar as is', async () => {
+    const post = await start();
+    expect(await answer(post, '/update', { id: 'brief', schedule: { kind: 'HOLIDAY' } }))
+      .toMatchObject({ status: 200, body: { data: { job: { schedule: { kind: 'holiday', cron: '0 0 9 * * *' } } } } });
+    expect(await answer(post, '/update', { id: 'brief', schedule: { kind: 'FreeDay' } }))
+      .toMatchObject({ status: 200, body: { data: { job: { schedule: { kind: 'freeDay', cron: '0 0 9 * * *' } } } } });
+    // Back to solar: the full cron has to be given, and its weekday range is kept.
+    expect(await answer(post, '/update', { id: 'water', schedule: { kind: 'Solar', cron: '0 0 9 * * 1-5' } }))
+      .toMatchObject({ status: 200, body: { data: { job: { schedule: { kind: 'solar', cron: '0 0 9 * * 1-5' } } } } });
+    expect(await answer(post, '/update', { id: 'brief', schedule: { kind: 'weekly' } }))
+      .toMatchObject({ status: 400, body: { code: 'invalid_argument', error: expect.stringContaining('holiday') } });
+  });
+
+  it('warns when the saved job stays enabled but has no next run, like the tool', async () => {
+    const post = await start();
+    // A cron the scheduler finds no next run for (e.g. a date that never comes).
+    vi.spyOn(engine, 'nextRunAt').mockReturnValue(undefined);
+    const result = await answer(post, '/update', { id: 'brief', schedule: { cron: '0 0 9 29 2 *' } });
+    expect(result).toMatchObject({ status: 200, body: { success: true, data: { warning: expect.stringContaining('算不出下次运行时间') } } });
+    expect(result.body.data.job.state.nextRunAtMs).toBeUndefined();
+    // Disabled: nothing to warn about.
+    expect((await answer(post, '/update', { id: 'brief', enabled: false })).body.data).not.toHaveProperty('warning');
+  });
+
+  it('answers a schedule the scheduler refuses as 400 schedule_invalid, not 500', async () => {
+    const post = await start();
+    const update = (state.assistant as { jobs: { update: ReturnType<typeof vi.fn> } }).jobs.update;
+    update.mockRejectedValueOnce(Object.assign(new Error('cron 表达式无效: Calendar cron requires * for day, month, and weekday fields'), { code: 'schedule_invalid' }));
+    expect(await answer(post, '/update', { id: 'water', schedule: { cron: '0 0 8 * * *' } }))
+      .toMatchObject({ status: 400, body: { success: false, code: 'schedule_invalid', error: expect.stringContaining('任务未修改') } });
+    // Any other failure stays an internal error.
+    update.mockRejectedValueOnce(new Error('disk full'));
+    expect((await answer(post, '/update', { id: 'water', schedule: { cron: '0 0 8 * * *' } })).status).toBe(500);
+  });
+
+  it('builds the schedule of a new job the same way (workday keeps the time, kind case-insensitive, holiday)', async () => {
+    const post = await start();
+    const added = await answer(post, '', { prompt: '喝水', schedule: { kind: 'WorkDay', cron: '0 0 9 * * 1-5' }, notify: { channel: 'silent' } });
+    expect(added).toMatchObject({ status: 201, body: { data: { job: { schedule: { kind: 'workday', cron: '0 0 9 * * *' } } } } });
+    expect(added.body.data.job.state.nextRunAtMs).toEqual(expect.any(Number));
+    expect(engine.listUnschedulable().map(job => job.jobId)).not.toContain(added.body.data.job.id);
+    expect(await answer(post, '', { prompt: '节日', schedule: { kind: 'holiday', cron: '0 0 9 * * *' }, notify: { channel: 'silent' } }))
+      .toMatchObject({ status: 201, body: { data: { job: { schedule: { kind: 'holiday', cron: '0 0 9 * * *' } } } } });
   });
 });

@@ -195,6 +195,7 @@ export function createAssistantScheduleRuntime(
         unschedulable: () => timerScheduler.listUnschedulable(),
         agents: () => Object.freeze(service.getBindingRegistry().listAgentNames()),
         setAgent: (id, agent) => timerScheduler.setJobAgent(id, agent),
+        update: (id, update) => timerScheduler.updateJob(id, update),
         defaultImNotify: () => {
           const fallback = defaultNotify?.channel === 'im' ? defaultNotify
             : profileDefaultNotify?.channel === 'im' ? profileDefaultNotify : undefined;
