@@ -15,6 +15,16 @@ const FORBIDDEN_PACKAGES = [
 ];
 
 const instanceEntry = resolve(import.meta.dirname, '../../src/instance/index.ts');
+const repositoryRoot = resolve(import.meta.dirname, '../../../../..');
+/**
+ * The supervised instance child is `zhin runtime start` re-spawned by the gateway: `cli.ts` takes the
+ * launcher path (`runtime-instance.ts`) and reaches the command tree (`program.ts`, which may load
+ * the scaffold wizard) only through a dynamic `import()`. Both CLI files are walked statically too.
+ */
+const instanceChildEntries = [
+  resolve(repositoryRoot, 'basic/cli/src/cli.ts'),
+  resolve(repositoryRoot, 'basic/cli/src/commands/runtime-instance.ts'),
+];
 const sourceExtensions = ['.ts', '.tsx', '.mts', '.js', '.mjs'];
 
 interface Graph {
@@ -151,5 +161,24 @@ describe('zhin.js/instance static import graph', () => {
       return importer ? [`${name} via ${chain(graph, importer).join(' -> ')}`] : [];
     });
     expect(found).toEqual([]);
+  }, 60_000);
+
+  it.each(instanceChildEntries)('keeps CLI-only packages out of the instance child launcher %s', (entry) => {
+    expect(existsSync(entry)).toBe(true);
+    const graph = staticGraph(entry);
+    const found = FORBIDDEN_PACKAGES.flatMap((name) => {
+      const importer = graph.packages.get(name);
+      return importer ? [`${name} via ${chain(graph, importer).join(' -> ')}`] : [];
+    });
+    expect(found).toEqual([]);
+    // The launcher never pulls in the command tree statically.
+    expect([...graph.files].some((file) => file.endsWith(`${sep}basic${sep}cli${sep}src${sep}program.ts`))).toBe(false);
+  }, 60_000);
+
+  it('sees the scaffold wizard in the CLI command tree, which legitimately imports it', () => {
+    // The CLI is the scaffolding tool: `program.ts` may depend on the wizard statically. This keeps
+    // the launcher assertions above meaningful (the walk does find the wizard where it is imported).
+    const graph = staticGraph(resolve(repositoryRoot, 'basic/cli/src/program.ts'));
+    expect(graph.packages.has('@zhin.js/scaffold-wizard')).toBe(true);
   }, 60_000);
 });

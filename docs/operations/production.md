@@ -207,7 +207,7 @@ zhin service stop --user    # 停止后不会被立即拉起；zhin service star
 
 macOS 使用不带 `--user` 的同一组命令（launchd）。`zhin service install` 是托管与开机自启的唯一推荐方式：服务文件现场生成，写入当前 `node` 与项目 CLI 的绝对路径，只在异常退出时重启，详见 [CLI 参考](../cli/index.md#service)。只保留一层进程重启策略：使用 systemd、launchd 或 Kubernetes 时，让外部 supervisor 管理前台网关（`--foreground`）；只有直接裸机运行时才用后台的 `zhin start`。
 
-`--no-watch` 的实例不监听文件，也不在启动时分析已加载模块的导入关系；只有 Agent 自改代码等显式重载第一次发生时，才分析一次并从此保持更新。项目里的 `.tsx` 文件会让实例常驻 tsx 加载器，内存紧张时见 [命令 · `.tsx` 文件的内存代价](../authoring/commands.md)。
+`--no-watch` 的实例不监听文件，也不在启动时分析已加载模块的导入关系；只有 Agent 自改代码等显式重载第一次发生时，才分析一次并从此保持更新。项目里的 `.tsx` 文件会让实例常驻 tsx 加载器，内存紧张时见 [命令 · `.tsx` 文件的内存代价](../authoring/commands.md)。实例和网关启动时都不加载脚手架向导（`@zhin.js/scaffold-wizard`）；打开 Console 用到插件检查、官方插件候选或 Console 初始化时，网关才按需加载它，加载后一直驻留到进程退出。这是有意的设计：没人用到就不占内存，用到一次后再用不必重新加载。
 
 高级用法：已有 PM2 环境时，可以用 `create-zhin-app --with pm2` 创建项目（生成 `ecosystem.config.cjs` 与 `pm2:*` 脚本）；Docker 见上文模板。
 

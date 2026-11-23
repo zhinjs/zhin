@@ -30,6 +30,14 @@ export class ClientBuildModuleRuntime implements ModuleRuntime {
     return this.server.affectedSources?.(source) ?? [source];
   }
 
+  staleDependents(source: string): readonly string[] {
+    return this.server.staleDependents?.(source) ?? [];
+  }
+
+  updateRevisionableRoots(roots: readonly string[]): void {
+    this.server.updateRevisionableRoots?.(roots);
+  }
+
   requiresProcessRestart(source: string): boolean {
     return this.server.requiresProcessRestart?.(source) ?? false;
   }

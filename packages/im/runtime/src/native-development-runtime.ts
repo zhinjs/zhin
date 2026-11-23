@@ -30,7 +30,9 @@ export interface NativeDevelopmentModuleRuntimeOptions {
    * `eager` analyzes every entry as it loads, so file watching can map a changed helper back to its
    * entries at once. `lazy` loads entries without analysis and without loading `es-module-lexer`;
    * the graph is built from the loaded entries the first time `prepareInvalidation()` runs (an
-   * explicit reload under `--no-watch`) and kept up to date from then on.
+   * explicit reload under `--no-watch`) and kept up to date from then on; each later call also
+   * analyzes any committed entry the graph does not know yet. An entry whose analysis fails makes
+   * `requiresProcessRestart()` answer true for every other source while it stays loaded.
    * Defaults to `eager` with `watch` and `lazy` without it.
    */
   readonly dependencyTracking?: 'eager' | 'lazy';
@@ -78,8 +80,13 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   /** Created on first use: by every load when tracking is eager, else by `prepareInvalidation()`. */
   #dependencies?: ModuleDependencyIndex;
   #dependenciesReady?: Promise<ModuleDependencyIndex>;
-  /** Lazy tracking: the graph of the committed entries, built once by `prepareInvalidation()`. */
+  /** Lazy tracking: the in-flight `prepareInvalidation()` pass that brings the graph up to date. */
   #graphReady?: Promise<void>;
+  /**
+   * Lazy tracking: committed entries whose import analysis failed. Their imports are unknown, so
+   * a reload of any other source cannot be planned safely while one of them is loaded.
+   */
+  readonly #unanalyzedEntries = new Set<string>();
   readonly #eagerDependencies: boolean;
   readonly #watchers = new Set<PortableSourceWatcher>();
   #pendingDependencies?: Map<string, ModuleDependencyAnalysis>;
@@ -155,19 +162,52 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   /**
    * Makes the dependency queries (`affectedSources`, `staleDependents`, `requiresProcessRestart`,
    * `invalidate`) complete before a reload. With lazy tracking the first call loads the index and
-   * analyzes the committed entries as they are on disk now; later loads keep it current.
+   * analyzes the committed entries as they are on disk now; later loads keep it current, and every
+   * later call analyzes the committed entries still missing from the graph (an entry whose load began
+   * before the index existed commits without analysis) and retries those whose analysis failed. A
+   * failed call (the index could not load) is not cached.
    */
   prepareInvalidation(): Promise<void> {
     this.#assertOpen();
     if (this.#eagerDependencies) return Promise.resolve();
-    this.#graphReady ??= (async () => {
-      const index = await this.#dependencyIndex();
-      for (const entry of [...this.#committedRevisions.keys()]) {
-        // An entry whose analysis fails stays unknown to the graph, as after a failed eager load.
-        try { index.commit(entry, await index.analyze(entry)); } catch { /* see above */ }
-      }
-    })();
+    // Every call reconciles, so an entry committed after an earlier pass took its snapshot (a load
+    // that started before the index existed) still joins the graph; concurrent calls share a pass.
+    this.#graphReady ??= this.#reconcileGraph().finally(() => { this.#graphReady = undefined; });
     return this.#graphReady;
+  }
+
+  /** Analyzes every committed entry the graph does not know yet, including earlier failures. */
+  async #reconcileGraph(): Promise<void> {
+    const index = await this.#dependencyIndex();
+    const attempted = new Set<string>();
+    for (;;) {
+      const missing = [...this.#committedRevisions.keys()]
+        .filter((entry) => !attempted.has(entry) && !index.hasEntry(entry));
+      if (missing.length === 0) break;
+      for (const entry of missing) {
+        attempted.add(entry);
+        let analysis: ModuleDependencyAnalysis;
+        try {
+          analysis = await index.analyze(entry);
+        } catch {
+          // Kept as unknown: `requiresProcessRestart` falls back to a restart while it is loaded.
+          if (this.#committedRevisions.has(entry)) this.#unanalyzedEntries.add(entry);
+          continue;
+        }
+        this.#unanalyzedEntries.delete(entry);
+        // The entry may have been retired, or reloaded with a fresher analysis, meanwhile.
+        if (this.#committedRevisions.has(entry) && !index.hasEntry(entry)) index.commit(entry, analysis);
+      }
+    }
+  }
+
+  /** True while a loaded entry other than `source` has imports the graph could not analyze. */
+  #hasUnanalyzedEntryBesides(source: string): boolean {
+    for (const entry of this.#unanalyzedEntries) {
+      if (entry === source) continue;
+      if (this.#committedRevisions.has(entry) && !this.#dependencies?.hasEntry(entry)) return true;
+    }
+    return false;
   }
 
   #dependencyIndex(): Promise<ModuleDependencyIndex> {
@@ -178,6 +218,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
         followPackageImport: (source) => this.#watchRoots.some((root) => isWithin(root, source)),
       });
       return this.#dependencies;
+    }).catch((error: unknown) => {
+      // A failed load is not cached: the next reload tries again (as `scaffold-wizard-loader`).
+      this.#dependenciesReady = undefined;
+      throw error;
     });
     return this.#dependenciesReady;
   }
@@ -232,6 +276,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // The HMR coordinator turns this into a visible process restart reason.
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
     if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
+    // Lazy tracking: an entry whose analysis failed may import this source; only a restart is safe.
+    if (this.#hasUnanalyzedEntryBesides(normalized)) return true;
     // Native ESM query revisions do not invalidate CommonJS require.cache.
     // Keep .cjs/.cts entries and their statically discovered closure on the
     // process boundary until the module runtime owns a CJS cache transaction.
@@ -299,6 +345,9 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     }
     for (const entry of this.#committedRevisions.keys()) {
       if (!retained.has(entry)) this.#committedRevisions.delete(entry);
+    }
+    for (const entry of this.#unanalyzedEntries) {
+      if (!retained.has(entry)) this.#unanalyzedEntries.delete(entry);
     }
     this.#evictRetiredRevisions();
   }
@@ -378,6 +427,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#dependencies?.clear();
     this.#entryRevisions.clear();
     this.#committedRevisions.clear();
+    this.#unanalyzedEntries.clear();
     this.#pendingRevisions = undefined;
     this.#packageFileRevisions.clear();
     if (this.#revisionableRoots.length > 0) {
