@@ -476,6 +476,8 @@
     "packages/im/tool/tests/types/config.ts",
     "packages/im/plugin-runtime/tests/types/persistent-state.ts",
     "packages/toolkit/testing/tests/types/public.ts",
+    "packages/toolkit/testing/tests/test-module-runtime.test.ts",
+    "packages/console/pagemanager/tests/client-build/client-build.test.ts",
     "packages/im/schedule-feature/tests/types/config.ts",
     "packages/im/feature-kit/tests/construction-types.fixture.ts",
     "packages/im/agent/tests/types/ai-completion-contract.ts",

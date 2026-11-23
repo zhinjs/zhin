@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, unlink, access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify, isDeepStrictEqual } from 'node:util';
-import { loadProjectConfig, packageToInstanceKey } from '@zhin.js/scaffold-wizard';
+import { loadScaffoldWizard } from '../scaffold-wizard-loader.js';
 import { createConfigDocument, HOST_CONFIG_KEYS, JsonConfigDocument, NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type ConfigFileDocument, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import {
   featureId, pluginVerificationToken, rootPluginId, readPluginConfigurationMap,
@@ -147,7 +147,9 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return { document, source, project: source.document as Project };
   }
 
-  #configuration(snapshot?: RuntimeSnapshot) {
+  async #configuration(snapshot?: RuntimeSnapshot) {
+    // The scaffold wizard loads on first use: the supervised instance imports this module (#1250).
+    const { loadProjectConfig } = await loadScaffoldWizard();
     const loaded = loadProjectConfig(this.#root);
     if (loaded.status === 'missing') return undefined;
     if (loaded.status !== 'loaded' || !loaded.configPath) throw new Error(loaded.message ?? 'Root configuration must use YAML or JSON');
@@ -191,7 +193,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   }
 
   async #declaredEntries() {
-    const configuration = this.#configuration();
+    const configuration = await this.#configuration();
     const config = configuration ? (await configuration.document.read()).document : {};
     const declaration = readApplicationPluginDeclaration(config);
     if ((await this.#project()).project.zhin?.plugins?.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
@@ -207,6 +209,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     if (matches.length > 1) throw new Error('此包存在多个插件实例，请使用精确 instanceKey');
     if (matches.length === 1) return { packageName: matches[0]!.package, instanceKey: matches[0]!.instanceKey };
     const spec = npmSpec(request);
+    const { packageToInstanceKey } = await loadScaffoldWizard();
     return { packageName: spec.name, instanceKey: packageToInstanceKey(spec.name) };
   }
 
@@ -251,7 +254,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     const resolver = await NodePackageResolver.create(this.#root);
     const root = await resolver.root(this.#root);
     if (root.packageJson.zhin.type !== 'plugin') throw new Error('Project root is not a Plugin');
-    const configuration = capturedDocument ? undefined : this.#configuration();
+    const configuration = capturedDocument ? undefined : await this.#configuration();
     const document = capturedDocument ?? (configuration ? (await configuration.document.read()).document : {});
     readApplicationPluginDeclaration(document);
     const next = candidate ? { ...document, plugins: {...document.plugins as Record<string, unknown>, [candidate.instanceKey]: candidate.packageName} } : document;
@@ -261,7 +264,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
 
   async #revisions() {
     const { source } = await this.#project();
-    const config = this.#configuration();
+    const config = await this.#configuration();
     const revision = config ? (await config.document.read()).revision : null;
     return { revision, projectRevision: createHash('sha256').update(JSON.stringify([source.revision, revision])).digest('hex') };
   }
@@ -278,7 +281,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
    * `{ dependencies: 'skip' }` to `inspect`.
    */
   async checkDependencies(): Promise<PluginDependencyCheck> {
-    const configuration = this.#configuration();
+    const configuration = await this.#configuration();
     const document = configuration ? (await configuration.document.read()).document : {};
     try {
       await this.#checkDependencies(undefined, document);
@@ -362,7 +365,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
 
   async #configurationObservation(snapshot?: RuntimeSnapshot) {
     const project = await this.#project();
-    const configuration = this.#configuration(snapshot);
+    const configuration = await this.#configuration(snapshot);
     if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
     const source = await configuration.document.read();
     const document = source.document;
@@ -414,7 +417,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     const spec = npmSpec(request);
     const state = await this.inspect(spec.name);
     if (state.declared && state.packageName !== spec.name) throw new Error(`Instance ${state.instanceKey} already references ${state.packageName}; install by the package name or edit its declaration explicitly`);
-    const config = this.#configuration();
+    const config = await this.#configuration();
     const document = config ? await config.store.readDocument() : {};
     const enable = options.enable !== false;
     const raw = config ? (await config.document.read()).document : {};
@@ -519,7 +522,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
         if ((await this.#revisions()).revision !== previous.revision) throw new Error('Root config changed during installation');
         const target = { packageName: spec.name, instanceKey: plan.instanceKey };
         await this.#checkDependencies(target);
-        const configuration = this.#configuration();
+        const configuration = await this.#configuration();
         if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
         const currentConfig = await configuration.document.read();
         readApplicationPluginDeclaration(currentConfig.document);
@@ -562,11 +565,11 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   async planDeclaration(request: string, config: unknown = {}, options: Pick<PluginDeclareOptions, 'instanceKey'> = {}) {
     const spec = npmSpec(request);
     if (spec.version !== undefined) throw new PluginDeclarationError('声明插件时不能指定版本');
-    const instanceKey = options.instanceKey ?? packageToInstanceKey(spec.name);
+    const instanceKey = options.instanceKey ?? (await loadScaffoldWizard()).packageToInstanceKey(spec.name);
     if (typeof instanceKey !== 'string' || instanceKey.length > 128 || !/^[a-z0-9][a-z0-9-]*$/u.test(instanceKey)) throw new PluginDeclarationError('instanceKey 只能包含小写字母、数字和连字符');
     if ((HOST_CONFIG_KEYS as readonly string[]).includes(instanceKey) || ['configVersion', 'plugins', 'disable_plugins', 'plugin', 'root'].includes(instanceKey)) throw new PluginDeclarationError(`instanceKey ${instanceKey} 是保留配置键`);
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new PluginDeclarationError('config 必须是对象');
-    const configuration = this.#configuration();
+    const configuration = await this.#configuration();
     if (!configuration) throw new PluginDeclarationError('Missing configVersion: 2 configuration; run zhin setup');
     const current = await configuration.document.read();
     const declaration = readApplicationPluginDeclaration(current.document);
@@ -599,7 +602,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return this.#mutate(async completed => {
       const plan = await this.planDeclaration(request, config, options);
       if (options.expectedRevision !== undefined && plan.revision !== options.expectedRevision) throw new PluginDeclarationError('项目或配置已被其他会话修改，请刷新后重试');
-      const configuration = this.#configuration();
+      const configuration = await this.#configuration();
       if (!configuration) throw new PluginDeclarationError('Missing configVersion: 2 configuration; run zhin setup');
       const current = await configuration.document.read();
       if (current.revision !== plan.revision) throw new PluginDeclarationError('配置在校验期间变化，请刷新后重试');
@@ -639,7 +642,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     if (enabled && (!state.installed || !state.plugin)) {
       throw new PluginEnablementError('not-installed', `${state.packageName} ${state.installed ? `不是可加载的 Plugin 包${state.issues[0] ? `：${state.issues[0]}` : ''}` : '未安装'}；先运行 zhin install ${state.packageName}`);
     }
-    const configuration = this.#configuration();
+    const configuration = await this.#configuration();
     if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
     const current = await configuration.document.read();
     if (current.revision !== state.revision) throw new Error('配置在读取期间变化，请重试');
@@ -672,7 +675,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const plan = await this.planSetEnabled(request, enabled);
       let revision = plan.configurationRevision;
       if (plan.changed) {
-        const configuration = this.#configuration();
+        const configuration = await this.#configuration();
         if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
         const current = await configuration.document.read();
         if (current.revision !== plan.configurationRevision) throw new Error('配置在校验期间变化，请刷新后重试');
@@ -701,7 +704,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
 
   async planUninstall(request: string): Promise<PluginUninstallPlan> {
     const state = await this.inspect(request);
-    const configuration = this.#configuration();
+    const configuration = await this.#configuration();
     const config = configuration ? await configuration.store.readDocument() : {};
     return { packageName: state.packageName, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, installed: state.installed, declared: state.declared, hasConfig: Object.hasOwn(config, state.instanceKey), restartRequired: state.declared || state.published };
   }
@@ -715,7 +718,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       if (plan.installed && !keepDependency && !plan.packageName.startsWith('./')) await this.#pnpm(['remove', plan.packageName]);
       if (plan.installed && !keepDependency && !plan.packageName.startsWith('./')) completed.push('dependency-remove');
       if ((await this.#revisions()).revision !== previous.revision) throw new Error('Root config changed during uninstall');
-      const configuration = this.#configuration();
+      const configuration = await this.#configuration();
       const config = configuration ? await configuration.document.read() : undefined;
       if (!config || !configuration) throw new Error('Missing configVersion: 2 configuration');
       const declaration = readApplicationPluginDeclaration(config.document);
