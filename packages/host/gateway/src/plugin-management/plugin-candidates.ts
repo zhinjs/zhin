@@ -6,7 +6,6 @@
  */
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createInstallAllowlist } from '../onboarding/allowlist.js';
 import { pluginUseCases } from './use-cases.js';
 
 const OFFICIAL_SCOPE = '@zhin.js/';
@@ -20,8 +19,13 @@ function baseName(name: string): string {
   return base;
 }
 
-/** The offline official catalog: catalog adapters, use-case plugins and Market entries. */
-export function officialPluginCatalog(): readonly string[] {
+/**
+ * The offline official catalog: catalog adapters, use-case plugins and Market entries. The install
+ * allowlist (and the scaffold wizard catalogs behind it) loads on first use: the supervised instance
+ * imports this module through `@zhin.js/gateway/plugin-management` (#1250).
+ */
+export async function officialPluginCatalog(): Promise<readonly string[]> {
+  const { createInstallAllowlist } = await import('../onboarding/allowlist.js');
   const names = new Set<string>();
   for (const entry of createInstallAllowlist().entries()) {
     if (entry.kind === 'adapter' && entry.name.startsWith(OFFICIAL_SCOPE)) names.add(entry.name);
@@ -42,7 +46,7 @@ async function installedOfficialPackages(projectRoot: string): Promise<readonly 
 export async function officialPluginCandidates(request: string, projectRoot?: string): Promise<readonly string[]> {
   const wanted = baseName(request);
   if (!wanted) return [];
-  const pool = new Set([...officialPluginCatalog(), ...(projectRoot ? await installedOfficialPackages(projectRoot) : [])]);
+  const pool = new Set([...await officialPluginCatalog(), ...(projectRoot ? await installedOfficialPackages(projectRoot) : [])]);
   return Object.freeze([...pool].filter(name => baseName(name) === wanted).sort());
 }
 

@@ -116,7 +116,7 @@ import { NativeDevelopmentModuleRuntime } from ${JSON.stringify(new URL('../src/
 const helper = ${JSON.stringify(helper)}, source = ${JSON.stringify(source)};
 const write = (g) => writeFile(helper, 'export const state = { g: ' + g + ', blob: new Array(1e5).fill(' + g + ') };\\n');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: ${JSON.stringify(root)}, watch: false });
+const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: ${JSON.stringify(root)}, watch: false, dependencyTracking: 'eager' });
 const retired = [];
 await write(0);
 let current = await runtime.load(source);

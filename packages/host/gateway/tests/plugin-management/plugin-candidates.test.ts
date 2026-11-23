@@ -9,8 +9,8 @@ describe('official plugin candidates (#1250)', () => {
     expect(await officialPluginCandidates('')).toEqual([]);
   });
 
-  it('keeps the catalog inside the @zhin.js scope', () => {
-    const catalog = officialPluginCatalog();
+  it('keeps the catalog inside the @zhin.js scope', async () => {
+    const catalog = await officialPluginCatalog();
     expect(catalog.length).toBeGreaterThan(3);
     for (const name of catalog) expect(name.startsWith('@zhin.js/')).toBe(true);
   });

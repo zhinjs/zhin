@@ -1,6 +1,6 @@
 ---
 "@zhin.js/cli": patch
-"@zhin.js/gateway": patch
+"@zhin.js/gateway": minor
 ---
 
 #1250 第 97 批：已并入、改名或停更的 `@zhin.js` 包与已删除的子路径（retired-package-not-flagged），以及 `zhin migrate` 的 pnpm 设置。

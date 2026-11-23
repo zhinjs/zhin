@@ -20,7 +20,9 @@
  * count. MCP tools, web pages, files and stored memory are external content even when read-only.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Locale } from '@zhin.js/plugin-runtime';
 import type { InitiatorTrustLevel } from './trust-level.js';
+import { describeProvenanceChain, describeProvenanceReason } from './high-risk-explain.js';
 import { hasNonAsciiToolName, isFileWriteToolName, isOutboundToolName, toolNameSpellings } from './trust-level.js';
 
 /** ADR 0067 D2: the high-risk categories the provenance gate confirms. */
@@ -169,6 +171,15 @@ const BUILTIN_EXTERNAL_CONTENT_TOOLS = new Set([
 export const EXTERNAL_CONTENT_TAG = 'external_content';
 /** Tag an author puts on a tool whose output is fully trusted (never recorded). */
 export const TRUSTED_OUTPUT_TAG = 'trusted_output';
+/**
+ * #1250 b98: put next to {@link TRUSTED_OUTPUT_TAG} on a tool whose successful results are written by
+ * the harness alone but whose failures may quote something else (a parser's or an upstream's text). Only
+ * its successful results are trusted; a failure, thrown or reported (`{ error }`, MCP `isError`), is
+ * recorded as external content (see {@link classifyToolFailure}). The Host's `schedule_update` carries both.
+ * A tool listed in `injectionGuard.trustedOutputTools` (deployer configuration) or a harness tool is not
+ * a source either way: the configuration takes precedence over this tag.
+ */
+export const UNTRUSTED_FAILURE_TAG = 'untrusted_failure';
 
 const READ_VERB = /^(?:get|read|list|show|view|query|search|find|check)_/;
 /** #1250: `<noun>_<read verb>` names (`schedule_list`, `remind_list`, `config_get`) read too. */
@@ -306,6 +317,18 @@ export function classifyToolOutput(tool: ToolView, settings: Pick<InjectionGuard
   return 'external';
 }
 
+/**
+ * #1250 F8 / b98: how a failed call of `tool` (a thrown error, or a reported `{ error }` / MCP `isError`
+ * result) is recorded: never as trusted output. `none` only for a tool whose output is never recorded
+ * ({@link classifyToolOutput} `none`), unless it also carries {@link UNTRUSTED_FAILURE_TAG}.
+ */
+export function classifyToolFailure(tool: ToolView, settings: Pick<InjectionGuardSettings, 'trustedOutputTools'>): 'none' | 'external' {
+  if (classifyToolOutput(tool, settings) !== 'none') return 'external';
+  // Harness tools and a deployer's `trustedOutputTools` stay fully trusted: only an author's tag is narrowed.
+  if (HARNESS_OUTPUT_TOOLS.has(tool.name) || settings.trustedOutputTools.includes(tool.name)) return 'none';
+  return (tool.tags ?? []).includes(UNTRUSTED_FAILURE_TAG) ? 'external' : 'none';
+}
+
 /** Whether a completed call of `tool` brought lower-trust content into the turn (trusted output included). */
 export function isExternalContentSource(tool: ToolView, settings: Pick<InjectionGuardSettings, 'trustedOutputTools'>): boolean {
   return classifyToolOutput(tool, settings) !== 'none';
@@ -313,14 +336,22 @@ export function isExternalContentSource(tool: ToolView, settings: Pick<Injection
 
 export type ProvenanceSource =
   /** `trusted`: a first-party read-only lookup (ADR 0067 D1.3); absent means external content. */
-  | Readonly<{ kind: 'tool_result'; toolName: string; trusted?: boolean }>
+  | Readonly<{
+    kind: 'tool_result'; toolName: string; trusted?: boolean;
+    /** #1250: the MCP server of an MCP tool, for the approval card only (not part of the source key). */
+    mcpServer?: string;
+  }>
   /**
    * Background messages / scene events of the conversation that arrived since the last turn,
    * excluding the agent's own replies delivered in this session (#1250, ADR 0067 D7) and, in a private
    * chat, the initiator's own original messages there (ADR 0067 D8). `scene` only picks the
    * wording of the approval card; it is not part of the source key.
    */
-  | Readonly<{ kind: 'conversation_context'; scene?: 'private' | 'group' | 'channel' }>
+  | Readonly<{
+    kind: 'conversation_context'; scene?: 'private' | 'group' | 'channel';
+    /** #1250: how many counted background messages / other events arrived; approval card only. */
+    messages?: number; events?: number;
+  }>
   /** A perception-model description of user media (`ai.multimodal.perception`). */
   | Readonly<{ kind: 'media_perception' }>
   /**
@@ -333,22 +364,6 @@ export type ProvenanceSource =
 export type ScheduledPromptProvenance = Readonly<{ tainted: true; sources: readonly string[] }>;
 
 const MAX_PERSISTED_SOURCES = 10;
-
-const MAX_CHAIN_SOURCES = 5;
-
-const LEVEL_LABELS: Readonly<Record<InitiatorTrustLevel, string>> = Object.freeze({
-  owner: '主人',
-  trusted_member: '信任成员',
-  group_member: '群成员',
-});
-
-const ACTION_LABELS: Readonly<Record<HighRiskActionKind, string>> = Object.freeze({
-  shell: '执行命令',
-  file_write: '写文件',
-  outbound: '向其他会话发消息',
-  config: '修改配置',
-  schedule: '创建或修改定时任务',
-});
 
 /** Records which lower-trust sources reached the model during one turn. */
 export class TurnProvenance {
@@ -429,25 +444,14 @@ export class TurnProvenance {
   }
 
   /** Human-readable chain for approval cards, e.g. `主人的消息 → 工具 web_fetch 的结果 → 本次调用 bash`. */
-  describeChain(initiator: InitiatorTrustLevel, toolName: string): string {
-    const shown = this.#sources.slice(0, MAX_CHAIN_SOURCES).map(describeSource);
-    const hidden = this.#sources.length - shown.length;
-    return [
-      `${LEVEL_LABELS[initiator]}的消息`,
-      ...shown,
-      ...(hidden > 0 ? [`另外 ${hidden} 个来源`] : []),
-      `本次调用 ${toolName}`,
-    ].join(' → ');
+  describeChain(initiator: InitiatorTrustLevel, toolName: string, locale?: Locale): string {
+    return describeProvenanceChain(this.#sources, initiator, toolName, locale);
   }
 }
 
 /** Approval question shown when a tainted turn attempts a high-risk action (ADR 0067: or the category is `always`). */
-export function formatProvenanceReason(kind: HighRiskActionKind, chain: string, tainted = true): string {
-  if (!tainted) return `按配置，${ACTION_LABELS[kind]}每次都需要确认。\n来源链：${chain}`;
-  return [
-    `这次${ACTION_LABELS[kind]}发生在读取外部内容之后，外部内容可能夹带了指令。`,
-    `来源链：${chain}`,
-  ].join('\n');
+export function formatProvenanceReason(kind: HighRiskActionKind, chain: string, tainted = true, locale?: Locale): string {
+  return describeProvenanceReason(kind, chain, tainted, locale);
 }
 
 export const PROVENANCE_UNATTENDED_REASON =
@@ -457,42 +461,6 @@ export const PROVENANCE_UNATTENDED_REASON =
 export const PROVENANCE_NO_CHANNEL_REASON =
   '读取外部内容之后的高危动作（执行命令、写文件、向其他会话发消息、修改配置、定时任务）需要发起人确认，'
   + '但当前会话没有可用的确认渠道，已拒绝。这不是无人值守的回合，用户也没有拒绝。';
-
-function describeSource(source: ProvenanceSource): string {
-  switch (source.kind) {
-    case 'tool_result': return `工具 ${source.toolName} 的结果${source.trusted ? '（第一方只读）' : ''}`;
-    case 'conversation_context': return describeConversationContext(source.scene);
-    case 'media_perception': return '图片/媒体的自动描述';
-    case 'scheduled_prompt': {
-      const shown = (source.sources ?? []).slice(0, MAX_CHAIN_SOURCES).map(describePersistedSource);
-      return `定时任务的提示词（创建时已读过${shown.length ? `：${shown.join('、')}` : '外部内容'}）`;
-    }
-  }
-}
-
-/** #1250: a private chat has no group; a stored key does not keep the scene. */
-function describeConversationContext(scene: 'private' | 'group' | 'channel' | undefined): string {
-  switch (scene) {
-    // ADR 0067 D8: the initiator's own original messages never count, so this is someone else's or rewritten content.
-    case 'private': return '私聊里的背景消息';
-    case 'group':
-    case 'channel': return '群聊背景消息';
-    default: return '会话背景消息';
-  }
-}
-
-/** Renders a key written by {@link TurnProvenance.snapshotForSchedule}. */
-function describePersistedSource(key: string): string {
-  if (key.startsWith('tool:')) {
-    const trusted = key.endsWith(':trusted');
-    const name = key.slice('tool:'.length, trusted ? -':trusted'.length : undefined);
-    return `工具 ${name} 的结果${trusted ? '（第一方只读）' : ''}`;
-  }
-  if (key === 'conversation_context') return describeConversationContext(undefined);
-  if (key === 'media_perception') return '图片/媒体的自动描述';
-  if (key === 'scheduled_prompt') return '另一个定时任务的提示词';
-  return key;
-}
 
 /**
  * ADR 0067 D2.1: parses a stored `ScheduleJob.provenance`. Absent stays absent (jobs from before the

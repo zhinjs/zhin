@@ -7,11 +7,8 @@ import {
   type ProbeDialect,
 } from '@zhin.js/database';
 import { expandEnvironmentValue, isWholeEnvironmentReference } from '@zhin.js/plugin-runtime';
-import {
-  DATABASE_DIALECT_DEFINITIONS,
-  validateDatabaseConfig,
-  type DatabaseDialectDefinition,
-} from '@zhin.js/scaffold-wizard';
+import type { DatabaseDialectDefinition } from '@zhin.js/scaffold-wizard';
+import { loadScaffoldWizard } from '../scaffold-wizard-loader.js';
 import { IamError, type ConsoleIamService, type ConsoleUserView } from './service.js';
 
 export type SetupDialect = ProbeDialect;
@@ -145,7 +142,11 @@ function fieldsOf(definition: DatabaseDialectDefinition): readonly SetupDatabase
  * live in `.zhin/gateway.db` (ADR 0059); a redis / memory project keeps its database block.
  */
 const SETUP_DIALECTS: ReadonlySet<string> = new Set<SetupDialect>(['sqlite', 'mysql', 'pg', 'mongodb']);
-const SETUP_DEFINITIONS = DATABASE_DIALECT_DEFINITIONS.filter(definition => SETUP_DIALECTS.has(definition.dialect));
+/** Loaded with the scaffold wizard on first use: the supervised instance imports this module too (#1250). */
+async function setupDefinitions(): Promise<readonly DatabaseDialectDefinition[]> {
+  const { DATABASE_DIALECT_DEFINITIONS } = await loadScaffoldWizard();
+  return DATABASE_DIALECT_DEFINITIONS.filter(definition => SETUP_DIALECTS.has(definition.dialect));
+}
 
 /** PostgreSQL / MySQL: raw Console SQL needs the restricted account (ADR 0059 §4). */
 export const SETUP_CONSOLE_ROLE_NOTICE = 'PostgreSQL / MySQL 上 Console 的原始 SQL 只用受限账号执行：运行 zhin db console-role 创建（无建号权限时加 --print-sql 交给 DBA）。';
@@ -172,7 +173,7 @@ export class ConsoleSetupService {
 
   async drivers(): Promise<readonly SetupDriver[]> {
     const available = this.#options.driverAvailable ?? ((dialect: SetupDialect) => isDatabaseDriverAvailable(dialect));
-    return Promise.all(SETUP_DEFINITIONS.map(async definition => {
+    return Promise.all((await setupDefinitions()).map(async definition => {
       const dialect = definition.dialect as SetupDialect;
       const ok = await available(dialect);
       return Object.freeze({
@@ -246,7 +247,7 @@ export class ConsoleSetupService {
       ? configured as Record<string, unknown>
       : { dialect: 'sqlite', filename: DEFAULT_SQLITE_FILE };
     // A field left out stands for its default (e.g. sqlite `mode: wal`).
-    const definition = SETUP_DEFINITIONS.find(candidate => candidate.dialect === block.dialect);
+    const definition = (await setupDefinitions()).find(candidate => candidate.dialect === block.dialect);
     const defaults: Record<string, unknown> = {};
     for (const field of definition ? fieldsOf(definition) : []) {
       if (field.default !== undefined) defaults[field.name] = field.default;
@@ -276,7 +277,7 @@ export class ConsoleSetupService {
     dialect: SetupDialect; fields: readonly SetupDatabaseField[];
     raw: Record<string, unknown>; expanded: Record<string, unknown>;
   }> {
-    const definition = SETUP_DEFINITIONS.find(candidate => candidate.dialect === input.dialect);
+    const definition = (await setupDefinitions()).find(candidate => candidate.dialect === input.dialect);
     if (!definition) throw new IamError('invalid_input', '不支持的数据库：可选 sqlite / mysql / pg / mongodb');
     const connection = input.connection === undefined ? {} : input.connection;
     if (!connection || typeof connection !== 'object' || Array.isArray(connection)) throw new IamError('invalid_input', 'connection 必须是对象');
@@ -300,6 +301,7 @@ export class ConsoleSetupService {
     }
     const env = await this.#environment();
     const expanded = expandEnvironmentValue({ dialect: definition.dialect, ...raw }, key => env[key]) as Record<string, unknown>;
+    const { validateDatabaseConfig } = await loadScaffoldWizard();
     const issues = validateDatabaseConfig(expanded, env);
     if (issues.length) throw new IamError('invalid_input', issues.map(issue => issue.message).join('; ').slice(0, 500));
     return { dialect: definition.dialect as SetupDialect, fields, raw, expanded };

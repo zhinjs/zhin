@@ -2,7 +2,7 @@
 /**
  * Measures what a supervised Zhin instance keeps loaded (#1250): loaded module count, notable
  * packages (TypeScript compiler, @zhin.js/cli command tree, scaffold wizard, inquirer,
- * puppeteer-core), heap after a full GC and RSS.
+ * puppeteer-core, es-module-lexer, tsx), heap after a full GC and RSS.
  *
  * It starts the project's instance the way the gateway does — `zhin runtime start` with the
  * instance-child environment — but with `--standalone` so no gateway, platform account or IPC
@@ -101,10 +101,13 @@ const timer = setTimeout(async () => {
       'scaffold-wizard': count(/scaffold-wizard\\//u),
       inquirer: count(/\\/(?:@inquirer|inquirer)\\//u),
       'puppeteer-core': count(/\\/puppeteer-core\\//u),
+      'es-module-lexer': count(/\\/es-module-lexer\\//u),
+      tsx: count(/\\/tsx\\/dist\\//u),
     },
     heapUsedMB: +(memory.heapUsed / 1048576).toFixed(1),
     rssMB: +(memory.rss / 1048576).toFixed(1),
     externalMB: +(memory.external / 1048576).toFixed(1),
+    arrayBuffersMB: +(memory.arrayBuffers / 1048576).toFixed(1),
     totalHeapSizeMB: +(getHeapStatistics().total_heap_size / 1048576).toFixed(1),
   }));
   process.kill(process.pid, 'SIGTERM');
@@ -156,6 +159,6 @@ child.on('exit', (code, signal) => {
     `modules loaded: ${report.modules} (Console client modules built: ${report.consoleClientModules})`,
     ...Object.entries(report.packages).map(([name, n]) => `  ${name}: ${n} files`),
     `heap used after GC: ${report.heapUsedMB} MB (total heap ${report.totalHeapSizeMB} MB)`,
-    `rss: ${report.rssMB} MB, external: ${report.externalMB} MB`,
+    `rss: ${report.rssMB} MB, external: ${report.externalMB} MB (array buffers ${report.arrayBuffersMB} MB)`,
   ].join('\n') + '\n');
 });
