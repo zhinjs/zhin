@@ -22,6 +22,10 @@ export class ClientBuildModuleRuntime implements ModuleRuntime {
     return this.server.invalidate?.(source);
   }
 
+  prepareInvalidation(): Promise<void> {
+    return this.server.prepareInvalidation?.() ?? Promise.resolve();
+  }
+
   affectedSources(source: string): readonly string[] {
     return this.server.affectedSources?.(source) ?? [source];
   }
