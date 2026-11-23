@@ -132,11 +132,13 @@ export interface NativeBuildAllowancePlan {
   /** Settings read in a form pnpm does not expect (a scalar instead of a list). */
   readonly warnings: readonly string[];
   /**
-   * Packages that got no `allowBuilds` key because an `onlyBuiltDependencies` list already allows
-   * them and the project's pnpm (below 11, or unknown) reads that list (#1250). pnpm 11 reads only
-   * `allowBuilds`, so with pnpm 11 confirmed the key is still written.
+   * Packages that got no `allowBuilds` key because the project's pnpm is confirmed below 11 and
+   * builds them from an `onlyBuiltDependencies` list it reads (#1250): `source` names the list,
+   * `appended` tells whether this plan adds the package to it (`false`: already listed). The same
+   * rule holds for every gateway package (`node-pty`, `ssh2`, `cpu-features`). pnpm 11 reads only
+   * `allowBuilds`, and an unknown pnpm version may be 11, so the key is written in both cases.
    */
-  readonly allowedByOnlyBuilt: readonly { readonly name: string; readonly source: string }[];
+  readonly allowedByOnlyBuilt: readonly { readonly name: string; readonly source: string; readonly appended: boolean }[];
   /**
    * The project's `pnpm-workspace.yaml` is missing and was not planned; the caller prints a hint
    * instead. See {@link workspaceSkipReason}.
@@ -457,9 +459,21 @@ export function planNativeBuildAllowance(
   });
 
   const changes: NativeBuildAllowanceChange[] = [];
-  const allowedByOnlyBuilt: { name: string; source: string }[] = [];
-  // pnpm 10 builds what onlyBuiltDependencies lists; only pnpm 11 needs allowBuilds for it too.
-  const readsOnlyBuilt = decisions.onlyBuilt.size > 0 && (projectPnpmMajor(dir, pkg, options.pnpmVersion) ?? 0) < 11;
+  const allowedByOnlyBuilt: { name: string; source: string; appended: boolean }[] = [];
+  // pnpm 10 builds what an onlyBuiltDependencies list it reads names, and this plan appends every
+  // wanted package to such a list when one is there (or is created for a pnpm < 10.26 pin): those
+  // packages need no allowBuilds key. Only with pnpm < 11 confirmed — an unknown version may be 11,
+  // which reads allowBuilds only; writing the key then is harmless.
+  const pnpmMajor = projectPnpmMajor(dir, pkg, options.pnpmVersion);
+  const nestedWorkspaceFile = workspaceSkipReason?.kind === 'nested-workspace' ? workspaceSkipReason.workspaceFile : undefined;
+  const existingWorkspaceList = workspaceSkipped ? undefined : doc.get('onlyBuiltDependencies');
+  const appendedList = workspaceSkipped ? undefined
+    : isSeq(existingWorkspaceList) || ((existingWorkspaceList === undefined || existingWorkspaceList === null) && pinsPnpmWithoutAllowBuilds(pkg))
+      ? `${WORKSPACE_FILE} onlyBuiltDependencies`
+      : Array.isArray(pkg.pnpm?.onlyBuiltDependencies) && nestedWorkspaceFile === undefined
+        ? 'package.json pnpm.onlyBuiltDependencies'
+        : undefined;
+  const readsOnlyBuilt = pnpmMajor !== undefined && pnpmMajor < 11;
   let allowBuilds = workspaceSkipped ? undefined : doc.get('allowBuilds', true);
   // An empty `allowBuilds:` key holds a null scalar, which `setIn` cannot descend into.
   if (allowBuilds === null || (isScalar(allowBuilds) && allowBuilds.value === null)) {
@@ -475,10 +489,12 @@ export function planNativeBuildAllowance(
       const hasBare = keys.includes(name);
       const current = hasBare ? (projectAllowBuilds as Record<string, unknown>)[name] : undefined;
       if (current === true) continue;
-      const listedIn = readsOnlyBuilt && !hasBare ? decisions.onlyBuilt.get(name) : undefined;
-      if (listedIn !== undefined) {
-        allowedByOnlyBuilt.push({ name, source: listedIn });
-        continue;
+      if (readsOnlyBuilt && !hasBare) {
+        const listedIn = decisions.onlyBuilt.get(name);
+        if (listedIn !== undefined || appendedList !== undefined) {
+          allowedByOnlyBuilt.push(listedIn !== undefined ? { name, source: listedIn, appended: false } : { name, source: appendedList!, appended: true });
+          continue;
+        }
       }
       const padded = keys.find(key => key !== name && key.trim() === name);
       if (!hasBare && padded !== undefined) {
@@ -511,7 +527,6 @@ export function planNativeBuildAllowance(
   }
 
   const packageList = pkg.pnpm?.onlyBuiltDependencies;
-  const nestedWorkspaceFile = workspaceSkipReason?.kind === 'nested-workspace' ? workspaceSkipReason.workspaceFile : undefined;
   if (Array.isArray(packageList) && nestedWorkspaceFile !== undefined) {
     // pnpm reads build settings from the workspace root only: adding to a member's list changes
     // nothing and suggests the package is allowed.
@@ -611,7 +626,7 @@ export function syncNativeBuildAllowance(
     ));
   }
   for (const entry of plan.allowedByOnlyBuilt) {
-    console.log(chalk.gray(`  · ${entry.name}: 已在 ${entry.source} 中，pnpm 10 会构建它，不再写 allowBuilds（升级到 pnpm 11 后再运行 zhin migrate 补上）`));
+    console.log(chalk.gray(`  · ${entry.name}: ${entry.appended ? '加入' : '已在'} ${entry.source}${entry.appended ? '' : ' 中'}，pnpm 10 会构建它，不再写 allowBuilds（升级到 pnpm 11 后再运行 zhin migrate 补上）`));
   }
   for (const change of plan.changes) {
     const target = change.setting.startsWith('allowBuilds.')

@@ -155,16 +155,20 @@ function npmrcReleaseAge(text: string): number | undefined {
 }
 
 /**
- * The project's own `minimumReleaseAge`, from the places pnpm reads it for a project:
- * `pnpm-workspace.yaml`, the project `.npmrc` (`minimum-release-age`) and `package.json#pnpm`.
+ * The project's own `minimumReleaseAge`, from the places the project's pnpm reads it.
+ * pnpm 11+ (`pnpmMajor` >= 11) reads settings only from `pnpm-workspace.yaml` (and the user-level
+ * `config.yaml`): `.npmrc` carries only auth, registry, TLS and proxy settings and the
+ * `package.json` `pnpm` field is ignored, so neither counts there. pnpm 10 and earlier, or an
+ * unknown version, also read the project `.npmrc` (`minimum-release-age`) and `package.json#pnpm`.
  * Undefined when none sets a number (user-level and global pnpm settings are not read).
  */
-export function configuredReleaseAge(dir: string, pkg: Record<string, any> = {}): ConfiguredReleaseAge | undefined {
+export function configuredReleaseAge(dir: string, pkg: Record<string, any> = {}, pnpmMajor?: number): ConfiguredReleaseAge | undefined {
   const doc = readWorkspace(dir);
   const fromWorkspace = doc ? doc.get('minimumReleaseAge') : undefined;
   if (fromWorkspace !== undefined && fromWorkspace !== null && Number.isFinite(Number(fromWorkspace))) {
     return { minutes: Number(fromWorkspace), source: WORKSPACE_FILE };
   }
+  if ((pnpmMajor ?? 0) >= 11) return undefined;
   try {
     const fromNpmrc = npmrcReleaseAge(fs.readFileSync(path.join(dir, '.npmrc'), 'utf8'));
     if (fromNpmrc !== undefined && Number.isFinite(fromNpmrc)) return { minutes: fromNpmrc, source: '.npmrc' };
@@ -178,11 +182,11 @@ export function configuredReleaseAge(dir: string, pkg: Record<string, any> = {})
 
 /**
  * Whether pnpm holds back fresh releases in this project: a configured `minimumReleaseAge` above 0
- * decides; without one, only pnpm 11+ (whose default is one day) does — `pnpmMajor` undefined
- * (pnpm not found) counts as no gate.
+ * decides (read as `pnpmMajor` reads it, see `configuredReleaseAge`); without one, only
+ * pnpm 11+ (whose default is one day) does — `pnpmMajor` undefined (pnpm not found) counts as no gate.
  */
 export function releaseAgeGateApplies(dir: string, pkg: Record<string, any>, pnpmMajor: number | undefined): boolean {
-  const configured = configuredReleaseAge(dir, pkg);
+  const configured = configuredReleaseAge(dir, pkg, pnpmMajor);
   return configured ? configured.minutes > 0 : (pnpmMajor ?? 0) >= 11;
 }
 

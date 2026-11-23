@@ -824,10 +824,10 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     vi.spyOn(console, 'log').mockImplementation(() => {});
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: false })).toBe(true);
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).pnpm.onlyBuiltDependencies).toEqual(['esbuild', 'node-pty', 'ssh2', 'cpu-features']);
-    // pnpm 10 builds node-pty from onlyBuiltDependencies already: no allowBuilds key for it, and
-    // no release-age exclusions without minimumReleaseAge (#1250).
+    // pnpm 10 builds every gateway package from the onlyBuiltDependencies lists it reads (node-pty
+    // already listed, ssh2 / cpu-features appended): no allowBuilds key for any of them, and no
+    // release-age exclusions without minimumReleaseAge (#1250).
     expect(workspace()).toEqual({
-      allowBuilds: { ssh2: true, 'cpu-features': true },
       onlyBuiltDependencies: ['node-pty', 'ssh2', 'cpu-features'],
     });
 
@@ -1339,6 +1339,24 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
   });
 
+  it('reads minimumReleaseAge only from pnpm-workspace.yaml under pnpm 11 (package.json#pnpm and .npmrc are ignored there)', () => {
+    // pnpm 11 ignores the package.json pnpm field: its default one-day gate still applies.
+    const output = run(bot({ pnpm: { minimumReleaseAge: 0 } }), '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    expect(output).not.toContain('不写 minimumReleaseAgeExclude');
+
+    // pnpm 11 reads only auth / registry / TLS / proxy settings from .npmrc.
+    const npmrc = bot();
+    fs.writeFileSync(path.join(tmp, '.npmrc'), 'minimum-release-age=0\n');
+    run(npmrc, '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    fs.rmSync(path.join(tmp, '.npmrc'));
+
+    // pnpm 10 still honours both.
+    run(bot({ pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+  });
+
   it('follows pnpm 11\'s default gate, and an explicit 0 turns it off', () => {
     run(bot(), '11.27.1');
     expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
@@ -1347,12 +1365,21 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     expect(output).toContain('pnpm-workspace.yaml 的 minimumReleaseAge 为 0（不拦新版本），不写 minimumReleaseAgeExclude');
   });
 
-  it('writes no allowBuilds key for a package onlyBuiltDependencies already allows under pnpm 10', () => {
+  it('writes no allowBuilds key under pnpm 10 for any gateway package an onlyBuiltDependencies list covers', () => {
     const output = run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
-    expect(workspace().allowBuilds).toEqual({ ssh2: true, 'cpu-features': true });
+    // ssh2 / cpu-features follow the same rule as node-pty: appended to the list pnpm 10 reads.
+    expect(workspace()).not.toHaveProperty('allowBuilds');
     expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
     expect(output).toContain('node-pty: 已在 pnpm-workspace.yaml onlyBuiltDependencies 中，pnpm 10 会构建它，不再写 allowBuilds');
-    expect(output).not.toContain('allowBuilds.node-pty');
+    expect(output).toContain('ssh2: 加入 pnpm-workspace.yaml onlyBuiltDependencies，pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('cpu-features: 加入 pnpm-workspace.yaml onlyBuiltDependencies，pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).not.toContain('allowBuilds.');
+  });
+
+  it('writes allowBuilds as before when the pnpm version is unknown (it may be pnpm 11)', () => {
+    run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), undefined);
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
   });
 
   it('still writes allowBuilds under pnpm 11, which no longer reads onlyBuiltDependencies', () => {
@@ -1380,6 +1407,17 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     expect(report).not.toContain('node_modules');
     // Nothing is rewritten.
     expect(fs.readFileSync(path.join(tmp, 'src', 'config.ts'), 'utf8')).toContain("from '@zhin.js/config-yaml'");
+  });
+
+  it('lists an import of the deleted subpath @zhin.js/agent/tools with @zhin.js/tool (#1250)', () => {
+    bot();
+    fs.mkdirSync(path.join(tmp, 'tools', 'echo'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'tools', 'echo', 'index.ts'), "// old: '@zhin.js/agent/tools'\nimport { defineAgentTool } from '@zhin.js/agent/tools';\n");
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(0);
+    const report = lines.join('\n');
+    expect(report).toContain("tools/echo/index.ts:2 '@zhin.js/agent/tools' → '@zhin.js/tool'：子路径 @zhin.js/agent/tools 已删除：defineAgentTool 改从 @zhin.js/tool 导入");
+    expect(report).not.toContain('index.ts:1');
   });
 
   it('reports retired packages of a workspace member and nothing for a clean project', () => {

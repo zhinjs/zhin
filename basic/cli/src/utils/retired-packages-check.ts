@@ -1,7 +1,8 @@
 /**
  * Retired `@zhin.js/*` packages in a project (#1250 `retired-package-not-flagged`): which
  * package.json (the root or a pnpm workspace member) still declares one, and which source files
- * still import it. The catalog itself is `RETIRED_ZHIN_PACKAGES` of `@zhin.js/gateway/project`.
+ * still import one or a deleted subpath (`@zhin.js/agent/tools`). The catalogs themselves are
+ * `RETIRED_ZHIN_PACKAGES` and `REMOVED_ZHIN_SUBPATHS` of `@zhin.js/gateway/project`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,27 +73,46 @@ export function findProjectRetiredImports(root: string): ProjectRetiredImport[] 
   return uses;
 }
 
-/** `src/a.ts:3 '@zhin.js/config-yaml' → '@zhin.js/runtime'` (or the action when nothing replaces it). */
+/**
+ * `src/a.ts:3 '@zhin.js/config-yaml' → '@zhin.js/runtime'`, plus the action for a deleted subpath
+ * (whose replacement covers only some exports); the action alone when nothing replaces the specifier.
+ */
 export function formatRetiredImport(use: ProjectRetiredImport): string {
-  return use.replacement
-    ? `${use.file}:${use.line} '${use.specifier}' → '${use.replacement}'`
-    : `${use.file}:${use.line} '${use.specifier}'：${use.retired.action}`;
+  if (!use.replacement) return `${use.file}:${use.line} '${use.specifier}'：${use.action}`;
+  const rewrite = `${use.file}:${use.line} '${use.specifier}' → '${use.replacement}'`;
+  return use.removedSubpath ? `${rewrite}：${use.action}` : rewrite;
 }
 
-/** `zhin doctor`'s check result (the `CheckResult` shape): warn per retired dependency, ok otherwise. */
+/** Imports doctor lists in full; the rest are counted. */
+const DOCTOR_IMPORT_LINES = 5;
+
+/**
+ * `zhin doctor`'s check result (the `CheckResult` shape): warn per retired dependency and per
+ * import of a deleted subpath or of a retired package no manifest declares; ok otherwise.
+ */
 export function retiredPackagesResult(root: string): { name: string; status: 'ok' | 'warn'; message: string; fix?: string } {
   const name = '已停更的 Zhin 包';
   let hits: ProjectRetiredDependency[];
+  let imports: ProjectRetiredImport[];
   try {
     hits = findProjectRetiredDependencies(root);
+    const declared = new Set(hits.map(hit => hit.name));
+    imports = findProjectRetiredImports(root).filter(use => !use.retired || !declared.has(use.retired.name));
   } catch (error) {
     return { name, status: 'warn', message: `无法检查：${error instanceof Error ? error.message.split('\n')[0] : String(error)}` };
   }
-  if (hits.length === 0) return { name, status: 'ok', message: '没有依赖已并入或停更的 @zhin.js 包' };
-  return {
-    name,
-    status: 'warn',
-    message: `${hits.map(formatRetiredDependency).join('；')}。这些包的最后版本仍依赖旧的 Zhin 包，会拖进第二份实例；pnpm.overrides 只能掩盖，删除依赖才能解决`,
-    fix: `${[...new Set(hits.map(hit => hit.manifest))].map(file => `改写 import 后从 ${file} 删除 ${hits.filter(hit => hit.manifest === file).map(hit => hit.name).join('、')}`).join('；')}，然后运行 pnpm install（zhin migrate 会列出要改的 import）`,
-  };
+  if (hits.length === 0 && imports.length === 0) return { name, status: 'ok', message: '没有依赖已并入或停更的 @zhin.js 包，也没有 import 已删除的子路径' };
+  const messages: string[] = [];
+  const fixes: string[] = [];
+  if (hits.length > 0) {
+    messages.push(`${hits.map(formatRetiredDependency).join('；')}。这些包的最后版本仍依赖旧的 Zhin 包，会拖进第二份实例；pnpm.overrides 只能掩盖，删除依赖才能解决`);
+    fixes.push(`${[...new Set(hits.map(hit => hit.manifest))].map(file => `改写 import 后从 ${file} 删除 ${hits.filter(hit => hit.manifest === file).map(hit => hit.name).join('、')}`).join('；')}，然后运行 pnpm install（zhin migrate 会列出要改的 import）`);
+  }
+  if (imports.length > 0) {
+    const shown = imports.slice(0, DOCTOR_IMPORT_LINES).map(formatRetiredImport);
+    const more = imports.length > DOCTOR_IMPORT_LINES ? `；另有 ${imports.length - DOCTOR_IMPORT_LINES} 处` : '';
+    messages.push(`要改写的 import：${shown.join('；')}${more}`);
+    if (hits.length === 0) fixes.push('按上面的提示改写 import（zhin migrate 会列出全部位置）');
+  }
+  return { name, status: 'warn', message: messages.join('。'), fix: fixes.join('；') };
 }

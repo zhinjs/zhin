@@ -690,6 +690,20 @@ describe('doctor: retired @zhin.js packages (#1250 retired-package-not-flagged)'
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 
+  it('warns about an import of the deleted subpath @zhin.js/agent/tools, whose package is still current', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+        name: 'doctor-run', private: true, dependencies: { 'zhin.js': '^1.0.0', '@zhin.js/agent': '^1.0.0' },
+      }));
+      fs.mkdirSync(path.join(dir, 'tools', 'echo'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'tools', 'echo', 'index.ts'), "import { defineAgentTool } from '@zhin.js/agent/tools';\nexport default defineAgentTool({} as never);\n");
+    });
+    try {
+      expect(output).toContain("已停更的 Zhin 包: 要改写的 import：tools/echo/index.ts:1 '@zhin.js/agent/tools' → '@zhin.js/tool'：子路径 @zhin.js/agent/tools 已删除");
+      expect(output).toContain('按上面的提示改写 import');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('reports ok when no retired package is declared', async () => {
     const { output, directory } = await runDoctor(() => {});
     try {

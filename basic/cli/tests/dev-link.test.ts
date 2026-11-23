@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { findRetiredZhinPackage } from '@zhin.js/gateway/project';
 import {
   STATE_DIR,
   applyLinkOverrides,
@@ -286,13 +287,48 @@ describe('duplicate zhin instance detection', () => {
       path: ['@zhin.js/config-yaml@1.1.0', '@zhin.js/runtime@1.1.0', '@zhin.js/plugin-runtime@1.1.9'],
     }]);
     const { fixes } = formatDuplicateZhinInstances(described);
-    expect(fixes[0]).toBe('根项目 的直接依赖 @zhin.js/config-yaml@1.1.0 拖进了 @zhin.js/plugin-runtime@1.1.9'
-      + '（@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0 → @zhin.js/plugin-runtime@1.1.9）：'
-      + '已停更并入 @zhin.js/runtime：改用 @zhin.js/runtime 的 YamlConfigDocument（import { YamlConfigDocument } from \'@zhin.js/runtime\'），然后删除 @zhin.js/config-yaml 依赖');
-    expect(fixes[1]).toContain('根项目 的直接依赖 @zhin.js/config-yaml@1.1.0 拖进了 @zhin.js/runtime@1.1.0（@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0）');
+    const configYamlAction = findRetiredZhinPackage('@zhin.js/config-yaml')!.action;
+    // One fix for the retired package, however many copies it drags in (#1250).
+    expect(fixes[0]).toBe('根项目 的直接依赖 @zhin.js/config-yaml@1.1.0 拖进了 @zhin.js/plugin-runtime@1.1.9、@zhin.js/runtime@1.1.0'
+      + '（@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0 → @zhin.js/plugin-runtime@1.1.9；@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0）：'
+      + configYamlAction);
+    expect(fixes.filter(fix => fix.includes(configYamlAction))).toHaveLength(1);
     // overrides only come last.
     expect(fixes.at(-1)).toBe('以上都处理后仍有重复，再在 package.json 的 pnpm.overrides 中统一 @zhin.js/plugin-runtime、@zhin.js/runtime 的版本');
     expect(fixes.findIndex(fix => fix.includes('overrides'))).toBe(fixes.length - 1);
+  });
+
+  it('still names a retired package that drags in a copy a workspace member also requires directly (#1250)', () => {
+    const current = store('@zhin.js+runtime@1.4.0', '@zhin.js/runtime', { version: '1.4.0' });
+    const old = store('@zhin.js+runtime@1.1.0', '@zhin.js/runtime', { version: '1.1.0' });
+    const configYaml = store('@zhin.js+config-yaml@1.1.0', '@zhin.js/config-yaml', { version: '1.1.0', dependencies: { '@zhin.js/runtime': '1.1.0' } });
+    sibling(path.dirname(configYaml), '@zhin.js/runtime', old);
+    pkg(project, { name: 'bot', dependencies: { '@zhin.js/runtime': '^1.4.0', '@zhin.js/config-yaml': '^1.1.0', foo: 'workspace:*' } });
+    fs.writeFileSync(path.join(project, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    const member = path.join(project, 'plugins/foo');
+    pkg(member, { name: 'foo', dependencies: { '@zhin.js/runtime': '1.1.0' } });
+    top('@zhin.js/runtime', current);
+    top('@zhin.js/config-yaml', configYaml);
+    top('foo', member);
+    fs.mkdirSync(path.join(member, 'node_modules/@zhin.js'), { recursive: true });
+    fs.symlinkSync(old, path.join(member, 'node_modules/@zhin.js/runtime'), 'dir');
+
+    const described = describeDuplicateZhinInstances(project);
+    const oldCopy = described.get('@zhin.js/runtime')!.find(copy => copy.version === '1.1.0')!;
+    expect(oldCopy.requiredBy.some(dependent => dependent.local)).toBe(true);
+    expect(oldCopy.origins).toEqual([{
+      project: '根项目',
+      direct: '@zhin.js/config-yaml@1.1.0',
+      directName: '@zhin.js/config-yaml',
+      path: ['@zhin.js/config-yaml@1.1.0', '@zhin.js/runtime@1.1.0'],
+    }]);
+    const { fixes } = formatDuplicateZhinInstances(described);
+    expect(fixes).toEqual([
+      `根项目 的直接依赖 @zhin.js/config-yaml@1.1.0 拖进了 @zhin.js/runtime@1.1.0（@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0）：${findRetiredZhinPackage('@zhin.js/config-yaml')!.action}`,
+      '@zhin.js/config-yaml@1.1.0 依赖 @zhin.js/runtime@1.1.0：升级该包，或运行 zhin migrate 后 pnpm dedupe',
+      '把 plugins/foo/package.json 的 @zhin.js/runtime 改成 ^1.4.0（或运行 zhin migrate，一并升级工作区里的包）',
+      '以上都处理后仍有重复，再在 package.json 的 pnpm.overrides 中统一 @zhin.js/runtime 的版本',
+    ]);
   });
 
   it('finds a workspace member\'s copy even when the root does not depend on the member', () => {

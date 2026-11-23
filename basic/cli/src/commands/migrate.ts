@@ -21,9 +21,10 @@ import path, { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
-import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
-import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
-import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, findRetiredZhinPackage, readConfig } from '@zhin.js/gateway/project';
+import {
+  applyInstanceDeclarationMigration, CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig, findConfigFile, findRetiredZhinPackage,
+  formatInstanceMigrationPreview, NODE_ENGINES_HINT, planInstanceDeclarationMigration, readConfig, recoverInstanceDeclarationMigration,
+} from '@zhin.js/gateway/project';
 import { findProjectRetiredDependencies, findProjectRetiredImports, formatRetiredDependency, formatRetiredImport } from '../utils/retired-packages-check.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
 import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
@@ -293,7 +294,7 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     if (releaseAgeGateApplies(dir, pkg, pnpmMajor)) {
       syncReleaseAgeExclusions(dir, releases, options.dryRun);
     } else if (releases.size > 0 && fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
-      const configured = configuredReleaseAge(dir, pkg);
+      const configured = configuredReleaseAge(dir, pkg, pnpmMajor);
       console.log(chalk.gray(configured
         ? `  · ${configured.source} 的 minimumReleaseAge 为 ${configured.minutes}（不拦新版本），不写 minimumReleaseAgeExclude`
         : `  · 项目未设置 minimumReleaseAge${pnpmMajor === undefined ? '' : `（pnpm ${pnpmMajor} 默认不启用）`}，不写 minimumReleaseAgeExclude`));

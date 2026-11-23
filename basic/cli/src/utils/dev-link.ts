@@ -409,8 +409,9 @@ export interface ZhinInstanceCopy {
   readonly version?: string;
   readonly requiredBy: readonly ZhinInstanceDependent[];
   /**
-   * Direct dependencies (of the root or a member) that reach this copy only through other
-   * installed packages; empty when a project directory requires the copy itself.
+   * Direct dependencies (of the root or a member) that reach this copy through other installed
+   * packages. Kept when a project directory also requires the copy itself, so a retired package
+   * that drags the same copy in is still named (#1250).
    */
   readonly origins: readonly ZhinInstanceOrigin[];
 }
@@ -557,7 +558,7 @@ export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinIn
       const requiredBy = [...copy.requiredBy.values()];
       return {
         dir, ...(copy.version ? { version: copy.version } : {}), requiredBy,
-        origins: requiredBy.some(dependent => dependent.local) ? [] : originsOf(dir),
+        origins: originsOf(dir),
       };
     }));
   }
@@ -571,8 +572,9 @@ export function collectZhinInstanceGraph(projectDir: string): Map<string, ZhinIn
 export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, readonly ZhinInstanceCopy[]>): { lines: string[]; fixes: string[] } {
   const lines: string[] = [];
   // #1250: the direct dependency that drags a copy in comes first (often a retired package such as
-  // @zhin.js/config-yaml); the per-package fixes follow; pnpm.overrides is the last resort.
-  const originFixes = new Set<string>();
+  // @zhin.js/config-yaml); the per-package fixes follow; pnpm.overrides is the last resort. One fix
+  // per (project, direct dependency): a retired package that drags in several copies is named once.
+  const originFixes = new Map<string, { owner: string; direct: string; directName: string; copies: string[]; chains: string[] }>();
   const fixes = new Set<string>();
   const overrideNames = new Set<string>();
   for (const [name, copies] of duplicates) {
@@ -588,12 +590,14 @@ export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, rea
     for (const copy of copies) {
       if (copy === rootCopy) continue;
       for (const origin of copy.origins) {
-        const retired = findRetiredZhinPackage(origin.directName);
         const owner = origin.project === '根项目' ? '根项目' : `${origin.project}/package.json`;
+        const key = `${owner}\0${origin.direct}`;
+        const entry = originFixes.get(key) ?? { owner, direct: origin.direct, directName: origin.directName, copies: [], chains: [] };
+        originFixes.set(key, entry);
+        const dragged = `${name}@${copy.version ?? '?'}`;
+        if (!entry.copies.includes(dragged)) entry.copies.push(dragged);
         const chain = origin.path.join(' → ');
-        originFixes.add(retired
-          ? `${owner} 的直接依赖 ${origin.direct} 拖进了 ${name}@${copy.version ?? '?'}（${chain}）：${retired.action}`
-          : `${owner} 的直接依赖 ${origin.direct} 拖进了 ${name}@${copy.version ?? '?'}（${chain}）：先升级或删除 ${origin.directName}`);
+        if (!entry.chains.includes(chain)) entry.chains.push(chain);
       }
       for (const dependent of copy.requiredBy) {
         if (dependent.by === '根项目') continue;
@@ -605,7 +609,12 @@ export function formatDuplicateZhinInstances(duplicates: ReadonlyMap<string, rea
       }
     }
   }
-  const all = [...originFixes, ...fixes];
+  const all = [...originFixes.values()].map(entry => {
+    const retired = findRetiredZhinPackage(entry.directName);
+    return `${entry.owner} 的直接依赖 ${entry.direct} 拖进了 ${entry.copies.join('、')}（${entry.chains.join('；')}）：`
+      + (retired ? retired.action : `先升级或删除 ${entry.directName}`);
+  });
+  all.push(...fixes);
   if (overrideNames.size > 0) {
     all.push(`以上都处理后仍有重复，再在 package.json 的 pnpm.overrides 中统一 ${[...overrideNames].join('、')} 的版本`);
   }
