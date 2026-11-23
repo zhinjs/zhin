@@ -1,8 +1,8 @@
 ---
-"@zhin.js/agent": patch
-"@zhin.js/core": patch
-"zhin.js": patch
-"@zhin.js/cli": patch
+"@zhin.js/agent": minor
+"@zhin.js/core": minor
+"zhin.js": minor
+"@zhin.js/cli": minor
 ---
 
 #1250 第 90 批：就地修改定时任务与确认卡编号。

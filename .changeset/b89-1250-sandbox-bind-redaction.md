@@ -1,10 +1,10 @@
 ---
-"@zhin.js/kernel": patch
-"@zhin.js/core": patch
+"@zhin.js/kernel": minor
+"@zhin.js/core": minor
 "@zhin.js/ai": patch
 "@zhin.js/agent": patch
-"zhin.js": patch
-"@zhin.js/console-protocol": patch
+"zhin.js": minor
+"@zhin.js/console-protocol": minor
 "@zhin.js/adapter-sandbox": patch
 ---
 
