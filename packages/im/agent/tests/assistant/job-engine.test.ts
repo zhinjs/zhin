@@ -75,6 +75,8 @@ describe('TimerScheduler', () => {
     expect(stored?.state.lastStatus).toBe('ok');
 
     engine.unload();
+
+    await engine.stop();
   });
 
   it.each(['en', undefined] as const)('uses the persisted job locale for failure delivery (%s)', async (locale) => {
@@ -93,7 +95,7 @@ describe('TimerScheduler', () => {
       expect(sendIm).toHaveBeenCalledWith(notify,
         expect.stringContaining(locale === 'en' ? '[Task failed]' : '[任务失败]'),
         undefined, { locale: locale ?? 'zh-CN' });
-    } finally { engine.unload(); }
+    } finally { engine.unload(); await engine.stop(); }
   });
 
   it('runJob passes createdBy to task executor', async () => {
@@ -128,6 +130,7 @@ describe('TimerScheduler', () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     engine.unload();
+    await engine.stop();
   });
 
   it('runJob passes executionPlan and activityFeedback to task executor', async () => {
@@ -169,6 +172,7 @@ describe('TimerScheduler', () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     engine.unload();
+    await engine.stop();
   });
 
   it.each([
@@ -190,6 +194,7 @@ describe('TimerScheduler', () => {
     await engine.runJobNow('heartbeat');
     expect(execute).toHaveBeenCalledTimes(calls);
     engine.unload();
+    await engine.stop();
   });
 
   it('runs a heartbeat with a custom prompt even without HEARTBEAT.md', async () => {
@@ -206,6 +211,7 @@ describe('TimerScheduler', () => {
     await engine.runJobNow('heartbeat');
     expect(execute).toHaveBeenCalledTimes(1);
     engine.unload();
+    await engine.stop();
   });
 
   describe('next run (#1250)', () => {
@@ -235,6 +241,7 @@ describe('TimerScheduler', () => {
       }));
       expect(engine.listUnschedulable()).toEqual([]);
       engine.unload();
+      await engine.stop();
     });
 
     it('pause clears the next run and resume recomputes it', async () => {
@@ -250,6 +257,7 @@ describe('TimerScheduler', () => {
       expect(resumed?.enabled).toBe(true);
       expect(resumed?.state.nextRunAtMs).toBe(Date.parse('2026-11-13T01:00:00.000Z'));
       engine.unload();
+      await engine.stop();
     });
 
     it('reports an enabled job whose next run cannot be computed', async () => {
@@ -264,6 +272,7 @@ describe('TimerScheduler', () => {
       await engine.removeJob('broken');
       expect(engine.listUnschedulable()).toEqual([]);
       engine.unload();
+      await engine.stop();
     });
   });
 });
