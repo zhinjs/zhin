@@ -263,31 +263,47 @@ export function redactChatOwnerClaimText(text: string): string {
   return result;
 }
 
-/**
- * ADR 0060 §2.4 (#1250 sandbox-transcript-shared-bind-code): a chat-identity bind message — the keyword
- * `绑定` / `綁定` / `bind` (any letter case; `码` / `code` may follow it) as the first word, after up to
- * three punctuation marks (a command prefix such as `/` or `#`, a quote) or the adapter's `prefix`,
- * then text that, folded like codes are compared (NFKC, upper case) with every non-letter, non-digit
- * dropped, is exactly {@link CHAT_BIND_CODE_LENGTH} symbols of the bind-code alphabet. Decided by the
- * shape alone, never by whether such a code is open: an expired code is shown no more than a live one.
- * Keep the alphabet and length in sync with `zhin.js/instance` (chat-identity-bind).
- */
+/** Keep the alphabet and length in sync with `zhin.js/instance` (chat-identity-bind). */
 const CHAT_BIND_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CHAT_BIND_CODE_LENGTH = 8;
 const CHAT_BIND_HEAD = /^([^\p{L}\p{N}\s]{0,3}\s*(?:绑定|綁定|bind)(?:码|碼|\s*code)?)/iu;
+/**
+ * What may follow the keyword: up to three punctuation marks, the code as one word or two words
+ * joined by whitespace or one `-`, up to three punctuation marks. The pieces never overlap (letters
+ * and digits / whitespace / other marks), so matching stays linear (no polynomial backtracking).
+ */
+const CHAT_BIND_REST = /^\s*(?:[^\p{L}\p{N}\s]{1,3}\s*)?([\p{L}\p{N}]{1,8})(?:(?:\s+|-)([\p{L}\p{N}]{1,8}))?\s*(?:[^\p{L}\p{N}\s]{1,3}\s*)?$/u;
 const CHAT_BIND_CODE_SHAPE = new RegExp(`^[${CHAT_BIND_CODE_ALPHABET}]{${CHAT_BIND_CODE_LENGTH}}$`, 'u');
 
 function bindHead(candidate: string): string | undefined {
   const head = CHAT_BIND_HEAD.exec(candidate)?.[1];
   if (!head) return undefined;
-  const rest = candidate.slice(head.length).normalize('NFKC').toUpperCase().replace(/[^\p{L}\p{N}]+/gu, '');
-  return CHAT_BIND_CODE_SHAPE.test(rest) ? head : undefined;
+  // Invisible characters (zero-width, format) and stray combining marks do not change what is read.
+  const rest = candidate.slice(head.length).replace(/\p{Cf}/gu, '').normalize('NFKC').replace(/\p{M}/gu, '');
+  const match = CHAT_BIND_REST.exec(rest);
+  if (!match) return undefined;
+  const typed = `${match[1]}${match[2] ?? ''}`;
+  // Without a digit, only one word in upper case reads as a code: a word in lower or mixed case
+  // (`username`, `Mysterys`) is a name, and two words (`ME PLEASE`) are words.
+  if (!/\p{N}/u.test(typed) && (match[2] !== undefined || typed !== typed.toUpperCase())) return undefined;
+  return CHAT_BIND_CODE_SHAPE.test(typed.toUpperCase()) ? head : undefined;
 }
 
 /**
- * The bind message `text` with its code replaced by `***` (`绑定 ABCD2345` → `绑定 ***`, `/bind abcd-2345` →
- * `/bind ***`), or `text` unchanged when it is not a bind message (see {@link CHAT_BIND_HEAD}). `prefix`
- * (the adapter's command prefix, which may be a word) may precede the keyword and is kept.
+ * ADR 0060 §2.4 (#1250 sandbox-transcript-shared-bind-code): the bind message `text` with its code
+ * replaced by `***` (`绑定 ABCD2345` → `绑定 ***`, `/bind abcd-2345` → `/bind ***`), or `text`
+ * unchanged when it is not one. A bind message is the keyword `绑定` / `綁定` / `bind` (any letter
+ * case; `码` / `code` may follow it) as the first word — after up to three punctuation marks (a
+ * command prefix such as `/` or `#`, a quote) or `prefix` (the adapter's command prefix, which may
+ * be a word, and is kept) — then the code and nothing else: up to three punctuation marks around it
+ * (`<ABCD2345>`), written as one word or as two words joined by whitespace or `-`, that are, once
+ * folded (NFKC, zero-width characters and combining marks dropped, upper case), exactly 8 symbols
+ * of the bind-code alphabet (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`). Without a digit only one word
+ * typed in upper case counts (`ABCDEFGH`; not `username`, `Mysterys` or `ME PLEASE`).
+ *
+ * Decided by the shape alone, never by whether such a code is open: an expired code is shown no
+ * more than a live one. So an argument with the shape of a code (`绑定 23456789`) is hidden too,
+ * while `bind username`, `BIND ME PLEASE` and `bind a-b-c-d-e-f-g-h` are kept as written.
  */
 export function redactChatIdentityBindText(text: string, prefix = ''): string {
   if (!text) return text;
@@ -302,7 +318,10 @@ export function redactChatIdentityBindText(text: string, prefix = ''): string {
   return head ? `${head} ***` : text;
 }
 
-/** Whether `text` is a chat-identity bind message ({@link redactChatIdentityBindText} would change it). */
+/**
+ * Whether `text` is a chat-identity bind message with a code-shaped argument, i.e. whether
+ * {@link redactChatIdentityBindText} would change it (the same shape, the same `prefix`).
+ */
 export function isChatIdentityBindText(text: string, prefix = ''): boolean {
   return redactChatIdentityBindText(text, prefix) !== text;
 }

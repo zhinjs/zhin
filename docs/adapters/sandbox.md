@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f7eeeebc6b359ef6 -->
+<!-- sync-adapter-docs:sha256=1bd557e6ce0a50f2 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -299,4 +299,8 @@ MIT License
 
 ## 会话共享与绑定码
 
-一个 Sandbox 账号的会话对所有能打开 Sandbox 的 Console 用户共享：同一会话的消息回显给每个打开它的页面，会话记录（`/api/conversations/history`）也对他们回放。因此形如`绑定 <码>``/绑定 <码>``bind <code>`的消息在端点收到时就改成 `绑定 ***`（关键词与命令前缀照写），之后的广播、发送者自己的气泡、日志、原生 `platform.receive` 事件、会话记录与回放里都没有码的原文；按形态判断，与码是否仍有效无关。Sandbox 本来就不接受绑定码，`绑定 ***` 仍会得到「这个适配器上不接受绑定」的回复。其它内容仍对所有 Console 用户可见。后续计划：会话按 Console 用户隔离（见 [ADR 0060](https://github.com/zhinjs/zhin/blob/main/docs/adr/0060-chat-identity-single-source.md)「共享 Sandbox 里的绑定码」）。
+一个 Sandbox 账号的会话对所有能打开 Sandbox 的 Console 用户共享：同一会话的消息回显给每个打开它的页面，会话记录（`/api/conversations/history`）也对他们回放。因此绑定消息（`绑定 <码>`、`/绑定 <码>`、`bind <code>`：关键词后只有一个形如绑定码的参数——8 位绑定码字母表字符，可以用空白或 `-` 拆成两段，没有数字时须是一个全大写的词）在端点收到时就改成 `绑定 ***`（关键词与命令前缀照写），之后的广播、发送者自己的气泡、日志、原生 `platform.receive` 事件、会话记录与回放里都没有码的原文。
+
+- **按形态判断，与码是否仍有效无关**：Sandbox 中形如绑定码的参数都会被改写。项目自己的 `绑定` / `bind` 命令若参数恰好形如绑定码（例如全由 2–9 组成的 8 位 QQ 号 `绑定 23456789`），在 Sandbox 里只会收到 `绑定 ***`；`bind username`、`BIND ME PLEASE`、`绑定 12345678`（含 1）这类参数照常到达。
+- **改写后的回复**：Sandbox 本来就不接受绑定码。命令前缀为空（默认）或带着命令前缀发送时，`绑定 ***` 由 `bind` 命令回复「这个适配器上不接受绑定」；配置了命令前缀却不带前缀发送时，它不是命令，按普通消息处理（交给 Agent 等），不会得到这条回复。
+- 其它内容仍对所有 Console 用户可见。后续计划：会话按 Console 用户隔离（见 [ADR 0060](https://github.com/zhinjs/zhin/blob/main/docs/adr/0060-chat-identity-single-source.md)「共享 Sandbox 里的绑定码」）。

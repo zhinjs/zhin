@@ -98,10 +98,24 @@ describe('Sandbox bind code redaction (#1250 sandbox-transcript-shared-bind-code
     const hidden = redact([{ type: 'text', data: { text: '绑定 ' } }, { type: 'text', data: { text: CODE } }]);
     expect(hidden.message.content).toEqual([{ type: 'text', data: { text: '绑定 ***' } }]);
     expect(carriesCode(JSON.parse(hidden.raw))).toBe(false);
-    for (const text of ['hello', '我想绑定 ABCD2345 这个号', '绑定 12345678', '认领 ABCD2345']) {
+    // A code-shaped argument cannot be told from a code: it is hidden too (README: known trade-off).
+    expect(redact('绑定 23456789').message.text).toBe('绑定 ***');
+    for (const text of ['hello', '我想绑定 ABCD2345 这个号', '绑定 12345678', '认领 ABCD2345',
+      'bind username', 'BIND ME PLEASE', 'Bind Mysterys', 'bind a-b-c-d-e-f-g-h']) {
       const result = redact(text);
       expect(result.redacted).toBe(false);
       expect(result.message.text).toBe(text);
     }
+  });
+
+  it('adds no text segment to a frame without one (an action-only frame stays action-only)', () => {
+    const content = [{ type: 'action', data: { id: 'bind', payload: `绑定 ${CODE}` } }];
+    const frame = JSON.stringify({ ...scene, content });
+    const result = redactSandboxBindCode(parseSandboxWsPayload(frame), frame);
+    expect(result.redacted).toBe(true);
+    expect(result.message.text).toBe('绑定 ***');
+    expect(result.message.content).toEqual(content);
+    expect(result.message.content.every(segment => segment.type === 'action')).toBe(true);
+    expect((JSON.parse(result.raw) as { content: unknown }).content).toEqual(content);
   });
 });

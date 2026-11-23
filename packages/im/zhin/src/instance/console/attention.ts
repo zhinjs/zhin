@@ -1407,7 +1407,8 @@ export async function collectAttention(sources: AttentionSources, options: Colle
       if (!state.hasGlobalOwner) {
         drafts.push({ kind: 'chat-roles.no-owner', severity: 'warning',
           state: { claimOpen: state.claimOpen, ...(state.simulationOnly ? { simulationOnly: true } : {}) },
-          // #1250: the Console shows 「打开 Sandbox」 from this (the revision input above is unchanged).
+          // #1250: published for the Console to offer 「打开 Sandbox」 (the client does not read it yet);
+          // the revision input above is unchanged.
           published: { simulationOnly: state.simulationOnly === true },
           title: t('roles.noOwner.title'),
           detail: state.simulationOnly ? t('roles.noOwner.sandbox')

@@ -150,6 +150,32 @@ describe('chat-identity bind text (ADR 0060 §2.4, #1250 sandbox-transcript-shar
     expect(redactChatIdentityBindText('绑定 AB\u200BCD2345')).toBe('绑定 ***');
     expect(redactChatIdentityBindText('zhin 绑定 ABCD2345', 'zhin')).toBe('zhin 绑定 ***');
     expect(isChatIdentityBindText('绑定 ZZZZ9999')).toBe(true);
+    expect(redactChatIdentityBindText('bind zzzz-9999')).toBe('bind ***');
+    expect(redactChatIdentityBindText('绑定 ABCDEFGH')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('绑定 A\u0336BCD2345')).toBe('绑定 ***');
+  });
+
+  it('hides an argument with the shape of a code: it cannot be told from one (known trade-off, README)', () => {
+    // All 8 symbols are in the alphabet (no 0 / 1 / O / I): a QQ number like this is hidden too.
+    expect(redactChatIdentityBindText('绑定 23456789')).toBe('绑定 ***');
+    expect(isChatIdentityBindText('#绑定 23456789')).toBe(true);
+  });
+
+  it('keeps names, several words and codes split into more than two parts (#1250 review)', () => {
+    for (const text of ['bind username', 'BIND ME PLEASE', 'Bind Mysterys', 'bind a-b-c-d-e-f-g-h', '绑定 AB CD 2345', '绑定 ABCD EFGH',
+      '绑定 ABCD--2345', '绑定 ABCD_2345', 'bind ABCD2345 now']) {
+      expect(redactChatIdentityBindText(text)).toBe(text);
+      expect(isChatIdentityBindText(text)).toBe(false);
+    }
+  });
+
+  it('stays linear on long near-misses (no polynomial backtracking)', () => {
+    const started = performance.now();
+    for (const filler of [' ', '-', 'A', '!']) {
+      const text = `绑定 A${filler.repeat(50_000)}B!`;
+      expect(redactChatIdentityBindText(text)).toBe(text);
+    }
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it('leaves other text as written', () => {

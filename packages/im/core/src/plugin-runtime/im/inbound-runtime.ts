@@ -245,13 +245,15 @@ export class InboundRuntime {
       this.context.diagnostics?.identify(conversation);
       // ADR 0060 §3.3: a one-time secret is recognized before it is logged, recorded or routed.
       const secret = this.#matchSecret(input, lease.value);
-      // #1250: a bind message no guard took (no open code, a group) is still logged as `绑定 ***`.
-      const visibleContent = secret ? secret.redacted : redactChatIdentityBindText(input.content);
+      const visibleContent = secret ? secret.redacted : input.content;
+      // #1250: a bind message no guard took (no open code, a group) is still logged as `绑定 ***`;
+      // only logs and previews use it — what is delivered (`incoming.content`) is `visibleContent`.
+      const logContent = secret ? secret.redacted : redactChatIdentityBindText(input.content);
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),
         sender: `${input.sender?.name || 'undefined'}(${input.sender?.id || 'undefined'})`,
-        preview: truncatePreview(visibleContent),
+        preview: truncatePreview(logContent),
       }));
       const enrichedSender = this.context.enrichSender
         ? this.context.enrichSender(input.sender, conversation, lease.value)
@@ -464,7 +466,7 @@ export class InboundRuntime {
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(visibleContent),
+            contentPreview: previewMessageContent(logContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
@@ -484,7 +486,7 @@ export class InboundRuntime {
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(visibleContent),
+            contentPreview: previewMessageContent(logContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
@@ -504,7 +506,7 @@ export class InboundRuntime {
             direction: 'inbound',
             conversation,
             ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-            contentPreview: previewMessageContent(visibleContent),
+            contentPreview: previewMessageContent(logContent),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
           });
@@ -584,7 +586,7 @@ export class InboundRuntime {
           direction: 'inbound',
           conversation,
           ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
-          contentPreview: previewMessageContent(visibleContent),
+          contentPreview: previewMessageContent(logContent),
           ...(input.message?.id ? { messageId: input.message.id } : {}),
           timestamp: receivedAt,
         });

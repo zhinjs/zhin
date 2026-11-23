@@ -252,7 +252,7 @@ export interface ConsoleAttentionItem {
    */
   readonly links?: readonly ConsoleAttentionPersonLink[];
   /**
-   * Facts of the item's state the Console may act on (#1250; older Hosts omit it). Only the fields
+   * Facts of the item's state a Console client may act on (#1250; older Hosts omit it). Only the fields
    * listed in {@link ConsoleAttentionItemState} are sent; the rest of the state only feeds `revision`.
    */
   readonly state?: ConsoleAttentionItemState;
@@ -263,7 +263,7 @@ export interface ConsoleAttentionItemState {
   /**
    * `chat-roles.no-owner`: only simulation adapters (the Sandbox) are loaded, where claims and bind
    * codes are refused; the first owner is made through the Sandbox (「以我的聊天身份发言」 + a chat
-   * role grant), so the Console offers 「打开 Sandbox」.
+   * role grant). Published so the Console can offer 「打开 Sandbox」 (the client does not read it yet).
    */
   readonly simulationOnly?: boolean;
 }
