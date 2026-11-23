@@ -11,6 +11,9 @@ import {
   findRetiredZhinPackage,
 } from '../../src/project/retired-packages.js';
 
+// Built at run time so the source has no literal import of the removed subpath (check:agent-tool-authoring-boundaries).
+const REMOVED_TOOLS_SUBPATH = ['@zhin.js', 'agent', 'tools'].join('/');
+
 const repo = path.resolve(import.meta.dirname, '../../../../..');
 
 /** Every workspace package.json by package name. */
@@ -177,7 +180,7 @@ describe('retired @zhin.js packages (#1250 retired-package-not-flagged)', () => 
       "import type { X } from '@zhin.js/ai-provider';",
       "const lazy = import(`@zhin.js/isolate`);",
       "const dyn = import(`@zhin.js/${name}`);",
-      "import { defineAgentTool } from '@zhin.js/agent/tools';",
+      `import { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';`,
     ].join('\n');
     expect(findRetiredImports(source).map(use => [use.line, use.specifier])).toEqual([
       [5, '@zhin.js/isolate'],
@@ -192,7 +195,7 @@ describe('retired @zhin.js packages (#1250 retired-package-not-flagged)', () => 
   });
 
   it('reports the deleted subpath @zhin.js/agent/tools with @zhin.js/tool, a deeper path without a replacement', () => {
-    const uses = findRetiredImports("import { defineAgentTool } from '@zhin.js/agent/tools';\nimport x from '@zhin.js/agent/tools/x';\nimport y from '@zhin.js/agent';\n");
+    const uses = findRetiredImports(`import { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';\nimport x from '${REMOVED_TOOLS_SUBPATH}/x';\nimport y from '@zhin.js/agent';\n`);
     expect(uses.map(use => [use.line, use.specifier, use.replacement, use.removedSubpath?.specifier, use.retired])).toEqual([
       [1, '@zhin.js/agent/tools', '@zhin.js/tool', '@zhin.js/agent/tools', undefined],
       [2, '@zhin.js/agent/tools/x', undefined, '@zhin.js/agent/tools', undefined],

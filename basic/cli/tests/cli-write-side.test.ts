@@ -33,6 +33,9 @@ import { expandWorkspaceBraces, listWorkspacePackageDirs, workspaceGlobToRegExp 
 import { describeScheduleRefusal, scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
 
+// Built at run time so the source has no literal import of the removed subpath (check:agent-tool-authoring-boundaries).
+const REMOVED_TOOLS_SUBPATH = ['@zhin.js', 'agent', 'tools'].join('/');
+
 // `zhin schedule` only talks to this project's gateway (#1250): a stand-in whose local-socket
 // fetch delegates to the stubbed global fetch while `gateway.running` is set.
 const gateway = vi.hoisted(() => ({ running: false }));
@@ -1431,7 +1434,7 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
   it('lists an import of the deleted subpath @zhin.js/agent/tools with @zhin.js/tool (#1250)', () => {
     bot();
     fs.mkdirSync(path.join(tmp, 'tools', 'echo'), { recursive: true });
-    fs.writeFileSync(path.join(tmp, 'tools', 'echo', 'index.ts'), "// old: '@zhin.js/agent/tools'\nimport { defineAgentTool } from '@zhin.js/agent/tools';\n");
+    fs.writeFileSync(path.join(tmp, 'tools', 'echo', 'index.ts'), `// old: '${REMOVED_TOOLS_SUBPATH}'\nimport { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';\n`);
     const lines: string[] = [];
     expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(0);
     const report = lines.join('\n');

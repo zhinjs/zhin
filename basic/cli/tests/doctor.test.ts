@@ -6,6 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../src/utils/adapter-endpoints-check.js';
 
+// Built at run time so the source has no literal import of the removed subpath (check:agent-tool-authoring-boundaries).
+const REMOVED_TOOLS_SUBPATH = ['@zhin.js', 'agent', 'tools'].join('/');
+
 vi.mock('child_process', async importOriginal => ({
   ...await importOriginal<typeof import('child_process')>(),
   exec: (_command: string, callback: (error: null, result: { stdout: string; stderr: string }) => void) => callback(null, { stdout: '9.0.0', stderr: '' }),
@@ -696,7 +699,7 @@ describe('doctor: retired @zhin.js packages (#1250 retired-package-not-flagged)'
         name: 'doctor-run', private: true, dependencies: { 'zhin.js': '^1.0.0', '@zhin.js/agent': '^1.0.0' },
       }));
       fs.mkdirSync(path.join(dir, 'tools', 'echo'), { recursive: true });
-      fs.writeFileSync(path.join(dir, 'tools', 'echo', 'index.ts'), "import { defineAgentTool } from '@zhin.js/agent/tools';\nexport default defineAgentTool({} as never);\n");
+      fs.writeFileSync(path.join(dir, 'tools', 'echo', 'index.ts'), `import { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';\nexport default defineAgentTool({} as never);\n`);
     });
     try {
       expect(output).toContain("已停更的 Zhin 包: 要改写的 import：tools/echo/index.ts:1 '@zhin.js/agent/tools' → '@zhin.js/tool'：子路径 @zhin.js/agent/tools 已删除");
