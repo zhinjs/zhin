@@ -6,6 +6,7 @@ import {
 } from '@zhin.js/command';
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import { redactChatIdentityBindText } from '@zhin.js/kernel';
 import { resolveLocale, type CapabilityId, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
 import { commandMenuReply, renderCommandFeedback } from './command-feedback.js';
@@ -170,7 +171,8 @@ export class MessageDispatcher {
     } else if (!result.matched) {
       logger.debug(formatCompact({
         op: 'dispatch_miss',
-        preview: truncatePreview(input),
+        // #1250: a bind message is logged as `绑定 ***` (shape alone, open code or not).
+        preview: truncatePreview(redactChatIdentityBindText(input)),
       }));
     }
     return dispatchOutcome(result.menu ? Object.freeze({ ...result,

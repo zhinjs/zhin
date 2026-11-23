@@ -2,7 +2,7 @@
  * Agent session persistence models.
  */
 
-import { redactChatOwnerClaimText } from '@zhin.js/kernel';
+import { redactChatIdentityBindText, redactChatOwnerClaimText } from '@zhin.js/kernel';
 import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
 import {
   normalizeUserMessageForStorage,
@@ -173,14 +173,17 @@ export function serializeAgentMessage(
   };
 }
 
-/** Backstop (ADR 0060 §3.3): an open chat-owner claim code in a user text is stored as `***`. */
+/**
+ * Backstop (ADR 0060 §3.3): an open chat-owner claim code in a user text is stored as `***`, and a
+ * chat-identity bind message (`绑定 <码>`) as `绑定 ***` by its shape alone (#1250).
+ */
 function redactClaimText(message: AgentMessage): AgentMessage {
   if (message.role !== 'user') return message;
   const user = message as UserMessage;
   let changed = false;
   const content = user.content.map(block => {
     if (block.type !== 'text' || typeof block.text !== 'string') return block;
-    const text = redactChatOwnerClaimText(block.text);
+    const text = redactChatIdentityBindText(redactChatOwnerClaimText(block.text));
     if (text === block.text) return block;
     changed = true;
     return { ...block, text };

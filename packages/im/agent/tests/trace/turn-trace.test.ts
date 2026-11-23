@@ -248,6 +248,12 @@ describe('redaction', () => {
       expect(scrubSecrets('claim it')).toBe('claim it');
     } finally { unregister(); }
   });
+
+  it('masks a chat-identity bind code by its shape alone (#1250 sandbox-transcript-shared-bind-code)', () => {
+    expect(scrubSecrets('绑定 ABCD2345')).toBe('绑定 ***');
+    expect(scrubSecrets('/bind abcd-2345')).toBe('/bind ***');
+    expect(scrubSecrets('我想绑定 ABCD2345 这个号')).toBe('我想绑定 ABCD2345 这个号');
+  });
 });
 
 describe('file store', () => {

@@ -209,6 +209,24 @@ describe('ConversationRuntime context hygiene', () => {
     } finally { unregister(); }
   });
 
+  it('records a bind code masked by its shape alone, open code or not (#1250 sandbox-transcript-shared-bind-code)', async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    // No code is open anywhere: the shape alone hides it (an expired code is shown no more than a live one).
+    await runtime.recordIncoming({ conversation, content: '绑定 ABCD2345', message: { conversation, id: 'b1' } } as never, { id: 'user-1' });
+    await runtime.recordIncoming({ conversation, content: '/绑定 ABCD2345',
+      segments: [{ type: 'text', data: { text: '/绑定 ABCD2345' } }], message: { conversation, id: 'b2' } } as never, { id: 'user-1' });
+    await runtime.recordIncoming({ conversation, content: 'bind abcd-2345', message: { conversation, id: 'b3' } } as never, { id: 'user-1' });
+    await runtime.recordIncoming({ conversation, content: '我想绑定 ABCD2345 这个号', message: { conversation, id: 'b4' } } as never, { id: 'user-1' });
+    const [b1, b2, b3, b4] = await Promise.all(['b1', 'b2', 'b3', 'b4'].map(id => store.getMessage({ conversation, id })));
+    expect(JSON.stringify([b1, b2, b3])).not.toMatch(/ABCD-?2345/iu);
+    expect(b1?.segments).toEqual([{ type: 'text', data: { text: '绑定 ***' } }]);
+    expect(b2?.segments).toEqual([{ type: 'text', data: { text: '/绑定 ***' } }]);
+    expect(b3?.segments).toEqual([{ type: 'text', data: { text: 'bind ***' } }]);
+    // Not a bind message: kept as written.
+    expect(b4?.segments).toEqual([{ type: 'text', data: { text: '我想绑定 ABCD2345 这个号' } }]);
+  });
+
   describe('original inbound text evidence (#1250, ADR 0067 D8)', () => {
     const sha = (text: string) => createHash('sha256').update(text).digest('hex');
     const authored = { textAuthoredBySender: true } as const;
