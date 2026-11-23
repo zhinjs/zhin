@@ -73,6 +73,17 @@ it('reads full canonical inbound and sent bot text without requiring an Agent se
   expect(data).toMatchObject({ hasMore: false, nextBeforeSequence: null });
 });
 
+it('replays a bind message recorded with its code (an older record) as 绑定 *** to every reader (#1250)', async () => {
+  // Written verbatim, as a record from before Core hid bind codes would be; no code is open.
+  await events.append(message('bare', conversation, [{ type: 'text', data: { text: '绑定 ABCD2345' } }]));
+  await events.append(message('prefixed', conversation, [{ type: 'text', data: { text: '/bind abcd-2345' } }]));
+  await events.append(message('chat', conversation, [{ type: 'text', data: { text: '我想绑定 ABCD2345 这个号' } }]));
+  const response = await (await start())();
+  expect(response.status).toBe(200);
+  const { data } = await response.json();
+  expect(data.items.map((item: any) => item.message.segments[0].data.text)).toEqual(['绑定 ***', '/bind ***', '我想绑定 ABCD2345 这个号']);
+});
+
 it('paginates fifty current message entities, excluding non-message events, with a stable exclusive sequence cursor', async () => {
   for (let index = 1; index <= 56; index++) {
     await events.append(index === 7 ? { type: 'member.joined', eventId: 'joined', conversation, timestamp: 7, member: { id: 'member' } } : message(`message-${index}`));

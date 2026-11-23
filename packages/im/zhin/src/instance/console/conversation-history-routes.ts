@@ -1,4 +1,5 @@
 import { jsonResponse } from '@zhin.js/host-http';
+import { redactChatIdentityBindText } from '@zhin.js/kernel';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import { conversationEventQueryFields, conversationRefKey, type ConversationEvent, type ConversationRef, type ForwardEntry, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import type { HttpHost } from '@zhin.js/host-http';
@@ -118,7 +119,8 @@ function projectSegment(segment: Segment): Segment {
   const data: Readonly<Record<string, unknown>> = segment.data;
   const strings = (...keys: string[]) => Object.fromEntries(keys.flatMap(key => typeof data[key] === 'string' ? [[key, data[key]]] : []));
   switch (segment.type) {
-    case 'text': return { type: 'text', data: strings('text') };
+    // #1250 sandbox-transcript-shared-bind-code: records written before Core hid bind codes are hidden on replay.
+    case 'text': return { type: 'text', data: typeof data.text === 'string' ? { text: redactChatIdentityBindText(data.text) } : {} };
     case 'markdown': return { type: 'markdown', data: strings('content', 'text') };
     case 'tts': return { type: 'tts', data: strings('text') };
     case 'mention': return { type: 'mention', data: strings('target', 'name') };

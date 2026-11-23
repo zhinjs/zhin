@@ -205,6 +205,7 @@
     "export{conversationRefKey}from '@zhin.js/im-contract'",
     "export{createOutboundMediaFetcher,fetchOutboundMedia,isOutboundMediaRefused,OUTBOUND_MEDIA_FETCH_TIMEOUT_MS,OutboundMediaFetchError,outboundMediaNotice,type OutboundMediaFetchCode,type OutboundMediaFetched,type OutboundMediaFetcher,type OutboundMediaFetcherOptions,type OutboundMediaFetchOptions,}from './built/outbound-media-fetch.js'",
     "export{defineComponent,type ComponentDefinition,type ComponentContext}from '@zhin.js/component'",
+    "export{isChatIdentityBindText,redactChatIdentityBindText}from '@zhin.js/kernel'",
     "export{isConfirmWord,isCancelWord,type ReplyWordOptions}from './built/confirm-words.js'",
     "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'",
     "export{readOperationSession}from '@zhin.js/feature-kit'"

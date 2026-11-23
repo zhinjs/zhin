@@ -251,6 +251,21 @@ export interface ConsoleAttentionItem {
    * Console replaces `Console 用户 #<id prefix>` with the user's name from `iam.users.list`.
    */
   readonly links?: readonly ConsoleAttentionPersonLink[];
+  /**
+   * Facts of the item's state a Console client may act on (#1250; older Hosts omit it). Only the fields
+   * listed in {@link ConsoleAttentionItemState} are sent; the rest of the state only feeds `revision`.
+   */
+  readonly state?: ConsoleAttentionItemState;
+}
+
+/** The published part of an attention item's state (see {@link ConsoleAttentionItem.state}). */
+export interface ConsoleAttentionItemState {
+  /**
+   * `chat-roles.no-owner`: only simulation adapters (the Sandbox) are loaded, where claims and bind
+   * codes are refused; the first owner is made through the Sandbox (「以我的聊天身份发言」 + a chat
+   * role grant). Published so the Console can offer 「打开 Sandbox」 (the client does not read it yet).
+   */
+  readonly simulationOnly?: boolean;
 }
 
 /** One Console user and the chat identities a configured link gives them (platform ids masked, #1250). */

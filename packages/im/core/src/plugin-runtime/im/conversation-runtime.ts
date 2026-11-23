@@ -16,7 +16,7 @@ import {
   type SequencedConversationEvent,
   type Segment,
 } from '@zhin.js/im-contract';
-import { redactChatOwnerClaimText } from '@zhin.js/kernel';
+import { redactChatIdentityBindText, redactChatOwnerClaimText } from '@zhin.js/kernel';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import type { Notice } from '../../notice.js';
@@ -33,11 +33,21 @@ export const CONVERSATION_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const MAX_TRACKED_INTERACTION_ANSWERS = 1_000;
 
-/** A text segment with any claim code replaced by `***`; other segments unchanged. */
+/**
+ * Recorded text with one-time codes hidden: an open claim code becomes `***`, and a chat-identity
+ * bind message (`绑定 <码>`, `/bind <code>`) becomes `绑定 ***` by its shape alone, open code or not
+ * (#1250 sandbox-transcript-shared-bind-code: records are read back by every Console user who may
+ * read the conversation, the shared Sandbox included).
+ */
+function redactRecordedText(text: string): string {
+  return redactChatIdentityBindText(redactChatOwnerClaimText(text));
+}
+
+/** A text segment with one-time codes hidden ({@link redactRecordedText}); other segments unchanged. */
 function redactClaimSegment<T extends { readonly type: unknown; readonly data?: unknown }>(segment: T): T {
   const data = segment.data as { text?: unknown } | undefined;
   if (segment.type !== 'text' || typeof data?.text !== 'string') return segment;
-  const text = redactChatOwnerClaimText(data.text);
+  const text = redactRecordedText(data.text);
   return text === data.text ? segment : { ...segment, data: { ...data, text } };
 }
 
@@ -165,7 +175,7 @@ export class ConversationRuntime {
     const timestamp = Date.now();
     const segments = Object.freeze(input.segments?.length
       ? input.segments.map(redactClaimSegment)
-      : [{ type: 'text', data: { text: redactChatOwnerClaimText(input.content) } }]);
+      : [{ type: 'text', data: { text: redactRecordedText(input.content) } }]);
     // ADR 0067 D8: the stored actor id is trimmed like the turn principal's `subjectId`.
     const actorId = typeof sender?.id === 'string' ? sender.id.trim() : '';
     const text = actorId && options.textAuthoredBySender === true ? originalInboundText(input, segments) : undefined;

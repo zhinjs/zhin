@@ -5607,6 +5607,37 @@ describe('inbound message outcomes (ADR 0061 P1)', () => {
     } finally { await loose.adapters.stop(); await loose.store.close(); }
   });
 
+  it('logs a bind message as `绑定 ***` but delivers the reply with the message content as received (#1250 sandbox-transcript-shared-bind-code)', async () => {
+    const { OutboundDeliveryRuntime } = await import('../../src/plugin-runtime/im/outbound-delivery-runtime.js');
+    const deliver = vi.spyOn(OutboundDeliveryRuntime.prototype, 'deliver');
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      inboundMiddleware: async input => { await input.$reply('ok'); },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    const lines: string[] = [];
+    const transport = { write: (line: string) => { lines.push(line); } };
+    addTransport(transport);
+    const inboundLogger = getLogger('im.inbound');
+    const previousLevel = getLevel(inboundLogger);
+    setLevel('debug', inboundLogger, true);
+    try {
+      const segments = [{ type: 'text', data: { text: '绑定 ABCD2345' } }];
+      await receive(fixture.im, { ...fixtureInput(fixture, '绑定 ABCD2345'), segments });
+      // What the reply sees (`message.content` / `message.segments` in outbound templates) is unchanged:
+      // only logs and previews hide the shape (no guard took the message).
+      const incoming = deliver.mock.calls.map(([request]) => request.incoming).find(Boolean);
+      expect(incoming?.content).toBe('绑定 ABCD2345');
+      expect(incoming?.segments).toEqual(segments);
+      expect(lines.some(line => line.includes('receive') && line.includes('绑定 ***'))).toBe(true);
+      expect(lines.join('\n')).not.toContain('ABCD2345');
+    } finally {
+      deliver.mockRestore();
+      setLevel(previousLevel, inboundLogger, true);
+      removeTransport(transport);
+      await fixture.adapters.stop(); await fixture.store.close();
+    }
+  });
+
   it('logs the first unaddressed group message of a minute at info with its reason (#1250 unaddressed-message-no-record)', async () => {
     const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
     const lines: string[] = [];
