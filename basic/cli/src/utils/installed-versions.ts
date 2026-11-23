@@ -135,6 +135,75 @@ export function syncReleaseAgeExclusions(dir: string, releases: ReadonlyMap<stri
   return added;
 }
 
+/** Where the project sets `minimumReleaseAge` and to what (minutes). */
+export interface ConfiguredReleaseAge {
+  readonly minutes: number;
+  /** `pnpm-workspace.yaml`, `.npmrc` or `package.json pnpm.minimumReleaseAge`. */
+  readonly source: string;
+}
+
+/** `minimum-release-age` / `minimumReleaseAge` of an `.npmrc` text (the last assignment wins). */
+function npmrcReleaseAge(text: string): number | undefined {
+  let value: number | undefined;
+  for (const raw of text.split(/\r?\n/u)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+    const match = /^(minimum-release-age|minimumReleaseAge)\s*=\s*(.*)$/u.exec(line);
+    if (match) value = Number(match[2]!.trim().replace(/^['"]|['"]$/gu, ''));
+  }
+  return value;
+}
+
+/**
+ * The project's own `minimumReleaseAge`, from the places the project's pnpm reads it.
+ * pnpm 11+ (`pnpmMajor` >= 11) reads settings only from `pnpm-workspace.yaml` (and the user-level
+ * `config.yaml`): `.npmrc` carries only auth, registry, TLS and proxy settings and the
+ * `package.json` `pnpm` field is ignored, so neither counts there. pnpm 10 and earlier, or an
+ * unknown version, also read the project `.npmrc` (`minimum-release-age`) and `package.json#pnpm`.
+ * Undefined when none sets a number (user-level and global pnpm settings are not read).
+ */
+export function configuredReleaseAge(dir: string, pkg: Record<string, any> = {}, pnpmMajor?: number): ConfiguredReleaseAge | undefined {
+  const doc = readWorkspace(dir);
+  const fromWorkspace = doc ? doc.get('minimumReleaseAge') : undefined;
+  if (fromWorkspace !== undefined && fromWorkspace !== null && Number.isFinite(Number(fromWorkspace))) {
+    return { minutes: Number(fromWorkspace), source: WORKSPACE_FILE };
+  }
+  if ((pnpmMajor ?? 0) >= 11) return undefined;
+  try {
+    const fromNpmrc = npmrcReleaseAge(fs.readFileSync(path.join(dir, '.npmrc'), 'utf8'));
+    if (fromNpmrc !== undefined && Number.isFinite(fromNpmrc)) return { minutes: fromNpmrc, source: '.npmrc' };
+  } catch { /* no .npmrc */ }
+  const fromPackage = pkg.pnpm?.minimumReleaseAge;
+  if (fromPackage !== undefined && fromPackage !== null && Number.isFinite(Number(fromPackage))) {
+    return { minutes: Number(fromPackage), source: 'package.json pnpm.minimumReleaseAge' };
+  }
+  return undefined;
+}
+
+/**
+ * Whether pnpm holds back fresh releases in this project: a configured `minimumReleaseAge` above 0
+ * decides (read as `pnpmMajor` reads it, see `configuredReleaseAge`); without one, only
+ * pnpm 11+ (whose default is one day) does — `pnpmMajor` undefined (pnpm not found) counts as no gate.
+ */
+export function releaseAgeGateApplies(dir: string, pkg: Record<string, any>, pnpmMajor: number | undefined): boolean {
+  const configured = configuredReleaseAge(dir, pkg, pnpmMajor);
+  return configured ? configured.minutes > 0 : (pnpmMajor ?? 0) >= 11;
+}
+
+/**
+ * Whether pnpm may hold back fresh releases wherever this project installs — the question
+ * `zhin migrate` asks before writing `minimumReleaseAgeExclude`. `pinnedMajor` is the pnpm major
+ * `packageManager` pins: with a pin, see `releaseAgeGateApplies`. Without one, the pnpm of a
+ * deployment or CI may be 11 (default one-day gate, `pnpm-workspace.yaml` only) even when the local
+ * one is 10, so the gate counts as applying when it would under pnpm 11 or under pnpm 10: only a
+ * `pnpm-workspace.yaml` `minimumReleaseAge` of 0 (read by both) rules it out. A needless exclusion
+ * is a dead entry; a missing one keeps the old release installed.
+ */
+export function releaseAgeGateMayApply(dir: string, pkg: Record<string, any>, pinnedMajor: number | undefined): boolean {
+  if (pinnedMajor !== undefined) return releaseAgeGateApplies(dir, pkg, pinnedMajor);
+  return releaseAgeGateApplies(dir, pkg, 11) || releaseAgeGateApplies(dir, pkg, 10);
+}
+
 /** pnpm major version on PATH (undefined when pnpm is unavailable). */
 export function detectPnpmMajor(dir: string): number | undefined {
   try {
@@ -156,10 +225,7 @@ export function explainVersionMismatch(dir: string, pkg: Record<string, any>, ro
   if (typeof override === 'string') {
     return `package.json 的 overrides 把 ${row.name} 固定为 ${override}，与声明的 ${row.declared} 冲突：改为相同范围或删除该 override，再运行 pnpm install`;
   }
-  const doc = readWorkspace(dir);
-  const configuredAge = doc ? Number(doc.get('minimumReleaseAge') ?? Number.NaN) : Number.NaN;
-  const ageGate = Number.isFinite(configuredAge) ? configuredAge > 0 : (pnpmMajor ?? 0) >= 11;
-  if (ageGate) {
+  if (releaseAgeGateApplies(dir, pkg, pnpmMajor)) {
     return `pnpm 的 minimumReleaseAge（新发布版本的冷却期，pnpm 11 默认 1 天）可能拦下了 ${row.name} 的新版本：在 ${WORKSPACE_FILE} 的 minimumReleaseAgeExclude 中加入 "${row.name}@<版本>"（zhin migrate 会自动补齐），或等冷却期过后再运行 pnpm install`;
   }
   return `pnpm install 没有把 ${row.name} 更新到声明的 ${row.declared}：检查上方 pnpm 输出（lockfile、registry 镜像同步），然后运行 pnpm install`;

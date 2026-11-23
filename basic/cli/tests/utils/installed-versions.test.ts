@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import yaml from 'yaml';
-import { compareInstalledVersions, explainVersionMismatch, syncReleaseAgeExclusions } from '../../src/utils/installed-versions.js';
+import { compareInstalledVersions, configuredReleaseAge, explainVersionMismatch, syncReleaseAgeExclusions } from '../../src/utils/installed-versions.js';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -75,6 +75,17 @@ describe('explainVersionMismatch', () => {
     expect(explainVersionMismatch(root(), {}, row, 10)).not.toContain('minimumReleaseAge');
     expect(explainVersionMismatch(root('minimumReleaseAge: 60\n'), {}, row, 10)).toContain('minimumReleaseAge');
     expect(explainVersionMismatch(root('minimumReleaseAge: 0\n'), {}, row, 11)).not.toContain('minimumReleaseAge');
+  });
+
+  it('reads package.json#pnpm and .npmrc for the release age only below pnpm 11', () => {
+    expect(explainVersionMismatch(root(), { pnpm: { minimumReleaseAge: 0 } }, row, 11)).toContain('minimumReleaseAge');
+    expect(explainVersionMismatch(root(), { pnpm: { minimumReleaseAge: 0 } }, row, 10)).not.toContain('minimumReleaseAge');
+    const dir = root();
+    fs.writeFileSync(path.join(dir, '.npmrc'), 'minimum-release-age=0\n');
+    expect(explainVersionMismatch(dir, {}, row, 11)).toContain('minimumReleaseAge');
+    expect(configuredReleaseAge(dir, {}, 11)).toBeUndefined();
+    expect(configuredReleaseAge(dir, {}, 10)).toEqual({ minutes: 0, source: '.npmrc' });
+    expect(configuredReleaseAge(root('minimumReleaseAge: 30\n'), { pnpm: { minimumReleaseAge: 0 } }, 11)).toEqual({ minutes: 30, source: 'pnpm-workspace.yaml' });
   });
 
   it('names an override first', () => {
