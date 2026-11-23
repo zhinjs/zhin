@@ -133,6 +133,7 @@ describe('TurnToolRuntime batches provenance confirmations within a turn (#1250)
 
   it("counts the result of a write tool whose output is recorded as a new source", async () => {
     const { approval, requests } = port();
+    // A plugin's `schedule_update` without `trusted_output`: the Host's exemption (b98) does not go by name.
     const runtime = tainted(new TurnToolRuntime(turn(approval), [capability('schedule_update', { tags: [] })]));
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'a');
     // a's own result (`tool:schedule_update`, external content) arrived after the answer.
@@ -140,6 +141,71 @@ describe('TurnToolRuntime batches provenance confirmations within a turn (#1250)
     // b's own result is external content again (same key, new content): c asks too.
     await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 6 * * *' }, 'c');
     expect(requests).toHaveLength(3);
+  });
+
+  describe("the Host's own schedule_update (#1250 b98)", () => {
+    type Job = { id: string; label?: string; enabled: boolean; schedule: Record<string, unknown>; action: Record<string, unknown>; state: Record<string, unknown> };
+    function hostUpdate(updateJob: (id: string, update: Record<string, unknown>) => Promise<Job | null>) {
+      const job: Job = { id: 'job-1', label: '别人写的标签', enabled: true, schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+        action: { kind: 'agent', prompt: '别人写的提示词' }, state: {} };
+      const engine = { listJobs: async () => [job], updateJob };
+      const entry = createScheduleTools({ scheduleFeature: { getStatus: () => [] }, engine } as never)
+        .find(tool => tool.name === 'schedule_update')!;
+      return capability('schedule_update', {
+        description: entry.definition.description,
+        inputSchema: entry.definition.inputSchema,
+        tags: entry.definition.tags,
+        execute: (async (input: Record<string, unknown>, invocation: unknown) =>
+          await entry.definition.execute(input, invocation as never)) as never,
+      });
+    }
+    const saved = (id: string, update: Record<string, unknown>): Job => ({ id, enabled: true, state: {},
+      schedule: (update.schedule as Record<string, unknown>) ?? { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: '别人写的提示词' }, ...(typeof update.label === 'string' ? { label: update.label } : {}) });
+
+    it('records no source for its result: a second change of the same job keeps the confirmation', async () => {
+      const { approval, requests } = port();
+      const runtime = tainted(new TurnToolRuntime(turn(approval), [hostUpdate(async (id, update) => saved(id, update))]));
+      const first = await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'a');
+      expect(first).toMatchObject({ status: 'completed' });
+      expect(JSON.stringify((first as { output: unknown }).output)).not.toContain('别人写的');
+      await expect(runtime.execute('schedule_update', { id: 'job-1', label: '早报' }, 'b'))
+        .resolves.toMatchObject({ status: 'completed', output: expect.objectContaining({ label: '早报' }) });
+      expect(requests).toHaveLength(1);
+      expect(runtime.provenance.sourceKeys).toEqual(['tool:web_fetch']);
+      expect(runtime.provenance.contentEntries).toBe(1);
+    });
+
+    it('records a reported failure as external content: the next change asks again', async () => {
+      const { approval, requests } = port();
+      const runtime = tainted(new TurnToolRuntime(turn(approval), [hostUpdate(async (id, update) => saved(id, update))]));
+      await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'a');
+      // Nothing to change: `{ error }`, covered by the first answer but recorded once it returns.
+      await expect(runtime.execute('schedule_update', { id: 'job-1' }, 'b')).resolves.toMatchObject({ status: 'failed' });
+      expect(runtime.provenance.sourceKeys).toEqual(['tool:web_fetch', 'tool:schedule_update']);
+      await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 7 * * *' }, 'c');
+      expect(requests).toHaveLength(2);
+    });
+
+    it('records a thrown failure as external content: the next change asks again', async () => {
+      const { approval, requests } = port();
+      let fail = true;
+      const runtime = tainted(new TurnToolRuntime(turn(approval), [hostUpdate(async (id, update) => {
+        if (fail) { fail = false; throw new Error('store unavailable'); }
+        return saved(id, update);
+      })]));
+      // The Host tool turns the engine's error into `{ error }`; a throw of the tool itself counts the same.
+      await expect(runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'a')).resolves.toMatchObject({ status: 'failed' });
+      await runtime.execute('schedule_update', { id: 'job-1', cron: '0 0 7 * * *' }, 'b');
+      expect(requests).toHaveLength(2);
+      const throwing = tainted(new TurnToolRuntime(turn(approval, 'turn-2'), [{
+        ...hostUpdate(async (id, update) => saved(id, update)),
+        execute: vi.fn(async () => { throw new Error('boom'); }) as never,
+      }]));
+      await expect(throwing.execute('schedule_update', { id: 'job-1', cron: '0 0 8 * * *' }, 'c')).resolves.toMatchObject({ status: 'failed' });
+      expect(throwing.provenance.sourceKeys).toEqual(['tool:web_fetch', 'tool:schedule_update']);
+      expect(throwing.provenance.contentEntries).toBe(2);
+    });
   });
 
   it.each([
