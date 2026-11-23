@@ -217,7 +217,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         id: { type: 'string', description: '任务 ID' },
         cron: { type: 'string', description: '新的 6 段 cron（秒 分 时 日 月 周）' },
         schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday；省略时沿用原来的' },
-        delay_minutes: { type: 'number', description: '改为一次性任务：从现在起延迟的分钟数' },
+        delay_minutes: { type: 'number', description: '改为一次性任务：从现在起延迟的分钟数（大于 0；不能与 cron 同时给）' },
         label: { type: 'string', description: '新标签；空字符串清除标签' },
         enabled: { type: 'boolean', description: 'true 启用，false 停用' },
       }, ['id']),
@@ -232,11 +232,18 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         if (refusal) return { error: refusal };
         const update = parseScheduleUpdateFromToolArgs(input, job);
         if ('error' in update) return { error: update.error };
-        const updated = await manager.engine.updateJob(id, update);
+        let updated: ScheduleJob | null;
+        try {
+          updated = await manager.engine.updateJob(id, update);
+        } catch (error) {
+          return { error: `计划无效，任务未修改: ${error instanceof Error ? error.message : String(error)}` };
+        }
         if (!updated) return { error: notFound };
         const next = updated.enabled && typeof updated.state?.nextRunAtMs === 'number'
           ? formatDateTime(updated.state.nextRunAtMs)
           : undefined;
+        // Enabled but never firing (e.g. a cron date that does not exist): saved, but say so.
+        const stuck = updated.enabled && next === undefined && updated.schedule.kind !== 'event';
         return {
           success: true,
           id,
@@ -245,6 +252,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
           enabled: updated.enabled,
           ...(next ? { next_run: next } : {}),
           message: '已更新调度任务；Agent、提示词与投递目标保持不变',
+          ...(stuck ? { warning: '任务已启用，但按新计划算不出下次运行时间，它不会自动执行；请检查 cron 或改用其他计划' } : {}),
         };
       },
     ),

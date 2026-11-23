@@ -1108,6 +1108,10 @@ describe('schedule (running Host)', () => {
     await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *'])).rejects.toThrow('process.exit:1');
     expect(error).toHaveBeenLastCalledWith('无法修改任务 brief：你没有权限向它的投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
     expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('--disable');
+    // A label change on a job that stays enabled needs the same permission: the hint says so.
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--label', '新标签'])).rejects.toThrow('process.exit:1');
+    expect(String(info.mock.calls.at(-1)?.[0])).toContain('改标签');
+    expect(String(info.mock.calls.at(-1)?.[0])).toContain('只有停用任务（--disable）不需要');
   });
 
   it('resume 被投递目标拒绝（403 schedule_target_forbidden）时说明原因并以 1 退出 (#1250 b61)', async () => {

@@ -1,10 +1,10 @@
 import type { ToolInvocationContext } from '@zhin.js/tool';
-import type { FestivalName } from '@zhin.js/kernel';
-import type { TimerScheduler } from './timer-scheduler.js';
+import { getNextRun, type FestivalName } from '@zhin.js/kernel';
+import { jobScheduleToResolved, type TimerScheduler } from './timer-scheduler.js';
 import { parseScheduleJobCreator, scheduleJobCreatorFromPrincipal } from './job-creator.js';
 import { parseExecutionPlanFromArgs } from './schedule-execution.js';
 import { parseJobNotify } from './notification-router.js';
-import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
+import { buildJobScheduleFromCronInput, type CronScheduleKind } from '../schedule-cron.js';
 import type {
   JobNotify,
   JobSchedule,
@@ -186,11 +186,36 @@ export function parseScheduleAddFromToolArgs(
   };
 }
 
-const UPDATE_TIMING_FIELDS = ['schedule_kind', 'cron', 'delay_minutes', 'at_ms', 'tz'] as const;
-const UPDATE_SCHEDULE_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay', 'holiday', 'at']);
+const UPDATE_TIMING_FIELDS = ['schedule_kind', 'cron', 'delay_minutes'] as const;
+/** Lower-cased spelling → canonical kind; matched case-insensitively like `schedule_add`. */
+const UPDATE_SCHEDULE_KINDS = new Map<string, CronScheduleKind | 'at'>([
+  ['solar', 'solar'], ['lunar', 'lunar'], ['workday', 'workday'], ['freeday', 'freeDay'], ['holiday', 'holiday'], ['at', 'at'],
+]);
+/**
+ * Timing inputs `schedule_add` reads but `schedule_update` does not offer: refused instead of
+ * silently ignored (an `at_ms` in the past, or a time zone the job does not get).
+ */
+const UPDATE_UNSUPPORTED_FIELDS = [
+  'at_ms', 'atMs', 'tz', 'festivals', 'every_day_of_holiday', 'everyDayOfHoliday', 'scheduleKind', 'delayMinutes',
+] as const;
 
 function given(value: unknown): boolean {
   return value !== undefined && value !== null && value !== '';
+}
+
+/**
+ * Whether a cron schedule can be evaluated (#1250 b90): an invalid cron used to be stored, leaving
+ * the job `invalid_schedule` while `schedule_update` answered success.
+ */
+function cronScheduleError(schedule: JobSchedule): string | undefined {
+  try {
+    const resolved = jobScheduleToResolved(schedule);
+    if (!resolved) return `无法解析计划: ${schedule.kind}`;
+    getNextRun(resolved, new Date());
+    return undefined;
+  } catch (error) {
+    return `cron 表达式无效: ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 /**
@@ -199,35 +224,54 @@ function given(value: unknown): boolean {
  * given, and a new `schedule_kind` keeps its cron. `delay_minutes` turns it into a one-shot job.
  */
 function buildScheduleUpdate(args: Record<string, unknown>, current: JobSchedule): JobSchedule | { error: string } {
-  const kindArg = given(args.schedule_kind) ? String(args.schedule_kind) : undefined;
-  if (kindArg !== undefined && !UPDATE_SCHEDULE_KINDS.has(kindArg)) {
-    return { error: `schedule_kind 无效: ${kindArg}，可选 solar | lunar | workday | freeDay | holiday` };
+  const kindRaw = given(args.schedule_kind) ? String(args.schedule_kind).trim() : undefined;
+  const kindArg = kindRaw === undefined ? undefined : UPDATE_SCHEDULE_KINDS.get(kindRaw.toLowerCase());
+  if (kindRaw !== undefined && kindArg === undefined) {
+    return { error: `schedule_kind 无效: ${kindRaw}，可选 solar | lunar | workday | freeDay | holiday | at（at 需同时给 delay_minutes）` };
   }
-  if (kindArg === 'at' || given(args.delay_minutes) || given(args.at_ms)) return buildScheduleFromRecord(args);
+  if (given(args.delay_minutes)) {
+    if (given(args.cron) || (kindArg !== undefined && kindArg !== 'at')) {
+      return { error: 'delay_minutes（改为一次性任务）不能与 cron 或 schedule_kind 同时提供，请只给其中一种' };
+    }
+    const delay = typeof args.delay_minutes === 'number' ? args.delay_minutes : Number(args.delay_minutes);
+    if (!Number.isFinite(delay) || delay <= 0) {
+      return { error: `delay_minutes 必须是大于 0 的分钟数，收到: ${String(args.delay_minutes)}` };
+    }
+    return { kind: 'at', atMs: Date.now() + delay * 60 * 1000, deleteAfterRun: true };
+  }
+  if (kindArg === 'at') return { error: '改为一次性任务请提供 delay_minutes（从现在起延迟的分钟数）' };
   const currentCron = 'cron' in current ? current : undefined;
   const cron = given(args.cron) ? String(args.cron) : currentCron?.cron;
   if (!cron) return { error: '该任务当前不是 cron 计划：请同时提供 6 段 cron 表达式（秒 分 时 日 月 周）' };
   const kind = kindArg ?? currentCron?.kind;
-  const tz = given(args.tz) ? String(args.tz) : currentCron?.tz;
-  const holiday = current.kind === 'holiday' ? current : undefined;
-  return buildScheduleFromRecord({
-    schedule_kind: kind,
-    cron,
-    ...(tz ? { tz } : {}),
-    festivals: args.festivals ?? holiday?.festivals,
-    every_day_of_holiday: args.every_day_of_holiday ?? holiday?.everyDayOfHoliday,
-  });
+  // An explicit or kept kind is taken as is: a solar job given `1-5` stays solar (#1250 b90).
+  const built = buildJobScheduleFromCronInput(kind, cron, currentCron?.tz, { inferWorkday: kind === undefined });
+  if ('error' in built) return built;
+  const schedule: JobSchedule = built.kind === 'holiday' && current.kind === 'holiday'
+    ? {
+        ...built,
+        ...(current.festivals ? { festivals: current.festivals } : {}),
+        ...(current.everyDayOfHoliday !== undefined ? { everyDayOfHoliday: current.everyDayOfHoliday } : {}),
+      }
+    : built;
+  const invalid = cronScheduleError(schedule);
+  return invalid ? { error: invalid } : schedule;
 }
 
 /**
  * `schedule_update` arguments (#1250 b90): the new timing (`cron` / `schedule_kind` /
  * `delay_minutes`), `label` (empty: removed) and `enabled`. Nothing else of the job can be changed
- * here, so its Agent, prompt, delivery target and creator stay as they are.
+ * here, so its Agent, prompt, delivery target and creator stay as they are. The new timing is
+ * validated before anything is written: an invalid cron is an error, not a stored job that never fires.
  */
 export function parseScheduleUpdateFromToolArgs(
   args: Record<string, unknown>,
   current: Pick<ScheduleJob, 'schedule'>,
 ): ScheduleJobUpdate | { error: string } {
+  const unsupported = UPDATE_UNSUPPORTED_FIELDS.filter(field => given(args[field]));
+  if (unsupported.length > 0) {
+    return { error: `schedule_update 不支持参数: ${unsupported.join(', ')}；可用 cron、schedule_kind、delay_minutes、label、enabled` };
+  }
   const update: { schedule?: JobSchedule; label?: string | null; enabled?: boolean } = {};
   if (UPDATE_TIMING_FIELDS.some(field => given(args[field]))) {
     const schedule = buildScheduleUpdate(args, current.schedule);

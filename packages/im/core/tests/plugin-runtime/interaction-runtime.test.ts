@@ -172,6 +172,47 @@ describe('UserInteraction via ImRuntime', () => {
     }
   });
 
+  it('keeps the card on screen numbered through the reminder phase, so a new card does not reuse its numbers (#1250 b90)', async () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const interactions = new RuntimeInteractionCoordinator(router);
+    const conversation = { endpoint: { adapter: 'test', id: 'main' }, kind: 'group' as const, id: 'room' };
+    const labels: Record<string, string>[] = [];
+    const texts: string[] = [];
+    const reply = vi.fn(async (content: unknown) => {
+      const payloads = [...new Set([...JSON.stringify(content).matchAll(/zhin:ask:[^"\\]+/gu)].map(match => match[0]))];
+      if (payloads.length) labels.push(router.rememberFallback(conversation, 1, Object.fromEntries(payloads.map((payload, index) => [String(index + 1), payload]))));
+      else texts.push(JSON.stringify(content));
+      return { status: 'sent' as const };
+    });
+    const from = (sender: string, content: string) => new Message({ conversation, content, sender: { id: sender } }, { generation: 1, reply });
+    const abort = new AbortController();
+    const select = { type: 'select' as const, title: '确认', options: [{ label: '允许', value: 'yes' }, { label: '拒绝', value: 'no' }], signal: abort.signal };
+    try {
+      const alice = interactions.create(from('alice', 'go')).ask(select);
+      await vi.waitFor(() => expect(labels).toHaveLength(1));
+      // First invalid answer: the card is sent again (and numbered from 1, replacing the first one).
+      await vi.waitFor(() => expect(interactions.resolveClaim(from('alice', '9'))).toBe(true));
+      await vi.waitFor(() => expect(labels).toHaveLength(2));
+      expect(Object.keys(labels[1]!)).toEqual(['1', '2']);
+      // Second invalid answer: only a reminder; the second card stays on screen.
+      const before = texts.length;
+      await vi.waitFor(() => expect(interactions.resolveClaim(from('alice', '9'))).toBe(true));
+      await vi.waitFor(() => expect(texts.length).toBeGreaterThan(before));
+      expect(labels).toHaveLength(2);
+      // A new card for bob in the same conversation continues after alice's visible card.
+      const bob = interactions.create(from('bob', 'go')).ask(select).catch(error => error);
+      await vi.waitFor(() => expect(labels).toHaveLength(3));
+      expect(Object.keys(labels[2]!)).toEqual(['3', '4']);
+      // Alice still answers by the number on her card.
+      await vi.waitFor(() => expect(interactions.resolveClaim(from('alice', '1'))).toBe(true));
+      await expect(alice).resolves.toBe('yes');
+      abort.abort();
+      await bob;
+    } finally {
+      abort.abort();
+    }
+  });
+
   async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean; detached?: boolean } = {}) {
     const sent: unknown[] = [];
     const events: string[] = [];

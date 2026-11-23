@@ -179,3 +179,183 @@ describe('parseScheduleUpdateFromToolArgs (#1250 b90)', () => {
       .toEqual({ schedule: { kind: 'holiday', cron: '0 0 8 * * *', festivals: ['春节'], everyDayOfHoliday: true } });
   });
 });
+
+describe('schedule_update input checks (#1250 b90 review)', () => {
+  const solar = { schedule: { kind: 'solar' as const, cron: '0 0 8 * * *' } };
+
+  it('keeps an explicit or kept solar kind for a Monday–Friday cron, but still infers workday without one', () => {
+    expect(parseScheduleUpdateFromToolArgs({ cron: '0 0 9 * * 1-5' }, solar))
+      .toEqual({ schedule: { kind: 'solar', cron: '0 0 9 * * 1-5' } });
+    expect(parseScheduleUpdateFromToolArgs({ cron: '0 0 9 * * 1-5', schedule_kind: 'solar' }, solar))
+      .toEqual({ schedule: { kind: 'solar', cron: '0 0 9 * * 1-5' } });
+    // A job without a calendar kind is read like schedule_add.
+    expect(parseScheduleUpdateFromToolArgs({ cron: '0 0 9 * * 1-5' }, { schedule: { kind: 'every', everyMs: 60_000 } }))
+      .toEqual({ schedule: { kind: 'workday', cron: '0 0 9 * * *' } });
+  });
+
+  it('refuses an invalid cron before anything is written', () => {
+    for (const cron of ['bad', '0 0 25 * * *', '0 61 9 * * *']) {
+      expect(parseScheduleUpdateFromToolArgs({ cron }, solar)).toEqual({ error: expect.stringContaining('cron 表达式无效') });
+    }
+  });
+
+  it('refuses delay_minutes together with cron, and a delay that is not a positive number', () => {
+    expect(parseScheduleUpdateFromToolArgs({ delay_minutes: 30, cron: '0 0 9 * * *' }, solar))
+      .toEqual({ error: expect.stringContaining('不能与 cron 或 schedule_kind 同时提供') });
+    expect(parseScheduleUpdateFromToolArgs({ delay_minutes: 30, schedule_kind: 'workday' }, solar))
+      .toEqual({ error: expect.stringContaining('不能与 cron 或 schedule_kind 同时提供') });
+    for (const delay of [0, -5, 'abc']) {
+      expect(parseScheduleUpdateFromToolArgs({ delay_minutes: delay }, solar))
+        .toEqual({ error: expect.stringContaining('delay_minutes 必须是大于 0 的分钟数') });
+    }
+    expect(parseScheduleUpdateFromToolArgs({ schedule_kind: 'at' }, solar)).toEqual({ error: expect.stringContaining('delay_minutes') });
+    expect(parseScheduleUpdateFromToolArgs({ delay_minutes: 5, schedule_kind: 'AT' }, solar))
+      .toEqual({ schedule: expect.objectContaining({ kind: 'at', deleteAfterRun: true }) });
+  });
+
+  it('matches schedule_kind case-insensitively and lists every kind when it is unknown', () => {
+    expect(parseScheduleUpdateFromToolArgs({ schedule_kind: 'WORKDAY' }, solar)).toEqual({ schedule: { kind: 'workday', cron: '0 0 8 * * *' } });
+    expect(parseScheduleUpdateFromToolArgs({ schedule_kind: 'freeday' }, solar)).toEqual({ schedule: { kind: 'freeDay', cron: '0 0 8 * * *' } });
+    const unknown = parseScheduleUpdateFromToolArgs({ schedule_kind: 'weekly' }, solar);
+    expect(unknown).toEqual({ error: expect.stringContaining('solar | lunar | workday | freeDay | holiday | at') });
+  });
+
+  it('refuses timing inputs the tool does not offer (at_ms, tz) instead of ignoring them', () => {
+    expect(parseScheduleUpdateFromToolArgs({ at_ms: Date.now() - 60_000 }, solar)).toEqual({ error: expect.stringContaining('at_ms') });
+    expect(parseScheduleUpdateFromToolArgs({ cron: '0 0 9 * * *', tz: 'Asia/Tokyo' }, solar)).toEqual({ error: expect.stringContaining('tz') });
+  });
+});
+
+describe('TimerScheduler.updateJob vs. timers and running jobs (#1250 b90 review)', () => {
+  let dataDir: string;
+  let store: ScheduleJobStore;
+  let engine: TimerScheduler;
+  let release: () => void;
+  let started: Promise<void>;
+  let result: Record<string, unknown>;
+  const ok = { success: true, status: 'succeeded', output: 'ok', responseText: 'ok', durationMs: 1, toolsUsed: [],
+    tokenUsage: { input: 0, output: 0 }, audit: { executionId: 'turn-run' }, delivery: { status: 'delivered', channel: 'im' } };
+  const transient = { success: false, status: 'failed', output: '', responseText: '', durationMs: 1, toolsUsed: [],
+    tokenUsage: { input: 0, output: 0 }, error: '模型调用失败（network）', audit: { executionId: 'turn-run' },
+    replay: { disposition: 'safe', operations: [] }, modelFailure: { kind: 'network', transient: true } };
+  const run = (id: string) => (engine as unknown as { runJob(id: string): Promise<void> }).runJob(id);
+  const owner = caller('boss', ['owner', 'admin', 'trusted']);
+  const updateTool = () => createScheduleTools({ scheduleFeature: { getStatus: () => [] }, engine, agents: () => ['zhin'] })
+    .find(entry => entry.name === 'schedule_update')!.definition;
+
+  beforeEach(async () => {
+    dataDir = await mkdtemp(join(tmpdir(), 'zhin-schedule-update-run-'));
+    store = new ScheduleJobStore({ dataDir });
+    result = ok;
+    let markStarted!: () => void;
+    started = new Promise(resolve => { markStarted = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    engine = new TimerScheduler({
+      store,
+      due: { run: async () => { markStarted(); await gate; return result; } } as never,
+      router: createNotificationRouter({ resolveAdapter: () => undefined, sendIm: async () => {} }),
+    });
+  });
+
+  afterEach(async () => {
+    engine.unload();
+    await engine.stop();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  it('keeps a one-shot job that was turned into a cron job while it ran, with the new next run', async () => {
+    await engine.addJob({ id: 'once', enabled: true, source: 'schedule', schedule: { kind: 'at', atMs: Date.now() + 60 * 60_000, deleteAfterRun: true },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const running = run('once');
+    await started;
+    await engine.updateJob('once', { schedule: { kind: 'solar', cron: '0 0 8 * * *' } });
+    release();
+    await running;
+    const job = await store.getJob('once');
+    expect(job?.schedule).toEqual({ kind: 'solar', cron: '0 0 8 * * *' });
+    expect(job?.state.lastStatus).toBe('ok');
+    expect(shanghaiTime(job!.state.nextRunAtMs!)).toBe('08:00');
+  });
+
+  it('still removes a finished one-shot job whose label alone changed while it ran', async () => {
+    await engine.addJob({ id: 'once', enabled: true, source: 'schedule', schedule: { kind: 'at', atMs: Date.now() + 60 * 60_000, deleteAfterRun: true },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const running = run('once');
+    await started;
+    await engine.updateJob('once', { label: '新标签' });
+    release();
+    await running;
+    expect(await store.getJob('once')).toBeUndefined();
+  });
+
+  it('records the next run of the new cron, not the one the run started with', async () => {
+    await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const running = run('daily');
+    await started;
+    await engine.updateJob('daily', { schedule: { kind: 'solar', cron: '0 30 7 * * *' } });
+    release();
+    await running;
+    expect(shanghaiTime((await store.getJob('daily'))!.state.nextRunAtMs!)).toBe('07:30');
+  });
+
+  it('makes no automatic retry on the old timing after the job was rescheduled while it ran', async () => {
+    result = transient;
+    await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const running = run('daily');
+    await started;
+    await engine.updateJob('daily', { schedule: { kind: 'solar', cron: '0 30 7 * * *' } });
+    release();
+    await running;
+    expect(engine.pendingModelRetries()).toEqual([]);
+    const state = (await store.getJob('daily'))!.state;
+    expect(state.lastStatus).toBe('error');
+    expect(state.retryCount).toBeUndefined();
+    expect(shanghaiTime(state.nextRunAtMs!)).toBe('07:30');
+  });
+
+  it('keeps the timer of an `every` job when only the label changes', async () => {
+    await engine.addJob({ id: 'tick', enabled: true, source: 'schedule', schedule: { kind: 'every', everyMs: 60 * 60_000 },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const before = (await store.getJob('tick'))!.state.nextRunAtMs;
+    const register = vi.spyOn(engine, 'registerOne');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const updated = await engine.updateJob('tick', { label: '整点' });
+    expect(register).not.toHaveBeenCalled();
+    expect(updated?.state.nextRunAtMs).toBe(before);
+    expect((await store.getJob('tick'))).toMatchObject({ label: '整点', state: { nextRunAtMs: before } });
+    // Enabling an already enabled job changes nothing about its timer either.
+    await engine.updateJob('tick', { enabled: true });
+    expect(register).not.toHaveBeenCalled();
+    // A new timing does re-register it.
+    await engine.updateJob('tick', { schedule: { kind: 'every', everyMs: 30 * 60_000 } });
+    expect(register).toHaveBeenCalledOnce();
+  });
+
+  it('refuses an invalid cron from the tool without touching the stored job or its timer', async () => {
+    await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const before = await store.getJob('daily');
+    const updateJob = vi.spyOn(engine, 'updateJob');
+    const outcome = await updateTool().execute({ id: 'daily', cron: '0 0 25 * * *' }, owner) as Record<string, unknown>;
+    expect(outcome).toEqual({ error: expect.stringContaining('cron 表达式无效') });
+    expect(updateJob).not.toHaveBeenCalled();
+    expect(await store.getJob('daily')).toEqual(before);
+    expect(engine.listUnschedulable()).toEqual([]);
+    // updateJob itself refuses one too, before anything changes.
+    await expect(engine.updateJob('daily', { schedule: { kind: 'solar', cron: 'bad' } })).rejects.toThrow();
+    expect(await store.getJob('daily')).toEqual(before);
+    expect(engine.nextRunAt((await store.getJob('daily'))!)).toBe(before!.state.nextRunAtMs);
+  });
+
+  it('warns when the updated job stays enabled but has no next run', async () => {
+    await engine.addJob({ id: 'daily', enabled: true, source: 'schedule', schedule: { kind: 'solar', cron: '0 0 9 * * *' },
+      action: { kind: 'agent', prompt: 'p' }, notify: { channel: 'silent' } });
+    const job = (await store.getJob('daily'))!;
+    vi.spyOn(engine, 'updateJob').mockResolvedValue({ ...job, schedule: { kind: 'lunar', cron: '0 0 9 * * *' }, state: {} });
+    const outcome = await updateTool().execute({ id: 'daily', schedule_kind: 'lunar' }, owner) as Record<string, unknown>;
+    expect(outcome).toMatchObject({ success: true, warning: expect.stringContaining('算不出下次运行时间') });
+    expect(outcome).not.toHaveProperty('next_run');
+  });
+});

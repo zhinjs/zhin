@@ -312,12 +312,16 @@ export class RuntimeInteractiveRouter<Admission = never> {
    * ended), #1250 b90. Their labels keep resolving until they expire (a late reply to an ended
    * prompt is told it expired), but they no longer hold back per-conversation numbering: the next
    * keyboard in a conversation with nothing pending starts at 1 again, and a newer keyboard's labels
-   * take precedence over a settled one's.
+   * take precedence over a settled one's. `conversation` narrows the search to the conversation the
+   * keyboard was sent in.
    */
-  settleFallback(payloads: Iterable<string>): void {
+  settleFallback(payloads: Iterable<string>, conversation?: ConversationRef): void {
     const ended = new Set(payloads);
     if (ended.size === 0) return;
-    for (const entries of this.#fallbacks.values()) {
+    const scopes = conversation
+      ? [this.#fallbacks.get(conversationRefKey(conversation)) ?? []]
+      : this.#fallbacks.values();
+    for (const entries of scopes) {
       for (const entry of entries) {
         if (Object.values(entry.map).some(payload => ended.has(payload))) this.#settled.add(entry);
       }

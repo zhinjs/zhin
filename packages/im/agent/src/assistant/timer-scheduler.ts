@@ -104,6 +104,22 @@ export function jobScheduleToResolved(schedule: JobSchedule, timezone = 'Asia/Sh
   }
 }
 
+/** Same timing (#1250 b90): stored schedules are plain JSON, so their serialization compares. */
+function sameJobSchedule(a: JobSchedule, b: JobSchedule): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Throws when a calendar (cron) schedule cannot be evaluated, so `updateJob` never stores a job
+ * that could not fire (#1250 b90). Other kinds are checked by their callers.
+ */
+function assertEvaluableSchedule(schedule: JobSchedule): void {
+  if (!('cron' in schedule)) return;
+  const resolved = jobScheduleToResolved(schedule);
+  if (!resolved) throw new Error(`无法解析计划: ${schedule.kind}`);
+  getNextRun(resolved, new Date());
+}
+
 export function isRuntimeSchedulable(job: ScheduleJob, now = Date.now()): boolean {
   if (!job.enabled) return false;
   switch (job.schedule.kind) {
@@ -379,19 +395,25 @@ export class TimerScheduler {
     });
 
     const lastExecutedAt = Date.now();
+    // #1250 b90: the job may have been changed (`schedule_update`) while it ran; what follows the run
+    // (its next run, an automatic retry, removing a finished one-shot) goes by the job as stored now,
+    // not by the snapshot it ran with.
+    const latest = await this.store.getJob(jobId);
+    const current = latest ?? job;
+    const rescheduled = latest !== undefined && !sameJobSchedule(latest.schedule, job.schedule);
     // #1250 b40: a run that failed because the model service was temporarily unavailable is retried
     // later (about 5, then 10 minutes) through this scheduler's clock, never by blocking. Only when
     // nothing it did can be repeated twice (no committed or unknown tool effect; a failed run sends
-    // no reply) and the job is still scheduled.
+    // no reply) and the job is still scheduled, on the timing it ran with.
     const modelFailure = result.success ? undefined : result.modelFailure;
-    const registered = job.enabled && this.disposes.has(jobId);
-    const retryInMs = modelFailure?.transient && source === 'scheduled' && registered
+    const registered = current.enabled && this.disposes.has(jobId);
+    const retryInMs = modelFailure?.transient && source === 'scheduled' && registered && !rescheduled
       && (result.replay?.disposition ?? 'safe') === 'safe'
       ? SCHEDULE_MODEL_RETRY_DELAYS_MS[retried] : undefined;
     const retryAt = retryInMs === undefined ? undefined : lastExecutedAt + retryInMs;
     // The next run is recorded with the outcome, in the same write (#1250).
     // Paused or removed while it ran: no longer registered, so no next run.
-    const regularNext = this.#trackNextRun({ ...job, enabled: registered, state: { ...job.state, lastExecutedAt } });
+    const regularNext = this.#trackNextRun({ ...current, enabled: registered, state: { ...current.state, lastExecutedAt } });
     const nextRunAtMs = retryAt !== undefined && (regularNext === undefined || retryAt < regularNext) ? retryAt : regularNext;
     const lastError = !result.success || result.status === 'degraded'
       ? retryInMs !== undefined
@@ -450,7 +472,8 @@ export class TimerScheduler {
       }
     }
 
-    if (result.success && job.schedule.kind === 'at' && job.schedule.deleteAfterRun) {
+    // A one-shot job moved to another time or turned into a recurring one while it ran is kept.
+    if (result.success && !rescheduled && current.schedule.kind === 'at' && current.schedule.deleteAfterRun) {
       await this.removeJob(jobId);
     }
   }
@@ -629,17 +652,25 @@ export class TimerScheduler {
    * `pauseJob`. Callers refuse profile routines (re-declared from the Profile on every start).
    */
   async updateJob(id: string, update: ScheduleJobUpdate): Promise<ScheduleJob | null> {
+    // An invalid cron is refused before anything changes: the job keeps its timer and timing.
+    if (update.schedule) assertEvaluableSchedule(update.schedule);
     const job = await this.store.getJob(id);
     if (!job) return null;
+    const wasEnabled = job.enabled;
     if (update.schedule) job.schedule = update.schedule;
     if (update.label === null) delete job.label;
     else if (update.label !== undefined) job.label = update.label;
     if (update.enabled !== undefined) job.enabled = update.enabled;
     job.updatedAt = Date.now();
-    const dispose = this.disposes.get(id);
-    if (dispose) {
-      dispose();
-      this.disposes.delete(id);
+    // Only a new timing or a changed enabled state re-registers the timer: a label change alone keeps
+    // an `every` / `scatter` interval where it is.
+    const retime = update.schedule !== undefined || job.enabled !== wasEnabled;
+    if (retime) {
+      const dispose = this.disposes.get(id);
+      if (dispose) {
+        dispose();
+        this.disposes.delete(id);
+      }
     }
     // A pending automatic retry belongs to the old timing (#1250 b40).
     if (update.schedule || !job.enabled) {
@@ -647,7 +678,7 @@ export class TimerScheduler {
       job.state = { ...withoutPendingModelRetry(job.state), nextRunAtMs: undefined };
     }
     await this.store.upsertJob(job);
-    if (isRuntimeSchedulable(job)) this.registerOne(job);
+    if (retime && isRuntimeSchedulable(job)) this.registerOne(job);
     const next = await this.#syncNextRun(job);
     return { ...job, state: { ...job.state, nextRunAtMs: next } };
   }

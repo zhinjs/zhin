@@ -81,7 +81,8 @@ export function describeScheduleRefusal(result: HostFetchResult<unknown>, action
     if (action.kind === 'update') {
       return [
         `无法修改任务 ${action.id}：你没有权限向它的投递目标发消息${need}`,
-        '请让管理员授予你投递账号的 endpoint.operate 权限；只停用任务（--disable）不需要该权限',
+        '请让管理员授予你投递账号的 endpoint.operate 权限：改计划时间、改标签或启用任务（任务保持启用时）都需要该权限；'
+          + '只有停用任务（--disable）不需要',
       ];
     }
     return [
