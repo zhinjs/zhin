@@ -284,6 +284,16 @@ releases then increment patch only.
 | `@zhin.js/core` | `1.1.35` |
 | `@zhin.js/plugin-runtime` | `1.1.9` |
 
+### High-risk confirmation rule changes {#high-risk-release-notes}
+
+Deployers need to see in the release notes which step will ask more or less often, so changes to the high-risk confirmation rules (the categories, levels, sources and exceptions of the [rule reference](../ai/agent.md#high-risk-rules), and the reasons the confirmation card states) get their own entry.
+
+The changelog generator is the default `@changesets/cli/changelog` set in `.changeset/config.json`: it groups only by Major / Minor / Patch and writes each changeset's summary as one list item (the first line after the commit hash, the other lines indented inside that item); the GitHub Release body (`scripts/create-github-releases.mjs`) copies that version's section of the package's `CHANGELOG.md`. It has no custom sections: a heading such as `### 高危确认规则` in a summary would only end up inside one list item. The release scripts stay as they are; the convention is:
+
+- Rule changes go into a changeset file of their own whose name contains `high-risk` (for example `.changeset/b95-1250-high-risk-explain.md`), never mixed with other changes, so they form a separate entry in the release notes.
+- Its first line starts with the fixed prefix `**高危确认规则**：` followed by one sentence on what changes for deployers; when only the explanation or the card text changed, it says the decisions are unchanged.
+- The rest lists each change (which tools, which level, which source or exception), and the same commit updates the rule reference tables of the Chinese and English docs.
+
 ## Publishing (GitHub CI)
 
 Everyday PRs and the merge queue use a fast CI that aims to finish the real checks **within 5 minutes**: it validates the affected packages and their downstream consumers, builds once on Linux Node 24, runs the selected unit tests in four shards that reuse the build output, and checks source contracts, the release plan, and lint for changed files. Global dependency or toolchain changes widen the scope to every package; a failure is never disguised as success by a timeout or an empty test run. GitHub runner queue time is outside the repository's control.
