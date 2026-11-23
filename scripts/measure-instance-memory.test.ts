@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  afterTurnSnapshotPath,
   aggregateHeapSnapshot,
+  assertHeapSnapshotReadable,
   attributeRss,
   classifyModule,
+  HEAP_SNAPSHOT_MAX_BYTES,
+  isSourceModule,
   groupModules,
   parseHeapSnapshot,
   parseMeasureArgs,
@@ -17,7 +21,7 @@ describe('parseMeasureArgs', () => {
   it('keeps the defaults of the original script', () => {
     expect(parseMeasureArgs([])).toMatchObject({
       project: 'examples/minimal-bot', settleSeconds: 8, source: false, json: false, breakdown: false,
-      heapSnapshot: undefined, afterTurn: false, turns: 3, idleSeconds: 10, top: 15, hostTmpdir: false,
+      heapSnapshot: undefined, afterTurn: false, turns: 3, idleSeconds: 10, top: 15, hostTmpdir: false, inPlace: false,
     });
   });
 
@@ -38,6 +42,13 @@ describe('parseMeasureArgs', () => {
     expect(() => parseMeasureArgs(['--settle', 'soon'])).toThrow(/non-negative number/u);
     expect(() => parseMeasureArgs(['--json=1'])).toThrow(/takes no value/u);
     expect(() => parseMeasureArgs(['--with-pages', '--after-turn'])).toThrow(/cannot be combined/u);
+  });
+
+  it('runs on a copy by default; --in-place only without the options that need one', () => {
+    expect(parseMeasureArgs(['--in-place'])).toMatchObject({ inPlace: true });
+    expect(() => parseMeasureArgs(['--in-place', '--config', 'x.yml'])).toThrow(/--in-place cannot be combined/u);
+    expect(() => parseMeasureArgs(['--in-place', '--after-turn'])).toThrow(/--in-place cannot be combined/u);
+    expect(() => parseMeasureArgs(['--in-place', '--with-pages'])).toThrow(/--in-place cannot be combined/u);
   });
 });
 
@@ -72,6 +83,31 @@ describe('/proc parsing', () => {
       { mapping: '[heap]', rss: 70 * 1024, privateDirty: 0, count: 1 },
       { mapping: 'shared libraries (.so)', rss: 50 * 1024, privateDirty: 0, count: 1 },
       { mapping: '[stack]', rss: 8 * 1024, privateDirty: 0, count: 1 },
+    ]);
+  });
+
+  it('classifies native addons, named anonymous mappings and deleted files', () => {
+    const smaps = [
+      '7f00-7f10 r-xp 00000000 08:01 1 /srv/bot/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
+      'Rss:                 400 kB',
+      '7f10-7f20 rw-p 00000000 00:00 0 [anon:v8]',
+      'Rss:                 300 kB',
+      'Private_Dirty:       300 kB',
+      '7f20-7f30 rw-p 00000000 00:00 0 [anon:libuv]',
+      'Rss:                 100 kB',
+      '7f30-7f40 r-xp 00000000 08:01 2 /usr/bin/node (deleted)',
+      'Rss:                 900 kB',
+      '7f40-7f50 r-xp 00000000 08:01 3 /usr/lib/libstdc++.so.6.0.33 (deleted)',
+      'Rss:                  60 kB',
+      '7f50-7f60 r--p 00000000 08:01 4 /tmp/cache.bin (deleted)',
+      'Rss:                  20 kB',
+    ].join('\n');
+    expect(summarizeSmaps(smaps, '/usr/bin/node').map(({ mapping, rss, count }) => [mapping, rss / 1024, count])).toEqual([
+      ['node binary', 900, 1],
+      ['native addons (.node)', 400, 1],
+      ['[anon]', 400, 2],
+      ['shared libraries (.so)', 60, 1],
+      ['other files', 20, 1],
     ]);
   });
 
@@ -113,6 +149,38 @@ describe('module classification', () => {
       .toEqual({ origin: 'project', package: 'my-bot (project)', convention: 'skills/*/tools' });
     expect(classifyModule('/srv/bot/node_modules/@scope/pkg/x.js', { project: '/srv/bot', packageOf: () => undefined }))
       .toEqual({ origin: 'third-party', package: '@scope/pkg' });
+  });
+
+  it('finds convention directories of built plugins under lib/ and Skill / Agent private tools', () => {
+    expect(classifyModule('/repo/plugins/games/lottery/lib/commands/draw/index.js', context))
+      .toEqual({ origin: 'official', package: '@zhin.js/plugin-lottery', convention: 'commands' });
+    expect(classifyModule('/repo/plugins/games/lottery/lib/skills/luck/tools/roll/index.js', context))
+      .toEqual({ origin: 'official', package: '@zhin.js/plugin-lottery', convention: 'skills/*/tools' });
+    expect(classifyModule('/repo/plugins/games/lottery/agents/dealer/tools/deal/index.ts', context))
+      .toEqual({ origin: 'official', package: '@zhin.js/plugin-lottery', convention: 'agents/*/tools' });
+    expect(classifyModule('/repo/plugins/games/lottery/skills/luck/SKILL.md', context))
+      .toEqual({ origin: 'official', package: '@zhin.js/plugin-lottery', convention: 'skills' });
+    // Only lib/ holds built convention files; src/ and lib/ files outside a convention directory are plain modules.
+    expect(classifyModule('/repo/plugins/games/lottery/src/commands/draw.ts', context)).toEqual({ origin: 'official', package: '@zhin.js/plugin-lottery' });
+    expect(classifyModule('/repo/plugins/games/lottery/lib/plugin.js', context)).toEqual({ origin: 'official', package: '@zhin.js/plugin-lottery' });
+  });
+
+  it('counts only JS / TS files as module source', () => {
+    expect(['a.js', 'a.mjs', 'a.cjs', 'a.ts', 'a.tsx', 'a.ts?zhin-generation=2'].map((name) => isSourceModule(`/x/${name}`))).toEqual([true, true, true, true, true, true]);
+    expect(['package.json', 'better_sqlite3.node', 'README.md', 'a.wasm'].map((name) => isSourceModule(`/x/${name}`))).toEqual([false, false, false, false]);
+  });
+
+  it('lists only the top N packages per origin, by file count then size', () => {
+    const grouped = groupModules([
+      { path: '/repo/node_modules/a/1.js', size: 1 },
+      { path: '/repo/node_modules/b/1.js', size: 50 },
+      { path: '/repo/node_modules/b/2.js', size: 1 },
+      { path: '/repo/node_modules/c/1.js', size: 100 },
+      { path: '/repo/node_modules/d/1.js', size: 7 },
+    ], { project: '/srv/bot', packageOf: () => undefined }, 2);
+    expect(grouped.origins['third-party']).toEqual({ files: 5, bytes: 159, packages: 4 });
+    expect(grouped.topPackages['third-party'].map((item) => item.package)).toEqual(['b', 'c']);
+    expect(grouped.topPackages.official).toEqual([]);
   });
 
   it('groups files by origin, package and convention', () => {
@@ -206,6 +274,23 @@ describe('heap snapshot', () => {
     expect(parsed.strings[3]).toBe('const a = "\\u4e2d";');
   });
 
+  it('reads strings containing ] and escaped quotes', () => {
+    const fixture = snapshotFixture();
+    fixture.strings[8] = 'a]b';
+    fixture.strings[9] = 'say "hi" ] \\ done';
+    const parsed = parseHeapSnapshot(Buffer.from(JSON.stringify(fixture), 'utf8'));
+    expect(parsed.strings).toEqual(fixture.strings);
+    expect(parsed.strings[9]).toBe('say "hi" ] \\ done');
+  });
+
+  it('names the after-turn snapshot and refuses files over the 2 GiB read limit', () => {
+    expect(afterTurnSnapshotPath('/tmp/out.heapsnapshot')).toBe('/tmp/out.after-turn.heapsnapshot');
+    expect(afterTurnSnapshotPath('/tmp/out')).toBe('/tmp/out.after-turn.heapsnapshot');
+    expect(HEAP_SNAPSHOT_MAX_BYTES).toBe(2 ** 31 - 1);
+    expect(() => assertHeapSnapshotReadable(HEAP_SNAPSHOT_MAX_BYTES, '/tmp/a.heapsnapshot')).not.toThrow();
+    expect(() => assertHeapSnapshotReadable(2 ** 31, '/tmp/a.heapsnapshot')).toThrow(/2048 MB.*2 GiB or more/u);
+  });
+
   it('rejects a truncated snapshot', () => {
     const text = JSON.stringify(snapshotFixture());
     expect(() => parseHeapSnapshot(Buffer.from(text.replace(/"strings":\[.*$/u, ''), 'utf8'))).toThrow(/no strings section/u);
@@ -238,8 +323,22 @@ describe('attributeRss', () => {
       status: { VmRSS: 300 * MB, RssFile: 60 * MB, RssShmem: 0 },
     });
     expect(result.rss).toBe(300 * MB);
+    expect(result.exceedsRss).toBe(false);
     expect(result.rows.map((row) => Math.round(row.bytes / MB))).toEqual([110, 2, 4, 26, 60, 98]);
     expect(result.rows.reduce((sum, row) => sum + row.share, 0)).toBeCloseTo(1);
+  });
+
+  it('cuts the remainder to 0 when the counters explain more than RSS', () => {
+    const MB = 1024 * 1024;
+    const result = attributeRss({
+      memory: { rss: 100 * MB, heapTotal: 90 * MB, heapUsed: 50 * MB, external: 40 * MB, arrayBuffers: 30 * MB },
+      heap: { total_physical_size: 80 * MB, malloced_memory: 1 * MB },
+      status: { VmRSS: 100 * MB, RssFile: 20 * MB },
+    });
+    expect(result.exceedsRss).toBe(true);
+    expect(result.rows.map((row) => Math.round(row.bytes / MB))).toEqual([80, 1, 30, 10, 20, 0]);
+    expect(result.rows.at(-1)!.share).toBe(0);
+    expect(result.rows.reduce((sum, row) => sum + row.share, 0)).toBeCloseTo(1.41);
   });
 
   it('works without /proc (macOS, Windows)', () => {

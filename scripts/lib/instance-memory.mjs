@@ -22,6 +22,7 @@ export const OPTION_SPEC = Object.freeze({
   '--turns': 'number',
   '--idle': 'number',
   '--host-tmpdir': 'boolean',
+  '--in-place': 'boolean',
 });
 
 /**
@@ -46,11 +47,13 @@ export function parseMeasureArgs(argv) {
     turns: 3,
     idleSeconds: 10,
     hostTmpdir: false,
+    inPlace: false,
   };
   const keys = {
     '--project': 'project', '--config': 'config', '--with-pages': 'withPages', '--settle': 'settleSeconds',
     '--source': 'source', '--keep': 'keep', '--json': 'json', '--verbose': 'verbose', '--breakdown': 'breakdown',
     '--heap-snapshot': 'heapSnapshot', '--top': 'top', '--after-turn': 'afterTurn', '--turns': 'turns', '--idle': 'idleSeconds', '--host-tmpdir': 'hostTmpdir',
+    '--in-place': 'inPlace',
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -74,6 +77,9 @@ export function parseMeasureArgs(argv) {
     }
   }
   if (options.withPages && (options.afterTurn || options.config)) throw new Error('--with-pages cannot be combined with --after-turn or --config');
+  if (options.inPlace && (options.withPages || options.afterTurn || options.config)) {
+    throw new Error('--in-place cannot be combined with --with-pages, --after-turn or --config (they need a copy of the project)');
+  }
   if (options.turns < 1) options.turns = 1;
   options.top = Math.max(1, Math.floor(options.top));
   return options;
@@ -115,7 +121,9 @@ export function summarizeSmaps(text, execPath) {
   return [...groups.values()].sort((a, b) => b.rss - a.rss);
 }
 
-function classifyMapping(name, execPath) {
+function classifyMapping(raw, execPath) {
+  // A file replaced on disk after it was mapped (an upgraded node binary or .so) keeps its mapping as `path (deleted)`.
+  const name = raw.replace(/\s+\(deleted\)$/u, '');
   if (!name) return '[anon]';
   if (execPath && name === execPath) return 'node binary';
   if (name.startsWith('[')) return name.startsWith('[stack') ? '[stack]' : name.replace(/:.*$/u, ']').replace(/\]\]$/u, ']');
@@ -212,6 +220,15 @@ function thirdPartyName(path) {
   return parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
 }
 
+/** Extensions whose files are module source V8 keeps as a string; `.json`, `.node` and others are not counted. */
+export const SOURCE_MODULE_EXTENSIONS = Object.freeze(['.js', '.mjs', '.cjs', '.ts', '.tsx']);
+
+/** Whether a loaded file counts towards the module source estimate (query strings ignored). */
+export function isSourceModule(path) {
+  const clean = path.replace(/[?#].*$/u, '');
+  return SOURCE_MODULE_EXTENSIONS.some((extension) => clean.endsWith(extension));
+}
+
 /**
  * Bytes V8 needs for a source text kept as a string: Latin-1 sources are one-byte strings, any
  * other character (for example Chinese in messages or descriptions) makes the whole string
@@ -281,9 +298,38 @@ export function groupModules(files, context, top = 15) {
 const SNAPSHOT_KEYS = ['nodes', 'edges', 'strings'];
 
 /**
- * Parses a `.heapsnapshot` from a Buffer without building one huge JS string (a 600MB instance
- * writes a snapshot past V8's maximum string length). `snapshot.meta`, `nodes`, `edges` and
- * `strings` are materialised (numbers as `Uint32Array`); the trace sections are skipped.
+ * Largest snapshot the script reads: it loads the whole file into one Buffer with
+ * `fs.readFileSync()`, which refuses files of 2 GiB or more (`ERR_FS_FILE_TOO_LARGE`).
+ */
+export const HEAP_SNAPSHOT_MAX_BYTES = 2 ** 31 - 1;
+
+/**
+ * The second snapshot of an `--after-turn` run: the path with its `.heapsnapshot` suffix (if
+ * any) replaced by `.after-turn.heapsnapshot` (`out.heapsnapshot` → `out.after-turn.heapsnapshot`,
+ * `out` → `out.after-turn.heapsnapshot`).
+ * @param {string} path
+ */
+export function afterTurnSnapshotPath(path) {
+  return path.replace(/(\.heapsnapshot)?$/u, '.after-turn.heapsnapshot');
+}
+
+/**
+ * Throws a readable error when a snapshot is too large for {@link parseHeapSnapshot} to be fed.
+ * @param {number} size file size in bytes
+ * @param {string} path
+ */
+export function assertHeapSnapshotReadable(size, path) {
+  if (size <= HEAP_SNAPSHOT_MAX_BYTES) return;
+  throw new Error(`heap snapshot ${path} is ${Math.round(size / 1024 / 1024)} MB; this script reads a snapshot into one Buffer `
+    + 'and cannot read 2 GiB or more (fs.readFileSync limit). Open it in Chrome DevTools instead, or measure a smaller project.');
+}
+
+/**
+ * Parses a `.heapsnapshot` that has been read completely into one Buffer. This is not a streaming
+ * parser: the caller holds the whole file in memory (at most {@link HEAP_SNAPSHOT_MAX_BYTES}), but
+ * the bytes are scanned in place instead of being decoded into one huge JS string (a 600MB
+ * instance writes a snapshot past V8's maximum string length). `snapshot.meta`, `nodes`, `edges`
+ * and `strings` are materialised (numbers as `Uint32Array`); the trace sections are skipped.
  * @param {Uint8Array} buffer
  */
 export function parseHeapSnapshot(buffer) {
@@ -510,10 +556,16 @@ const MB = 1024 * 1024;
 /** Bytes to MB with one decimal. */
 export const mb = (bytes) => Math.round((bytes / MB) * 10) / 10;
 
+/** Printed under the RSS attribution table: the V8 / external counters are allocations, not resident pages. */
+export const RSS_ATTRIBUTION_NOTE = 'counters report allocated, not resident, memory, so the rows can add up to more than 100% '
+  + '(the remainder is then 0)';
+
 /**
  * Builds an approximate RSS attribution from one sample. The rows overlap where V8 does not
  * report separately (malloc'd V8 memory and native allocations of Node / libuv / ICU / SQLite
- * both live in RssAnon); `remainder` is what none of the reported counters explain.
+ * both live in RssAnon); `remainder` is what none of the reported counters explain. The counters
+ * are allocated sizes, not resident pages (an untouched ArrayBuffer or committed heap page need not
+ * be in RSS), so the rows can add up to more than RSS; the remainder is then cut to 0.
  * @param {{ memory: NodeJS.MemoryUsage; heap: Record<string, number>; status?: Record<string, number> }} sample
  */
 export function attributeRss(sample) {
@@ -522,11 +574,11 @@ export function attributeRss(sample) {
   const rows = [
     { item: 'V8 heap (committed, physical)', bytes: heapPhysical },
     { item: 'V8 malloced (outside the JS heap)', bytes: sample.heap.malloced_memory ?? 0 },
-    { item: 'ArrayBuffers (incl. WebAssembly memory)', bytes: sample.memory.arrayBuffers },
+    { item: 'ArrayBuffers (Buffers, typed arrays)', bytes: sample.memory.arrayBuffers },
     { item: 'other external (WebAssembly memory, external strings)', bytes: Math.max(0, sample.memory.external - sample.memory.arrayBuffers) },
   ];
   if (sample.status?.RssFile !== undefined) rows.push({ item: 'file-backed (node binary, .so, mapped files)', bytes: sample.status.RssFile + (sample.status.RssShmem ?? 0) });
   const explained = rows.reduce((sum, row) => sum + row.bytes, 0);
   rows.push({ item: 'remainder (native: Node/libuv/ICU/SQLite, threads, workers, fragmentation)', bytes: Math.max(0, rss - explained) });
-  return { rss, rows: rows.map((row) => ({ ...row, share: rss ? row.bytes / rss : 0 })) };
+  return { rss, exceedsRss: explained > rss, rows: rows.map((row) => ({ ...row, share: rss ? row.bytes / rss : 0 })) };
 }

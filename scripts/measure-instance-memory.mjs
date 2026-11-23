@@ -8,16 +8,25 @@
  * instance-child environment — but with `--standalone` so no gateway, platform account or IPC
  * channel is needed, waits for it to settle, samples it and stops it.
  *
+ * By default the project is copied to a temporary directory first (its own files, without
+ * node_modules — linked instead —, `.zhin/`, `data/`, `tests/` and `.env*`), so the instance does
+ * not read the project's `.env`, does not share `.zhin/` or the SQLite database with a dev instance
+ * running in the project, and leaves no state there. The copied `zhin.config.yml` is still read:
+ * adapters and services configured in it may still connect; use --config to replace it.
+ *
  *   node scripts/measure-instance-memory.mjs [--project examples/minimal-bot | --with-pages]
- *        [--config file.yml] [--settle 8] [--source] [--json] [--verbose] [--keep]
+ *        [--config file.yml] [--in-place] [--settle 8] [--source] [--json] [--verbose] [--keep]
  *        [--breakdown] [--top 15] [--heap-snapshot out.heapsnapshot]
  *        [--after-turn] [--turns 3] [--idle 10] [--host-tmpdir]
  *
  * --with-pages  sample a generated project (in the OS temp dir, resolving packages through
  *            examples/test-bot/node_modules) whose root plugin has Console pages — a pure
  *            Blueprint `.ts` page and a `.tsx` page — so the Console page builder runs at startup.
- * --config   use this file as the project's `zhin.config.yml` (e.g. examples/test-bot/
- *            zhin.config.example.yml); the project is copied to the temp dir for that.
+ * --config   use this file as the copied project's `zhin.config.yml` (e.g. examples/test-bot/
+ *            zhin.config.example.yml) instead of the project's own.
+ * --in-place  run in the project directory itself instead of a copy, as `zhin start` would: the
+ *            instance reads the project's `.env` and leaves its `.zhin/` state there. Not with
+ *            --config / --after-turn / --with-pages.
  * --source   run the workspace from TypeScript sources (tsx + `development` condition); the
  *            default runs the built `lib/` output (run `pnpm build` first).
  * --keep     keep the temporary directory (generated project, built Console modules, reports).
@@ -27,20 +36,24 @@
  *            statistics, /proc status / smaps_rollup / smaps grouped by mapping (Linux), child
  *            processes (esbuild, workers) and loaded modules by origin / package / convention dir.
  * --heap-snapshot <path>  write a heap snapshot after the GC and print the top classes by self size
- *            (with --after-turn a second one, `<path>.after-turn.heapsnapshot`). Snapshots are large
- *            (about 1.5x the heap); delete them when done. Writing one leaves the process with more
- *            RSS, so compare RSS from runs without it.
+ *            (with --after-turn a second one: the path with its `.heapsnapshot` suffix replaced by
+ *            `.after-turn.heapsnapshot`, so `out.heapsnapshot` → `out.after-turn.heapsnapshot`).
+ *            A snapshot is about 0.7–1.5 times the heap used after GC; delete it when done. The
+ *            script reads it back into one Buffer (not streamed), so it cannot analyse a snapshot
+ *            of 2 GiB or more. Writing one leaves the process with more RSS, so compare RSS from
+ *            runs without it. An interrupted run deletes a snapshot that was not finished.
  * --top      how many packages / snapshot classes to list (default 15 packages, 30 classes).
- * --after-turn  copy the project to the temp dir, add the terminal adapter (from examples/minimal-bot)
- *            if it has none, point an `ai.plan.yml` at a local fake OpenAI-compatible server, send
+ * --after-turn  write the terminal adapter of examples/minimal-bot, patched to send an endpointId,
+ *            to the copy's `adapters/terminal/index.ts` (replacing the project's own), point an
+ *            `ai.plan.yml` at a local fake OpenAI-compatible server, send
  *            --turns messages on stdin, wait --idle seconds and sample again (before and after GC).
  * --host-tmpdir  let the instance use the host's temp dir. By default it gets an empty TMPDIR in the
  *            work dir, because tsx (registered once a project has a `.tsx` file) reads the whole
  *            listing of its disk cache `<tmpdir>/tsx-<uid>` into the heap — on a developer machine
  *            that can be hundreds of thousands of entries and tens of MB, which a fresh production
  *            host does not have.
- * Without --config / --after-turn / --with-pages the instance runs in the project directory itself
- * and leaves its `.zhin/` state there, as `zhin start` would.
+ * The temporary directory is removed on every exit path (unless --keep); Ctrl+C exits with 130,
+ * SIGTERM with 143.
  * Compare before/after by running it on two checkouts.
  */
 import { spawn } from 'node:child_process';
@@ -53,7 +66,8 @@ import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  aggregateHeapSnapshot, attributeRss, groupModules, mb, parseHeapSnapshot, parseMeasureArgs, sourceStringBytes,
+  afterTurnSnapshotPath, aggregateHeapSnapshot, assertHeapSnapshotReadable, attributeRss, groupModules, isSourceModule, mb,
+  parseHeapSnapshot, parseMeasureArgs, RSS_ATTRIBUTION_NOTE, sourceStringBytes,
 } from './lib/instance-memory.mjs';
 
 const repo = resolve(import.meta.dirname, '..');
@@ -67,14 +81,74 @@ try {
 const settleMs = options.settleSeconds * 1000;
 const { source } = options;
 
+// Everything that can fail without side effects is checked before the work dir exists.
+const cliEntry = source ? join(repo, 'basic/cli/src/cli.ts') : join(repo, 'basic/cli/lib/cli.js');
+if (!existsSync(cliEntry)) {
+  console.error(`missing ${cliEntry}; run pnpm build (or pass --source)`);
+  process.exit(2);
+}
+const sourceProject = resolve(repo, options.project);
+if (!options.withPages && !existsSync(join(sourceProject, 'package.json'))) {
+  console.error(`--project ${options.project}: no package.json in ${sourceProject}`);
+  process.exit(2);
+}
+const configFile = options.config ? resolve(options.config) : undefined;
+if (configFile && !existsSync(configFile)) {
+  console.error(`--config ${options.config}: no such file`);
+  process.exit(2);
+}
+const heapSnapshot = options.heapSnapshot ? resolve(options.heapSnapshot) : undefined;
+
 const work = mkdtempSync(join(tmpdir(), 'zhin-instance-memory-'));
 const reportDir = join(work, 'reports');
-mkdirSync(reportDir);
-const sourceProject = resolve(repo, options.project);
-const project = options.withPages
-  ? createPagesProject(join(work, 'project'))
-  : options.afterTurn || options.config ? copyProject(sourceProject, join(work, 'project')) : sourceProject;
-const heapSnapshot = options.heapSnapshot ? resolve(options.heapSnapshot) : undefined;
+/** @type {import('node:child_process').ChildProcess | undefined} */
+let child;
+let fake;
+let cleaned = false;
+function cleanup() {
+  if (cleaned) return;
+  cleaned = true;
+  if (options.keep) process.stderr.write(`kept ${work}\n`);
+  else rmSync(work, { recursive: true, force: true });
+}
+// Every exit path — a normal end, process.exit(), an uncaught error while copying the project or
+// summarizing — stops the instance and removes the work dir.
+process.on('exit', () => {
+  if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  cleanup();
+});
+// Ctrl+C or an outer timeout: stop the instance, drop unfinished snapshots; the exit hook removes the work dir.
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+  process.once(signal, () => {
+    child?.kill('SIGKILL');
+    fake?.server.close();
+    removeUnfinishedSnapshots();
+    process.exit(code);
+  });
+}
+
+/**
+ * A phase's JSON is written only after its snapshot is complete (instance-memory-probe.mjs), so a
+ * snapshot without its JSON was cut off by the interrupt (or is a stale file this run would have overwritten).
+ */
+function removeUnfinishedSnapshots() {
+  if (!heapSnapshot) return;
+  const phases = [['baseline', heapSnapshot], ...(options.afterTurn ? [['after-turn', afterTurnSnapshotPath(heapSnapshot)]] : [])];
+  for (const [phase, path] of phases) {
+    if (!existsSync(join(reportDir, `${phase}.json`))) rmSync(path, { force: true });
+  }
+}
+
+let project;
+try {
+  mkdirSync(reportDir);
+  project = options.withPages
+    ? createPagesProject(join(work, 'project'))
+    : options.inPlace ? sourceProject : copyProject(sourceProject, join(work, 'project'));
+} catch (error) {
+  console.error(`could not prepare the project: ${error.message}`);
+  process.exit(1);
+}
 
 function createPagesProject(dir) {
   const write = (path, text) => {
@@ -110,12 +184,15 @@ function createPagesProject(dir) {
   return dir;
 }
 
-/** Copies the project's own files (not node_modules, state or build output) and links its node_modules. */
+/**
+ * Copies the project's own files (not node_modules, state, tests or `.env*`) and links its
+ * node_modules. `zhin.config.yml` is copied unless --config replaces it.
+ */
 function copyProject(from, dir) {
-  const skip = new Set(['node_modules', '.zhin', 'data', 'tests', '.env', 'zhin.config.yml']);
+  const skip = new Set(['node_modules', '.zhin', 'data', 'tests', ...(configFile ? ['zhin.config.yml'] : [])]);
   mkdirSync(dir, { recursive: true });
   for (const entry of readdirSync(from)) {
-    if (skip.has(entry)) continue;
+    if (skip.has(entry) || entry === '.env' || entry.startsWith('.env.')) continue;
     cpSync(join(from, entry), join(dir, entry), { recursive: true });
     if (/^tsconfig.*\.json$/u.test(entry)) {
       // Keep a relative `extends` (../../tsconfig.base.json) pointing at the original location.
@@ -125,17 +202,26 @@ function copyProject(from, dir) {
     }
   }
   symlinkSync(join(from, 'node_modules'), join(dir, 'node_modules'), 'dir');
-  if (options.config) writeFileSync(join(dir, 'zhin.config.yml'), readFileSync(resolve(options.config), 'utf8'));
+  if (configFile) writeFileSync(join(dir, 'zhin.config.yml'), readFileSync(configFile, 'utf8'));
   if (options.afterTurn) prepareTurnProject(dir);
   return dir;
 }
 
+/**
+ * Writes the minimal-bot terminal adapter to the copy's `adapters/terminal/index.ts` — added if the
+ * project has none, replacing the project's own otherwise — patched to send an endpointId: the
+ * example adapter sends none, and the Agent ingress requires one for a turn.
+ */
 function prepareTurnProject(dir) {
   const terminal = join(dir, 'adapters/terminal/index.ts');
-  if (!existsSync(terminal)) mkdirSync(dirname(terminal), { recursive: true });
-  // The example terminal adapter sends no endpointId, which the Agent ingress requires for a turn.
-  writeFileSync(terminal, readFileSync(join(repo, 'examples/minimal-bot/adapters/terminal/index.ts'), 'utf8')
-    .replace("sender: { id: 'local-user' } })", "sender: { id: 'local-user' }, endpointId: 'terminal' })"));
+  mkdirSync(dirname(terminal), { recursive: true });
+  const example = join(repo, 'examples/minimal-bot/adapters/terminal/index.ts');
+  const original = readFileSync(example, 'utf8');
+  const needle = "sender: { id: 'local-user' } })";
+  if (!original.includes(needle)) {
+    throw new Error(`${example} no longer contains \`${needle}\`; update prepareTurnProject() to add the endpointId`);
+  }
+  writeFileSync(terminal, original.replace(needle, "sender: { id: 'local-user' }, endpointId: 'terminal' })"));
   const configPath = join(dir, 'zhin.config.yml');
   let config = existsSync(configPath) ? readFileSync(configPath, 'utf8') : 'configVersion: 2\nplugins: {}\n';
   // The terminal adapter reads stdin by default (`plugin.terminal.interactive` defaults to true).
@@ -224,12 +310,7 @@ function startFakeModel() {
   return new Promise((resolveServer) => server.listen(0, '127.0.0.1', () => resolveServer({ server, port: server.address().port, stats })));
 }
 
-const cliEntry = source ? join(repo, 'basic/cli/src/cli.ts') : join(repo, 'basic/cli/lib/cli.js');
-if (!existsSync(cliEntry)) {
-  console.error(`missing ${cliEntry}; run pnpm build (or pass --source)`);
-  process.exit(2);
-}
-const fake = options.afterTurn ? await startFakeModel() : undefined;
+fake = options.afterTurn ? await startFakeModel() : undefined;
 if (fake) writeAiPlan(project, fake.port);
 
 const nodeArgs = ['--expose-gc'];
@@ -243,7 +324,7 @@ const childTmp = join(work, 'tmp');
 mkdirSync(childTmp);
 const probe = { reportDir, settleMs, breakdown: options.breakdown, afterTurn: options.afterTurn, ...(heapSnapshot ? { heapSnapshot } : {}) };
 let output = '';
-const child = spawn(process.execPath, nodeArgs, {
+child = spawn(process.execPath, nodeArgs, {
   cwd: project,
   env: {
     ...process.env, ZHIN_RUNTIME_CHILD: '1', NODE_ENV: 'production', HTTP_PORT: process.env.HTTP_PORT ?? '0',
@@ -253,6 +334,7 @@ const child = spawn(process.execPath, nodeArgs, {
   stdio: [options.afterTurn ? 'pipe' : 'ignore', options.verbose ? 'inherit' : 'pipe', options.verbose ? 'inherit' : 'ignore'],
 });
 child.stdout?.on('data', (chunk) => { output = (output + chunk).slice(-20_000); });
+child.stdin?.on('error', () => { /* the instance exited while a turn was being sent */ });
 const turnBudgetMs = options.afterTurn ? options.turns * 60_000 + options.idleSeconds * 1000 : 0;
 const hardStop = setTimeout(() => child.kill('SIGKILL'), settleMs + 60_000 + turnBudgetMs);
 
@@ -266,6 +348,7 @@ async function driveTurns() {
     await delay(200);
   }
   for (let turn = 1; turn <= options.turns; turn += 1) {
+    if (child.exitCode !== null || child.signalCode !== null) return;
     const before = fake.stats.completions;
     const startedAt = Date.now();
     child.stdin.write(`请简单介绍一下你自己（测量回合 ${turn}）\n`);
@@ -286,12 +369,22 @@ async function driveTurns() {
 child.on('exit', (code, signal) => {
   clearTimeout(hardStop);
   fake?.server.close();
+  try {
+    finish(code, signal);
+  } catch (error) {
+    console.error(`could not summarize the samples: ${error.stack ?? error.message}`);
+    process.exitCode = 1;
+  } finally {
+    cleanup();
+  }
+});
+
+function finish(code, signal) {
   let baseline;
   try {
     baseline = JSON.parse(readFileSync(join(reportDir, 'baseline.json'), 'utf8'));
   } catch {
     console.error(`instance exited (code ${code}, signal ${signal}) before it was sampled; rerun with --verbose\n${output.slice(-4000)}`);
-    cleanup();
     process.exit(1);
   }
   let afterTurn;
@@ -318,27 +411,11 @@ child.on('exit', (code, signal) => {
     // writeHeapSnapshot() itself needs native memory the process keeps afterwards.
     else if (heapSnapshot) report.afterTurn.warning = 'RSS after the turns includes the memory of writing the first heap snapshot; compare RSS without --heap-snapshot';
   }
-  cleanup();
   if (options.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return;
   }
   process.stdout.write(`${formatText(report)}\n`);
-});
-
-// Ctrl+C or an outer timeout: stop the instance and still remove the work dir.
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => {
-    child.kill('SIGKILL');
-    fake?.server.close();
-    cleanup();
-    process.exit(130);
-  });
-}
-
-function cleanup() {
-  if (options.keep) process.stderr.write(`kept ${work}\n`);
-  else rmSync(work, { recursive: true, force: true });
 }
 
 function summarize(sample, previous) {
@@ -372,24 +449,33 @@ function summarize(sample, previous) {
     };
   }
   if (options.breakdown) report.breakdown = breakdown(sample);
-  if (sample.heapSnapshot) {
-    const started = Date.now();
-    const aggregate = aggregateHeapSnapshot(parseHeapSnapshot(readFileSync(sample.heapSnapshot)), Math.max(options.top, 30));
-    report.heapSnapshot = {
-      path: sample.heapSnapshot,
-      sizeMB: mb(statSync(sample.heapSnapshot).size),
-      parseMs: Date.now() - started,
-      nodes: aggregate.nodes,
-      totalSelfSizeMB: mb(aggregate.totalSelfSize),
-      largeStrings: { ...aggregate.largeStrings, mb: mb(aggregate.largeStrings.bytes) },
-      top: aggregate.top.map((item) => ({ name: item.name, count: item.count, selfSizeMB: mb(item.selfSize), share: round(item.share) })),
-      details: Object.fromEntries(Object.entries(aggregate.details).map(([name, items]) => [name,
-        items.map((item) => ({ name: item.name, count: item.count, selfSizeMB: mb(item.selfSize) }))])),
-      retainedBy: Object.fromEntries(Object.entries(aggregate.retainedBy ?? {}).map(([name, items]) => [name,
-        items.map((item) => ({ name: item.name, count: item.count, selfSizeMB: mb(item.selfSize) }))])),
-    };
-  }
+  if (sample.heapSnapshot) report.heapSnapshot = summarizeSnapshot(sample.heapSnapshot);
   return report;
+}
+
+function summarizeSnapshot(path) {
+  const size = statSync(path).size;
+  try {
+    assertHeapSnapshotReadable(size, path);
+  } catch (error) {
+    return { path, sizeMB: mb(size), error: error.message };
+  }
+  const started = Date.now();
+  // The whole file in one Buffer (at most 2 GiB), scanned in place — not a streaming parse.
+  const aggregate = aggregateHeapSnapshot(parseHeapSnapshot(readFileSync(path)), Math.max(options.top, 30));
+  return {
+    path,
+    sizeMB: mb(size),
+    parseMs: Date.now() - started,
+    nodes: aggregate.nodes,
+    totalSelfSizeMB: mb(aggregate.totalSelfSize),
+    largeStrings: { ...aggregate.largeStrings, mb: mb(aggregate.largeStrings.bytes) },
+    top: aggregate.top.map((item) => ({ name: item.name, count: item.count, selfSizeMB: mb(item.selfSize), share: round(item.share) })),
+    details: Object.fromEntries(Object.entries(aggregate.details).map(([name, items]) => [name,
+      items.map((item) => ({ name: item.name, count: item.count, selfSizeMB: mb(item.selfSize) }))])),
+    retainedBy: Object.fromEntries(Object.entries(aggregate.retainedBy ?? {}).map(([name, items]) => [name,
+      items.map((item) => ({ name: item.name, count: item.count, selfSizeMB: mb(item.selfSize) }))])),
+  };
 }
 
 function breakdown(sample) {
@@ -415,6 +501,8 @@ function breakdown(sample) {
   };
   const files = sample.modules.map((url) => {
     const path = fileURLToPath(url.replace(/\?.*$/u, ''));
+    // Only JS / TS module source is kept as a V8 source string; `.json` and `.node` are not counted.
+    if (!isSourceModule(path)) return { path, size: 0, source: false };
     try {
       const text = readFileSync(path, 'utf8');
       const strings = sourceStringBytes(text);
@@ -435,8 +523,10 @@ function breakdown(sample) {
     heapSpacesMB: (sample.spaces ?? []).map((space) => ({ space: space.space_name, size: mb(space.space_size), used: mb(space.space_used_size), physical: mb(space.physical_space_size) })),
     codeMB: toMB(sample.code ?? {}),
     rssAttribution: attributeRss(sample).rows.map((row) => ({ item: row.item, mb: mb(row.bytes), share: round(row.share) })),
+    rssAttributionNote: RSS_ATTRIBUTION_NOTE,
     modules: {
       total: modules.total,
+      nonSourceFiles: files.filter((file) => file.source === false).length,
       sourceMB: mb(modules.bytes),
       sourceStringsMB: mb(modules.heapBytes),
       sourceStringsIfAsciiEscapedMB: mb(modules.escapedBytes),
@@ -468,7 +558,7 @@ function shortPath(url) {
 
 function formatText(report) {
   const lines = [
-    `project: ${options.withPages ? 'generated pages project' : sourceProject} (${source ? 'sources' : 'lib'})`,
+    `project: ${options.withPages ? 'generated pages project' : `${sourceProject} (${options.inPlace ? 'in place' : 'copied to a temp dir'})`} (${source ? 'sources' : 'lib'})`,
     ...formatSample(report),
   ];
   if (report.afterTurn) {
@@ -492,6 +582,7 @@ function formatSample(report) {
   if (b) {
     const table = (rows, columns) => rows.map((row) => `  ${columns.map((column) => String(row[column] ?? '')).join('  |  ')}`);
     lines.push('', 'RSS attribution (approximate):', ...table(b.rssAttribution.map((row) => ({ ...row, share: `${(row.share * 100).toFixed(1)}%` })), ['item', 'mb', 'share']));
+    lines.push(`  note: ${b.rssAttributionNote}`);
     lines.push('', `process.memoryUsage (MB): ${JSON.stringify(b.memoryUsageMB)}`);
     lines.push(`V8 heap statistics (MB): ${JSON.stringify(b.heapStatisticsMB)}; native contexts ${b.nativeContexts}, detached ${b.detachedContexts}`);
     lines.push(`V8 code statistics (MB): ${JSON.stringify(b.codeMB)}`);
@@ -502,7 +593,7 @@ function formatSample(report) {
       lines.push('mappings by RSS:', ...table(b.mappings, ['mapping', 'count', 'rssMB', 'privateDirtyMB']));
       lines.push(`child processes: ${b.childProcesses.length ? '' : 'none'}`, ...table(b.childProcesses, ['pid', 'command', 'rssMB']));
     }
-    lines.push('', `modules: ${b.modules.total} files, ${b.modules.sourceMB} MB source on disk, about ${b.modules.sourceStringsMB} MB as V8 source strings (${b.modules.twoByteFiles} files are two-byte: non-Latin-1 text; ${b.modules.sourceStringsIfAsciiEscapedMB} MB if that text were \\u-escaped)`);
+    lines.push('', `modules: ${b.modules.total} files (${b.modules.nonSourceFiles} .json / .node / other not counted as source), ${b.modules.sourceMB} MB source on disk, about ${b.modules.sourceStringsMB} MB as V8 source strings (${b.modules.twoByteFiles} files are two-byte: non-Latin-1 text; ${b.modules.sourceStringsIfAsciiEscapedMB} MB if that text were \\u-escaped)`);
     for (const [origin, value] of Object.entries(b.modules.origins)) lines.push(`  ${origin}: ${value.files} files in ${value.packages} packages, ${value.sourceMB} MB`);
     lines.push(`  convention directories: ${Object.entries(b.modules.conventions).map(([name, value]) => `${name} ${value.files}`).join(', ') || 'none'}`);
     for (const [origin, list] of Object.entries(b.modules.topPackages)) {
@@ -511,7 +602,8 @@ function formatSample(report) {
     }
   }
   const s = report.heapSnapshot;
-  if (s) {
+  if (s?.error) lines.push('', `heap snapshot ${s.path} (${s.sizeMB} MB) not analysed: ${s.error}`);
+  else if (s) {
     lines.push('', `heap snapshot ${s.path} (${s.sizeMB} MB, ${s.nodes} nodes, self size ${s.totalSelfSizeMB} MB; strings of 16 KB or more: ${s.largeStrings.count} = ${s.largeStrings.mb} MB)`);
     lines.push(...s.top.map((item) => `  ${item.name}: ${item.selfSizeMB} MB (${(item.share * 100).toFixed(1)}%, ${item.count})`));
     for (const [name, items] of Object.entries(s.details)) {

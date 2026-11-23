@@ -4,12 +4,16 @@
  * loaded `file:` module, samples after a full GC once the instance has settled and writes the
  * sample to `<reportDir>/baseline.json`; with `afterTurn` it then waits for the file
  * `<reportDir>/after-turn.go` and samples again into `after-turn.json`. Then it stops the instance.
+ * With `heapSnapshot` set, each phase also writes a snapshot after the GC: the baseline to that
+ * path, the after-turn one to `afterTurnSnapshotPath(path)` (`out.heapsnapshot` →
+ * `out.after-turn.heapsnapshot`). A snapshot is about 0.7–1.5 times the heap used after GC. The
+ * phase's JSON is written only after its snapshot is complete, so a missing JSON marks a partial file.
  */
 import { registerHooks } from 'node:module';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import v8 from 'node:v8';
-import { parseProcKeyValues, readProcessTree, summarizeSmaps } from './instance-memory.mjs';
+import { afterTurnSnapshotPath, parseProcKeyValues, readProcessTree, summarizeSmaps } from './instance-memory.mjs';
 
 const config = JSON.parse(process.env.ZHIN_MEMORY_PROBE ?? '{}');
 delete process.env.ZHIN_MEMORY_PROBE;
@@ -75,7 +79,7 @@ const timer = setTimeout(async () => {
   const poll = setInterval(async () => {
     if (!existsSync(join(config.reportDir, 'after-turn.go'))) return;
     clearInterval(poll);
-    await phase('after-turn', config.heapSnapshot ? config.heapSnapshot.replace(/(\.heapsnapshot)?$/u, '.after-turn.heapsnapshot') : undefined);
+    await phase('after-turn', config.heapSnapshot ? afterTurnSnapshotPath(config.heapSnapshot) : undefined);
     process.kill(process.pid, 'SIGTERM');
   }, 200);
 }, config.settleMs ?? 8000);
