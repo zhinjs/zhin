@@ -226,16 +226,17 @@ describe('editing a scheduled task in the owner\'s private chat: cards shown (#1
   const updateLabel: Call = { name: 'schedule_update', input: { id: 'job-1', label: '每日早报' } };
 
   it.each(['default', 'master-shell-ask'] as const)(
-    '[%s] schedule_list + schedule_update(cron) + schedule_update(label): only the two writes ask', async (setup) => {
+    '[%s] schedule_list + schedule_update(cron) + schedule_update(label): one card', async (setup) => {
       const { cards, outcomes } = await runTurn(setup, [list, updateCron, updateLabel]);
       expect(outcomes).toEqual([
         expect.objectContaining({ status: 'completed' }),
         expect.objectContaining({ status: 'completed' }),
         expect.objectContaining({ status: 'completed' }),
       ]);
-      // The lookup asks nothing. The second update asks again: the first update's result is a new
-      // recorded source (`tool:schedule_update`) that the first answer did not cover (#1250 b91, kept).
-      expect(cards).toEqual(['schedule_update:intent', 'schedule_update:intent']);
+      // The lookup asks nothing. #1250 b98: the first update's result is harness output (no label it did not
+      // set, no prompt), not a new source, so the first answer covers the second update of the same job
+      // (b91 asked twice here).
+      expect(cards).toEqual(['schedule_update:intent']);
       const after = await store.getJob('job-1');
       expect(after).toMatchObject({ label: '每日早报', schedule: { kind: 'solar', cron: '0 0 8 * * *' } });
     });
@@ -249,6 +250,20 @@ describe('editing a scheduled task in the owner\'s private chat: cards shown (#1
       ]);
       expect(cards).toEqual(['schedule_update:intent']);
       expect((await store.getJob('job-1'))?.schedule).toEqual({ kind: 'solar', cron: '0 0 8 * * *' });
+    });
+
+  it.each(['default', 'master-shell-ask'] as const)(
+    '[%s] a failed schedule_update counts as external content: the next update asks again', async (setup) => {
+      // An invalid cron: the error text reaches the model, so it is recorded like any outside text (b98).
+      const invalid: Call = { name: 'schedule_update', input: { id: 'job-1', cron: '0 0 99 * * *' } };
+      const { cards, outcomes } = await runTurn(setup, [list, updateCron, invalid, updateLabel]);
+      expect(outcomes).toEqual([
+        expect.objectContaining({ status: 'completed' }),
+        expect.objectContaining({ status: 'completed' }),
+        expect.objectContaining({ status: 'failed' }),
+        expect.objectContaining({ status: 'completed' }),
+      ]);
+      expect(cards).toEqual(['schedule_update:intent', 'schedule_update:intent']);
     });
 
   it('keeps the visibility filter of schedule_list: a member sees only their own jobs, with no card', async () => {
