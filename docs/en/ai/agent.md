@@ -401,9 +401,75 @@ Levels: `off` (never asks because of provenance); `untrusted_content` (asks afte
 
 **Configuration.** `confirmHighRisk` takes per-category levels (unset categories keep their defaults), or one string for every category: `external_content` (the previous meaning, `any_content` everywhere, so a reminder after a weather lookup still asks), `always`, `off`. An explicit string is never relaxed. `off` also drops the protection for commands, file writes, outbound messages and configuration; `zhin doctor` warns about it. To be asked less, switch off one category instead, e.g. `confirmHighRisk: { schedule: off }`.
 
-The rest of this section applies to every category. The confirmation names the source chain and is never covered by a remembered grant.
+The rest of this section applies to every category. The confirmation names the source chain, the rule that asked and the type of each source (see the [rule reference](#high-risk-rules)), and is never covered by a remembered grant.
 
 **One task is confirmed once per turn (#1250).** Within one turn, once the initiator has confirmed a high-risk action of one category (the table above) with one tool on one target, later calls of that tool on that target in the same turn are not confirmed again, as long as no further external content reached the turn after that answer. Batching by target applies to the configuration and schedule categories only, and only to a tool whose input schema declares exactly one identifying argument (`id`, `job_id`, `target`, `group_id`, `user_id`, `path`, `key` and similar, compared without `_` / `-` and ignoring case, declared as a single string or number type) plus known value arguments (`cron`, `schedule_kind`, `delay_minutes`, `label`, `enabled`, `value`; `prompt` and `description`, which change what a job does, are not among them and always ask again), within the same plugin, MCP server and tool: `schedule_remove` of the same job after `schedule_update` asks again. Note that the Host's own `schedule_update` result is currently recorded as external content (it echoes the job's label, which someone else may have written), so two `schedule_update` calls on the same job each ask too; the read-only `schedule_list` asks nothing. A tool that declares any other argument (such as `field`, `slug`, `index`, `url`, `name`), more than one identifying argument, or an identifying argument of an array or combined type, and a call that passes an argument the tool does not declare, share a confirmation only with an identical call. Shell commands, file writes and messages to other conversations always share one only with an identical call: the command, the file content and the message text are what was confirmed, so two different commands on the same host, two different messages to the same person and two different contents for the same file each ask. When external content reaches the turn after a confirmation (another tool result, a web page, background messages, including the confirmed call's own result when it is recorded as external content), the next call asks again, also when the same tool reads again (such as `web_fetch` of another URL). Another target, another tool, another category, another initiator (per `onBehalfOf` in a merged turn) and every new turn ask again; a rejected or timed-out confirmation is not recorded. A confirmation never covers more than it settled: an intent-only answer (the initiator confirming their own intent) leaves the ordinary approval of later calls in place, a confirmation of a call that needed no authorization does not stand in for one a later call needs, and an admin's answer does not cover a call that needs the owner. Tools with `requiresApproval: 'human'` are confirmed every time, and the dangerous-tool hard gate is unaffected. The record lives in the turn's memory only: it is never stored and never reaches another session. Unattended turns (schedules, background events) cannot confirm and are refused (policy `external-content-confirmation`).
+
+#### Rule reference: which step asks, and why (#1250) {#high-risk-rules}
+
+The three tables below collect the rules spread over this section, each checked against the code. They describe the current behaviour; they add no rule. The confirmation card and the audit row state their reason in these terms (see "The card names the rule and the sources" below the tables).
+
+**1. Which tools fall into which high-risk category** (the first matching row wins)
+
+| Order | Category | Matches when | Basis |
+|---|---|---|---|
+| 1 | Running commands `shell` | the name is `bash`, or the `shell` tag | name rule / tag |
+| 2 | Messaging other conversations `outbound` | the `outbound` tag, or a name segment `send`, `forward`, `broadcast`, `notify`, `email`, `mail`, `dm`, `post_message`, `private_message` | tag / name rule |
+| 3 | Writing files `file_write` | the `file_write` tag, or the name (any spelling) is `write_file`, `edit_file`, `multi_edit`, `apply_patch`, `delete_file`, `move_file`, `rename_file` | tag / name rule |
+| 4 | Changing configuration `config` | the `config` tag | tag |
+| 5 | Schedules `schedule` | the `schedule` tag | tag |
+| 6 | Changing configuration `config` | the name does not start with a read verb (`get_`, `read_`, `list_`, `show_`, `view_`, `query_`, `search_`, `find_`, `check_`) and has a segment `config`, `configs`, `configuration`, `setting`, `settings`, `plugin_install`, `install_plugin`, `uninstall_plugin` | name rule |
+| 7 | Schedules `schedule` | the name does not start with a read verb and has a segment `schedule(s)`, `cron(s)`, `reminder(s)`, `remind`, `timer(s)`, `alarm(s)` | name rule |
+
+The read exception applies to rows 6 and 7 only (tools in the configuration or schedule category by name alone), and only when all of these hold: no tag of that category; no `risk: 'dangerous'`; no declared `riskCategory` (a `riskCategory` never puts a tool in one of these five categories, it only voids the read exception); a plain ASCII name; no write verb and no kept-list noun (white list, block list and similar) in any spelling of the name; and the tool's code declares `readOnly: true` or the name ends in `_list`, `_get`, `_show` or `_status`. Counter-examples that keep their category: `schedule_add_list`, `schedule_Add_list`, `config_set-x_get` (write verb), `config_white_list`, `schedule_allowlist_get` (kept list). `schedule_preview` is not a read. Details: "Reads are not high-risk" above.
+
+**2. When each category asks** (`ai.agent.injectionGuard.confirmHighRisk`)
+
+| Category (config key) | Default level | Meaning of the default |
+|---|---|---|
+| `shell` | `any_content` | asks once the turn recorded any source, first-party read-only results included |
+| `fileWrite` | `any_content` | same |
+| `outbound` | `any_content` | same |
+| `config` | `any_content` | same |
+| `schedule` | `untrusted_content` | asks once the turn recorded a source other than first-party read-only results; `schedule_preview` asks at `any_content` at least (an explicit `off` still switches it off) |
+
+| Level | Asks when |
+|---|---|
+| `off` | never because of sources |
+| `untrusted_content` | the turn has a source other than first-party read-only results |
+| `any_content` | the turn has any source |
+| `always` | every call, sources or not |
+
+A string applies to every category: `external_content` means `any_content` everywhere, `always` and `off` apply as written; an unrecognised value counts as `any_content` and never relaxes. Unattended turns (schedules, background events) have nobody to confirm and are refused when a confirmation is due; a category set below its default still asks at the default level when an unattended call would be settled by the automatic reviewer (only ever stricter). Writing the initiator's own `user` memory is not one of these categories, but after any source the initiator confirms that write first too (see [Semantic memory](#semantic-memory)).
+
+**3. What counts as "read content", and the exceptions**
+
+| Source | Recorded when | Not a source when |
+|---|---|---|
+| Tool results | each completed tool call; a returned `{ error }`, an MCP `isError` and a thrown error's text count too | harness tools `discover`, `load_tool`, `load_skill`, `ask_user`; tools tagged `trusted_output` or listed in `injectionGuard.trustedOutputTools` (for every category); errors the harness wrote itself (cancellation, timeouts, local policy refusals) |
+| First-party read-only results (trusted output) | a tool of a first-party plugin (`zhin.js` or `@zhin.js/*`) that declares `readOnly: true`, is not `risk: 'dangerous'`, declares no `riskCategory` and falls into no high-risk category by table 1 (without the read exception) | counts only for `any_content` categories, not for `untrusted_content`; recorded as external content when it returns an error |
+| Tools that are always external content | MCP tools (even when upstream marks them read-only), `web_fetch`, `web_search`, `read_file`, `list_dir`, `glob`, `grep`, `knowledge_search`, `get_local_assets`, `memory_search`, `todo_read`, `get_self_profile`, tools tagged `external_content` | none (`trusted_output` / `trustedOutputTools` can still declare them trusted) |
+| Background messages and scene events | messages and events of the conversation that arrived since the last turn | the Agent's own replies delivered verbatim in this session; clean deliveries of this instance's own scheduled jobs; the initiator's own original messages in a private chat (conditions in the three paragraphs above) |
+| Image / media descriptions | a perception model described the user's images or media | none |
+| Scheduled prompts | the due run (or `schedule_preview`) of a job created after reading any content, trusted output included | jobs a person created in the Console or CLI, or created without reading content |
+| Sub-agents | a sub-agent shares the root turn's source record, so what it reads counts directly; results of `ask`, `delegate`, `follow_up` and `board_read` are recorded like any tool result | as for tool results |
+
+One confirmation per task in a turn: see "One task is confirmed once per turn" above.
+
+Code: categories and levels in `packages/im/agent/src/security/provenance.ts` (`classifyHighRiskAction`, `nameHighRiskCategory`, `resolveHighRiskConfirm`, `classifyToolOutput`, `TurnProvenance`), name lists in `trust-level.ts` (`isOutboundToolName`, `isFileWriteToolName`), the confirmation and unattended handling in `packages/im/agent/src/tool/turn-tool-runtime.ts`, the background exceptions in `packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts` and `session/context-provenance.ts`, the memory-write intent confirmation in `security/policy-facade.ts`, batching in `security/high-risk-confirmation-batch.ts`.
+
+**The card names the rule and the sources (#1250).** The provenance confirmation card (policy `external-content-confirmation`) adds two lines after the reason and the source chain. In an English conversation:
+
+```text
+Risk: This call (creating or changing a scheduled task) comes after the turn read external content, which may carry instructions.
+Source chain: message from the owner → result of tool web_fetch → this call: schedule_add
+Rule: `schedule_add` counts as a schedule operation (name rule); this category asks once the turn read external content; first-party read-only results do not count (untrusted_content).
+Sources: web page read by web_fetch; group background messages of this conversation since the last turn (2 messages, 0 other events)
+```
+
+"Rule" gives the category, its basis (name rule or tool tag) and the level the call asked at; "Sources" names each source by type (web page, search results, workspace files, knowledge base, stored records, MCP server and tool, sub-agent, first-party read-only result, number of background messages, media description, scheduled prompt), at most five. The card carries metadata only (source type, tool name, MCP server name, counts) and never quotes external content; names keep letters, digits and `_ . : -`, anything else becomes `_`. The card follows the turn's display language (`zh-CN` / `en`). Each provenance confirmation's `tool_approval` decision audit row carries three more `payload` fields: `rule` (such as `schedule.name`, `outbound.tag`), `confirmLevel` (the level used) and `sourceKinds` (source types, such as `["tool_result","conversation_context"]`).
+
+**Release notes.** Changes to the high-risk confirmation rules (categories, levels, sources and exceptions) get their own entry in the release notes; see [Development: high-risk confirmation rule changes](../contributing/development.md#high-risk-release-notes).
 
 **Who approves in an IM conversation (#1250).** The global owner approves their own turns; in a group or channel with a bot owner configured, the owner approves. Admin self-approval is **off by default**: only with `ai.agent.approval.adminSelfApprove: true` may a zhin `admin` held at endpoint level or above approve, once (allow once / reject, nothing remembered), in their own private chat when the owner cannot answer there — and only operations a policy marks admin-approvable: tools tagged `admin_approvable` (the Host's `schedule_add` and `schedule_update` are) and writes to `session` memory. Everything else needs the bot owner even with the switch on: sensitive files and protected paths (e.g. reading `.git/config` or `.env`), shell commands, `global` / `platform` memory, plugin tools without the tag (`always` / `once` / `on-risk`), auto-reviewer escalations, `requiresApproval: 'human'` and the dangerous-tool hard gate. A conversation-level admin or a demoted conversation owner never counts, and a group without a configured owner never falls back to an admin. With the switch off (the default), such turns behave as before: the owner, or nobody can approve. `execApprovalMode: ask` therefore still requires the owner by default. Anyone else, with nobody to ask, can only confirm their own intent for a high-risk action after external content; that confirmation never replaces an approval.
 

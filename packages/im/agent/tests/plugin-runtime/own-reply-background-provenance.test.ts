@@ -13,6 +13,9 @@ import { DEFAULT_TOLD_LEDGER_MAX_DELIVERED, SessionToldLedger } from '../../src/
 import { TurnProvenance, type ProvenanceSource } from '../../src/security/provenance.js';
 import { deliveredTextDigest } from '../../src/session/context-provenance.js';
 
+/** #1250 high-risk-rules-explain: the background source carries its counts (approval card only). */
+const BACKGROUND_COUNTS = { messages: expect.any(Number), events: expect.any(Number) };
+
 /**
  * #1250 `own-reply-counts-as-background`: the conversation cursor stops at the inbound message, so the
  * bot's reply comes back as a background block of the next turn. A reply this agent delivered in the
@@ -141,7 +144,8 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
       await run('turn-1', []);
       const sources = recorded();
       await run('turn-2', [ownBlock('reply-1'), memberBlock]);
-      expect(sources).toEqual([{ kind: 'conversation_context', scene: scope }]);
+      // The excluded own reply is not counted; the member's message is.
+      expect(sources).toEqual([{ kind: 'conversation_context', scene: scope, messages: 1, events: 0 }]);
       vi.restoreAllMocks();
     }
   });
@@ -158,7 +162,7 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
       await h.run('turn-1', []);
       const sources = recorded();
       await h.run('turn-2', [block(h)]);
-      expect(sources).toEqual([{ kind: 'conversation_context', scene: 'group' }]);
+      expect(sources).toEqual([{ kind: 'conversation_context', scene: 'group', ...BACKGROUND_COUNTS }]);
       vi.restoreAllMocks();
     }
   });
@@ -168,7 +172,7 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
     await run('turn-1', []);
     const sources = recorded();
     await run('turn-2', [ownBlock('reply-1')]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
   });
 
   it("counts the reply of a tainted turn: the reply may repeat what that turn read (ADR 0067 D7)", async () => {
@@ -178,7 +182,7 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
       await run('turn-1', [memberBlock]);
       const sources = recorded();
       await run('turn-2', [ownBlock('reply-1')]);
-      expect(sources).toEqual([{ kind: 'conversation_context', scene: scope }]);
+      expect(sources).toEqual([{ kind: 'conversation_context', scene: scope, ...BACKGROUND_COUNTS }]);
       vi.restoreAllMocks();
     }
   });
@@ -195,7 +199,7 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
     late.mockRestore();
     const sources = recorded();
     await run('turn-2', [ownBlock('reply-1')]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
   });
 
   it("does not taint a group turn when only the bot's own reply came in between", async () => {
@@ -212,7 +216,7 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
     session.id = 'other-session-id';
     const sources = recorded();
     await run('turn-2', [ownBlock('reply-1')]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'group' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'group', ...BACKGROUND_COUNTS }]);
   });
 
   it('counts an own reply whose delivery record was evicted', async () => {
@@ -222,6 +226,6 @@ describe('FullAgentTurnEngine background provenance (#1250)', () => {
     await run('turn-next', [ownBlock(`reply-${DEFAULT_TOLD_LEDGER_MAX_DELIVERED + 1}`)]);
     expect(sources).toEqual([]);
     await run('turn-evicted', [ownBlock('reply-1')]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
   });
 });

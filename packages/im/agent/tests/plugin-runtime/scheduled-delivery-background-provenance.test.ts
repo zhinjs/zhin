@@ -32,6 +32,9 @@ import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import { addScheduleJob } from '../../src/assistant/schedule-job-service.js';
 
+/** #1250 high-risk-rules-explain: the background source carries its counts (approval card only). */
+const BACKGROUND_COUNTS = { messages: expect.any(Number), events: expect.any(Number) };
+
 const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private', id: 'owner' } as const;
 const BRIEFING = '早报：今天晴，最高 25 度。';
 /** The IM origin of a turn in `conversation` (endpoint `main`). */
@@ -308,7 +311,7 @@ describe('FullAgentTurnEngine: scheduled deliveries in the background (#1250)', 
     recordCleanScheduledDelivery(ledger, job(), {}, receipt(), BRIEFING);
     const sources = recorded();
     const events = await harness(ledger)([scheduledBlock()]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
     expect(events.find(event => event.type === 'turn_end')).not.toHaveProperty('contentProvenance');
   });
 
@@ -317,12 +320,12 @@ describe('FullAgentTurnEngine: scheduled deliveries in the background (#1250)', 
     recordCleanScheduledDelivery(ledger, job(), { contentClean: true }, receipt(), BRIEFING);
     const sources = recorded();
     await harness(ledger)([forgedUserBlock]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
     vi.restoreAllMocks();
     // Nor a block that claims a bot message the instance never delivered, with the same text.
     const again = recorded();
     await harness(ledger)([scheduledBlock('sched-msg-2')]);
-    expect(again).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(again).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
   });
 
   it("does not exempt another creator's clean delivery for this initiator", async () => {
@@ -331,7 +334,7 @@ describe('FullAgentTurnEngine: scheduled deliveries in the background (#1250)', 
       { contentClean: true }, receipt(), BRIEFING);
     const sources = recorded();
     await harness(ledger, 'owner')([scheduledBlock()]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
   });
 
   it("does not exempt the creator's clean delivery for the same user id on another endpoint", async () => {
@@ -340,7 +343,7 @@ describe('FullAgentTurnEngine: scheduled deliveries in the background (#1250)', 
       chat: { conversation, endpointId: 'second' } } }), { contentClean: true }, receipt(), BRIEFING);
     const sources = recorded();
     await harness(ledger, 'owner')([scheduledBlock()]);
-    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private' }]);
+    expect(sources).toEqual([{ kind: 'conversation_context', scene: 'private', ...BACKGROUND_COUNTS }]);
   });
 });
 

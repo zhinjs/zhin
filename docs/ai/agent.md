@@ -392,9 +392,75 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 
 **私聊里发起人自己的原文消息不算来源（#1250）**：私聊里发起人自己更早发的、没被处理的消息（例如不是指令的 `/clear`）会作为背景出现在下一回合，模型仍能看到它，但它不会让回合算作「读过外部内容」。只认同一平台、同一 endpoint、同一会话里与本回合发起人同一 sender id、且按入站原文存下的纯文本消息，并且这个适配器在能力画像里声明了 `messaging.inboundTextAuthoredBySender`（保证转发、引用、卡片都不会以纯文本段出现；目前有 sandbox、telegram、onebot11、napcat、discord）——核心在任何中间件之前用实例密钥给原文记下摘要（HMAC，绑定会话、消息、发送者和原文），读出时再核对，进程重启后旧证据失效。没声明这项能力的适配器（如 email、ipad-wechat、qq 官方、slack、lark、kook、钉钉）、带转发标记（Telegram 的转发、inline bot 结果、跨会话引用）、带引用、转发、媒体或 @ 的消息、别人发的消息、被改写或缺少证据的消息照旧计来源。群聊、频道不放宽，同样的消息仍计「群聊背景消息」。没被任何指令处理的 `/clear`、`/reset`、`/new`（大小写、全角斜杠都算）直接清空本会话的上下文（见[会话与会话树](#会话与会话树)）；清空与归档的确认都是固定文案，下一回合不计来源（[ADR 0067 D8](../adr/0067-high-risk-confirm-tiers.md#d8-私聊里发起人自己的原文消息不算来源-1250-own-unhandled-message-counts-as-background)）。
 
-审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批不会沿用会话里已记住的批准。
+审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”，以及触发确认的规则和每个来源的类型（见下文[规则速查](#high-risk-rules)）。这类审批不会沿用会话里已记住的批准。
 
 **同一件事在一个回合里只确认一次（#1250）**：同一回合里，同一发起人用同一个工具对同一类高危动作（上表的类别）、同一目标确认过一次后，本回合后面的同类调用不再重复确认，前提是确认之后没有新的外部内容进入回合。按目标合并只用于修改配置和定时任务两类，而且只在工具输入定义里声明的参数恰好是一个标识参数（`id`、`job_id`、`target`、`group_id`、`user_id`、`path`、`key` 等，比对时去掉 `_` / `-` 并忽略大小写，类型须是单一的字符串或数字）加若干已知的取值参数（`cron`、`schedule_kind`、`delay_minutes`、`label`、`enabled`、`value`；改任务内容的 `prompt`、`description` 不在其中，改它们总要重新确认）时才按目标判断，限定在同一插件、同一 MCP 服务器、同一工具内；例如 `schedule_update` 之后再 `schedule_remove` 同一任务要再问一次。注意 Host 自带的 `schedule_update` 返回的结果目前按外部内容记账（结果里会回显任务标签，标签可能是别人写的），所以连续两次 `schedule_update` 同一任务也会各问一次；只读的 `schedule_list` 不弹确认。工具声明了其他任何参数（如 `field`、`slug`、`index`、`url`、`name`）、声明了多个标识参数、标识参数是数组或组合类型，或者调用里带了工具没有声明的参数时，按完全相同的参数判断。执行命令、写文件、向其他会话发消息三类一律按完全相同的参数判断：命令、文件内容、消息文字本身就是确认的内容，所以对同一主机的两条不同命令、给同一个人的两条不同消息、写同一个文件的两份不同内容各问一次。确认之后又读入新的外部内容（新的工具结果、网页、背景消息等，包括这次调用本身被记作外部内容的结果）时，下一次调用重新确认；同一个工具再读一次也算，例如用 `web_fetch` 读了另一个网址。目标不同、工具不同、类别不同、发起人不同（合流回合里按 `onBehalfOf` 区分）、下一回合都要重新确认；被拒绝或超时的确认不记录。一次确认不会带来比它本身更多的授权：只确认了意图（发起人本人确认）时，后续调用仍按原规则走普通审批；第一次调用本身不需要授权时，它的确认也不能代替后续调用需要的授权；需要主人的调用不会被管理员的确认覆盖。`requiresApproval: 'human'` 的工具每次都单独确认，危险工具硬闸不受影响。确认记录只在本回合的内存里，不持久化、不跨会话。无人值守的回合（定时任务、后台事件等）没有人能确认，会直接拒绝，策略名为 `external-content-confirmation`。
+
+#### 规则速查：哪一步会弹确认、为什么（#1250） {#high-risk-rules}
+
+下面三张表把上文分散的规则集中在一起，逐条对应代码；只描述现状，不是新规则。确认卡与审计记录也按这几张表写明原因（见表后的「确认卡写明规则与来源」）。
+
+**一、哪些工具算哪一类高危**（自上而下取第一条命中的规则）
+
+| 顺序 | 类别 | 命中条件 | 依据 |
+|---|---|---|---|
+| 1 | 执行命令 `shell` | 名称是 `bash`，或带 `shell` 标签 | 名字规则 / 标签 |
+| 2 | 向其他会话发消息 `outbound` | 带 `outbound` 标签，或名称里有一段是 `send`、`forward`、`broadcast`、`notify`、`email`、`mail`、`dm`、`post_message`、`private_message` | 标签 / 名字规则 |
+| 3 | 写文件 `file_write` | 带 `file_write` 标签，或名称（任一写法）是 `write_file`、`edit_file`、`multi_edit`、`apply_patch`、`delete_file`、`move_file`、`rename_file` | 标签 / 名字规则 |
+| 4 | 修改配置 `config` | 带 `config` 标签 | 标签 |
+| 5 | 定时任务 `schedule` | 带 `schedule` 标签 | 标签 |
+| 6 | 修改配置 `config` | 名称不以读取动词开头（`get_`、`read_`、`list_`、`show_`、`view_`、`query_`、`search_`、`find_`、`check_`），且有一段是 `config`、`configs`、`configuration`、`setting`、`settings`、`plugin_install`、`install_plugin`、`uninstall_plugin` | 名字规则 |
+| 7 | 定时任务 `schedule` | 名称不以读取动词开头，且有一段是 `schedule(s)`、`cron(s)`、`reminder(s)`、`remind`、`timer(s)`、`alarm(s)` | 名字规则 |
+
+读取类例外只作用于第 6、7 行（只凭名字归进配置 / 定时任务的工具），而且要同时满足：没有对应类别的标签；没有 `risk: 'dangerous'`；没有声明 `riskCategory`（`riskCategory` 本身不会把工具归进这五类，只会让读取例外失效）；名称是纯 ASCII；名称的各种写法里没有写动词，也没有白名单 / 黑名单一类的名单名词；并且工具代码声明了 `readOnly: true`，或名称以 `_list`、`_get`、`_show`、`_status` 结尾。反例：`schedule_add_list`、`schedule_Add_list`、`config_set-x_get`（有写动词）、`config_white_list`、`schedule_allowlist_get`（名单名词）仍归类。`schedule_preview` 不是读取类。细节见上文「读取类不算高危」。
+
+**二、每类在什么条件下要确认**（`ai.agent.injectionGuard.confirmHighRisk`）
+
+| 类别（配置键） | 默认级别 | 默认含义 |
+|---|---|---|
+| `shell` | `any_content` | 本回合记录过任何来源（含第一方只读结果）后确认 |
+| `fileWrite` | `any_content` | 同上 |
+| `outbound` | `any_content` | 同上 |
+| `config` | `any_content` | 同上 |
+| `schedule` | `untrusted_content` | 本回合记录过第一方只读结果以外的来源后确认；`schedule_preview` 至少按 `any_content`（显式写 `off` 时不确认） |
+
+| 级别 | 何时确认 |
+|---|---|
+| `off` | 不因来源确认 |
+| `untrusted_content` | 回合里有第一方只读结果以外的来源 |
+| `any_content` | 回合里有任何来源 |
+| `always` | 每次调用，不论来源 |
+
+字符串写法作用于所有类别：`external_content` 等于全部 `any_content`，`always`、`off` 原样作用；无法识别的值按 `any_content`，不会放宽。无人值守的回合（定时任务、后台事件）没有人能确认，需要确认时直接拒绝；即使把某类调低，到了无人值守、要靠自动审核放行的调用，仍按默认级别判断（只会更严）。另外，写发起人自己的 `user` 记忆不属于这五类，但回合里有任何来源时也会先请发起人确认意图（见[语义记忆](#语义记忆)）。
+
+**三、哪些东西算「读过内容」，以及例外**
+
+| 来源 | 什么时候记 | 不算来源的情况 |
+|---|---|---|
+| 工具结果 | 每次工具调用完成后；返回 `{ error }`、MCP `isError` 或抛出的错误文本也算 | harness 工具 `discover`、`load_tool`、`load_skill`、`ask_user`；带 `trusted_output` 标签或写进 `injectionGuard.trustedOutputTools` 的工具（对所有类别都不算）；取消、超时与本地策略拒绝等 harness 自己写的错误 |
+| 第一方只读结果（受信输出） | 第一方插件（`zhin.js` 或 `@zhin.js/*`）声明 `readOnly: true`、不是 `risk: 'dangerous'`、没有 `riskCategory`、按表一（不含读取例外）不属于任何高危类别的工具 | 只对 `any_content` 的类别算来源，`untrusted_content` 不算；返回错误时按外部内容记 |
+| 一定算外部内容的工具 | MCP 工具（即使上游标了只读）、`web_fetch`、`web_search`、`read_file`、`list_dir`、`glob`、`grep`、`knowledge_search`、`get_local_assets`、`memory_search`、`todo_read`、`get_self_profile`、带 `external_content` 标签的工具 | 无（`trusted_output` / `trustedOutputTools` 仍可声明为不算） |
+| 背景消息与场景事件 | 上一回合以来本会话新到的消息和事件 | 本会话里 Agent 按原文投递的回复；本实例定时任务的干净投递；私聊里发起人自己的原文消息（条件见上文三段） |
+| 识图 / 媒体描述 | 识图模型为用户图片、媒体生成的描述 | 无 |
+| 定时任务提示词 | 到点运行或 `schedule_preview` 的任务是在读过任何内容（含受信输出）后创建的 | 由人在 Console / CLI 创建、或创建时没读过内容的任务 |
+| 子 Agent | 子 Agent 与根回合共用同一条来源记录，它读到的内容直接计入；`ask`、`delegate`、`follow_up`、`board_read` 的结果按普通工具结果记 | 同工具结果 |
+
+同一回合里同一件事只确认一次的规则见上文「同一件事在一个回合里只确认一次」。
+
+代码位置：分类与级别在 `packages/im/agent/src/security/provenance.ts`（`classifyHighRiskAction`、`nameHighRiskCategory`、`resolveHighRiskConfirm`、`classifyToolOutput`、`TurnProvenance`），名称表在 `trust-level.ts`（`isOutboundToolName`、`isFileWriteToolName`），确认与无人值守的处理在 `packages/im/agent/src/tool/turn-tool-runtime.ts`，背景消息的例外在 `packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts` 与 `session/context-provenance.ts`，记忆写入的意图确认在 `security/policy-facade.ts`，合并确认在 `security/high-risk-confirmation-batch.ts`。
+
+**确认卡写明规则与来源（#1250）**：来源确认卡（策略 `external-content-confirmation`）在原来的原因与来源链之后多两行，例如：
+
+```text
+风险：这次创建或修改定时任务发生在读取外部内容之后，外部内容可能夹带了指令。
+来源链：主人的消息 → 工具 web_fetch 的结果 → 本次调用 schedule_add
+规则：`schedule_add` 被当成定时任务操作（名字规则）；这一类在本回合读过外部内容后需要确认，第一方只读结果不算（untrusted_content）。
+来源：web_fetch 读取的网页；本会话上一回合以来的群聊背景消息（2 条消息、0 个其他事件）
+```
+
+「规则」写类别、依据（名字规则或工具标签）与这次用的级别；「来源」按类型写每个来源（网页、搜索结果、工作区文件、知识库、已存记录、MCP 服务与工具、子 Agent、第一方只读结果、背景消息条数、识图描述、定时任务提示词），最多列 5 个。卡片只写来源类型、工具名、MCP 服务名和条数这类元数据，从不引用外部内容原文；名称只保留字母、数字和 `_ . : -`，其余字符换成 `_`。卡片文字跟随回合的显示语言（`zh-CN` / `en`）。每次来源确认写的决策审计 `tool_approval` 在 `payload` 里多三个字段：`rule`（如 `schedule.name`、`outbound.tag`）、`confirmLevel`（这次用的级别）和 `sourceKinds`（来源类型，如 `["tool_result","conversation_context"]`）。
+
+**发版说明**：高危确认规则（分类、级别、来源与例外）的变化在发版说明里单独成条，约定见[开发流程：高危确认规则变化](../contributing/development.md#high-risk-release-notes)。
 
 **IM 会话里的确认（#1250）**：实时 IM 回合在当前会话里发确认消息（经正常出站链；支持按钮的平台带按钮，纯文本平台按编号或文字回复），写明要执行的动作、关键参数（密钥类字段与令牌打码）和来源链。谁能回答：
 
