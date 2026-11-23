@@ -31,6 +31,7 @@ import {
   PROVENANCE_UNATTENDED_REASON,
   TurnProvenance,
   classifyHighRiskAction,
+  classifyToolFailure,
   classifyToolOutput,
   defaultHighRiskConfirmLevel,
   highRiskConfirmLevel,
@@ -515,7 +516,8 @@ export class TurnToolRuntime {
   /** Records where the result came from, and which parts are another session's memory. */
   #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown, reportedError = false): void {
     const source = classifyToolOutput(tool, this.#guard);
-    if (source !== 'none') {
+    // #1250 b98: a reported failure of a tool tagged `untrusted_failure` counts though its results do not.
+    if (source !== 'none' || (reportedError && classifyToolFailure(tool, this.#guard) === 'external')) {
       // #1250 F8: a reported failure (`{ error }`, MCP `isError`) may quote upstream text, as a thrown error does.
       const trusted = source === 'trusted' && !reportedError;
       this.provenance.record({ kind: 'tool_result', toolName: tool.name, ...(trusted ? { trusted: true } : {}),
@@ -530,11 +532,13 @@ export class TurnToolRuntime {
    * #1250 F8 (ADR 0067 D1): a thrown error's text reaches the model like a result, and often quotes the
    * other side (an HTTP reason phrase, a JSON-RPC error message, an upstream API's text). A tool whose output
    * counts therefore records the failure as external content, even one whose results count as trusted
-   * first-party output. Errors the harness wrote itself (cancellation, local policy refusals) are not sources.
+   * first-party output, and so does a tool tagged `untrusted_failure` whose results are trusted output
+   * (#1250 b98, `classifyToolFailure`). Errors the harness wrote itself (cancellation, local policy
+   * refusals) are not sources.
    */
   #observeFailure(tool: ToolCapability, error: unknown): void {
     if (isHarnessGeneratedError(error)) return;
-    if (classifyToolOutput(tool, this.#guard) === 'none') return;
+    if (classifyToolFailure(tool, this.#guard) === 'none') return;
     this.provenance.record({ kind: 'tool_result', toolName: tool.name,
       ...(tool.mcpServer !== undefined ? { mcpServer: tool.mcpServer } : {}) });
   }
