@@ -158,6 +158,7 @@ function outcomeFromTerminal(event: TurnTerminalEvent, observedUsage: Usage): Tu
         status: 'completed',
         output: Object.freeze([...event.output]),
         usage: usageFromTurn(event.usage),
+        ...(event.contentProvenance === 'clean' ? { contentProvenance: 'clean' as const } : {}),
       });
     case 'turn_cancelled':
       return Object.freeze({

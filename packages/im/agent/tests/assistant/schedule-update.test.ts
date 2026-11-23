@@ -14,6 +14,7 @@ import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import { createScheduleTools, type ScheduleManager } from '../../src/schedule-manager.js';
 import { parseScheduleUpdateFromToolArgs } from '../../src/assistant/schedule-job-service.js';
 import { classifyHighRiskAction, defaultHighRiskConfirmLevel } from '../../src/security/provenance.js';
+import { ADMIN_APPROVABLE_TOOL_TAG } from '../../src/security/admin-approvable.js';
 
 const conversation = (id: string) => ({ endpoint: { adapter: 'qq', id: 'bot' }, kind: 'private' as const, id });
 const caller = (subjectId: string, roles: string[]) => ({
@@ -153,8 +154,9 @@ describe('schedule_update (#1250 b90)', () => {
     expect(classifyHighRiskAction({ name: upd.name, tags: upd.definition.tags })).toBe('schedule');
     expect(classifyHighRiskAction({ name: add.name, tags: add.definition.tags })).toBe('schedule');
     expect(defaultHighRiskConfirmLevel('schedule_update', 'schedule')).toBe(defaultHighRiskConfirmLevel('schedule_add', 'schedule'));
-    // No admin-approvable relaxation: only the owner confirms it.
-    expect(upd.definition.tags ?? []).toEqual([]);
+    // #1250: like schedule_add, an admin may confirm it in their own private chat (admin-approvable).
+    expect(upd.definition.tags).toEqual(add.definition.tags);
+    expect(upd.definition.tags).toContain(ADMIN_APPROVABLE_TOOL_TAG);
   });
 
   it('tells schedule_add callers to update a job instead of rebuilding it', () => {

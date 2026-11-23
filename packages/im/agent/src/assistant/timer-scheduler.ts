@@ -627,7 +627,9 @@ export class TimerScheduler {
       state: job.state ?? {},
       enabled: job.enabled ?? true,
     };
-    full.source = job.source ?? 'manual';
+    // #1250: no default `source`. The deployer's paths (Console, CLI, Profile) set `manual` / `profile`
+    // themselves, and only those count as the deployer's jobs (`recordCleanScheduledDelivery`): a job
+    // added without one (a plugin calling `addJob`) must not pass for one. Readers treat absent as manual.
     // An `im` job must carry a complete target: storing one without would fail later (and in SQL
     // storage while encoding it), long after the caller got its answer.
     full.notify = parseJobNotify(resolveEffectiveNotify(full.notify, this.defaultNotify));

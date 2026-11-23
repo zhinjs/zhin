@@ -22,7 +22,7 @@ import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
 import { isAmbientTurn } from '../user-relation-turn.js';
 import { ADMIN_APPROVABLE_TOOL_TAG } from './admin-approvable.js';
-import { classifyHighRiskAction } from './provenance.js';
+import { nameHighRiskCategory } from './provenance.js';
 import {
   TRUST_LEVEL_POLICY,
   TRUST_RESTRICTION_REASON,
@@ -373,7 +373,10 @@ export function readOnlyDeclarationApplies(
   if (tool.riskCategory !== undefined) return false;
   // b33 review: spelling variants and possible homoglyphs of a side-effect name never earn the relaxation.
   if (hasNonAsciiToolName(tool.name) || isBuiltinSideEffectToolName(tool.name)) return false;
-  return toolNameSpellings(tool.name).every(name => classifyHighRiskAction({ ...tool, name }) === undefined);
+  // #1250 review: the pre-#1250 category rule (`nameHighRiskCategory`), not `classifyHighRiskAction`: the
+  // read exception that lets a config / schedule read skip the provenance confirmation must not also
+  // relieve it of this declarative approval (the readOnly declaration is what is being judged here).
+  return toolNameSpellings(tool.name).every(name => nameHighRiskCategory({ name, ...(tool.tags ? { tags: tool.tags } : {}) }) === undefined);
 }
 
 /**
