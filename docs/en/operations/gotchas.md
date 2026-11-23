@@ -23,7 +23,7 @@ Rules deployers keep running into that are not failures. Each entry was checked 
 
 - only a single capability file in a convention directory (`commands/`, `tools/`, …) of a locally mounted plugin (a `./` reference in the main configuration) reloads by capability, without touching adapters;
 - editing a plugin entry or a `src/` module shared by several modules rebuilds the whole plugin or even the whole instance; when an adapter plugin is rebuilt, its accounts log in again;
-- a change to `package.json`, a lockfile (`pnpm-lock.yaml`, …) or `.env` restarts the instance and every account logs in again;
+- a change to a runtime field of `package.json` (dependencies, `exports`, the `zhin` manifest; not `scripts` or `description`), a lockfile (`pnpm-lock.yaml`, …) or `.env` restarts the instance and every account logs in again;
 - packages resolved from `node_modules` (plugins installed with `pnpm add` / `pnpm update`) are not watched at all.
 
 So the most common production change, upgrading a package, always restarts the instance. `--watch` does not avoid that re-login, and it makes any accidental edit trigger a reload.
@@ -77,7 +77,7 @@ A request that already streamed text to the user never switches, and a fallback 
 
 **Why**: the `BOT.md` / `AGENTS.md` that older scaffolds and `zhin migrate` generated say "Use `cron_add` for scheduled reminders"; that tool never existed. Newly generated files are corrected, but files in existing projects are not rewritten.
 
-**What to do**: open the project's `BOT.md` (or `AGENTS.md`) and change its "Reminders" section: a fixed reminder message (once or at a fixed interval) uses `reminder_create` (the reminder plugin must be installed); a job where the AI produces content or calls tools when due, or that follows a calendar rule such as workdays or lunar dates, uses `schedule_add`; change an existing job with `schedule_update` instead of deleting and recreating it; never just write reminders to memory. The built-in `schedule_add` tool description states the same rules.
+**What to do**: open the project's `BOT.md` (or `AGENTS.md`) and change its "Reminders" section: a fixed reminder message (once or at a fixed interval) uses `reminder_create` from the reminder skill (the reminder plugin must be installed and the skill activated first; the tool is not listed before that); a job where the AI produces content or calls tools when due, or that follows a calendar rule such as workdays or lunar dates, uses `schedule_add`; change an existing job with `schedule_update` instead of deleting and recreating it; never just write reminders to memory. The built-in `schedule_add` tool description states the same rules.
 
 ## A single `.tsx` file in the project costs extra memory {#tsx-memory}
 

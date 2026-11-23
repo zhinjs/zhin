@@ -270,7 +270,7 @@ export class NativeBashToolFeature {
       // #1250 b96: no other command can run either; a model retrying bash only burns the turn.
       throw new Error(
         `Shell is unavailable on this host: ${result.blockReason ?? 'isolated environment unavailable'}. `
-        + 'Do not retry bash in this conversation; tell the user it is unavailable here.',
+        + 'Do not retry bash until the environment is restored; tell the user it is unavailable here.',
       );
     }
     if (result.blocked) {

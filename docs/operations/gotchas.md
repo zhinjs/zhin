@@ -23,7 +23,7 @@ description: "部署 Zhin 时容易踩到的规律：配置种子、热重载与
 
 - 只有本地挂载插件（主配置里 `./` 开头的引用）约定目录里的单个能力文件（`commands/`、`tools/` 等）能按能力重载，不动适配器；
 - 改插件入口或被多个模块共享的 `src/` 模块，会重建整个插件甚至整个实例；重建的是适配器插件时，它的账号跟着重新登录；
-- `package.json`、锁文件（`pnpm-lock.yaml` 等）或 `.env` 变化会重启实例，所有账号重新登录；
+- 影响运行时的 `package.json` 字段（依赖、`exports`、`zhin` 清单等；`scripts`、`description` 这类不算）、锁文件（`pnpm-lock.yaml` 等）或 `.env` 变化会重启实例，所有账号重新登录；
 - 从 `node_modules` 解析的包（`pnpm add` / `pnpm update` 装的插件）根本不被监听。
 
 所以生产上最常见的「升级包」一定会重启实例，`--watch` 省不掉这次重登，反而让任何误改都触发重载。
@@ -77,7 +77,7 @@ description: "部署 Zhin 时容易踩到的规律：配置种子、热重载与
 
 **原因**：旧版脚手架和 `zhin migrate` 生成的 `BOT.md` / `AGENTS.md` 里写着「Use `cron_add` for scheduled reminders」，这个工具从来不存在。新生成的文件已改正，已有项目里的文件不会被自动改写。
 
-**怎么做**：打开项目的 `BOT.md`（或 `AGENTS.md`），把「Reminders」一节改成：固定文案的提醒（一次性或固定间隔）用 `reminder_create`（需要安装提醒插件）；到点由 AI 生成内容、调用工具，或按工作日 / 农历等日历规则运行的任务用 `schedule_add`，改已有任务用 `schedule_update`，不要删除后重建；提醒不要只写进记忆。内置的 `schedule_add` 工具说明里也写了这些规则。
+**怎么做**：打开项目的 `BOT.md`（或 `AGENTS.md`），把「Reminders」一节改成：固定文案的提醒（一次性或固定间隔）用提醒技能里的 `reminder_create`（需要安装提醒插件，并先启用 reminder 技能，启用前它不在工具列表里）；到点由 AI 生成内容、调用工具，或按工作日 / 农历等日历规则运行的任务用 `schedule_add`，改已有任务用 `schedule_update`，不要删除后重建；提醒不要只写进记忆。内置的 `schedule_add` 工具说明里也写了这些规则。
 
 ## 项目里只有一个 `.tsx` 文件，内存也多了一截 {#tsx-memory}
 

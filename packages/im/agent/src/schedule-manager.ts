@@ -45,7 +45,7 @@ export const SCHEDULE_PROMPT_DESCRIPTION = '到点要执行的内容（例如「
  */
 export const SCHEDULE_ADD_DESCRIPTION = '添加持久化调度任务：到点由 AI 执行 prompt（生成内容、调用工具），或按日历 cron 运行。'
   + '中国大陆工作日必须使用 workday；支持 6 段 cron 或 delay_minutes 一次性任务。'
-  + '只是到点发一条固定文案的提醒时，若有 reminder_create 优先用它。提醒必须真正建任务，不要只写进记忆；没有 cron_add 工具。'
+  + '只是到点发一条固定文案的提醒时，装了提醒插件就先启用 reminder 技能，用其中的 reminder_create（它在技能启用前不在工具列表里）。提醒必须真正建任务，不要只写进记忆；没有 cron_add 工具。'
   + '要修改已有任务（改时间、标签、启用状态）请用 schedule_update，不要删除后重建：重建会丢掉隐藏的 Agent 等设置。';
 
 /**
@@ -201,7 +201,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         const warning = isEmptyExecutionPlan(job.executionPlan)
           ? '执行计划没有指定工具或技能：到点时将按提示词自动选择工具。建议先用 schedule_preview 预演，再把 execution_plan 一起传给 schedule_add。'
           : job.executionPlan?.skills?.length && !job.executionPlan.tools?.length
-            ? '执行计划只指定了技能、没有指定工具：到点运行时没有任何工具可用。需要工具时请删除这个刚建的任务，带上 tools 重新创建。'
+            ? '执行计划只指定了技能、没有指定工具：到点运行时没有任何工具可用。schedule_update 不能改 tools，需要工具时请删除这个刚建的任务，带上 tools 重新创建。'
             : undefined;
         if (job.schedule.kind === 'at') {
           // #1250: the repository's date format, in the process zone as before (`at` jobs carry no zone).
