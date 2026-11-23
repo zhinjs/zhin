@@ -236,7 +236,8 @@ export class TimerScheduler {
    * finished one-shot) run one at a time per job, so a change made while the run finishes is neither
    * overwritten by the old timing nor deleted with the one-shot it turned into a recurring job. The
    * run itself (the Agent turn) is not under the lock: a change made while it runs waits only for
-   * those few store writes.
+   * those few store writes. The lock lives in this instance only: two schedulers sharing one store
+   * are not serialised against each other (a runtime runs a single scheduler).
    */
   readonly #jobLocks = new Map<string, Promise<void>>();
 
@@ -508,7 +509,6 @@ export class TimerScheduler {
         }).catch(() => {});
       }
     }
-
   }
 
   async #deliverWithRetries(

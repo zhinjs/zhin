@@ -30,7 +30,11 @@ function loadCronScheduleBuilder(): Promise<CronScheduleBuilder | undefined> {
       const build = (agent as { buildCronJobSchedule?: unknown }).buildCronJobSchedule;
       return typeof build === 'function' ? build as CronScheduleBuilder : undefined;
     },
-    () => undefined,
+    () => {
+      // Not cached: a failed load is retried on the next request.
+      cronScheduleBuilder = undefined;
+      return undefined;
+    },
   );
   return cronScheduleBuilder;
 }
