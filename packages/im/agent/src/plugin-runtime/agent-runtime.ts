@@ -575,12 +575,14 @@ export async function expandMcpTools(
       const decision = resolveMcpToolPermit(permits, { name: tool.name, ...(tool.hints ? { hints: tool.hints } : {}) });
       if (decision.status === 'denied') continue;
       const permissions = decision.permissions;
+      const upstreamDescription = tool.description?.trim();
       expanded.push(Object.freeze({
         owner: connection.owner,
         mcpServer: connection.qualifiedName,
         name,
         qualifiedName: name,
-        description: tool.description?.trim() || `${connection.name} MCP tool ${tool.name}`,
+        description: upstreamDescription || `${connection.name} MCP tool ${tool.name}`,
+        mcpDescriptionFromUpstream: Boolean(upstreamDescription),
         inputSchema: tool.inputSchema === undefined
           ? undefined
           : requireToolInputSchema(tool.inputSchema, `MCP Tool ${name} inputSchema`),
