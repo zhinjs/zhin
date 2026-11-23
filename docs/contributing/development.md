@@ -255,6 +255,16 @@ Git 历史中是否存在消费 patch changeset、提升 patch 版本并新增�
 | `@zhin.js/core` | `1.1.35` |
 | `@zhin.js/plugin-runtime` | `1.1.9` |
 
+### 高危确认规则变化 {#high-risk-release-notes}
+
+部署者需要能从发版说明里直接看出「哪一步会多弹或少弹确认」，所以高危确认规则（[规则速查](../ai/agent.md#high-risk-rules)里的分类、级别、来源与例外，以及确认卡写明的原因）的变化在发版说明里单独成条。
+
+当前的 changelog 生成器是 `.changeset/config.json` 里的默认 `@changesets/cli/changelog`：它只按 Major / Minor / Patch 分组，每个 changeset 的正文写成一条列表项（首行跟在提交哈希后面，其余行缩进在这一条里）；GitHub Release 的正文（`scripts/create-github-releases.mjs`）照抄该包 `CHANGELOG.md` 里这一版的内容。它不支持自定义分节，正文里写 `### 高危确认规则` 这样的标题只会落在某一条列表项里面。因此不改发布脚本，改用下面的约定：
+
+- 规则变化单独写一个 changeset 文件，文件名带 `high-risk`（例如 `.changeset/b95-1250-high-risk-explain.md`），不和其他改动混在同一个文件里，这样它在发版说明里是单独的一条。
+- 正文首行以固定前缀 `**高危确认规则**：` 开头，后面一句话说明对部署者的影响；判定没变、只改了说明或卡片文案时写「判定不变」。
+- 正文其余部分逐条列出变化（哪类工具、哪个级别、哪种来源或例外），同一提交里同步更新中英文文档的规则速查表。
+
 ## 发版（GitHub CI）
 
 日常 PR 与合并队列使用快速 CI，目标是在 **5 分钟内**完成实际检查：验证受影响的包及下游消费者，Linux Node 24 构建一次，四个分片复用构建产物运行选中的单测，同时检查源码契约、发版计划和改动文件的 lint。全局依赖/工具链变化会扩大到全部包；不通过时不会用超时或空测试冒充成功。GitHub runner 的排队时间不受仓库控制。
