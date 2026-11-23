@@ -265,14 +265,18 @@ Tags are created by the real publish flow and never need to be created ahead of 
 Internal peer dependencies use `workspace:^` so compatible internal minor releases publish as caret
 ranges instead of exact versions, which would otherwise push unrelated upstream packages to major. Private examples do not participate in Changesets versioning or tags.
 
-### 1.1 stable line
+### 1.x stable line
 
 The official npm ecosystem uses the 1.1.x stable line. Eighty-one packages whose 1.1.0 version
 was still available start at 1.1.0. Seven packages that had already published 1.1.0 use their next
 available 1.1.x patch because npm does not permit version reuse. Historical higher versions remain
 available to preserve existing lockfiles and are marked as superseded by the corresponding 1.1.x
 stable release. Each official package points both `latest` and `stable` to that release; routine
-releases then increment patch only.
+releases then increment patch only. A release with an incompatible public API change goes out as a
+minor once the owner approves it: the package, its target version `X.Y.0` and the reason are listed in
+`approvedNonPatchReleases` of `.changeset/version-policy.json`, and `pnpm check:release-plan` lets only
+those minors through and refuses every major. Package versions therefore move on to 1.10, 1.14 and so
+on within the same 1.x line; the table below records only the versions at the reset.
 
 | Package whose 1.1.0 is reserved | Stable version |
 | --- | --- |

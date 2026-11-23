@@ -237,13 +237,16 @@ Git 历史中是否存在消费 patch changeset、提升 patch 版本并新增�
 内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
 进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。
 
-### 1.1 稳定线
+### 1.x 稳定线
 
 官方 npm 生态统一使用 1.1.x 稳定线。81 个未占用该版本号的包从 1.1.0 开始；
 7 个历史上已经发布过 1.1.0 的包使用各自在 1.1.x 中下一个可用 patch，因为 npm
 不允许复用已发布版本号。历史更高版本保留在 npm 以免破坏已有 lockfile，并标记为
 由对应包的 1.1.x 稳定版本取代。发布后每个官方包的 `latest` 与 `stable` 均指向其
-1.1.x 稳定版本，后续常规发布只增加 patch。
+1.1.x 稳定版本，后续常规发布只增加 patch。含不兼容公开 API 变更的发布经所有者批准后走 minor：
+在 `.changeset/version-policy.json` 的 `approvedNonPatchReleases` 里登记包名、目标版本 `X.Y.0` 与理由，
+`pnpm check:release-plan` 只放行登记过的 minor，major 一律拒绝。所以各包版本会前进到 1.10、1.14 等，
+仍属同一条 1.x 稳定线；下表只记录重置时的起始版本。
 
 | 1.1.0 已占用的包 | 稳定版本 |
 | --- | --- |
