@@ -113,6 +113,19 @@ describe('schedule_update (#1250 b90)', () => {
     expect(shanghaiTime(job!.state.nextRunAtMs!)).toBe('09:00');
   });
 
+  it('says a stored invalid time zone blocks re-timing, and still allows other changes (#1250 b99)', async () => {
+    await engine.addJob({
+      id: 'legacy-tz', enabled: false, source: 'schedule',
+      schedule: { kind: 'solar', cron: '0 0 9 * * *', tz: 'Mars/Olympus' },
+      action: { kind: 'agent', prompt: 'x' }, notify: { channel: 'silent' },
+    });
+    const retimed = await update({ id: 'legacy-tz', cron: '0 30 9 * * *' }, owner);
+    expect(retimed.error).toContain('该任务保存的时区无效');
+    expect(retimed.error).toContain('删除后重建');
+    expect(retimed.error).not.toContain('Mars/Olympus');
+    expect(await update({ id: 'legacy-tz', label: '旧任务' }, owner)).toMatchObject({ success: true, label: '旧任务' });
+  });
+
   it('turns a job into a one-shot with delay_minutes', async () => {
     const now = Date.now();
     await update({ id: 'alice-water', delay_minutes: 30 }, alice);

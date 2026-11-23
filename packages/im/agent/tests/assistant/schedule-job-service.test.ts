@@ -39,6 +39,13 @@ describe('parseScheduleAddFromToolArgs', () => {
     expect(fromRpc).toEqual({ error: expect.stringContaining('时区无效') });
     expect(parseScheduleAddFromToolArgs({ prompt: 'x', cron: '0 0 9 * * *', tz: 'Asia/Shanghai' }, toolContext))
       .toMatchObject({ schedule: { kind: 'solar', cron: '0 0 9 * * *', tz: 'Asia/Shanghai' } });
+    // Offsets and other spellings Intl (and so the scheduler) accepts stay accepted; surrounding spaces are trimmed.
+    for (const tz of ['+08:00', 'asia/shanghai', 'Etc/GMT-8']) {
+      expect(parseScheduleAddFromToolArgs({ prompt: 'x', cron: '0 0 9 * * *', tz }, toolContext), tz)
+        .toMatchObject({ schedule: { tz } });
+    }
+    expect(parseScheduleAddFromToolArgs({ prompt: 'x', cron: '0 0 9 * * *', tz: ' Asia/Shanghai ' }, toolContext))
+      .toMatchObject({ schedule: { tz: 'Asia/Shanghai' } });
   });
   it('captures trusted context language and ignores model-supplied locale', () => {
     const result = parseScheduleAddFromToolArgs({ delay_minutes: 10, prompt: 'report', locale: 'zh-CN' }, { ...toolContext, locale: 'en' });

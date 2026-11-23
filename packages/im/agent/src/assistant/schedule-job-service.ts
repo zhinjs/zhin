@@ -4,7 +4,7 @@ import { jobScheduleToResolved, type TimerScheduler } from './timer-scheduler.js
 import { parseScheduleJobCreator, scheduleJobCreatorFromPrincipal } from './job-creator.js';
 import { parseExecutionPlanFromArgs } from './schedule-execution.js';
 import { parseJobNotify } from './notification-router.js';
-import { buildJobScheduleFromCronInput, type CronScheduleKind } from '../schedule-cron.js';
+import { buildJobScheduleFromCronInput, isValidScheduleTimeZone, type CronScheduleKind } from '../schedule-cron.js';
 import type {
   JobNotify,
   JobSchedule,
@@ -86,7 +86,7 @@ function buildScheduleFromRecord(record: Record<string, unknown>): JobSchedule |
   const built = buildJobScheduleFromCronInput(
     kind != null ? String(kind) : undefined,
     cron,
-    record.tz != null ? String(record.tz) : undefined,
+    record.tz != null ? String(record.tz).trim() : undefined,
   );
   if ('error' in built) return built;
 
@@ -283,6 +283,13 @@ export function buildCronJobSchedule(
     };
   }
   const kind = kindArg ?? currentCron?.kind;
+  // #1250 b99: a zone saved before zones were checked cannot be changed here (`tz` is not an argument).
+  if (currentCron?.tz && !isValidScheduleTimeZone(currentCron.tz)) {
+    return {
+      error: '该任务保存的时区无效，无法修改计划；请删除后重建，或用 delay_minutes 改为一次性任务',
+      code: 'schedule_invalid',
+    };
+  }
   const built = buildJobScheduleFromCronInput(kind, cron, currentCron?.tz, { inferWorkday: kind === undefined });
   if ('error' in built) return { error: built.error, code: 'invalid_argument' };
   const schedule: JobSchedule = built.kind === 'holiday' && current?.kind === 'holiday'
