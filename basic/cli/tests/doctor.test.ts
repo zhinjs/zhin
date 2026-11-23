@@ -6,6 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../src/utils/adapter-endpoints-check.js';
 
+// Built at run time so the source has no literal import of the removed subpath (check:agent-tool-authoring-boundaries).
+const REMOVED_TOOLS_SUBPATH = ['@zhin.js', 'agent', 'tools'].join('/');
+
 vi.mock('child_process', async importOriginal => ({
   ...await importOriginal<typeof import('child_process')>(),
   exec: (_command: string, callback: (error: null, result: { stdout: string; stderr: string }) => void) => callback(null, { stdout: '9.0.0', stderr: '' }),
@@ -669,5 +672,45 @@ describe('doctor: TypeScript version (#1250 doctor-typescript-global)', () => {
     expect(await diagnoseTypeScript(project(), { devDependencies: { typescript: '^6.0.0' } }, async () => 'Version 5.9.3'))
       .toMatchObject({ status: 'warn', fix: 'pnpm install' });
     expect(await diagnoseTypeScript(project(), {}, async () => undefined)).toMatchObject({ status: 'warn', message: '未安装' });
+  });
+});
+
+describe('doctor: retired @zhin.js packages (#1250 retired-package-not-flagged)', () => {
+  it('warns about a retired dependency of the root and of a workspace member, with the replacement', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+        name: 'doctor-run', private: true, dependencies: { 'zhin.js': '^1.0.0', '@zhin.js/config-yaml': '^1.1.0' },
+      }));
+      fs.writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+      fs.mkdirSync(path.join(dir, 'plugins', 'foo'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'plugins', 'foo', 'package.json'), JSON.stringify({ name: 'foo', dependencies: { '@zhin.js/interaction': '^1.0.0' } }));
+    });
+    try {
+      expect(output).toContain('已停更的 Zhin 包: package.json 的 dependencies 依赖 @zhin.js/config-yaml（^1.1.0）：已停更并入 @zhin.js/runtime：改用 @zhin.js/runtime 的 YamlConfigDocument');
+      expect(output).toContain('plugins/foo/package.json 的 dependencies 依赖 @zhin.js/interaction（^1.0.0）：已并入 @zhin.js/im-contract');
+      expect(output).toContain('从 package.json 删除 @zhin.js/config-yaml');
+      expect(output).toContain('从 plugins/foo/package.json 删除 @zhin.js/interaction');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('warns about an import of the deleted subpath @zhin.js/agent/tools, whose package is still current', async () => {
+    const { output, directory } = await runDoctor(dir => {
+      fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+        name: 'doctor-run', private: true, dependencies: { 'zhin.js': '^1.0.0', '@zhin.js/agent': '^1.0.0' },
+      }));
+      fs.mkdirSync(path.join(dir, 'tools', 'echo'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'tools', 'echo', 'index.ts'), `import { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';\nexport default defineAgentTool({} as never);\n`);
+    });
+    try {
+      expect(output).toContain("已停更的 Zhin 包: 要改写的 import：tools/echo/index.ts:1 '@zhin.js/agent/tools' → '@zhin.js/tool'：子路径 @zhin.js/agent/tools 已删除");
+      expect(output).toContain('按上面的提示改写 import');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('reports ok when no retired package is declared', async () => {
+    const { output, directory } = await runDoctor(() => {});
+    try {
+      expect(output).toContain('已停更的 Zhin 包: 没有依赖已并入或停更的 @zhin.js 包');
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 });

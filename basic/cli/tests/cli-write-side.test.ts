@@ -26,11 +26,15 @@ import {
   syncWorkspaceYamlOverrides,
   upgradeProjectDependencies,
   upgradeWorkspacePackages,
+  reportRetiredPackages,
 } from '../src/commands/migrate.js';
 import { cachedRegistryLookup, npmRegistryLookup } from '../src/utils/registry-version.js';
 import { expandWorkspaceBraces, listWorkspacePackageDirs, workspaceGlobToRegExp } from '../src/utils/workspace-packages.js';
 import { describeScheduleRefusal, scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
+
+// Built at run time so the source has no literal import of the removed subpath (check:agent-tool-authoring-boundaries).
+const REMOVED_TOOLS_SUBPATH = ['@zhin.js', 'agent', 'tools'].join('/');
 
 // `zhin schedule` only talks to this project's gateway (#1250): a stand-in whose local-socket
 // fetch delegates to the stubbed global fetch while `gateway.running` is set.
@@ -749,7 +753,7 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
   it('appends the missing allowBuilds entries and keeps the existing workspace settings and comments', () => {
     const pkgPath = botPackage();
     fs.writeFileSync(path.join(tmp, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
-    const original = "# project workspace\npackages:\n  - '.'\n  - 'plugins/*'\nallowBuilds:\n  esbuild: true\n  node-pty: true\n";
+    const original = "# project workspace\npackages:\n  - '.'\n  - 'plugins/*'\nminimumReleaseAge: 1440\nallowBuilds:\n  esbuild: true\n  node-pty: true\n";
     fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), original);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -765,6 +769,7 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     expect(written).toContain('# project workspace');
     expect(workspace()).toEqual({
       packages: ['.', 'plugins/*'],
+      minimumReleaseAge: 1440,
       allowBuilds: { esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true },
       minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
@@ -802,16 +807,17 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
   it('fills an empty allowBuilds key and keeps long strings on one line', () => {
     const pkgPath = botPackage();
     const long = 'x'.repeat(120);
-    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), `packages:\n  - '.'\ncatalog:\n  foo: "${long} ${long}"\nallowBuilds:\n`);
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), `packages:\n  - '.'\nminimumReleaseAge: 1440\ncatalog:\n  foo: "${long} ${long}"\nallowBuilds:\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     const written = fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8');
     expect(written).toContain(`  foo: "${long} ${long}"\n`);
     expect(workspace()).toEqual({
       packages: ['.'],
+      minimumReleaseAge: 1440,
       catalog: { foo: `${long} ${long}` },
       allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
-      // pnpm projects also list the upgrade targets for pnpm 11's release-age gate (#1250).
+      // A project that sets minimumReleaseAge also lists the upgrade targets (#1250).
       minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
   });
@@ -821,10 +827,11 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     vi.spyOn(console, 'log').mockImplementation(() => {});
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: false })).toBe(true);
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).pnpm.onlyBuiltDependencies).toEqual(['esbuild', 'node-pty', 'ssh2', 'cpu-features']);
+    // pnpm 10 builds every gateway package from the onlyBuiltDependencies lists it reads (node-pty
+    // already listed, ssh2 / cpu-features appended): no allowBuilds key for any of them, and no
+    // release-age exclusions without minimumReleaseAge (#1250).
     expect(workspace()).toEqual({
-      allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
       onlyBuiltDependencies: ['node-pty', 'ssh2', 'cpu-features'],
-      minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
 
     fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - sharp\n  - ssh2\n');
@@ -1289,5 +1296,161 @@ describe('schedule (running Host)', () => {
       '    Agent:  news',
       '    Agent:  zhin（默认）',
     ]);
+  });
+});
+
+describe('migrate: release-age exclusions, allowBuilds and retired packages (#1250 retired-package-not-flagged)', () => {
+  const bot = (extra: Record<string, unknown> = {}, workspaceText = "packages:\n  - '.'\n") => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      private: true,
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': '9.4.1', '@zhin.js/cli': '9.4.1', '@zhin.js/gateway': '9.4.1', '@zhin.js/adapter-icqq': '1.0.0' },
+      ...extra,
+    }, null, 2));
+    fs.writeFileSync(path.join(tmp, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), workspaceText);
+    return pkgPath;
+  };
+  const workspace = () => yaml.parse(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8'));
+  const run = (pkgPath: string, pnpm: string | undefined) => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true, pnpmVersion: () => pnpm });
+    return log.mock.calls.flat().join('\n');
+  };
+
+  it('writes no minimumReleaseAgeExclude with --include-pinned when the project sets no minimumReleaseAge (pnpm 10 pinned)', () => {
+    const output = run(bot({ packageManager: 'pnpm@10.30.0' }), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+    expect(output).toContain('项目未设置 minimumReleaseAge（packageManager 固定的 pnpm 10 默认不启用），不写 minimumReleaseAgeExclude');
+  });
+
+  it('writes minimumReleaseAgeExclude without a packageManager pin although the local pnpm is 10 (CI may run pnpm 11)', () => {
+    const output = run(bot(), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    expect(output).not.toContain('不写 minimumReleaseAgeExclude');
+    // Unpinned, .npmrc / package.json#pnpm turn the gate off for pnpm 10 only: pnpm 11 ignores them.
+    run(bot({ pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    // A pnpm-workspace.yaml value of 0 is read by every pnpm that has the gate.
+    run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 0\n"), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+  });
+
+  it('writes the exclusions where pnpm reads minimumReleaseAge: pnpm-workspace.yaml, .npmrc, package.json#pnpm', () => {
+    run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 1440\n"), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toEqual(['@zhin.js/adapter-icqq@9.4.2', '@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2']);
+
+    const npmrc = bot({ packageManager: 'pnpm@10.30.0' });
+    fs.writeFileSync(path.join(tmp, '.npmrc'), 'registry=https://registry.npmjs.org/\nminimum-release-age=60\n');
+    run(npmrc, '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    fs.rmSync(path.join(tmp, '.npmrc'));
+
+    run(bot({ packageManager: 'pnpm@10.30.0', pnpm: { minimumReleaseAge: 30 } }), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+  });
+
+  it('reads minimumReleaseAge only from pnpm-workspace.yaml under pnpm 11 (package.json#pnpm and .npmrc are ignored there)', () => {
+    // pnpm 11 ignores the package.json pnpm field: its default one-day gate still applies.
+    const output = run(bot({ pnpm: { minimumReleaseAge: 0 } }), '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    expect(output).not.toContain('不写 minimumReleaseAgeExclude');
+
+    // pnpm 11 reads only auth / registry / TLS / proxy settings from .npmrc.
+    const npmrc = bot();
+    fs.writeFileSync(path.join(tmp, '.npmrc'), 'minimum-release-age=0\n');
+    run(npmrc, '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    fs.rmSync(path.join(tmp, '.npmrc'));
+
+    // A pinned pnpm 10 still honours both.
+    run(bot({ packageManager: 'pnpm@10.30.0', pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+  });
+
+  it('follows pnpm 11\'s default gate, and an explicit 0 turns it off', () => {
+    run(bot(), '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    const output = run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 0\n"), '11.27.1');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+    expect(output).toContain('pnpm-workspace.yaml 的 minimumReleaseAge 为 0（不拦新版本），不写 minimumReleaseAgeExclude');
+  });
+
+  it('writes no allowBuilds key under a pinned pnpm 10 for any gateway package an onlyBuiltDependencies list covers', () => {
+    const output = run(bot({ packageManager: 'pnpm@10.30.0' }, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
+    // ssh2 / cpu-features follow the same rule as node-pty: appended to the list pnpm 10 reads.
+    expect(workspace()).not.toHaveProperty('allowBuilds');
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+    expect(output).toContain('node-pty: 已在 pnpm-workspace.yaml onlyBuiltDependencies 中，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('ssh2: 加入 pnpm-workspace.yaml onlyBuiltDependencies，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('cpu-features: 加入 pnpm-workspace.yaml onlyBuiltDependencies，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).not.toContain('allowBuilds.');
+  });
+
+  it('still writes allowBuilds without a packageManager pin when the local pnpm is 10 (a deployment may run pnpm 11)', () => {
+    const output = run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+    expect(output).not.toContain('不再写 allowBuilds');
+  });
+
+  it('writes allowBuilds as before when the pnpm version is unknown (it may be pnpm 11)', () => {
+    run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), undefined);
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+  });
+
+  it('still writes allowBuilds under pnpm 11, which no longer reads onlyBuiltDependencies', () => {
+    run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '11.27.1');
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+  });
+
+  it('does not upgrade a retired package and lists it with its replacement and the imports to rewrite', () => {
+    const pkgPath = bot({ devDependencies: { '@zhin.js/config-yaml': '^1.1.0' } });
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'src', 'config.ts'), "// '@zhin.js/config-yaml' in a comment\nimport { YamlConfigDocument } from '@zhin.js/config-yaml';\n");
+    fs.mkdirSync(path.join(tmp, 'node_modules', '@zhin.js', 'config-yaml'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'node_modules', '@zhin.js', 'config-yaml', 'index.js'), "export * from '@zhin.js/config-yaml';\n");
+    const output = run(pkgPath, '10.30.0');
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).devDependencies['@zhin.js/config-yaml']).toBe('^1.1.0');
+    expect(output).toContain('@zhin.js/config-yaml: 已并入或停更，不升级');
+    expect(registry.calls).not.toContain('@zhin.js/config-yaml@latest');
+
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(1);
+    const report = lines.join('\n');
+    expect(report).toContain('package.json 的 devDependencies 依赖 @zhin.js/config-yaml（^1.1.0）：已停更并入 @zhin.js/runtime');
+    expect(report).toContain("import { YamlConfigDocument } from '@zhin.js/runtime'");
+    expect(report).toContain("src/config.ts:2 '@zhin.js/config-yaml' → '@zhin.js/runtime'");
+    expect(report).not.toContain('node_modules');
+    // Nothing is rewritten.
+    expect(fs.readFileSync(path.join(tmp, 'src', 'config.ts'), 'utf8')).toContain("from '@zhin.js/config-yaml'");
+  });
+
+  it('lists an import of the deleted subpath @zhin.js/agent/tools with @zhin.js/tool (#1250)', () => {
+    bot();
+    fs.mkdirSync(path.join(tmp, 'tools', 'echo'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'tools', 'echo', 'index.ts'), `// old: '${REMOVED_TOOLS_SUBPATH}'\nimport { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';\n`);
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(0);
+    const report = lines.join('\n');
+    expect(report).toContain("tools/echo/index.ts:2 '@zhin.js/agent/tools' → '@zhin.js/tool'：子路径 @zhin.js/agent/tools 已删除：defineAgentTool 改从 @zhin.js/tool 导入");
+    expect(report).not.toContain('index.ts:1');
+  });
+
+  it('reports retired packages of a workspace member and nothing for a clean project', () => {
+    bot({}, "packages:\n  - 'plugins/*'\n");
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(0);
+    expect(lines.join('\n')).toContain('没有依赖已并入或停更的 @zhin.js 包');
+    fs.mkdirSync(path.join(tmp, 'plugins', 'foo'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'plugins', 'foo', 'package.json'), JSON.stringify({ name: 'foo', dependencies: { '@zhin.js/isolate': '^1.0.0' } }));
+    lines.length = 0;
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(1);
+    expect(lines.join('\n')).toContain('plugins/foo/package.json 的 dependencies 依赖 @zhin.js/isolate（^1.0.0）：已并入 @zhin.js/runtime');
   });
 });

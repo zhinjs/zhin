@@ -357,6 +357,21 @@ describe('build denials the gateway allowance must honour', () => {
     expect(sync(root, pkg, true).output).toContain('[dry-run] node-pty: 已跳过：在 neverBuiltDependencies 中（package.json pnpm.neverBuiltDependencies）');
   });
 
+  it('skips allowBuilds for an onlyBuiltDependencies list only when packageManager pins pnpm < 11, not on the local pnpm version', () => {
+    const settings = (plan: ReturnType<typeof planNativeBuildAllowance>) => plan!.changes.map(change => change.setting);
+    const workspaceText = "packages:\n  - '.'\nonlyBuiltDependencies:\n  - esbuild\n";
+    // No pin, local pnpm 10: a deployment or CI may run pnpm 11, which reads allowBuilds only.
+    const unpinned = projectWith(workspaceText, { packageManager: undefined });
+    expect(settings(planNativeBuildAllowance(unpinned.root, unpinned.pkg, { pnpmVersion: () => '10.30.0' }))).toEqual(expect.arrayContaining([
+      'allowBuilds.node-pty', 'allowBuilds.ssh2', 'allowBuilds.cpu-features',
+    ]));
+    // pnpm 10 pinned: the list is what pnpm 10 builds from, no allowBuilds key.
+    const pinned = projectWith(workspaceText, { packageManager: 'pnpm@10.30.0' });
+    const plan = planNativeBuildAllowance(pinned.root, pinned.pkg, { pnpmVersion: () => '11.0.0' });
+    expect(settings(plan).filter(setting => setting.startsWith('allowBuilds.'))).toEqual([]);
+    expect(plan?.allowedByOnlyBuilt.map(entry => entry.name)).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+  });
+
   it('creates onlyBuiltDependencies for pnpm < 10.26 without the denied packages', () => {
     const { root, pkg } = projectWith("packages:\n  - '.'\nignoredBuiltDependencies:\n  - cpu-features\n", { packageManager: 'pnpm@10.12.1' });
     const plan = planNativeBuildAllowance(root, pkg, { pnpmVersion: () => '10.12.1' });
