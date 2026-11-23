@@ -222,6 +222,11 @@ export interface SandboxResult {
   /** 阻止原因 */
   blockReason?: string;
   /**
+   * #1250 b96: blocked because the isolated environment itself (Docker, its image) is unavailable,
+   * not because of the command. Another command will not run either.
+   */
+  isolationUnavailable?: boolean;
+  /**
    * Container runs that were stopped (timeout / cancel) only: whether the container is confirmed
    * gone. Killing the `docker run` CLI does not stop the container, so until this is `true` the
    * container may still be writing to the workspace mount.
@@ -470,6 +475,7 @@ export class Sandbox {
             timedOut: false,
             blocked: true,
             blockReason: `隔离执行环境不可用：${reason}`,
+            isolationUnavailable: true,
           };
         }
       }

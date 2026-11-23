@@ -725,6 +725,15 @@ describe('migrate', () => {
     expect(fs.readFileSync(path.join(tmp, 'SOUL.md.bak'), 'utf-8')).toBe(oldSoul);
   });
 
+  it('upgradeBootstrapFiles 生成的 AGENTS.md 只写真实存在的提醒/调度工具，不再写 cron_add (#1250 b96)', () => {
+    upgradeBootstrapFiles(tmp, false);
+    const agents = fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf-8');
+    expect(agents).not.toContain('cron_add');
+    expect(agents).toContain('`reminder_create`');
+    expect(agents).toContain('`schedule_add`');
+    expect(agents).toContain('`schedule_update`');
+  });
+
   it('upgradeBootstrapFiles 不误伤用户自定义文件', () => {
     const custom = '# 我的 SOUL\n\n这里记录记忆与工具组合的用法。\n';
     fs.writeFileSync(path.join(tmp, 'SOUL.md'), custom);

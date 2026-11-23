@@ -131,6 +131,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   sidebarGroup('上线运维', [
     { text: '部署与恢复', link: '/operations/production' },
+    { text: '常见问题与反直觉行为', link: '/operations/gotchas' },
     { text: '版本兼容与迁移', link: '/operations/upgrades' },
     { text: '升级到 Console 访问控制', link: '/migrations/console-access-control' },
     { text: '升级到管理网关', link: '/migrations/management-gateway' },
@@ -315,6 +316,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
   sidebarGroup('Operations', [
     { text: 'Deployment and Recovery', link: '/en/operations/production' },
+    { text: 'Gotchas and Counter-intuitive Behavior', link: '/en/operations/gotchas' },
     { text: 'Compatibility and Migration', link: '/en/operations/upgrades' },
     { text: 'Upgrading to Console Access Control', link: '/en/migrations/console-access-control' },
     { text: 'Upgrading to the Management Gateway', link: '/en/migrations/management-gateway' },

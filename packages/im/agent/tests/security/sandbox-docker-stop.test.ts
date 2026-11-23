@@ -147,3 +147,16 @@ describe('docker stop confirmation', () => {
     expect(result.containerStopConfirmed).toBe(false);
   });
 });
+
+describe('executeInDocker without a usable image (#1250 b96)', () => {
+  it('marks the result as an unavailable isolated environment, not a refused command', async () => {
+    const docker: DockerCli = {
+      spawnRun: () => { throw new Error('must not start a container'); },
+      run: async () => ({ code: 1, stderr: 'Cannot connect to the Docker daemon' }),
+    };
+    const result = await executeInDocker('echo hi', { dockerImage: 'zhin-test/unavailable-image-b96:none' }, { docker });
+    expect(result.blocked).toBe(true);
+    expect(result.isolationUnavailable).toBe(true);
+    expect(result.blockReason).toContain('zhin-test/unavailable-image-b96:none');
+  });
+});

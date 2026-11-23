@@ -408,3 +408,32 @@ describe('schedule prompt argument (#1250 b55)', () => {
     expect(tool(value, 'schedule_preview').description).toContain('不会创建任务');
   });
 });
+
+describe('schedule_add guidance for the model (#1250 b96)', () => {
+  const value = { scheduleFeature: { getStatus: () => [] }, engine: null } as unknown as ScheduleManager;
+
+  it('says when to use schedule_add instead of a reminder, that cron_add does not exist, and to update instead of recreate', () => {
+    const description = tool(value, 'schedule_add').description;
+    expect(description).toContain('reminder_create');
+    expect(description).toContain('不要只写进记忆');
+    expect(description).toContain('没有 cron_add');
+    expect(description).toContain('schedule_update');
+  });
+
+  it('says what an omitted tools argument means when the job runs', () => {
+    const tools = (tool(value, 'schedule_add').inputSchema.properties as Record<string, { description?: string }>).tools!;
+    expect(tools.description).toContain('只能用这些工具');
+    expect(tools.description).toContain('按 prompt 关键词自动挑选');
+    expect(tools.description).toContain('只给 skills 不给 tools 时到点没有任何工具');
+  });
+
+  it('warns when the plan names skills but no tools, since that run has no tool at all', async () => {
+    const addJob = vi.fn(async (input: Record<string, unknown>) => ({ ...input, createdAt: 1, updatedAt: 1, state: {} }));
+    const adding = { scheduleFeature: { getStatus: () => [] }, engine: { addJob } } as unknown as ScheduleManager;
+    const result = await tool(adding, 'schedule_add').execute({
+      delay_minutes: 5, prompt: '天气', notify_channel: 'im', skills: 'weather-report',
+    }, context) as Record<string, unknown>;
+    expect(result.success).toBe(true);
+    expect(result.warning).toContain('没有任何工具');
+  });
+});
