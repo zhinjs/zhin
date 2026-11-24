@@ -134,6 +134,10 @@ const messages = createMessages({
   profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
   invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
   receiveFailed: { 'zh-CN': '机器人没能处理这条输入：{error}', en: 'The bot could not process this input: {error}' },
+  undelivered: {
+    'zh-CN': '这条输入没有送到机器人（实例可能正在重启或切换），请稍后重发；详情见实例日志。',
+    en: 'This input did not reach the bot (the instance may be restarting or switching); send it again shortly. The instance log has the details.',
+  },
   asMeTimeout: { 'zh-CN': '建立 Sandbox 身份超时（{seconds} 秒）', en: 'Creating the Sandbox identity timed out ({seconds} s)' },
   mediaRejected: { 'zh-CN': '消息里的文件不属于这个会话、已过期、签名无效，或指向本机路径，没有发送。', en: 'A file in this message belongs to another conversation, has expired, has an invalid signature or names a path on the host; the message was not sent.' },
 });
@@ -233,6 +237,14 @@ export type SandboxAsMeUnavailableReason = 'no-console-user' | 'no-identity' | '
 
 /** How long the first 「以我的聊天身份发言」 message waits for its identity before it goes out simulated. */
 export const SANDBOX_CONSOLE_SPEAKER_TIMEOUT_MS = 10_000;
+
+/**
+ * How long a socket's next frame waits for the one before it to be handed to the Runtime
+ * (#1250 sandbox-button-stalls-connection): the identity wait plus a margin. Never the dispatch itself.
+ */
+export function sandboxInboxCeilingMs(consoleSpeakerTimeoutMs = SANDBOX_CONSOLE_SPEAKER_TIMEOUT_MS): number {
+  return Math.max(0, consoleSpeakerTimeoutMs) + 5_000;
+}
 
 interface SandboxConsoleUser {
   readonly userId: string;
@@ -510,12 +522,32 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     if (placeholder?.placeholder) this.connectionRecords.delete(this.#options.defaults.id);
     // #1250 sandbox-speak-as-me: the first 「以我的聊天身份发言」 message may wait for its identity to be
     // created; later frames of this socket wait their turn so messages keep their order.
+    // #1250 sandbox-button-stalls-connection: a frame waits only until the one before it was handed to
+    // the Runtime (or dropped), never for that frame's dispatch. A message's dispatch lasts its whole
+    // Agent turn, and that turn may be waiting for the very answer this socket sends next (a confirm
+    // card's button): queueing behind it held the click — and every later frame — until the ask timed
+    // out. A hand-over that still has not happened after {@link sandboxInboxCeilingMs} lets the queue
+    // move on as well, so one frame can never stall the connection.
     // Once the socket closed (also on `principal-revoked`, which closes it), frames still queued are dropped.
-    let inbox: Promise<unknown> = Promise.resolve();
+    let inbox: Promise<void> = Promise.resolve();
     let closed = false;
+    const ceilingMs = sandboxInboxCeilingMs(this.#options.consoleSpeakerTimeoutMs);
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
-        inbox = inbox.then(() => closed ? undefined : this[endpointSpec].events.run(async () => {
+        const previous = inbox;
+        let handedOver!: () => void;
+        const handed = new Promise<void>((resolve) => { handedOver = resolve; });
+        let ceiling: ReturnType<typeof setTimeout> | undefined;
+        // The ceiling counts from this frame's turn (the frame before it handed over), not from its
+        // arrival: time spent queued behind a slow frame must not let the next frame overtake this one.
+        inbox = previous.then(() => Promise.race([handed, new Promise<void>((resolve) => {
+          ceiling = setTimeout(() => {
+            this.#logger.warn(formatCompact({ op: 'sandbox_inbox_stalled', target, connectionId, waitedMs: ceilingMs }));
+            resolve();
+          }, ceilingMs);
+          ceiling.unref?.();
+        })])).finally(() => { if (ceiling) clearTimeout(ceiling); });
+        const receiveFrame = async (): Promise<void> => {
           if (closed) return;
           if (!canExecute) {
             socket.send(JSON.stringify({
@@ -647,9 +679,19 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
               }));
             } catch { /* silent-ok: the socket is gone; the run log keeps the failure */ }
           });
+        };
+        void previous.then(() => closed ? undefined : this[endpointSpec].events.run(async () => {
+          try {
+            await receiveFrame();
+          } finally {
+            // Handed to the Runtime (or dropped): the next frame may go, the dispatch runs on.
+            handedOver();
+          }
         })).catch((error: unknown) => {
-          this.#logger.debug(formatCompact({ op: 'sandbox_receive_failed', error: error instanceof Error ? error.message : String(error) }));
-        });
+          const reason = error instanceof Error ? error.message : String(error);
+          this.#logger.warn(formatCompact({ op: 'sandbox_receive_failed', target, connectionId, error: reason }));
+          this.#reportUndelivered(socket, raw, { target, connectionId, owner, closed });
+        }).finally(handedOver);
       },
       onClose: () => {
         closed = true;
@@ -703,6 +745,30 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       });
       whenWsOpen(socket, () => socket.send(readyPayload));
     });
+  }
+
+  /**
+   * #1250 sandbox-button-stalls-connection: a message frame that never reached the Runtime (ingress
+   * closed, generation retired, the frame's own preparation threw) is reported to its page like a
+   * dispatch failure (`sandbox_gateway_receive_failed`, sandbox-submitted-without-feedback), so a
+   * clicked card shows the failure instead of 「已提交本次选择」.
+   */
+  #reportUndelivered(socket: SandboxWsSocket, raw: string,
+    source: { readonly target: string; readonly connectionId: string; readonly owner: string; readonly closed: boolean }): void {
+    if (source.closed) return;
+    let frame: ReturnType<typeof parseSandboxWsFrame>;
+    try { frame = parseSandboxWsFrame(raw); } catch { return; }
+    if (frame.kind !== 'message') return;
+    const scene = { type: frame.message.type, id: frame.message.id || source.owner };
+    try {
+      socket.send(JSON.stringify({
+        type: 'error', code: 'sandbox_gateway_receive_failed', endpoint: source.target, connectionId: source.connectionId,
+        id: scene.id, conversation: scene, ...(frame.message.messageId ? { messageId: frame.message.messageId } : {}),
+        // The reason stays in the instance log (`sandbox_receive_failed`): internal error text is not for the page.
+        content: [{ type: 'text', data: { text: messages(this.#locale, 'undelivered') } }],
+        timestamp: Date.now(),
+      }));
+    } catch { /* silent-ok: the socket is gone; the run log keeps the failure */ }
   }
 
   /**
