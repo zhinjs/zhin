@@ -125,5 +125,9 @@ describe('#1250 sandbox-button-stalls-connection', () => {
     await vi.waitFor(() => expect(client.frames.some(frame => frame.type === 'error' && frame.code === 'sandbox_gateway_receive_failed')).toBe(true));
     expect(client.frames.find(frame => frame.code === 'sandbox_gateway_receive_failed')).toMatchObject({
       messageId: 'click-2', conversation: { type: 'private', id: 'room' } });
+    // The page gets a fixed localized hint, never the internal error text (it stays in the instance log).
+    const text = JSON.stringify(client.frames.find(frame => frame.code === 'sandbox_gateway_receive_failed')?.content);
+    expect(text).toContain('没有送到机器人');
+    expect(text).not.toMatch(/ingress|generation|Endpoint/u);
   });
 });

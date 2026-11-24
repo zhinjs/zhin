@@ -134,6 +134,10 @@ const messages = createMessages({
   profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
   invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
   receiveFailed: { 'zh-CN': '机器人没能处理这条输入：{error}', en: 'The bot could not process this input: {error}' },
+  undelivered: {
+    'zh-CN': '这条输入没有送到机器人（实例可能正在重启或切换），请稍后重发；详情见实例日志。',
+    en: 'This input did not reach the bot (the instance may be restarting or switching); send it again shortly. The instance log has the details.',
+  },
   asMeTimeout: { 'zh-CN': '建立 Sandbox 身份超时（{seconds} 秒）', en: 'Creating the Sandbox identity timed out ({seconds} s)' },
   mediaRejected: { 'zh-CN': '消息里的文件不属于这个会话、已过期、签名无效，或指向本机路径，没有发送。', en: 'A file in this message belongs to another conversation, has expired, has an invalid signature or names a path on the host; the message was not sent.' },
 });
@@ -686,7 +690,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
         })).catch((error: unknown) => {
           const reason = error instanceof Error ? error.message : String(error);
           this.#logger.warn(formatCompact({ op: 'sandbox_receive_failed', target, connectionId, error: reason }));
-          this.#reportUndelivered(socket, raw, { target, connectionId, owner, closed }, reason);
+          this.#reportUndelivered(socket, raw, { target, connectionId, owner, closed });
         }).finally(handedOver);
       },
       onClose: () => {
@@ -750,7 +754,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
    * clicked card shows the failure instead of 「已提交本次选择」.
    */
   #reportUndelivered(socket: SandboxWsSocket, raw: string,
-    source: { readonly target: string; readonly connectionId: string; readonly owner: string; readonly closed: boolean }, reason: string): void {
+    source: { readonly target: string; readonly connectionId: string; readonly owner: string; readonly closed: boolean }): void {
     if (source.closed) return;
     let frame: ReturnType<typeof parseSandboxWsFrame>;
     try { frame = parseSandboxWsFrame(raw); } catch { return; }
@@ -760,7 +764,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       socket.send(JSON.stringify({
         type: 'error', code: 'sandbox_gateway_receive_failed', endpoint: source.target, connectionId: source.connectionId,
         id: scene.id, conversation: scene, ...(frame.message.messageId ? { messageId: frame.message.messageId } : {}),
-        content: [{ type: 'text', data: { text: messages(this.#locale, 'receiveFailed', { error: reason.replace(/[\r\n]+/gu, ' ').slice(0, 200) }) } }],
+        // The reason stays in the instance log (`sandbox_receive_failed`): internal error text is not for the page.
+        content: [{ type: 'text', data: { text: messages(this.#locale, 'undelivered') } }],
         timestamp: Date.now(),
       }));
     } catch { /* silent-ok: the socket is gone; the run log keeps the failure */ }
