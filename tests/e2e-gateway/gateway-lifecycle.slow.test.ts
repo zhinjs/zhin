@@ -160,7 +160,7 @@ describe.skipIf(!enabled)('management gateway end to end (zhin start, examples/m
     expect(after.gateway.pid).toBe(gatewayPid);
     expect(after.instance!.startedAt).toBeGreaterThan(before.instance!.startedAt!);
     expect(new Set(codes).size).toBeGreaterThan(0);
-    expect(codes.every((code) => code === 200 || code === 503)).toBe(true);
+    expect(codes.filter((code) => code !== 200 && code !== 503)).toEqual([]);
     expect(codes.at(-1)).toBe(200);
     expect((await project.json('/pub/health')).status).toBe(200);
   }, 90_000);

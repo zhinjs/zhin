@@ -10,9 +10,11 @@
  *    those routes authenticate themselves.
  *
  * The instance being offline never takes gateway-owned routes down: forwarded requests get
- * `503 { code: 'instance_unavailable', state }` with `Retry-After`; an instance that does not
- * answer in time gives `504 { code: 'instance_timeout' }`, any other bridge failure
- * `502 { code: 'instance_error' }` (mapped from {@link InstanceTransportError}).
+ * `503 { code: 'instance_unavailable', state }` with `Retry-After` — also for any forward that
+ * fails while the supervisor is stopping, restarting or starting the instance; a running instance
+ * that does not answer in time gives `504 { code: 'instance_timeout' }`, any other bridge failure
+ * `502 { code: 'instance_error' }` (mapped from {@link InstanceTransportError}). Responses the
+ * instance itself sends (its own 500 / 502 included) are passed through unchanged.
  */
 import {
   authorizeConsoleWebSocket,
@@ -273,8 +275,8 @@ export class GatewayHttpServer {
     return jsonResponse(200, body, { 'cache-control': 'no-store' });
   }
 
-  #unavailable(): Response {
-    return this.#instanceError(503, 'instance_unavailable', 'not-dispatched', 'The Zhin instance is not running', true);
+  #unavailable(requestOutcome: GatewayInstanceErrorReply['requestOutcome'] = 'not-dispatched'): Response {
+    return this.#instanceError(503, 'instance_unavailable', requestOutcome, 'The Zhin instance is not running', true);
   }
 
   /** One body shape for every forward failure (`GatewayInstanceErrorReply`, ADR 0054 §3). */
@@ -311,16 +313,39 @@ export class GatewayHttpServer {
     return stripHopByHop(response);
   }
 
-  /** Maps a failed forward onto the documented gateway error responses (ADR 0054 §3). */
+  /**
+   * Maps a failed forward onto the documented gateway error responses (ADR 0054 §3).
+   *
+   * While the supervisor is not `running` (stopping, restarting, starting, backing off) every
+   * failure is the instance going away or not being up yet: `503 instance_unavailable` with
+   * `Retry-After` (zhinjs/zhin#1250 b103 — a stopping instance ends its open exchanges with an
+   * error before it exits). `requestOutcome` is `not-dispatched` only when the transport says the
+   * request never reached the instance.
+   */
   #transportFailure(error: unknown, transport: InstanceTransport, path: string): Response {
     const code = error instanceof InstanceTransportError ? error.code : undefined;
+    // Too many streams is refused before anything is sent.
+    const requestOutcome = code === 'overloaded' || (error instanceof InstanceTransportError && error.dispatched === false)
+      ? 'not-dispatched'
+      : 'unknown';
     // A transport that is no longer ready failed because the instance went away.
-    if (code === 'instance-offline' || (code === undefined && !transport.ready)) return this.#unavailable();
+    if (code === 'instance-offline' || (code === undefined && !transport.ready)) return this.#unavailable(requestOutcome);
+    const state = this.#instance.state();
+    if (state !== 'running') {
+      logger.debug(formatCompact({
+        op: 'gateway_forward_unavailable',
+        path,
+        state,
+        ...(code ? { code } : {}),
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      return this.#unavailable(requestOutcome);
+    }
     if (code === 'timeout') {
       return this.#instanceError(504, 'instance_timeout', 'unknown', 'The instance did not answer in time', false);
     }
     if (code === 'overloaded') {
-      return this.#instanceError(502, 'instance_error', 'not-dispatched', 'The instance is overloaded', true);
+      return this.#instanceError(502, 'instance_error', requestOutcome, 'The instance is overloaded', true);
     }
     logger.warn(formatCompact({
       op: 'gateway_forward_failed',
