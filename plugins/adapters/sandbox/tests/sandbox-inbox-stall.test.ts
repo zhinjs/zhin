@@ -101,6 +101,21 @@ describe('#1250 sandbox-button-stalls-connection', () => {
     await vi.waitFor(() => expect(seen).toEqual(['first', 'second']));
   });
 
+  it('counts the stall ceiling from a frame\'s turn, so a frame queued behind slow identities is not overtaken', async () => {
+    // Identity creation never answers: each asMe frame waits the full speaker timeout (2 s) before it
+    // hands over, so D hands over 8 s after it arrived — past the 7 s ceiling. Counted from arrival,
+    // that ceiling let E overtake D; counted from D's turn, it does not.
+    const seen: string[] = [];
+    const { connect } = await fixture(async (payload) => { seen.push(String(payload.message?.id)); return { matched: true }; },
+      { consoleSpeaker: { ensure: () => new Promise<void>(() => undefined) } as never, consoleSpeakerTimeoutMs: 2_000 });
+    const client = await connect(user);
+    const frame = (messageId: string, asMe: boolean) => ({ type: 'private', id: 'room', messageId, senderId: 'dev-user', ...(asMe ? { asMe } : {}), content: messageId, timestamp: Date.now() });
+    for (const id of ['A', 'B', 'C', 'D']) client.send(frame(id, true));
+    client.send(frame('E', false));
+    await vi.waitFor(() => expect(seen).toHaveLength(5), { timeout: 12_000, interval: 50 });
+    expect(seen).toEqual(['A', 'B', 'C', 'D', 'E']);
+  }, 20_000);
+
   it('reports a frame that could not be handed to the runtime on its card instead of leaving it 「已提交」', async () => {
     const { connect, endpoint } = await fixture(async () => ({ matched: true }));
     const client = await connect(user);

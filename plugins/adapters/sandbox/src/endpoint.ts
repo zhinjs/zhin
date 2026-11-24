@@ -534,13 +534,15 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
         let handedOver!: () => void;
         const handed = new Promise<void>((resolve) => { handedOver = resolve; });
         let ceiling: ReturnType<typeof setTimeout> | undefined;
-        inbox = Promise.race([handed, new Promise<void>((resolve) => {
+        // The ceiling counts from this frame's turn (the frame before it handed over), not from its
+        // arrival: time spent queued behind a slow frame must not let the next frame overtake this one.
+        inbox = previous.then(() => Promise.race([handed, new Promise<void>((resolve) => {
           ceiling = setTimeout(() => {
             this.#logger.warn(formatCompact({ op: 'sandbox_inbox_stalled', target, connectionId, waitedMs: ceilingMs }));
             resolve();
           }, ceilingMs);
           ceiling.unref?.();
-        })]).finally(() => { if (ceiling) clearTimeout(ceiling); });
+        })])).finally(() => { if (ceiling) clearTimeout(ceiling); });
         const receiveFrame = async (): Promise<void> => {
           if (closed) return;
           if (!canExecute) {
