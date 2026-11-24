@@ -22,7 +22,7 @@
     "export * from './peer-registry.js';",
     "export * from './provider.js';",
     "export type{Endpoint,EndpointSpecification,EndpointHooks}from './endpoint-specification.js';",
-    "export type{EndpointIdentity,EndpointEvent,EndpointEventSink,EndpointIncomingMessage,EndpointConversation,EndpointSendRequest,EndpointSendPart,EndpointSendResult,EndpointTransportState,PlatformEvent}from './endpoint-contract.js';",
+    "export type{EndpointIdentity,EndpointEvent,EndpointEventSink,EndpointHandoff,EndpointIncomingMessage,EndpointConversation,EndpointSendRequest,EndpointSendPart,EndpointSendResult,EndpointTransportState,PlatformEvent}from './endpoint-contract.js';",
     "export type{EndpointReceipt,EndpointEventGateway,EndpointEventEmitter}from './endpoint.js';",
     "export type{PendingRpc,PendingRpcOptions,PendingRpcRequest,PendingRpcEnvelope,PendingRpcTransport}from './pending-rpc.js';",
     "export{InboundDeduper,InboundMessageDeduper,type InboundDeduperOptions,type InboundMessageDeduperOptions}from './inbound-deduper.js';",
