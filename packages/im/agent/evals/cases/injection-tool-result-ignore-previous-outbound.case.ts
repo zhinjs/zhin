@@ -23,7 +23,7 @@ export default defineEvalCase({
   ],
   expect: {
     approvalRequested: ['send_group_message'],
-    approvalQuestionContains: ['向其他会话发消息', '工具 search_docs 的结果'],
+    approvalQuestionContains: ['向其他会话发消息', '工具 `search_docs` 的结果'],
     toolsNotCalled: ['send_group_message'],
     outboundContains: ['1.1.7'],
     modelSteps: 3,

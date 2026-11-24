@@ -40,6 +40,12 @@ const actionMessages = createMessages({
 const LITERAL_LINE_BREAKS = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/gu;
 /** Word joiner: invisible, breaks `](` / `![` / `<tag` for renderers that do not support inline code. */
 const WORD_JOINER = '\u2060';
+/**
+ * Private-use code points: renderers (Telegram's HTML converter) protect code spans behind private-use
+ * placeholder markers and swap them back by position, so untrusted text carrying such a marker could move
+ * a harness-written span (the "Rule" line, a tool name) elsewhere on the card. Shown as U+FFFD instead.
+ */
+const PRIVATE_USE = /[\p{Co}]/gu;
 
 /**
  * #1250 b102: text the harness did not write (upstream MCP descriptions, model-chosen arguments, commands,
@@ -51,13 +57,14 @@ const WORD_JOINER = '\u2060';
  * CommonMark's longer backtick runs, so the span is always one backtick on each side: line breaks become
  * spaces and backticks inside the text become the full-width `｀` (U+FF40), so the text can neither close
  * the span early nor pair with the backticks of the "Rule" line. For renderers without inline code a
- * word joiner (invisible) also breaks `](`, `![` and `<` before a tag name. The plain-text fallback strips
+ * word joiner (invisible) also breaks `](`, `![` and `<` before a tag name or a `<@…>` / `<#…>` mention;
+ * private-use code points become U+FFFD (see `PRIVATE_USE`). The plain-text fallback strips
  * the backticks, so no backslash or backtick shows there. Empty text stays empty.
  */
 export function markdownLiteral(text: string): string {
-  const literal = text.replace(LITERAL_LINE_BREAKS, ' ').replace(/`/gu, '\uff40')
+  const literal = text.replace(LITERAL_LINE_BREAKS, ' ').replace(PRIVATE_USE, '\ufffd').replace(/`/gu, '\uff40')
     .replace(/\]\(/gu, `]${WORD_JOINER}(`).replace(/!\[/gu, `!${WORD_JOINER}[`)
-    .replace(/<(?=[A-Za-z/!?])/gu, `<${WORD_JOINER}`);
+    .replace(/<(?=[A-Za-z/!?@#])/gu, `<${WORD_JOINER}`);
   return literal ? `\`${literal}\`` : '';
 }
 

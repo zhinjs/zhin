@@ -72,6 +72,18 @@ describe('markdownLiteral (#1250 b102)', () => {
     expect(markdownLiteral('')).toBe('');
   });
 
+  it('folds every line terminator and replaces private-use code points (renderer placeholder markers)', () => {
+    expect(markdownLiteral('a\vb\fc\u0085d e f\rg')).toBe('`a b c d e f g`');
+    // Telegram's converter swaps code spans back through private-use markers; a planted marker must not survive.
+    const literal = markdownLiteral('0 1 \u{f0000}2');
+    expect(literal).toBe('`�0 �1 �2`');
+    expect(literal).not.toMatch(/\p{Co}/u);
+  });
+
+  it('breaks platform mentions such as <@id>, <@&role> and <#channel>', () => {
+    expect(markdownLiteral('<@123> <@&9> <#5>')).toBe('`<⁠@123> <⁠@&9> <⁠#5>`');
+  });
+
   it('writes names as code spans, so underscores never pair into emphasis across a line', () => {
     expect(codeDisplayName('web_fetch')).toBe('`web_fetch`');
     expect(codeDisplayName('_x_')).toBe('`_x_`');
