@@ -54,7 +54,7 @@ describe('ADR 0067 D2.1: provenance kept by scheduled tasks', () => {
     provenance.record({ kind: 'scheduled_prompt', sources: ['tool:weather:trusted'] });
     expect(provenance.taintedByUntrusted).toBe(true);
     expect(provenance.requiresConfirmation('untrusted_content')).toBe(true);
-    expect(provenance.describeChain('owner', 'write_file')).toContain('定时任务的提示词（创建时已读过：工具 weather 的结果（第一方只读））');
+    expect(provenance.describeChain('owner', 'write_file')).toContain('定时任务的提示词（创建时已读过：工具 `weather` 的结果（第一方只读））');
     // A task created by a tainted scheduled run keeps the original sources.
     expect(provenance.snapshotForSchedule()).toEqual({ tainted: true, sources: ['tool:weather:trusted'] });
   });

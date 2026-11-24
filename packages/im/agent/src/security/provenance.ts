@@ -443,7 +443,7 @@ export class TurnProvenance {
     return Object.freeze({ tainted: true, sources: Object.freeze([...new Set(keys)].slice(0, MAX_PERSISTED_SOURCES)) });
   }
 
-  /** Human-readable chain for approval cards, e.g. `主人的消息 → 工具 web_fetch 的结果 → 本次调用 bash`. */
+  /** Human-readable chain for approval cards, e.g. `主人的消息 → 工具 \`web_fetch\` 的结果 → 本次调用 \`bash\``. */
   describeChain(initiator: InitiatorTrustLevel, toolName: string, locale?: Locale): string {
     return describeProvenanceChain(this.#sources, initiator, toolName, locale);
   }
