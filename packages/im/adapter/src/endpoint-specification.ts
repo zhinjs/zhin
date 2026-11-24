@@ -1,6 +1,7 @@
 import type { GenerationAdmissionGate } from '@zhin.js/plugin-runtime';
 import { EndpointRuntime, bindEndpoint, isEndpointRuntime, type EndpointEventSink, type EndpointSendRequest,
   type EndpointSendResult, type EndpointTransportState } from './endpoint.js';
+import type { EndpointHandoff, EndpointIncomingMessage } from './endpoint-contract.js';
 import type { EndpointContentPort } from './endpoint-content.js';
 import type { EndpointInboundMediaPort } from './endpoint-inbound-media.js';
 import type { EndpointControl } from './endpoint-control.js';
@@ -91,29 +92,37 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
     const normalizedPayload = name === 'message.receive' ? promoteInboundMessagePayload(payload, this.selfUserId) : payload;
     return this.emitAccepted(name, normalizedPayload);
   }
+  publishHandoff(name: string, payload: unknown): Promise<EndpointHandoff> {
+    const normalizedPayload = name === 'message.receive' ? promoteInboundMessagePayload(payload, this.selfUserId) : payload;
+    return this.emitHandoff(name, normalizedPayload);
+  }
   publishPlatform(name: string, event: unknown): Promise<unknown> { return this.emitPlatform(name, event); }
   report(userId: string | undefined): void { this.reportSelfUserId(userId); }
 }
 
 export function createEndpointSpecification(client: object, hooks: EndpointHooks): EndpointSpecification {
   const runtime = new NativeEndpointRuntime(client, hooks);
+  const messagePayload = (input: EndpointIncomingMessage) => {
+    const conversation = Object.freeze({ ...input.conversation, endpoint: runtime.identity });
+    return Object.freeze({
+      ...input, conversation,
+      ...(input.message ? { message: Object.freeze({ ...input.message, conversation }) } : {}),
+      endpointId: input.endpointId ?? hooks.name,
+    });
+  };
   return Object.freeze({
     [specificationRuntime]: runtime,
     get identity() { return runtime.identity; },
     resolveLocale: (senderId?: string) => runtime.resolveLocale(senderId),
     events: Object.freeze({
       run: <T>(receive: () => T | Promise<T>) => runtime.runInbound(receive),
+      admit: <T>(receive: () => T | Promise<T>) => runtime.admitInbound(receive),
       emit: (name: string, payload: unknown) => runtime.publish(name, payload),
       emitAccepted: (name: string, payload: unknown) => runtime.publishAccepted(name, payload),
       platform: (name: string, event: unknown) => runtime.publishPlatform(name, event),
-      message: (input) => {
-        const conversation = Object.freeze({ ...input.conversation, endpoint: runtime.identity });
-        return runtime.publish('message.receive', Object.freeze({
-          ...input, conversation,
-          ...(input.message ? { message: Object.freeze({ ...input.message, conversation }) } : {}),
-          endpointId: input.endpointId ?? hooks.name,
-        }));
-      },
+      message: (input) => runtime.publish('message.receive', messagePayload(input)),
+      handoff: (name: string, payload: unknown) => runtime.publishHandoff(name, payload),
+      handoffMessage: (input) => runtime.publishHandoff('message.receive', messagePayload(input)),
     } satisfies EndpointEventSink),
     reportSelfUserId: (userId: string | undefined) => runtime.report(userId),
   });

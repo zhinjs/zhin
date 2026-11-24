@@ -10,7 +10,7 @@ export * from './definition.js';
 export * from './capability-profile.js';
 export { endpointEventGatewayToken } from './endpoint.js';
 export type { EndpointReceipt, EndpointEventGateway, EndpointEventEmitter } from './endpoint.js';
-export type { EndpointIdentity, EndpointEvent, EndpointEventSink, EndpointIncomingMessage, EndpointConversation, EndpointSendRequest, EndpointSendPart, EndpointSendResult, EndpointTransportState, PlatformEvent } from './endpoint-contract.js';
+export type { EndpointIdentity, EndpointEvent, EndpointEventSink, EndpointHandoff, EndpointIncomingMessage, EndpointConversation, EndpointSendRequest, EndpointSendPart, EndpointSendResult, EndpointTransportState, PlatformEvent } from './endpoint-contract.js';
 /** @internal Process-level Peer Registry (framework mechanism, no semver promise). */
 export * from './peer-registry.js';
 export * from './endpoint-configuration.js';

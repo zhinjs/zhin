@@ -143,7 +143,7 @@ napcat:
 
 SDK listener 用 `events.run(async () => { ... })` 跟踪完整异步回调，包括解码、平台事件和规范化消息，不能只跟踪最后一次 emit。`close` 不打断已接纳回调；`stop` 的取消信号必须传到实际 IO。不要从自己的入站回调等待自己的关闭，否则会自等；生命周期由所属 Adapter 操作。
 
-保留 SDK 公开事件实际给出的 payload 对象，另行产生 canonical message；原生事件不自动等于网络原始 packet，SDK 没有公开的 wire bytes 不能伪称已暴露。游标或 ACK 只有在 `events.emitAccepted` 确认实际派发后才推进。
+保留 SDK 公开事件实际给出的 payload 对象，另行产生 canonical message；原生事件不自动等于网络原始 packet，SDK 没有公开的 wire bytes 不能伪称已暴露。游标或 ACK 只有在 Runtime 接下这条事件后才推进，但不要等它派发完：消息的派发可能是一整轮 Agent 回合，而回合可能正在等这个平台的下一条入站（确认卡按钮、对 ask_user 的回答）。轮询、SDK ACK、Webhook 响应这类「拿下一条入站」的调用方用 `events.admit(...)`（同 `run` 的接收凭据，但只等回调本身），回调里用 `events.handoff(name, payload)` / `events.handoffMessage(input)`：Runtime 接下（入站已记录）即 resolve，没接下则 reject（此时不得推进游标），之后的派发结果在返回的 `dispatched` 上。`events.run` 与 `events.emitAccepted` 仍会等到派发结束，不要在拿下一条入站之前 await 它们。
 
 对于 `NapCatWsEndpoint`，specification 将钩子绑定到私有 `#start/#openEndpoint/#close/#stop`；实际 SDK API 保持原样。重连和心跳由同一 Client 的 `createEndpointLifecycle` 管理，不建立第二份运行账号状态。
 

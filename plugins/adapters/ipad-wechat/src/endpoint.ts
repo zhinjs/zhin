@@ -22,12 +22,15 @@ export class IpadWechatEndpoint extends IpadWechatClient implements Endpoint {
     return createEndpointSpecification(this, hooks);
   }
 
+  /** Settles with the callback, not with the dispatch it handed off (#1250 adapter-inbound-deadlock). */
   protected override receiveInboundCallback<T>(receive: () => T | Promise<T>): Promise<T> {
-    return this[endpointSpec].events.run(receive);
+    return this[endpointSpec].events.admit(receive);
   }
 
   protected override publishAccepted(name: string, payload: unknown): Promise<unknown> {
-    return this[endpointSpec].events.emitAccepted(name, payload);
+    return this[endpointSpec].events.handoff(name, payload).then(({ dispatched }) => {
+      this.reportDispatch(dispatched, name);
+    });
   }
 
   protected override async publishPlatform(name: string, event: unknown): Promise<unknown> {

@@ -611,7 +611,9 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
       const key = `${area.type}:${area.oid}`;
       try {
         const page = await this.listLatestReplies(area.type, area.oid);
-        await this[endpointSpec].events.run(async () => {
+        // Settles once each new comment was handed over, not after its dispatch (#1250 adapter-inbound-deadlock):
+        // the next poll must still run while a turn waits for a reply only that poll can fetch.
+        await this[endpointSpec].events.admit(async () => {
           const replies = flattenReplies(page.replies).sort((a, b) => a.ctime - b.ctime);
           if (!this.#baselined.has(key)) {
             for (const reply of replies) this.#markSeen(String(reply.rpid));
@@ -645,7 +647,9 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
       if (this.#tripped) return;
       try {
         const page = await this.listNotifications(kind);
-        await this[endpointSpec].events.run(async () => {
+        // Settles once each new comment was handed over, not after its dispatch (#1250 adapter-inbound-deadlock):
+        // the next poll must still run while a turn waits for a reply only that poll can fetch.
+        await this[endpointSpec].events.admit(async () => {
           const items = [...(page.items ?? [])].filter((entry) => Number.isFinite(entry?.id)).sort((a, b) => a.id - b.id);
           const cursor = this.#notificationCursor.get(kind);
           const newest = items.reduce((max, entry) => Math.max(max, entry.id), cursor ?? 0);
@@ -710,7 +714,14 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     const conversation = { ...bilibiliThreadConversation(String(this.#options.id), area.oid, rootId, area.kind), endpoint: this[endpointSpec].identity };
     const addressedToMe = options.via === 'reply' || options.via === 'at';
     void this[endpointSpec].events.platform('reply', reply).catch(() => undefined);
-    await this[endpointSpec].events.message({
+    const fail = (error: unknown) => {
+      this.#logger.warn(formatCompact({
+        op: 'bilibili_gateway_receive_failed',
+        target: conversation.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    };
+    await this[endpointSpec].events.handoffMessage({
       event: reply,
       platformSentAt: reply.ctime * 1000,
       conversation,
@@ -733,13 +744,7 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
         likeCount: reply.like ?? 0,
         isUploader: options.upperMid !== undefined && Number(reply.mid) === Number(options.upperMid),
       }),
-    }).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'bilibili_gateway_receive_failed',
-        target: conversation.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+    }).then(({ dispatched }) => { void dispatched.catch(fail); }, fail);
   }
 
   #handleError(op: string, error: unknown, target?: string): void {

@@ -1,9 +1,11 @@
 import { vi } from 'vitest';
+import type { EndpointEventGateway } from 'zhin.js/adapter';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { KookWebsocketEndpoint, KookWebhookEndpoint } from '../src/endpoint.js';
 
 export async function kookFixture(factory: () => KookWebsocketEndpoint | KookWebhookEndpoint, api: () => object,
-  gateway?: Parameters<typeof createTestEventGateway>[0], sideEvents?: Parameters<typeof createTestEventGateway>[1]) {
+  gateway?: Parameters<typeof createTestEventGateway>[0], sideEvents?: Parameters<typeof createTestEventGateway>[1],
+  events?: EndpointEventGateway) {
   const fixture = await createEndpointHarness(() => {
     const endpoint = factory();
     endpoint.request.defaults.adapter = async () => { throw new Error('Unexpected unmocked KOOK transport'); };
@@ -17,7 +19,7 @@ export async function kookFixture(factory: () => KookWebsocketEndpoint | KookWeb
     }
     return endpoint;
   }, { name: 'kook', capabilities: ['inbound', 'outbound'], operations: ['recall'],
-    gateway: createTestEventGateway(gateway, sideEvents) });
+    gateway: events ?? createTestEventGateway(gateway, sideEvents) });
   return { ...fixture,
     get management() { return fixture.index.management(fixture.canonicalId)!; },
     get control() { return fixture.index.control(fixture.canonicalId, 'recall')!; },

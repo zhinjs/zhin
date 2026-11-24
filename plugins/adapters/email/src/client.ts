@@ -87,7 +87,15 @@ export class EmailClient extends EventEmitter {
     try { return Promise.resolve(receive()); } catch (error) { return Promise.reject(error); }
   }
   protected publishEvent(name: string, payload: unknown): Promise<unknown> { this.emit(name, payload); return Promise.resolve(); }
+  /** Resolves once the Runtime accepted the event, never after its dispatch (#1250 adapter-inbound-deadlock). */
   protected publishAccepted(name: string, payload: unknown): Promise<void> { return this.publishEvent(name, payload).then(() => undefined); }
+  /** A dispatch that failed after its hand-over is not refetched (its UID counts as admitted); keep it in the log. */
+  protected reportDispatch(dispatched: Promise<unknown>, target: string): void {
+    void dispatched.catch((err: unknown) => {
+      this.#logger.warn(formatCompact({ op: 'email_dispatch_failed', target,
+        error: err instanceof Error ? err.message : String(err) }));
+    });
+  }
   protected publishPlatform(name: string, event: unknown): Promise<unknown> { this.emit(name, event); return Promise.resolve(); }
 
   constructor(options: EmailEndpointOptions) {
@@ -228,7 +236,9 @@ export class EmailClient extends EventEmitter {
     const content = formatInboundContent(email);
     const sender = email.from;
     const conversation = emailInboundConversation(String(this.#options.id), email);
-    await this.publishEvent('message.receive', {
+    // #1250 adapter-inbound-deadlock: wait for the hand-over only. The dispatch may be an Agent turn
+    // waiting for this sender's reply mail, which only a later check (held by this one) can fetch.
+    await this.publishAccepted('message.receive', {
       event: nativeEvent,
       conversation,
       ...(email.messageId ? { message: { conversation, id: email.messageId } } : {}),

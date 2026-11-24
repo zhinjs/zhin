@@ -19,14 +19,17 @@ export class EmailEndpoint extends EmailClient implements Endpoint {
   }
   #startFramework(signal: AbortSignal) { return this.connectTransport(signal); }
   protected override inboundReceiptCurrent(current: () => boolean): boolean { return current(); }
+  /** Settles with the callback, not with the dispatch it handed off (#1250 adapter-inbound-deadlock). */
   protected override receiveInboundCallback<T>(receive: () => T | Promise<T>): Promise<T> {
-    return this[endpointSpec].events.run(receive);
+    return this[endpointSpec].events.admit(receive);
   }
   protected override publishEvent(name: string, payload: unknown): Promise<unknown> {
     return this[endpointSpec].events.emit(name, payload);
   }
   protected override publishAccepted(name: string, payload: unknown): Promise<void> {
-    return this[endpointSpec].events.emitAccepted(name, payload).then(() => undefined);
+    return this[endpointSpec].events.handoff(name, payload).then(({ dispatched }) => {
+      this.reportDispatch(dispatched, name);
+    });
   }
   protected override async publishPlatform(name: string, event: unknown): Promise<unknown> {
     await super.publishPlatform(name, event);

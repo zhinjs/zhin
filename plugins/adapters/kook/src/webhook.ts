@@ -74,7 +74,9 @@ export async function handleKookWebhookRequest(
     if (!handler.isOpen) {
       return new Response(JSON.stringify({ message: 'Endpoint unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     }
-    return await handler[endpointSpec].events.run(async () => {
+    // admit, not run (#1250 adapter-inbound-deadlock): answer KOOK once the event was handed to the Runtime,
+    // not after its dispatch — possibly a whole Agent turn waiting for this user's next event.
+    return await handler[endpointSpec].events.admit(async () => {
       if (frame.sn != null) {
         if (!handler.checkAndRememberSn(frame.sn)) {
           return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
