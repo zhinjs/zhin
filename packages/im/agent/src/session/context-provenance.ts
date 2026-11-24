@@ -3,6 +3,7 @@ import { conversationRefKey, messageRefKey, type ConversationContextBlock, type 
 import { createUserMessage, renderContextMessage, type UserMessage } from '@zhin.js/ai';
 import { splitOutputMessages, type AgentOutputElement } from '../outbound/agent-output.js';
 import type { DeliveryOutcome } from '../turn/turn-ingress.js';
+import { MAX_BACKGROUND_MESSAGE_SUMMARIES, type BackgroundMessageSummary } from '../security/provenance.js';
 
 /** Opaque identities keep platform paths and IDs out of provider-facing metadata. */
 export function deliveredMessageContextRef(message: MessageRef, textDigest: string): string {
@@ -125,4 +126,26 @@ export function unrepresentedConversationBlocks(
       && block.inboundActorId === own.subjectId && block.message.conversation.kind === 'private'
       && conversationRefKey(block.message.conversation) === ownConversation);
   });
+}
+
+/**
+ * #1250 `interaction-answer-counts-as-background`: who sent the first counted background messages and
+ * when, for the approval card's source line (metadata only: the card never shows their content). The
+ * labels describe; they decide nothing — counting is {@link unrepresentedConversationBlocks}' job.
+ */
+export function summarizeCountedMessages(
+  blocks: readonly ConversationContextBlock[],
+  initiatorId: string | undefined,
+): readonly BackgroundMessageSummary[] {
+  const initiator = initiatorId?.trim() || undefined;
+  return Object.freeze(blocks
+    .filter(block => (block.eventType === 'message.created' || block.eventType === 'message.updated') && block.message)
+    .slice(0, MAX_BACKGROUND_MESSAGE_SUMMARIES)
+    .map((block): BackgroundMessageSummary => {
+      const at = typeof block.timestamp === 'number' && Number.isFinite(block.timestamp) ? { at: block.timestamp } : {};
+      if (!block.actor) return Object.freeze({ from: block.ownMessage === true ? 'bot' as const : 'unknown' as const, ...at });
+      if (initiator !== undefined && block.actor.id === initiator) return Object.freeze({ from: 'initiator' as const, ...at });
+      return Object.freeze({ from: 'other' as const, senderId: block.actor.id,
+        ...(block.actor.displayName ? { senderName: block.actor.displayName } : {}), ...at });
+    }));
 }

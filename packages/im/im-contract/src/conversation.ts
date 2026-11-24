@@ -81,4 +81,13 @@ export interface ConversationContextBlock {
    */
   readonly inboundActorId?: string;
   readonly inboundTextDigest?: string;
+  /**
+   * #1250 `interaction-answer-counts-as-background`: display metadata of a message block, for the
+   * approval card's source line only (never a trust signal, never shown to the model): the message's
+   * runtime-assigned timestamp and its stored sender (`actor`), or `ownMessage` for the bot's own
+   * (actor-less) outbound message. A block with neither has no known sender.
+   */
+  readonly timestamp?: number;
+  readonly actor?: ActorRef;
+  readonly ownMessage?: true;
 }

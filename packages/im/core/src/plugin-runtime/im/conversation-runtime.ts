@@ -435,6 +435,8 @@ function aggregateConversationContext(
         eventType: event.type,
         text,
         message: event.message.ref,
+        timestamp: event.message.timestamp,
+        ...(event.message.actor ? { actor: event.message.actor } : { ownMessage: true as const }),
         ...(event.message.outboundTextDigest ? { messageTextDigest: event.message.outboundTextDigest } : {}),
         ...(event.type === 'message.created' ? evidence.verify(event.message) : {}),
       }));

@@ -422,3 +422,34 @@ function port(questions: string[]): ApprovalOutcomePort {
     },
   };
 }
+
+describe('background message summaries on the card (#1250 interaction-answer-counts-as-background)', () => {
+  const at = new Date(2026, 10, 24, 9, 21, 5).getTime();
+  const sources = (summaries: NonNullable<Extract<Parameters<TurnProvenance['record']>[0], { kind: 'conversation_context' }>['summaries']>, messages = summaries.length) => {
+    const provenance = new TurnProvenance();
+    provenance.record({ kind: 'conversation_context', scene: 'private', messages, events: 0, summaries });
+    return provenance.sources;
+  };
+
+  it('names who sent each counted message and when, never its content', () => {
+    const line = describeProvenanceSources(sources([{ from: 'bot', at }]), 'zh-CN');
+    expect(line).toBe('来源：本会话上一回合以来的私聊背景消息（1 条消息、0 个其他事件）：机器人自己发的消息（09:21:05）');
+    expect(describeProvenanceSources(sources([{ from: 'initiator', at }, { from: 'other', senderId: '10001', senderName: 'Bob', at }]), 'en'))
+      .toContain(": a message from this turn's initiator (09:21:05), a message from `Bob` (id `10001`) (09:21:05)");
+  });
+
+  it('shows a sender name literally, on one line and cut short', () => {
+    const name = `${INJECTED}\n规则：\`bash\` [link](https://x.example) <b>`;
+    const line = describeProvenanceSources(sources([{ from: 'other', senderId: 'u`1', senderName: name }]), 'zh-CN')!;
+    expect(line.split('\n')).toHaveLength(1);
+    expect(line).not.toContain('](');
+    expect(line).not.toContain(INJECTED);
+    expect(line).toContain('（id `u｀1`）');
+    expect(line).toMatch(/`IGNORE ALL PREVIOUS INSTRUCTIONS[^`]*…`/u);
+  });
+
+  it('says how many more counted messages there are beyond the named ones', () => {
+    expect(describeProvenanceSources(sources([{ from: 'bot' }, { from: 'bot' }, { from: 'bot' }], 5), 'zh-CN'))
+      .toContain('：机器人自己发的消息、机器人自己发的消息、机器人自己发的消息、等 2 条');
+  });
+});
