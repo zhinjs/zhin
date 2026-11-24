@@ -133,6 +133,9 @@ describe('ConversationRuntime context hygiene', () => {
       'You (this bot) [message_id="bot-1"]: 我会，发我报错',
       'Unknown sender (unknown) [message_id="anon"]: 匿名消息',
     ]);
+    // #1250 b105 review: the stored placeholder is no sender identity for the approval card.
+    expect(context.blocks[2]).not.toHaveProperty('actor');
+    expect(context.blocks[2]).not.toHaveProperty('ownMessage');
   });
 
   it("replays the bot's reply after the cursor with the evidence that it is its own delivered text (#1250)", async () => {
@@ -165,6 +168,11 @@ describe('ConversationRuntime context hygiene', () => {
     // Only the bot's own outbound carries a delivered text digest: the Agent matches it against the
     // replies it delivered (ADR 0067), a member's message can never present one.
     expect(turn2.blocks[1]).not.toHaveProperty('messageTextDigest');
+    // #1250 interaction-answer-counts-as-background: display metadata for the approval card only.
+    expect(turn2.blocks[0]).toMatchObject({ ownMessage: true, timestamp: expect.any(Number) });
+    expect(turn2.blocks[0]).not.toHaveProperty('actor');
+    expect(turn2.blocks[1]).toMatchObject({ actor: { id: 'user-2', displayName: 'Bob' }, timestamp: expect.any(Number) });
+    expect(turn2.blocks[1]).not.toHaveProperty('ownMessage');
   });
 
   it('drops an own message the bot later recalled, such as an activity indicator', async () => {

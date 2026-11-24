@@ -101,6 +101,15 @@ function truncate(text: string, max: number): string {
 }
 
 /**
+ * #1250 `interaction-answer-counts-as-background`: a short untrusted name (a sender's display name or
+ * id) on one line of the card: first line only, folded like upstream text (`oneLine`), cut at `max`
+ * code points and shown literally (`markdownLiteral`).
+ */
+export function markdownLiteralName(text: string, max: number): string {
+  return markdownLiteral(truncate(oneLine(text), max));
+}
+
+/**
  * #1250 b100: the first line of an approval question (the action). A first-party or plugin tool keeps
  * `approvalActionLabel`. For an MCP tool the description is written by the upstream server, so the
  * harness says so in a fixed label that names the server through `codeDisplayName` (the rule the card's

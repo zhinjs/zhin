@@ -435,6 +435,10 @@ function aggregateConversationContext(
         eventType: event.type,
         text,
         message: event.message.ref,
+        timestamp: event.message.timestamp,
+        // The stored `UNKNOWN_SENDER` placeholder is no sender identity: such a block carries neither.
+        ...(!event.message.actor ? { ownMessage: true as const }
+          : isUnknownSender(event.message.actor) ? {} : { actor: event.message.actor }),
         ...(event.message.outboundTextDigest ? { messageTextDigest: event.message.outboundTextDigest } : {}),
         ...(event.type === 'message.created' ? evidence.verify(event.message) : {}),
       }));
@@ -505,6 +509,10 @@ function describeConversationEvent(event: ConversationEvent): string {
  */
 export const OWN_MESSAGE_LABEL = 'You (this bot)';
 const UNKNOWN_SENDER = Object.freeze({ id: 'unknown', displayName: 'Unknown sender' });
+/** The stored placeholder of an inbound message without a usable sender (compared by value: stored events are copies). */
+function isUnknownSender(actor: { readonly id: string; readonly displayName?: string }): boolean {
+  return actor.id === UNKNOWN_SENDER.id && actor.displayName === UNKNOWN_SENDER.displayName;
+}
 /** In-turn progress updates (the Agent's `⏳ ` marker) are not part of the conversation. */
 const OWN_PROGRESS_PREFIX = /^⏳\s*/u;
 

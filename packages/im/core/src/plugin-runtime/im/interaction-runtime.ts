@@ -219,6 +219,20 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     this.#markPrompt = markPrompt;
   }
 
+  /**
+   * #1250 `interaction-answer-counts-as-background`: every platform message of a delivered prompt, not
+   * only the first. An endpoint may split one card into several messages (text, then the keyboard; a long
+   * description); each part is recorded on its own, and an unmarked part came back as a background
+   * message of the next Agent turn (the bot's own message from another path, which counts as a source).
+   */
+  #markPromptReceipt(receipt: DeliveryReceipt): void {
+    if (!this.#markPrompt) return;
+    if (receipt.message) this.#markPrompt(receipt.message);
+    for (const part of receipt.parts ?? []) {
+      if (part.message && part.message !== receipt.message) this.#markPrompt(part.message);
+    }
+  }
+
   register(
     prefix: string,
     handler: (message: Message) => Promise<boolean> | boolean,
@@ -499,16 +513,18 @@ export class RuntimeInteractionCoordinator<Admission = never> {
               shown = actions;
               shownId = claim.id;
               const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
+              // Mark before the status and lifetime checks can exit: parts already on screen stay out
+              // of background even when the whole card did not report `sent` (#1250 b105 review).
+              this.#markPromptReceipt(receipt);
               assertLifetime();
               if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
-              if (receipt.message) this.#markPrompt?.(receipt.message);
             } else if (reminders < REMINDER_LIMIT && Date.now() - lastReminderAt >= REMINDER_INTERVAL_MS) {
               reminders += 1;
               lastReminderAt = Date.now();
               // A lost reminder is not a failed prompt: the question itself was delivered already.
               const receipt = await reply(reminderText);
+              this.#markPromptReceipt(receipt);
               assertLifetime();
-              if (receipt.status === 'sent' && receipt.message) this.#markPrompt?.(receipt.message);
             }
             claim.delivered();
             const raw = await claim.answer;

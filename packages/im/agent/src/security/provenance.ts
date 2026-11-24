@@ -351,6 +351,11 @@ export type ProvenanceSource =
     kind: 'conversation_context'; scene?: 'private' | 'group' | 'channel';
     /** #1250: how many counted background messages / other events arrived; approval card only. */
     messages?: number; events?: number;
+    /**
+     * #1250 `interaction-answer-counts-as-background`: who sent the first counted messages and when
+     * (at most {@link MAX_BACKGROUND_MESSAGE_SUMMARIES}); approval card only, never their content.
+     */
+    summaries?: readonly BackgroundMessageSummary[];
   }>
   /** A perception-model description of user media (`ai.multimodal.perception`). */
   | Readonly<{ kind: 'media_perception' }>
@@ -359,6 +364,19 @@ export type ProvenanceSource =
    * restored at the start of every due run and preview. Never trusted. `sources`: the creating turn's.
    */
   | Readonly<{ kind: 'scheduled_prompt'; sources?: readonly string[] }>;
+
+/**
+ * #1250: one counted background message as the approval card names it. `bot`: the bot's own message
+ * (sent by another path, or a reply of a turn that read content); `initiator`: stored with the sender id
+ * of this turn's initiator; `other`: anybody else, with the stored sender (untrusted display text).
+ * `unknown`: the block names no sender. `at`: the runtime-assigned time of the message (ms), when known.
+ */
+export type BackgroundMessageSummary =
+  | Readonly<{ from: 'bot' | 'initiator' | 'unknown'; at?: number }>
+  | Readonly<{ from: 'other'; senderId: string; senderName?: string; at?: number }>;
+
+/** #1250: how many counted background messages the approval card names one by one. */
+export const MAX_BACKGROUND_MESSAGE_SUMMARIES = 3;
 
 /** ADR 0067 D2.1: what a scheduled task keeps of the turn that created it (see `ScheduleJob.provenance`). */
 export type ScheduledPromptProvenance = Readonly<{ tainted: true; sources: readonly string[] }>;
