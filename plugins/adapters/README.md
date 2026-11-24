@@ -10,7 +10,7 @@
 | NapCat / Milky / Satori | 对应 `@zhin.js/adapter-*` | 第三方网关协议 |
 | Discord / Telegram / Slack / KOOK | 对应 `@zhin.js/adapter-*` | 社区与协作平台 |
 | 钉钉 / 飞书 / 企业微信 | 对应 `@zhin.js/adapter-*` | 企业协作平台 |
-| 微信公众号 / 微信 iLink | 对应 `@zhin.js/adapter-*` | 微信生态连接 |
+| 微信公众号 / 微信 iLink / 微信 iPad | 对应 `@zhin.js/adapter-*` | 微信生态连接 |
 | LINE / Email / GitHub | 对应 `@zhin.js/adapter-*` | 其他消息与事件源 |
 
 ## 档位含义

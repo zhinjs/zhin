@@ -191,7 +191,7 @@ pnpm install && pnpm dev
 | Discord | `@zhin.js/adapter-discord` | Telegram | `@zhin.js/adapter-telegram` |
 | Slack | `@zhin.js/adapter-slack` | KOOK | `@zhin.js/adapter-kook` |
 | DingTalk | `@zhin.js/adapter-dingtalk` | Lark / Feishu | `@zhin.js/adapter-lark` |
-| WeCom | `@zhin.js/adapter-wecom` | WeChat MP | `@zhin.js/adapter-wechat-mp` |
+| WeCom | `@zhin.js/adapter-wecom` | WeChat MP / WeChat iPad | `@zhin.js/adapter-wechat-mp` / `@zhin.js/adapter-ipad-wechat` |
 | LINE | `@zhin.js/adapter-line` | NapCat / Milky / Satori | `napcat` / `milky` / `satori` |
 | Email | `@zhin.js/adapter-email` | GitHub | `@zhin.js/adapter-github` |
 

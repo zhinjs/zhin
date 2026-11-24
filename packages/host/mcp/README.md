@@ -26,7 +26,7 @@ mcp:
   allowUnauthenticatedLocalhost: false  # require Bearer even in development
 ```
 
-Start the project with `pnpm dev` or `zhin start`. Use the HTTP address printed at startup: new scaffolded projects currently use port **8068**, while the Runtime fallback without an `http:` configuration is **8086**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
+Start the project with `pnpm dev` or `zhin start`. Use the HTTP address printed at startup. Scaffolded projects and the runtime default when `http.port` is omitted both use port **8068**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
 
 ## Connect a client
 

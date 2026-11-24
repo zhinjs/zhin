@@ -191,7 +191,7 @@ pnpm install && pnpm dev
 | Discord | `@zhin.js/adapter-discord` | Telegram | `@zhin.js/adapter-telegram` |
 | Slack | `@zhin.js/adapter-slack` | KOOK | `@zhin.js/adapter-kook` |
 | 钉钉 | `@zhin.js/adapter-dingtalk` | 飞书 | `@zhin.js/adapter-lark` |
-| 企业微信 | `@zhin.js/adapter-wecom` | 微信公众号 | `@zhin.js/adapter-wechat-mp` |
+| 企业微信 | `@zhin.js/adapter-wecom` | 微信公众号 / 微信 iPad | `@zhin.js/adapter-wechat-mp` / `@zhin.js/adapter-ipad-wechat` |
 | LINE | `@zhin.js/adapter-line` | NapCat / Milky / Satori | `napcat` / `milky` / `satori` |
 | Email | `@zhin.js/adapter-email` | GitHub | `@zhin.js/adapter-github` |
 
