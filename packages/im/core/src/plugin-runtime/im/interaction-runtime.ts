@@ -513,16 +513,18 @@ export class RuntimeInteractionCoordinator<Admission = never> {
               shown = actions;
               shownId = claim.id;
               const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
+              // Mark before the status and lifetime checks can exit: parts already on screen stay out
+              // of background even when the whole card did not report `sent` (#1250 b105 review).
+              this.#markPromptReceipt(receipt);
               assertLifetime();
               if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
-              this.#markPromptReceipt(receipt);
             } else if (reminders < REMINDER_LIMIT && Date.now() - lastReminderAt >= REMINDER_INTERVAL_MS) {
               reminders += 1;
               lastReminderAt = Date.now();
               // A lost reminder is not a failed prompt: the question itself was delivered already.
               const receipt = await reply(reminderText);
+              this.#markPromptReceipt(receipt);
               assertLifetime();
-              if (receipt.status === 'sent') this.#markPromptReceipt(receipt);
             }
             claim.delivered();
             const raw = await claim.answer;
