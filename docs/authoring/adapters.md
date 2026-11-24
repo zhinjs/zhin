@@ -156,7 +156,7 @@ SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 
 
 原生事件指 SDK 公开事件与它实际给出的对象：保留同一事件 payload，不删字段、不从规范化消息反推。它不等于原始 wire packet；SDK 没有公开的加密帧、HTTP bytes 或内部对象，不能宣称已经保真暴露。XML webhook、ParsedMail 等由平台自行解析的输入也应在原始事件路径保留实际原对象。
 
-`events.message()` 负责规范化消息；`events.platform(name, event)` 保留平台原生事件。需要等实际准入和派发完成后再确认游标或 ACK 时，使用 `events.emitAccepted()`，失败不得推进游标。长连接重连与心跳仍用 `createEndpointLifecycle`，详见 [生命周期钩子](./endpoint-lifecycle.md#endpoint-的生命周期钩子)。
+`events.message()` 负责规范化消息；`events.platform(name, event)` 保留平台原生事件。确认游标或 ACK 时用 `events.admit()` 包住回调、用 `events.handoff()` / `events.handoffMessage()` 交给 Runtime：Runtime 接下即返回，没接下则不得推进游标；不要在拿下一条入站前 await `events.run()` / `events.emitAccepted()`，它们会等整轮派发（可能是在等下一条入站的 Agent 回合），详见 [生命周期钩子](./endpoint-lifecycle.md)。长连接重连与心跳仍用 `createEndpointLifecycle`，详见 [生命周期钩子](./endpoint-lifecycle.md#endpoint-的生命周期钩子)。
 
 ## 能力画像（profile）
 

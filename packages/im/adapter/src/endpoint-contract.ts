@@ -21,6 +21,12 @@ export interface EndpointEvent<
   readonly payload: TPayload;
   readonly endpoint: EndpointIdentity;
   readonly client: TClient;
+  /**
+   * #1250 adapter-inbound-deadlock: present on a handed-off event (`events.handoff`). The Runtime calls it
+   * once it has accepted the event — recorded it, before routing and dispatch — so the Endpoint can take
+   * the platform's next inbound while this one's dispatch (possibly an Agent turn) runs on. Not enumerable.
+   */
+  readonly accepted?: () => void;
 }
 
 /** Lossless native event delivered before any optional canonical projection. */
@@ -69,10 +75,28 @@ export interface EndpointIncomingMessage<TSegment = unknown> {
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * #1250 adapter-inbound-deadlock: an event the Runtime now holds. Its dispatch — for a message, possibly a
+ * whole Agent turn — goes on without the caller; `dispatched` settles with it (value, or the error it ended with).
+ */
+export interface EndpointHandoff {
+  readonly dispatched: Promise<unknown>;
+}
+
 /** Inbound event methods available to a compact Endpoint implementation. */
 export interface EndpointEventSink {
-  /** Admit the complete SDK callback, including asynchronous normalization before emit. */
+  /**
+   * Admit the complete SDK callback, including asynchronous normalization before emit. Settles only after
+   * everything the callback emitted — detached emits included — finished dispatching.
+   */
   run<T>(receive: () => T | Promise<T>): Promise<T>;
+  /**
+   * Same receipt as {@link run}, but settles with the callback's own result as soon as it returns: what it
+   * emitted or handed off keeps this receipt (close/stop still drain it) without holding the caller.
+   * Use it where the platform's next inbound (poll, ACK, HTTP response) must not wait for this one's
+   * dispatch: an Agent turn may be waiting for exactly that next inbound (a confirm button, an answer).
+   */
+  admit<T>(receive: () => T | Promise<T>): Promise<T>;
   /** Emit a canonical or Adapter-specific event. */
   emit<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<unknown>;
   /** Await generation admission before acknowledging a platform update. */
@@ -81,6 +105,14 @@ export interface EndpointEventSink {
   platform<TEvent, TName extends string>(name: TName, event: TEvent): Promise<unknown>;
   /** Emit a canonical message and attach this Endpoint's identity automatically. */
   message<TSegment = unknown>(input: EndpointIncomingMessage<TSegment>): Promise<unknown>;
+  /**
+   * Like {@link emitAccepted}, but resolves once the Runtime holds the event instead of after its dispatch;
+   * rejects when it could not be handed over (closed, retired, rolled back), so the platform cursor/ACK may
+   * advance on resolve and must not on reject. The dispatch stays owned by the current receipt.
+   */
+  handoff<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<EndpointHandoff>;
+  /** {@link handoff} for a canonical message, attaching this Endpoint's identity like {@link message}. */
+  handoffMessage<TSegment = unknown>(input: EndpointIncomingMessage<TSegment>): Promise<EndpointHandoff>;
 }
 
 /** Local transport facts; generation admission is tracked separately. */

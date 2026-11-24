@@ -283,7 +283,9 @@ export class JuejinEndpoint extends JuejinClient implements Endpoint {
       if (this.#tripped) return;
       try {
         const page = await this.listLatestComments(articleId);
-        await this[endpointSpec].events.run(async () => {
+        // Settles once each new comment was handed over, not after its dispatch (#1250 adapter-inbound-deadlock):
+        // the next poll must still run while a turn waits for a reply only that poll can fetch.
+        await this[endpointSpec].events.admit(async () => {
           const comments = flattenComments(articleId, page.comments).sort((a, b) => a.ctime - b.ctime);
           if (!this.#baselined.has(articleId)) {
             for (const comment of comments) { this.#markSeen(comment.id); this.#remember(comment); }
@@ -331,7 +333,14 @@ export class JuejinEndpoint extends JuejinClient implements Endpoint {
     if (this.#isSelf(comment)) return; // 防自回环
     const conversation = { ...juejinThreadConversation(String(this.#options.id), comment.articleId, comment.rootId), endpoint: this[endpointSpec].identity };
     void this[endpointSpec].events.platform(comment.kind, comment).catch(() => undefined);
-    await this[endpointSpec].events.message({
+    const fail = (error: unknown) => {
+      this.#logger.warn(formatCompact({
+        op: 'juejin_gateway_receive_failed',
+        target: conversation.id,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    };
+    await this[endpointSpec].events.handoffMessage({
       event: comment,
       platformSentAt: comment.ctime * 1000,
       conversation,
@@ -349,13 +358,7 @@ export class JuejinEndpoint extends JuejinClient implements Endpoint {
         likeCount: comment.diggCount,
         isAuthor: comment.isAuthor,
       }),
-    }).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'juejin_gateway_receive_failed',
-        target: conversation.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+    }).then(({ dispatched }) => { void dispatched.catch(fail); }, fail);
   }
 
   #halt(stage: string, target?: string): void {

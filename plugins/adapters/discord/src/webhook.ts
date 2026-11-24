@@ -73,7 +73,10 @@ export async function handleDiscordInteractionRequest(
         .catch(() => logger.debug('Protocol event dispatch did not complete'));
       return writeJson(200, { type: INTERACTION_RESPONSE_PONG });
     }
-    return await handler[endpointSpec].events.run(async () => {
+    // admit, not run (#1250 adapter-inbound-deadlock): the response is Discord's ACK, due within 3 seconds.
+    // It must not wait for the dispatch it started — a whole Agent turn, possibly waiting for the next
+    // interaction (a confirm card's button) — which keeps this receipt and runs on.
+    return await handler[endpointSpec].events.admit(async () => {
       if (handler.isOpen) handler.admitPlatform(interaction);
       if (interaction.type === 3) {
         const data = interaction.data as { component_type?: number; custom_id?: string } | undefined;

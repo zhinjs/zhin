@@ -159,7 +159,15 @@ export class WeixinIlinkClient extends EventEmitter {
     try { return Promise.resolve(receive()); } catch (error) { return Promise.reject(error); }
   }
   protected publishEvent(name: string, payload: unknown): Promise<unknown> { this.emit(name, payload); return Promise.resolve(); }
+  /** Resolves once the Runtime accepted the event, never after its dispatch (#1250 adapter-inbound-deadlock). */
   protected publishAccepted(name: string, payload: unknown): Promise<void> { return this.publishEvent(name, payload).then(() => undefined); }
+  /** A dispatch that failed after its hand-over is not refetched (the cursor moved on); keep it in the log. */
+  protected reportDispatch(dispatched: Promise<unknown>, target: string): void {
+    void dispatched.catch((err: unknown) => {
+      this.#logger.warn(formatCompact({ op: 'weixin_ilink_dispatch_failed', target,
+        error: err instanceof Error ? err.message : String(err) }));
+    });
+  }
   protected publishPlatform(name: string, event: unknown): Promise<unknown> { this.emit(name, event); return Promise.resolve(); }
 
   constructor(options: WeixinIlinkEndpointOptions) {
@@ -534,7 +542,8 @@ export class WeixinIlinkClient extends EventEmitter {
         }
 
         consecutiveFailures = 0;
-        // 先分发再推进 buf：分发途中崩溃时 buf 未推进，下一轮重拉不丢消息。
+        // 先交给 Runtime 再推进 buf：交接前崩溃时 buf 未推进，下一轮重拉不丢消息。只等交接、不等分发
+        // （#1250 adapter-inbound-deadlock）：分发可能是一轮 Agent 回合，正在等下一轮才拉得到的用户回复。
         const nextBuf = resp.get_updates_buf;
         for (const inbound of resp.msgs ?? []) {
           await this.#handleInboundMessage(inbound);
