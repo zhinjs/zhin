@@ -154,6 +154,16 @@ export function safeDisplayName(name: string): string {
   return `${head.join('')}…${tail.join('')}`;
 }
 
+/**
+ * #1250 b102: a name as the card shows it: `safeDisplayName` inside one inline code span. The safe
+ * character set has no backtick, so the span always closes where it should, and `_` / `.` / `:` in a name
+ * never turn into emphasis on any renderer (some, like Telegram's, pair `_` across two names on a line).
+ * The plain-text fallback strips the backticks, so the name reads as before there.
+ */
+export function codeDisplayName(name: string): string {
+  return `\`${safeDisplayName(name)}\``;
+}
+
 /** English needs a singular form; the Chinese text is the same for any count. */
 function plural(locale: Locale | undefined, one: MessageKey, many: MessageKey, count: number): string {
   return t(locale, count === 1 ? one : many, { count });
@@ -186,7 +196,7 @@ function t(locale: Locale | undefined, key: MessageKey, params?: Record<string, 
   return messages(resolveLocale(locale), key, params);
 }
 
-/** The short chain shown since #727, e.g. `主人的消息 → 工具 web_fetch 的结果 → 本次调用 bash`. */
+/** The short chain shown since #727, e.g. `主人的消息 → 工具 \`web_fetch\` 的结果 → 本次调用 \`bash\``. */
 export function describeProvenanceChain(
   sources: readonly ProvenanceSource[],
   initiator: InitiatorTrustLevel,
@@ -199,7 +209,7 @@ export function describeProvenanceChain(
     t(locale, `initiator_${initiator}`),
     ...shown,
     ...(hidden > 0 ? [plural(locale, 'chainHiddenOne', 'chainHidden', hidden)] : []),
-    t(locale, 'chainCall', { tool: safeDisplayName(toolName) }),
+    t(locale, 'chainCall', { tool: codeDisplayName(toolName) }),
   ].join(t(locale, 'chainSeparator'));
 }
 
@@ -254,7 +264,7 @@ export function formatProvenanceCardReason(input: Readonly<{
 function chainItem(source: ProvenanceSource, locale?: Locale): string {
   switch (source.kind) {
     case 'tool_result':
-      return t(locale, source.trusted ? 'chainToolTrusted' : 'chainTool', { tool: safeDisplayName(source.toolName) });
+      return t(locale, source.trusted ? 'chainToolTrusted' : 'chainTool', { tool: codeDisplayName(source.toolName) });
     case 'conversation_context': return chainConversation(source.scene, locale);
     case 'media_perception': return t(locale, 'chainMedia');
     case 'scheduled_prompt': return t(locale, 'chainScheduled', { sources: scheduledSources(source.sources, locale) });
@@ -284,7 +294,7 @@ function persistedSource(key: string, locale?: Locale): string {
   if (key.startsWith('tool:')) {
     const trusted = key.endsWith(':trusted');
     const name = key.slice('tool:'.length, trusted ? -':trusted'.length : undefined);
-    return t(locale, trusted ? 'chainToolTrusted' : 'chainTool', { tool: safeDisplayName(name) });
+    return t(locale, trusted ? 'chainToolTrusted' : 'chainTool', { tool: codeDisplayName(name) });
   }
   if (key === 'conversation_context') return chainConversation(undefined, locale);
   if (key === 'media_perception') return t(locale, 'chainMedia');
@@ -295,9 +305,9 @@ function persistedSource(key: string, locale?: Locale): string {
 function sourceDetail(source: ProvenanceSource, locale?: Locale): string {
   switch (source.kind) {
     case 'tool_result': {
-      const tool = safeDisplayName(source.toolName);
+      const tool = codeDisplayName(source.toolName);
       if (source.trusted) return t(locale, 'srcTrusted', { tool });
-      if (source.mcpServer !== undefined) return t(locale, 'srcMcp', { tool, server: safeDisplayName(source.mcpServer) });
+      if (source.mcpServer !== undefined) return t(locale, 'srcMcp', { tool, server: codeDisplayName(source.mcpServer) });
       if (WEB_PAGE_TOOLS.has(source.toolName)) return t(locale, 'srcWebPage', { tool });
       if (WEB_SEARCH_TOOLS.has(source.toolName)) return t(locale, 'srcWebSearch', { tool });
       if (FILE_TOOLS.has(source.toolName)) return t(locale, 'srcFiles', { tool });

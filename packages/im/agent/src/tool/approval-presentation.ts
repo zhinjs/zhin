@@ -1,5 +1,5 @@
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
-import { safeDisplayName } from '../security/high-risk-explain.js';
+import { codeDisplayName } from '../security/high-risk-explain.js';
 
 /** Keep internal qualified names out of the question when a tool describes its action. */
 export function approvalActionLabel(toolName: string, description?: string): string {
@@ -36,6 +36,43 @@ const actionMessages = createMessages({
   },
 });
 
+/** Line terminators a code span must not contain (most Markdown renderers end a code span at a line). */
+const LITERAL_LINE_BREAKS = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/gu;
+/** Word joiner: invisible, breaks `](` / `![` / `<tag` for renderers that do not support inline code. */
+const WORD_JOINER = '\u2060';
+/**
+ * Private-use code points: renderers (Telegram's HTML converter) protect code spans behind private-use
+ * placeholder markers and swap them back by position, so untrusted text carrying such a marker could move
+ * a harness-written span (the "Rule" line, a tool name) elsewhere on the card. Shown as U+FFFD instead.
+ */
+const PRIVATE_USE = /[\p{Co}]/gu;
+
+/**
+ * #1250 b102: text the harness did not write (upstream MCP descriptions, model-chosen arguments, commands,
+ * paths, policy reasons quoting them) as one Markdown inline code span, so the approval card shows it
+ * literally: no link, image, inline HTML, emphasis, heading or table syntax takes effect.
+ *
+ * Every platform renderer the adapters use (Console / Sandbox, Telegram, e-mail, the plain-text fallback
+ * `markdownToPlainText`) knows single-backtick code spans on one line, but several do not know
+ * CommonMark's longer backtick runs, so the span is always one backtick on each side: line breaks become
+ * spaces and backticks inside the text become the full-width `｀` (U+FF40), so the text can neither close
+ * the span early nor pair with the backticks of the "Rule" line. For renderers without inline code a
+ * word joiner (invisible) also breaks `](`, `![` and `<` before a tag name or a `<@…>` / `<#…>` mention;
+ * private-use code points become U+FFFD (see `PRIVATE_USE`). The plain-text fallback strips
+ * the backticks, so no backslash or backtick shows there. Empty text stays empty.
+ */
+export function markdownLiteral(text: string): string {
+  const literal = text.replace(LITERAL_LINE_BREAKS, ' ').replace(PRIVATE_USE, '\ufffd').replace(/`/gu, '\uff40')
+    .replace(/\]\(/gu, `]${WORD_JOINER}(`).replace(/!\[/gu, `!${WORD_JOINER}[`)
+    .replace(/<(?=[A-Za-z/!?@#])/gu, `<${WORD_JOINER}`);
+  return literal ? `\`${literal}\`` : '';
+}
+
+/** `markdownLiteral` per line, for multi-line text (a shell command, a policy reason) that keeps its lines. */
+export function markdownLiteralLines(text: string): string {
+  return text.split(LITERAL_LINE_BREAKS).map(markdownLiteral).join('\n');
+}
+
 /** Every line terminator, including the ones `\n`-splitting misses (`\r`, `\v`, `\f`, NEL, LS, PS). */
 const LINE_TERMINATORS = /\r\n|[\r\v\f\u0085\u2028\u2029]/gu;
 /**
@@ -66,10 +103,11 @@ function truncate(text: string, max: number): string {
 /**
  * #1250 b100: the first line of an approval question (the action). A first-party or plugin tool keeps
  * `approvalActionLabel`. For an MCP tool the description is written by the upstream server, so the
- * harness says so in a fixed label that names the server through `safeDisplayName` (the rule the card's
- * "Rule" and "Sources" lines use); the upstream text follows on the same line, folded to one line and cut at
- * `MAX_UPSTREAM_ACTION_CHARS`. Without an upstream description the line is the harness's own
- * "calling tool Y of MCP server X", both names escaped, so no upstream text appears at all.
+ * harness says so in a fixed label that names the server through `codeDisplayName` (the rule the card's
+ * "Rule" and "Sources" lines use); the upstream text follows on the same line, folded to one line, cut at
+ * `MAX_UPSTREAM_ACTION_CHARS` and shown literally (`markdownLiteral`, #1250 b102). Without an upstream
+ * description the line is the harness's own "calling tool Y of MCP server X", both names escaped, so no
+ * upstream text appears at all.
  */
 export function describeApprovalAction(tool: ApprovalActionTool, locale?: Locale): string {
   const server = tool.mcpServer ?? tool.mcpOrigin?.server;
@@ -81,10 +119,11 @@ export function describeApprovalAction(tool: ApprovalActionTool, locale?: Locale
     const prefix = `${server}__`;
     const upstreamName = tool.name.startsWith(prefix) && tool.name.length > prefix.length
       ? tool.name.slice(prefix.length) : tool.name;
-    return actionMessages(locale, 'mcpCall', { server: safeDisplayName(server), tool: safeDisplayName(upstreamName) });
+    return actionMessages(locale, 'mcpCall', { server: codeDisplayName(server), tool: codeDisplayName(upstreamName) });
   }
   return actionMessages(locale, 'upstream', {
-    server: safeDisplayName(server),
-    text: truncate(first, MAX_UPSTREAM_ACTION_CHARS),
+    server: codeDisplayName(server),
+    // #1250 b102: shown literally (one inline code span), never as Markdown.
+    text: markdownLiteral(truncate(first, MAX_UPSTREAM_ACTION_CHARS)),
   });
 }

@@ -1,6 +1,6 @@
 import { runTurnToolPolicies } from '../security/policy-facade.js';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
-import { describeApprovalAction, type ApprovalActionTool } from './approval-presentation.js';
+import { describeApprovalAction, markdownLiteral, markdownLiteralLines, type ApprovalActionTool } from './approval-presentation.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
@@ -315,7 +315,7 @@ export class TurnToolRuntime {
           // #1250 review: an admin's own answer may cover the call only when the call itself needs no
           // authorization or the policy lets an admin authorize it; otherwise it needs the bot owner.
           ...(neededAuthority !== 'owner' ? { adminMayApprove: true } : { requiresOwner: true }),
-          question: formatApprovalQuestion(name, reason, effectiveInput, humanOnly, tool, this.turn.input.locale),
+          question: formatApprovalQuestion(name, reason, effectiveInput, humanOnly, tool, this.turn.input.locale, true),
           signal: this.turn.signal,
         });
         if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -635,22 +635,27 @@ function formatApprovalQuestion(
   humanOnly: boolean,
   tool?: ApprovalActionTool,
   locale?: Locale,
+  /** The provenance card's reason, written by the harness (`formatProvenanceCardReason`); kept as Markdown. */
+  harnessReason = false,
 ): string {
   const label = (key: Parameters<typeof approvalQuestionMessages>[1], value: string) => approvalQuestionMessages(locale, key, { value });
   const command = typeof input.command === 'string' ? redactSecretText(input.command.trim()) : '';
   const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
   const path = ['file_path', 'path'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
+  // #1250 b102: the card is Markdown. Values the harness did not write (the command, paths and arguments the
+  // model chose, a policy reason that quotes them) are shown literally, one inline code span per line.
   return [
     // #1250 b100: an MCP tool's description is upstream text; the first line says so (one line, capped).
     describeApprovalAction(tool ?? { name: toolName }, locale),
-    command ? label('command', command) : undefined,
-    cwd ? label('cwd', cwd) : undefined,
-    path ? label('path', path) : undefined,
+    command ? label('command', markdownLiteralLines(command)) : undefined,
+    cwd ? label('cwd', markdownLiteral(cwd)) : undefined,
+    path ? label('path', markdownLiteral(path)) : undefined,
     humanOnly || (!command && !path && Object.keys(input).length > 0)
-      ? label('args', stableApprovalValue(redactApprovalDisplay(input)))
+      ? label('args', markdownLiteral(stableApprovalValue(redactApprovalDisplay(input))))
       : undefined,
     // #1250 review: policy reasons can quote the raw command (exec-policy); mask secrets like the arguments.
-    reason.startsWith('tool approval policy is ') ? undefined : label('risk', redactSecretText(reason)),
+    reason.startsWith('tool approval policy is ') ? undefined
+      : label('risk', harnessReason ? redactSecretText(reason) : markdownLiteralLines(redactSecretText(reason))),
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
