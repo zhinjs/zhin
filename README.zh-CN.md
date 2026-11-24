@@ -245,7 +245,7 @@ defaults:
 
 默认只装 IM 核心；AI、模型 SDK、MCP、图片渲染、语音都是可选包。启用 AI 时推荐使用 `npx zhin setup --ai`，它会一并写好依赖与 Feature 声明。
 
-### Install tiers（zhin.js 1.1.x）
+### Install tiers（zhin.js 1.x）
 
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|

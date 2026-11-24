@@ -87,6 +87,53 @@ describe('Interactive fallback numbering', () => {
     }
   });
 
+  it('restarts per-conversation numbering at 1 once every keyboard there has been answered (#1250 b90)', () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    for (let card = 0; card < 7; card += 1) {
+      const allocated = router.rememberFallback(conversation, 1, { '1': `card-${card}:yes`, '2': `card-${card}:no`, '3': `card-${card}:always` });
+      expect(allocated).toEqual({ '1': `card-${card}:yes`, '2': `card-${card}:no`, '3': `card-${card}:always` });
+      expect(router.resolvePayload(message('1'))).toBe(`card-${card}:yes`);
+      router.settleFallback([`card-${card}:yes`, `card-${card}:no`, `card-${card}:always`]);
+    }
+    // Another conversation's settled keyboard does not touch this one's numbering.
+    const other = { ...conversation, id: 'another' };
+    expect(router.rememberFallback(other, 1, { '1': 'other:a' })).toEqual({ '1': 'other:a' });
+    expect(router.rememberFallback(conversation, 1, { '1': 'pending:a' })).toEqual({ '1': 'pending:a' });
+    router.settleFallback(['other:a']);
+    expect(router.rememberFallback(conversation, 1, { '1': 'next:a' })).toEqual({ '2': 'next:a' });
+  });
+
+  it('keeps numbering after a keyboard still waiting for an answer, without reusing its labels (#1250 b90)', () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    expect(router.rememberFallback(conversation, 1, { '1': 'a:yes', '2': 'a:no' })).toEqual({ '1': 'a:yes', '2': 'a:no' });
+    expect(router.rememberFallback(conversation, 1, { '1': 'b:yes', '2': 'b:no' })).toEqual({ '3': 'b:yes', '4': 'b:no' });
+    // The first card is answered; the second still waits, so a third card keeps counting.
+    router.settleFallback(['a:yes', 'a:no']);
+    expect(router.rememberFallback(conversation, 1, { '1': 'c:yes', '2': 'c:no' })).toEqual({ '5': 'c:yes', '6': 'c:no' });
+    expect(router.resolvePayload(message('3'))).toBe('b:yes');
+    expect(router.resolvePayload(message('5'))).toBe('c:yes');
+    // Once nothing is pending the next card starts at 1 and its labels win over the settled ones.
+    router.settleFallback(['b:yes', 'c:no']);
+    expect(router.rememberFallback(conversation, 1, { '1': 'd:yes', '2': 'd:no' })).toEqual({ '1': 'd:yes', '2': 'd:no' });
+    expect(router.resolvePayload(message('1'))).toBe('d:yes');
+    expect(router.resolvePayload(message('2'))).toBe('d:no');
+  });
+
+  it('settles a keyboard sent on another conversation key than the one it was asked in (#1250 b90 review)', () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const thread = { ...conversation, id: `${conversation.id}-thread` };
+    expect(router.rememberFallback(thread, 1, { '1': 'a:yes', '2': 'a:no' })).toEqual({ '1': 'a:yes', '2': 'a:no' });
+    // Nothing in the asking conversation carries the payloads: every conversation is searched.
+    router.settleFallback(['a:yes', 'a:no'], conversation);
+    expect(router.rememberFallback(thread, 1, { '1': 'b:yes' })).toEqual({ '1': 'b:yes' });
+    // A match in the asking conversation does not settle another conversation's keyboard.
+    expect(router.rememberFallback(conversation, 1, { '1': 'c:yes' })).toEqual({ '1': 'c:yes' });
+    expect(router.rememberFallback(thread, 1, { '1': 'c:yes' })).toEqual({ '2': 'c:yes' });
+    router.settleFallback(['c:yes'], conversation);
+    expect(router.rememberFallback(thread, 1, { '1': 'd:yes' })).toEqual({ '3': 'd:yes' });
+    expect(router.rememberFallback(conversation, 1, { '1': 'e:yes' })).toEqual({ '1': 'e:yes' });
+  });
+
   it('survives HMR of an unrelated plugin while evicting when the owning plugin reloads', () => {
     const root = rootPluginId();
     const gamePlugin = childPluginId(root, 'game');

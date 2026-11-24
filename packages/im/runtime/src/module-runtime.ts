@@ -12,6 +12,12 @@ export interface ModuleRuntime {
   /** Optional compiler/manifest adapter for browser modules such as Page and Layout. */
   loadClientModule?<T = unknown>(source: string, request: ClientModuleRequest): Promise<T>;
   invalidate?(source: string): Promise<void> | void;
+  /**
+   * Completes whatever the dependency queries below need before a reload transaction asks them
+   * (#1250 `prod-runs-dependency-index`): a runtime that skips import analysis while nothing
+   * watches files builds its graph here. The HMR coordinator awaits it before each transaction.
+   */
+  prepareInvalidation?(): Promise<void>;
   affectedSources?(source: string): readonly string[];
   /**
    * Loaded entries that import the source but keep their old module instance after a reload

@@ -74,6 +74,9 @@ export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 export { Schema } from '@zhin.js/schema'
 export { ScheduleEngine } from '@zhin.js/kernel'
+// #1250 sandbox-transcript-shared-bind-code: adapters that show inbound text to other people (the
+// shared Console Sandbox) hide a chat-identity bind code the way Core's records do.
+export { isChatIdentityBindText, redactChatIdentityBindText } from '@zhin.js/kernel'
 export type {
   ScheduleFireCallback,
   MemoryScheduleRegistration,

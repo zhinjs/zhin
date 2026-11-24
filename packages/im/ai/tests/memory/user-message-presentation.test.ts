@@ -33,6 +33,15 @@ describe('user-message-presentation', () => {
     expect(serializeAgentMessage(createUserMessage('认领 ABCD2345', undefined, 1, actor)).payload).toContain('认领 ABCD2345');
   });
 
+  it('stores a chat-identity bind code masked by its shape alone (#1250 sandbox-transcript-shared-bind-code)', () => {
+    for (const text of ['绑定 ABCD2345', '/绑定 abcd-2345']) {
+      const payload = serializeAgentMessage(createUserMessage(text, undefined, 1, actor)).payload;
+      expect(payload).not.toMatch(/ABCD-?2345/iu);
+      expect(payload).toContain('绑定 ***');
+    }
+    expect(serializeAgentMessage(createUserMessage('我想绑定 ABCD2345 这个号', undefined, 1, actor)).payload).toContain('我想绑定 ABCD2345 这个号');
+  });
+
   it('strips an origin-bearing prefix back to the canonical body and round-trips origin', () => {
     const message = createUserMessage('你好', undefined, 1, { ...actor, origin: 'human' });
     const rendered = renderUserMessageForLlm(message);

@@ -40,6 +40,7 @@ describe.skipIf(process.platform === 'win32')("Sandbox useDocker: 'auto' host fa
     const { Sandbox } = await load(warn);
     const result = await new Sandbox({ enabled: true, useDocker: 'always', workingDirectory: process.cwd() }).execute('echo hi');
     expect(result.blocked).toBe(true);
+    expect(result.isolationUnavailable).toBe(true);
     expect(result.stdout).not.toContain('hi');
     expect(warn).not.toHaveBeenCalled();
   });

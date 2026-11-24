@@ -89,6 +89,11 @@ export class ModuleDependencyIndex {
     }
   }
 
+  /** True when the entry's import closure is in the graph (possibly marked for re-analysis). */
+  hasEntry(entry: string): boolean {
+    return this.#dependenciesByEntry.has(normalizeSourcePath(entry));
+  }
+
   /** Marks the changed entry and every entry importing it for lazy re-analysis. */
   invalidate(source: string): void {
     const normalized = normalizeSourcePath(source);

@@ -52,14 +52,11 @@ export interface PermitDenialOptions {
   /** A platform / Bot condition's reason the caller already described (the command index's denial). */
   readonly reason?: string;
   /**
-   * The chat invocation of the `bind` command where the refusal is sent (endpoint command prefix
-   * included, e.g. `!!绑定`; `CommandContext.formatCommand('bind')`), for the global owner text.
+   * The chat invocation of the `bind` command where the refusal is sent. Kept for callers; no longer
+   * read since `绑定 <码>` works without the command prefix (#1250), so the text names the bare word.
    */
   readonly bindCommand?: string;
-  /**
-   * The endpoint's actual command prefix (`''`: none) when `bindCommand` is not at hand: the text
-   * names `<prefix>绑定` / `<prefix>bind`. With neither, it says to add a configured prefix.
-   */
+  /** The endpoint's command prefix; kept for callers, no longer read (see {@link bindCommand}). */
   readonly commandPrefix?: string;
 }
 
@@ -73,13 +70,9 @@ function requiresGlobalOwner(values: readonly string[]): boolean {
   return values.length > 0 && values.every((value) => value === 'owner@global');
 }
 
-/** Where a global owner is granted: the `bind` invocation as sent here when known. */
-function globalOwnerGrant(locale: Locale, options: Pick<PermitDenialOptions, 'bindCommand' | 'commandPrefix'>): string {
-  const word = permissionMessages(locale, 'bindWord');
-  const bind = options.bindCommand?.trim() || (typeof options.commandPrefix === 'string' ? `${options.commandPrefix}${word}` : undefined);
-  return permissionMessages(locale, 'globalOwnerGrant', bind
-    ? { bind, prefixHint: '' }
-    : { bind: word, prefixHint: permissionMessages(locale, 'bindPrefixHint') });
+/** Where a global owner is granted (#1250: `绑定 <码>` needs no command prefix). */
+function globalOwnerGrant(locale: Locale, _options: Pick<PermitDenialOptions, 'bindCommand' | 'commandPrefix'>): string {
+  return permissionMessages(locale, 'globalOwnerGrant', { bind: permissionMessages(locale, 'bindWord') });
 }
 
 function roleDenial(values: readonly string[], locale: Locale, options: PermitDenialOptions): string {

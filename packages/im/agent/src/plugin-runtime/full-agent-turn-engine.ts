@@ -2,7 +2,7 @@ import type { CoreReplyStream } from '@zhin.js/core/runtime';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { MessageAliasTable } from '@zhin.js/ai';
-import { sessionKeyLedgerId } from '../memory/told-ledger.js';
+import { isOwnScheduledDelivery, sessionKeyLedgerId } from '../memory/told-ledger.js';
 import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, ownPrivateInbound, plannedReplyTexts, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
@@ -284,11 +284,16 @@ async function* runInteractiveTurn(
   actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067 D7);
   // so is the initiator's own original message in this private chat (ADR 0067 D8).
-  if (background && unrepresentedConversationBlocks(pendingContext!.blocks,
-    ref => (host.toldLedger?.hasDelivered(prep.sessionId, ref) || host.toldLedger?.hasDelivered(sessionKeyLedgerId(context.turn.session.key), ref)) ?? false,
-    ownPrivateInbound(context.turn)).length) {
+  const counted = background ? unrepresentedConversationBlocks(pendingContext!.blocks,
+    ref => (host.toldLedger?.hasDelivered(prep.sessionId, ref) || host.toldLedger?.hasDelivered(sessionKeyLedgerId(context.turn.session.key), ref)
+      || isOwnScheduledDelivery(host.toldLedger, context.turn, ref)) ?? false,
+    ownPrivateInbound(context.turn)) : [];
+  if (counted.length) {
+    // #1250 high-risk-rules-explain: the counts only describe the source on the approval card.
+    const messages = counted.filter(block => block.eventType === 'message.created' || block.eventType === 'message.updated').length;
     provenance.record({ kind: 'conversation_context',
-      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}) });
+      ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}),
+      messages, events: counted.length - messages });
   }
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
@@ -526,6 +531,10 @@ async function* runInteractiveTurn(
       const output = [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput);
       completion.terminal = { ...completion.terminal, output };
       completion.result = { ...completion.result, reply: renderAgentOutput(output), output };
+    }
+    // #1250: whether this turn's output may carry recorded content (a scheduled run's delivery reads it).
+    if (completion.terminal.type === 'turn_end' && !provenance.tainted) {
+      completion.terminal = { ...completion.terminal, contentProvenance: 'clean' };
     }
     yield completion.terminal;
     projectionOwnsReply = true;

@@ -14,22 +14,22 @@
 
 **Heads-up (next major):** redundant published TypeScript sources (`src/**/*.ts` in many packages, and convention-directory `index.ts` next to `index.js` in plugin packages) will be removed. They are not loaded at runtime and no source map refers to them. If you deep-import a package's `.ts` file, switch to the package's `exports` entry. Nothing changes until the next major.
 
-## 版本号说明：当前稳定线是 1.1.x
+## 版本号说明：当前稳定线是 1.x（从 1.1.0 重置）
 
 主包 `zhin.js` 的版本号经历过一次重编号，下文的 4.x / 3.x / 2.x 小节都是**历史版本线**，不是当前主线：
 
 - 2025-10 ~ 2026-06：`1.0.0` → `1.0.9x`（zhin-next 重写）。
 - 2026-06 ~ 2026-07：因 changesets 级联升级，主版本在短时间内 `2.0.x` → `3.0.0` → `4.0.x` → `4.1.x` → `5.0.x` → `6.0.x` → `7.0.x` 快速递进。
-- 之后：全部官方发布包统一重置到由维护者治理的 **1.1.x 稳定线**（`zhin.js` 从 `1.1.0` 起，当前为 1.1.x）。npm 上 1.1.0 已被永久占用的包使用下一个可用的 1.1.x patch；此后的常规发布只走 patch。
-- 历史上更高的版本线（2.x ~ 7.x）在 npm 上仍可安装，但已被 1.1.x 取代，不再维护。请以 dist-tag `latest`（1.1.x）为准，不要按数值大小选择版本。
+- 之后：全部官方发布包统一重置到由维护者治理的 **1.x 稳定线**（`zhin.js` 从 `1.1.0` 起）。npm 上 1.1.0 已被永久占用的包使用下一个可用的 1.1.x patch。此后的常规发布只走 patch；含不兼容公开 API 变更的发布经所有者批准后走 minor（登记在 `.changeset/version-policy.json` 的 `approvedNonPatchReleases`，`pnpm check:release-plan` 校验），所以各包版本会前进到 1.10、1.14 等；major 一律不发。
+- 历史上更高的版本线（2.x ~ 7.x）在 npm 上仍可安装，但已被 1.x 稳定线取代，不再维护。请以 dist-tag `latest` 为准，不要按数值大小选择版本。
 
 逐版本记录见 [packages/im/zhin/CHANGELOG.md](./packages/im/zhin/CHANGELOG.md)（其中 `1.1.0` 条目记录了这次重置）。
 
-**Version note:** `zhin.js` is on the **1.1.x** stable line. The 2.x–7.x numbers below were published before the package line was reset to 1.1.0; they remain installable but are superseded. Follow the `latest` dist-tag, not the highest number.
+**Version note:** `zhin.js` is on the **1.x** stable line (reset to 1.1.0; owner-approved minors since). The 2.x–7.x numbers below were published before the package line was reset to 1.1.0; they remain installable but are superseded. Follow the `latest` dist-tag, not the highest number.
 
 ## [4.1.x] - 2026-06 ~ 2026-07
 
-历史版本线（发布时的主线，现已被 1.1.x 取代）。4.1.0 引入语音管线，4.1.3 完成约定式插件运行时（Plugin Runtime）迁移。
+历史版本线（发布时的主线，现已被 1.x 稳定线取代）。4.1.0 引入语音管线，4.1.3 完成约定式插件运行时（Plugin Runtime）迁移。
 
 ### 💥 破坏性变更（4.1.3，按仓库惯例以 patch 形式发布）
 

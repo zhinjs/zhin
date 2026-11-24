@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, isSecretLikeKey, matchChatOwnerClaimText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactDecisionPayload, redactSecretText } from '../src/index.js';
+import { containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, isChatIdentityBindText, isSecretLikeKey, matchChatOwnerClaimText, redactChatIdentityBindText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactDecisionPayload, redactSecretText } from '../src/index.js';
 
 describe('redaction (moved from @zhin.js/agent, ADR 0061 P1)', () => {
   it('masks secret keys, omits prompts and hides token-shaped text', () => {
@@ -135,5 +135,63 @@ describe('chat-owner claim text (ADR 0060 §3.3, zhinjs/zhin#1250)', () => {
     const scanner = createChatOwnerClaimCodeScanner('ABCD2345');
     expect(scanner.feed('ABCD2345')).toBe(true);
     expect(scanner.feed('nothing')).toBe(true);
+  });
+});
+
+describe('chat-identity bind text (ADR 0060 §2.4, #1250 sandbox-transcript-shared-bind-code)', () => {
+  it('hides the code of a bind message by its shape alone, with or without a command prefix', () => {
+    // Nothing registers bind codes: whether one is open (or expired) never decides.
+    expect(redactChatIdentityBindText('绑定 ABCD2345')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('  /绑定 ABCD2345 ')).toBe('/绑定 ***');
+    expect(redactChatIdentityBindText('#bind abcd-2345')).toBe('#bind ***');
+    expect(redactChatIdentityBindText('BIND <ABCD2345>')).toBe('BIND ***');
+    expect(redactChatIdentityBindText('绑定码：ABCD 2345')).toBe('绑定码 ***');
+    expect(redactChatIdentityBindText('綁定 ＡＢＣＤ２３４５')).toBe('綁定 ***');
+    expect(redactChatIdentityBindText('绑定 AB\u200BCD2345')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('zhin 绑定 ABCD2345', 'zhin')).toBe('zhin 绑定 ***');
+    expect(isChatIdentityBindText('绑定 ZZZZ9999')).toBe(true);
+    expect(redactChatIdentityBindText('bind zzzz-9999')).toBe('bind ***');
+    expect(redactChatIdentityBindText('bind abcd-2345')).toBe('bind ***');
+    expect(redactChatIdentityBindText('绑定 abcd 2345')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('bind abcdefg2')).toBe('bind ***');
+    expect(redactChatIdentityBindText('绑定 ABCD EFG2')).toBe('绑定 ***');
+    expect(redactChatIdentityBindText('绑定 A\u0336BCD2345')).toBe('绑定 ***');
+  });
+
+  it('hides an argument with the shape of a code: it cannot be told from one (known trade-off, README)', () => {
+    // All 8 symbols are in the alphabet (no 0 / 1 / O / I): a QQ number like this is hidden too.
+    expect(redactChatIdentityBindText('绑定 23456789')).toBe('绑定 ***');
+    expect(isChatIdentityBindText('#绑定 23456789')).toBe(true);
+  });
+
+  it('keeps words without a digit: every bind code holds one (#1250 review)', () => {
+    for (const text of ['绑定 ABCDEFGH', 'bind abcdefgh', '绑定 ABCD EFGH', 'bind abcd-efgh', 'BIND <ABCDEFGH>', '綁定 ＡＢＣＤＥＦＧＨ']) {
+      expect(redactChatIdentityBindText(text)).toBe(text);
+      expect(isChatIdentityBindText(text)).toBe(false);
+    }
+  });
+
+  it('keeps names, several words and codes split into more than two parts (#1250 review)', () => {
+    for (const text of ['bind username', 'BIND ME PLEASE', 'Bind Mysterys', 'bind a-b-c-d-e-f-g-h', '绑定 AB CD 2345', '绑定 ABCD EFGH',
+      '绑定 ABCD--2345', '绑定 ABCD_2345', 'bind ABCD2345 now']) {
+      expect(redactChatIdentityBindText(text)).toBe(text);
+      expect(isChatIdentityBindText(text)).toBe(false);
+    }
+  });
+
+  it('stays linear on long near-misses (no polynomial backtracking)', () => {
+    const started = performance.now();
+    for (const filler of [' ', '-', 'A', '!']) {
+      const text = `绑定 A${filler.repeat(50_000)}B!`;
+      expect(redactChatIdentityBindText(text)).toBe(text);
+    }
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('leaves other text as written', () => {
+    for (const text of ['绑定 ***', '我想绑定 ABCD2345', '绑定 ABCD2345 谢谢', '绑定 12345678', '绑定 ABCD234', '认领 ABCD2345', 'binding ABCD2345', '']) {
+      expect(redactChatIdentityBindText(text)).toBe(text);
+      expect(isChatIdentityBindText(text)).toBe(false);
+    }
   });
 });

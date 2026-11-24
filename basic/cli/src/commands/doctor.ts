@@ -41,6 +41,7 @@ import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/pro
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { diagnoseApprovalChannelConfig } from '../utils/approval-config-check.js';
 import { describeDuplicateZhinInstances, formatDuplicateZhinInstances } from '../utils/dev-link.js';
+import { retiredPackagesResult } from '../utils/retired-packages-check.js';
 import { formatGatewayVersionSkew, gatewayVersionSkew, installedGatewayVersion } from '../utils/gateway-version.js';
 import {
   formatRecordedFailure, readRuntimeFailureJournal, readRuntimeState, RUNTIME_FAILURES_FILE, type RuntimeState,
@@ -640,6 +641,10 @@ export const doctorCommand = new Command('doctor')
         fix: 'pnpm install'
       });
     }
+
+    // 7a. 已并入或停更的 @zhin.js 包（#1250 retired-package-not-flagged）：它们的最后版本仍依赖旧的
+    // Zhin 包，会在 node_modules 里拖进第二份 runtime / plugin-runtime，先删依赖再谈 overrides。
+    if (fs.existsSync(projectPackagePath)) results.push(retiredPackagesResult(cwd));
 
     // 7b. 同名 zhin 包是否解析到多份实例（Token / instanceof 不互通，generation 会硬错误）
     if (fs.existsSync(nodeModulesPath)) {

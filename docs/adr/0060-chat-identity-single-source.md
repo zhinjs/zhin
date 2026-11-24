@@ -100,7 +100,7 @@ chat_principals      人（principal）          1 ──< chat_identities   平
   2. Sandbox 中以「我的聊天身份」发言（§5.4）；
   3. Console 显示「我是谁」、我的聊天角色。
 - 建立链接的两种方式：
-  - **自助（推荐，需证明）**：Console 用户点「把聊天身份绑定到我」，得到一次性绑定码（8 位、10 分钟、单次）；在聊天里私聊机器人发送 `绑定 <码>`（`bind <code>`），该平台身份即归入此 Console 用户的人；
+  - **自助（推荐，需证明）**：Console 用户点「把聊天身份绑定到我」，得到一次性绑定码（8 位、10 分钟、单次）；在聊天里私聊机器人发送 `绑定 <码>`（`bind <code>`，与 `认领 <码>` 一样不需要命令前缀，#1250），该平台身份即归入此 Console 用户的人；
   - **运营者代绑**：持有全局 `iam.manage` 的 Console 用户可直接链接任意人与任意 Console 用户（审计记为 `manual`）。
 - Console 用户被删除 / 禁用时：网关在用户生命周期事件中通知实例删除链接（实例侧只按值失效，聊天角色不受影响）。
 
@@ -108,9 +108,9 @@ chat_principals      人（principal）          1 ──< chat_identities   平
 
 新部署（数据库中没有任何全局 `owner` 绑定时）提供三条路，任一条完成即关闭引导：
 
-1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
+1. **Console 绑定（主路径；P2 起）**：P1 中该项先指向 Console「聊天角色」页的全局授予与认领码。Console 初始化向导（ADR 0053）完成第一位 Console 所有者后，「需要你处理」出现 `chat-roles.no-owner` 项：「还没有聊天主人——在聊天中私聊机器人发送 `绑定 <码>`」（不需要命令前缀；只装了模拟适配器时改为指向 Sandbox 的「以我的聊天身份发言」，见 §5.4）。由于此时操作者持有全局 `iam.manage`，绑定完成后**同一流程**询问「是否把这个人设为全局 owner」，确认后授予（审计 `chat-roles.grant`，`grantedBy: console:user:<id>`）。
 2. **配置种子导入**（§4）：首次启动导入适配器 owner / master、`ai.trigger.masters`、`ai.personalPrincipals`。
-3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；在私聊中直接向机器人发送 `认领 <码>`（`claim <code>`，不需要命令前缀，见下文「认领码的入站处理」）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领。
+3. **认领码（无 Console 时）**：没有全局 owner 时，`zhin status` 显示一次性认领码（实例日志只记哈希前缀，见下文「安全复核」）（同 `http.token` 的引导语义：只在「尚无 owner」时有效，用一次即失效、重启轮换）；在私聊中直接向机器人发送 `认领 <码>`（`claim <code>`，不需要命令前缀，见下文「认领码的入站处理」）成为全局 owner。sandbox 类适配器（能力画像 `runtime.sandbox`）上不接受认领；只装了这类适配器时，`zhin status` 与启动日志改为指引 §5.4 的路径（#1250）。
 
 ### 4. 迁移与兼容
 
@@ -181,6 +181,10 @@ ADR 0057 §3 对种子「再次出现」的处理是「已忽略，数据库为�
 - 客户端自填的 `senderId` 仍可用于模拟「别人」，但这类发言**一律不解析 zhin 角色**（视为隐式陌生人，`chatRole` 为空），界面明确标注「模拟身份，无角色」。否则任何持有 `endpoint.operate` 的 Console 用户都能填 owner 的 id 冒充 owner。
 - 平台身份预设改名：「Master」→「群主（平台身份）」，徽章同时显示服务端回报的 zhin 角色与信任档位，消除 MASTER / `group_member` 的错位。
 - 仅限本机 / 开发？不需要额外限制：映射依赖 Console 认证与链接，与部署形态无关；但 `--standalone`（无网关，ADR 0054）下没有 Console 主体，sandbox 一律按「模拟身份，无角色」处理。
+- **第一条消息即建立身份（#1250 sandbox-speak-as-me）**：已登录的 Console 用户请求「以我的聊天身份发言」而还没有 Sandbox 身份时，服务端在处理这条消息前直接建立 `console-<Console 用户 id>`（与 `chat-identities.simulated.ensure` 同一次写入与同一门槛：需要 Console 权限 `self.chat-identity`，链接的人持有全局授予时需要全局 `iam.manage`），并以它发言；不依赖页面先发 RPC。建立失败时这条消息按模拟身份发送，回显带 `asMeUnavailable: 'identity-failed'` 与原因 `asMeError`，页面关闭开关并显示原因。同一连接上的消息按到达顺序处理。这一写能力**不在**插件可读的 `chatRolesToken` 上：实例以 Root 私有、仅 Adapter Feature 投影时可读的 `simulatedConsoleSpeakerToken`（`@zhin.js/adapter`）提供，Adapter Feature 只把按所属插件绑定的 `AdapterContext.consoleSpeaker` 交给**受信的**本地模拟适配器（`@zhin.js/adapter` 的 `isTrustedSimulationAdapter`：能力画像声明 `runtime.sandbox`，且所属插件的包是 `TRUSTED_SIMULATION_ADAPTER_PACKAGES` 中的 `@zhin.js/adapter-sandbox`；第三方插件声明 `runtime.sandbox` 仍算模拟适配器——与角色迁移、认领 / 绑定拒绝共用 `declaresLocalSimulation` 这一判定——但拿不到这个端口），实例侧对所属插件再按同一依据核对。`ensure(conversation, principal)` 里的 principal 由适配器交出，实例**不信任其内容**：只接受实例自己的 HTTP Host 交给路由 / socket 的**那个对象**（`HttpRouter.isHostIssuedPrincipal`，按 Host 实例记录、深度冻结；网关经桥转发、由 `parseBridgePrincipal` 解析的 principal，或 `--standalone` 下令牌表认证的 principal），适配器自己构造的同形对象（哪怕列出全局 `iam.manage`）、它的拷贝或别的 Host 实例的 principal 一律以 `not-host-issued` 拒绝、什么都不写；通过后 `self.chat-identity` 与全局 `iam.manage` 才从这个 principal 判断，且只写当前代里该插件所属的模拟适配器、只针对该适配器上的会话。这一标记是 Host 实例上的查询而不是模块级函数：`createHttpRouter` / `createBridgedHttpHost` 是公开工厂，插件可以自建路由并让它「转发」任意 principal，模块级标记因此可被伪造；实例只问它自己创建的那一个 Host，插件拿到的按代绑定 Host 上也没有这个查询。Sandbox 在建立前先检查 `self.chat-identity`，没有时回显 `asMeUnavailable: 'needs-self-chat-identity'`、页面关闭开关并说明原因；建立最多等 10 秒，超时按 `identity-failed` 处理，之后的帧照常处理；连接关闭（含 `principal-revoked`）后已排队、尚未执行的帧不再派发。
+- **只有 Console Sandbox 身份能持有角色（#1250 grant-owner-to-simulated-identity-silent）**：模拟适配器上，服务端只以「其人链接了 Console 用户」的身份发言（`console-<用户 id>`）；其他 id（`sandbox-user`、`dev-user` 等自填 id）永远不会发言。因此给这类 id 授予角色**在授予前拒绝**（Console `chat-roles.grant` 400 `simulated-identity`，聊天 `角色 授予` 同样拒绝，撤销照常），提示改用「以我的聊天身份发言」；「是否已有全局 owner」（认领、「需要你处理」、`zhin status`、`suggestGlobalOwner`）不把只落在这类 id 上的 owner 授予算作有效（其人另有真实平台身份或链接了 Console 用户时才算）。
+- **最近发言人（#1250 chat-recent-speakers-empty）**：模拟发送者（`~sim:<id>`）按设计不记录；`chat-identities.recent` 在作用范围含模拟适配器时返回 `simulatedSendersOmitted`（别名列表），Console 显示「模拟发送者不出现在这里」；成员视图中模拟适配器上永不发言的 id 带 `simulatedSender: true`，代替「90 天内没有发言」。以 Console Sandbox 身份发过言的照常出现在最近发言人中。
+- **只装了模拟适配器时的第一位 owner（#1250 owner-hints-dead-end-sandbox-only）**：认领码与绑定码在模拟适配器上都被拒绝，所以 `zhin status`、启动日志、「需要你处理」的 `chat-roles.no-owner`（`state.simulationOnly`）与聊天中的无主提示改为：在 Sandbox 打开「以我的聊天身份发言」并发一条消息，再到「聊天角色」把全局 owner 授予这个 `console-<用户 id>` 身份。
 
 #### 5.5 审计
 
@@ -397,6 +401,24 @@ export type ChatScopeRef =
   - 原生载荷只检查自有可枚举属性（以及数组、Map、Set 的元素）：`Error.message`（不可枚举）、原型上的 getter、不可枚举属性与 Symbol 键里的文本不检查。
   - 字节缓冲只按 UTF-8 解码：UTF-16（以及其它编码）的缓冲里的码识别不到。
 - **保留不变**：只接受真实平台私聊、sandbox 不接受、同一码连错 5 次轮换且同一发送者窗口内至多计 2 次、码只用一次。
+- **绑定码同样免前缀（#1250 bind-hint-omits-command-prefix）**：`绑定 <码>` / `bind <码>` 也由入站最早处的守卫接手（`createChatIdentityBindGuard`，与认领守卫经 `combineInboundSecretGuards` 组合成一个 `inboundSecret`），带不带命令前缀都行；带前缀的 `bind` 命令照常可用。**只在存在开放的绑定码时**接手，且只接手绑定形态（关键词是第一个词、后面恰好一个词）的消息：该词是当前有效的绑定码时一律接手（不进会话历史，日志只记 `绑定 ***`；群聊中作废并提示改私聊），私聊中该词**形如绑定码**（规范化后 8 位绑定码字母表）时也接手（错码回复「不正确或已过期」并计数，5 次锁 10 分钟，防止免前缀猜码）；其余照常交给命令或 Agent。没有任何开放码时什么都不接手、也不计失败：`bind username`、`绑定 82345678` 以及项目自己的 `绑定 <QQ号>` 之类命令照常到达命令和 Agent（带前缀的 `bind` 命令此时答「不正确或已过期」，同样不计数）。被接手的消息在处理前被丢弃（未就绪、自己的回声、去重失败）时，它携带的开放码作废。拒绝文案与「需要你处理」中的绑定提示改为「`绑定 <码>`（不需要命令前缀）」。
+
+### 共享 Sandbox 里的绑定码（zhinjs/zhin#1250 1.9.0 巡检，sandbox-transcript-shared-bind-code）
+
+根因：Console 沙盒的会话由所有 Console 用户共享。operator 打开同一会话，就能看到 owner 发过的`绑定 <码>`/`/绑定 <码>`原文——入站回显广播给该会话的每个订阅页面，会话记录（`/api/conversations/history`）也对所有能读这个会话的人回放。认领码在聊天记录里已按当前码隐藏；绑定码只有免前缀守卫在「有开放码」时接手的那条路径被隐藏（`绑定 ***`），其余路径——发送者本地回显、广播、会话记录与回放、带前缀的 `/绑定 <码>`、没有开放码或群聊中守卫不接手时——都会留下原文。绑定码 10 分钟内有效，拿到码的人可以在真实平台上把自己的聊天身份链接到别人的 Console 账号。
+
+- **按形态脱敏，不看码是否有效**：`redactChatIdentityBindText`（`@zhin.js/kernel`，经 `@zhin.js/core` / `zhin.js` 导出）把绑定消息改成 `绑定 ***`（关键词与前缀照写，如 `/绑定 ***`）。绑定消息：绑定 / 綁定 / bind（任意大小写，可跟 `码` / `code`）是第一个词（容忍至多 3 个标点的命令前缀或适配器给的前缀），其后只有码，码两侧至多 3 个标点（`<ABCD2345>`）；码写成一个词，或用空白或一个 `-` 连成的两段，按 NFKC、去掉零宽等格式字符与组合符、转大写后**恰好是 8 位绑定码字母表，且至少含一位数字**。绑定码生成时保证至少一位数字（`randomInt` 从 32 字符字母表均匀抽 8 位，无数字则整码重抽，不引入取模偏差；认领码有自己的生成器，不受影响），所以没有数字的词（`ABCDEFGH`、`username`、`ME PLEASE`）一律不是码、不改写。与守卫 `CHAT_BIND_TEXT` 的 token 规则对齐（一个参数、两侧至多 3 个标点），差别是：两段写法（`ABCD 2345`）与全角写法守卫不当作码但这里也隐藏（看起来就是码，旁人照着抄就能用）；拆成三段以上（`a-b-c-d-e-f-g-h`）与没有数字的词（`ABCDEFGH`、`username`、`Mysterys`、`ME PLEASE`）守卫在有开放码的私聊里仍当作码形态接手（按错码回复并计数，接手时自己记 `绑定 ***`；守卫不因无数字而放过，猜码仍会被锁），这里不改写，免得 Sandbox 源头改写让项目自己的 `bind <名字>` 只收到 `***`。不依赖码是否开放：过期或从未发出的码也一样，不会因为码过期就放出原文。绑定码不像认领码那样登记当前码，所以写入端只能按形态判断；代价是恰好形如绑定码的参数（`绑定 23456789`：全由 2–9 组成的 8 位数字无法与码区分）在 Sandbox 里被改写、在记录里显示为 `绑定 ***`（真实平台上当轮消息本身照常交给命令与 Agent）。
+- **Sandbox 在源头脱敏**：Sandbox 端点解析出一帧消息后、在回显、日志、`platform.receive` 原生事件与交给 Runtime 之前就把绑定消息改成 `绑定 ***`（也试去掉开头一个词，覆盖单词形式的命令前缀）；文本段合并成一个脱敏文本段，没有文本段的帧（文本来自 action 的 payload）不追加文本段，页面仍按 `content` 全是 action 认出它；action 段里本身是绑定形态的字符串（`data.payload`，或代替 payload 的 `data.id`）与 `message.action` 的 `payload` / `id` 也改写成脱敏文本（第 89 批复核：否则码会经广播、segments 与 `metadata.elements` / `metadata.action` 外泄）。广播给其他 Console 连接的、Runtime 记录与回放的、Agent 看到的都只有 `绑定 ***`。不丢功能：模拟适配器本来就不接受绑定码（§2.4）；命令前缀为空（默认）或带前缀发送时，`绑定 ***` 仍由 `bind` 命令回复「这个适配器上不接受绑定」，配置了前缀却不带前缀发送时它按普通消息处理，不会得到这条回复。
+- **发送者本人也只看到脱敏后的文本**：回显带同一 `messageId`，发送者页面用它替换本地乐观气泡，所以发送者的气泡（及其浏览器本地存储的会话）随即变成 `绑定 ***`。选这一做法而不是只对其他连接脱敏：服务端完全不保留原文，不需要区分连接；原文只在发送者自己的浏览器里、回显到达前（或这一帧被拒绝、没有回显时）短暂存在，这本来就是发送者自己输入的内容。
+- **写入端兜底（所有适配器）**：与认领码同一批写入点也按形态脱敏——会话记录（`ConversationRuntime.recordIncoming`）、Agent 会话消息（`serializeAgentMessage`）、trace（`scrubSecrets`）、入站 `receive` 与 `dispatch_miss` 调试日志；会话历史接口在回放时再脱敏一次，覆盖修复前已落盘的记录。
+- **保留不变**：认领码的识别与脱敏（按当前码）不变；免前缀绑定守卫只在有开放码时接手的规则（M1）不变。
+- **残余边界**：
+  - 码夹在其它文字中（`绑定 ABCD2345 谢谢`、`我想绑定 ABCD2345`）不是绑定形态，不脱敏；形近字写法同认领码。真实码总含数字，所以不再有「无数字的码按形态不识别」的情形（第 89 批复核前约十分之一的码没有数字，小写或拆成两段输入时不被隐藏；这类旧码 10 分钟内过期）。
+  - 写入端兜底（会话记录、Agent 会话消息、trace、日志）不识别单词形式的命令前缀（`zhin 绑定 X`：只有 Sandbox 源头会试去掉开头一个词，写入端只认标点前缀与调用方给的 `prefix`），也不识别被拆成多个文本段的码（逐段判断）。
+  - 不回溯：修复前已落盘的 Agent 会话消息与 trace 不会回溯脱敏，只有 `/api/conversations/history` 回放时再脱敏一次。
+  - 模型回复中引用的原文（Agent 复述用户发来的码）不处理。
+
+**后续（未实现）：沙盒会话按 Console 用户隔离。** 现状：一个 Sandbox 账号的会话（`private:<id>` / `group:<id>` / `channel:<id>`）对所有持有 `endpoint.operate` 的 Console 用户共享——同一会话的入站回显广播给所有订阅页面，会话记录、结局与 trace 对所有能读这个会话的人可见，「以我的聊天身份发言」也只改变发言身份，不改变会话归属。风险：除绑定码外，任何在 Sandbox 里输入的内容（试验用的密钥、个人信息、别人不该看到的提示词）都会被其他 Console 用户看到，本次只按形态隐藏了绑定码。方向：会话键带上 Console 用户（或由页面显式选择「共享会话」），回显只发给同一用户的连接，历史接口按调用者过滤；需要同时处理多人协作调试的场景与已有会话记录的迁移。
 
 ## 落盘位置（计划）
 

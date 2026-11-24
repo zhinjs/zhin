@@ -248,7 +248,27 @@ export async function syncProfileRoutinesToStore(
         op: 'profile_routine_agent_missing', routine: key, job: jobId, agent, available: options.agents.join(','),
       }));
     }
-    await upsertProfileJob(store, buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults));
+    let job: ScheduleJob;
+    try {
+      job = buildScheduleJobFromRoutine(jobId, defaultLabel, routine, profileDefaults);
+    } catch (error) {
+      // #1250 b99: one invalid routine (e.g. an unknown time zone) is skipped with a warning; the others
+      // sync. A job synced from an earlier, valid version is disabled with the reason, so it does not keep
+      // running the old settings unnoticed.
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.warn(formatCompact({ op: 'profile_routine_invalid', routine: key, job: jobId, error: reason }));
+      const stale = await store.getJob(jobId);
+      if (stale) {
+        await store.upsertJob({
+          ...stale,
+          enabled: false,
+          updatedAt: Date.now(),
+          state: { ...stale.state, nextRunAtMs: undefined, lastStatus: 'error', lastError: `Profile routine 配置无效：${reason}` },
+        });
+      }
+      continue;
+    }
+    await upsertProfileJob(store, job);
     synced++;
   }
   return synced;

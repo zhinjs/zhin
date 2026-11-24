@@ -16,7 +16,9 @@ export class SandboxAdapter extends Adapter<SandboxWsEndpoint, SandboxEndpointCo
   protected createEndpoint(input: SandboxEndpointConfig, execution: EndpointCreationContext): SandboxWsEndpoint {
     return new SandboxWsEndpoint({ id: execution.canonicalId, defaults: resolveSandboxEndpoint(input),
       http: this.#context.use(httpHostToken), locale: resolveLocale(this.#context.use(projectLocaleToken)),
-      ...optionalChatRoles(() => this.#context.use(chatRolesToken)) });
+      ...optionalChatRoles(() => this.#context.use(chatRolesToken)),
+      // ADR 0060 §5.4: only trusted local simulation Adapters (this package) receive it from the Adapter Feature (Root-private).
+      ...(this.#context.consoleSpeaker ? { consoleSpeaker: this.#context.consoleSpeaker } : {}) });
   }
 }
 /** The instance provides chat roles (ADR 0060 §6); hosts without them (tests, other roots) show no zhin role. */

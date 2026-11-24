@@ -11,6 +11,11 @@
  *   above (e.g. global owners, seen from an endpoint-scoped caller) show role and level only
  *   (`redacted: true`).
  * - Without a relational project database grants are refused (503 `chat-roles-unpersisted`).
+ * - #1250 / ADR 0060 §5.4: a grant to an id on a local simulation adapter (`runtime.sandbox`) that
+ *   the Sandbox never speaks as (a client-chosen sender such as `sandbox-user`: those messages use a
+ *   reserved simulated id and hold no role) is refused (400 `simulated-identity`) instead of saved
+ *   in vain. A Console Sandbox identity (`console-<userId>`, its person linked to that Console user)
+ *   may hold roles. Revoking stays possible.
  */
 import {
   CHAT_ROLES_RPC_PERMISSIONS, isConsoleChatRolesRpcType,
@@ -18,7 +23,7 @@ import {
 } from '@zhin.js/console-protocol';
 import {
   ChatRoleStorageUnavailableError, chatScopeChain, chatRoleIncludes, isChatIdentity, isChatRole, normalizeChatRoleScope,
-  type ChatRole, type ChatRoleEntry, type InstanceChatRoleService,
+  simulatedIdentitySpeaks, type ChatRole, type ChatRoleEntry, type InstanceChatRoleService,
 } from '../chat-roles.js';
 import { FeatureRpcError, readScope, type FeatureRpcReply } from './console-feature-rpc.js';
 
@@ -43,6 +48,15 @@ export interface ChatRolesRpcContext {
    */
   readonly actorDisplayName?: string;
   readonly publishEvent?: (type: string, data: unknown) => void;
+  /** Aliases of the loaded local simulation adapters (`runtime.sandbox`): grants to ids nobody speaks as there are refused. */
+  readonly simulatedAdapters?: () => readonly string[];
+}
+
+/** Why a grant to an id on a simulation adapter is refused, and what to do instead (#1250). */
+export function simulatedIdentityGrantRefusal(identity: Readonly<{ adapter: string; userId: string }>): string {
+  return `不能把角色授予模拟适配器 ${identity.adapter} 上的 ${identity.userId}：Sandbox 里手填的发送者是模拟身份，`
+    + '消息以保留 id 发出、从不解析 zhin 角色，这条授予不会生效。'
+    + '请在 Sandbox 打开「以我的聊天身份发言」并发一条消息（会为你建立 console-<你的 Console 用户 id> 身份），再把角色授予那个身份。';
 }
 
 type Record_ = Record<string, unknown>;
@@ -139,6 +153,10 @@ export async function dispatchChatRolesConsoleRpc(message: Record_, context: Cha
       if (touchesOwner && !(await authorized({ level: 'global' }))) {
         throw new FeatureRpcError(403, '授予或撤销 owner 需要全局 iam.manage 权限');
       }
+      if (type === 'chat-roles.grant' && (context.simulatedAdapters?.() ?? []).includes(identity.adapter)
+        && !simulatedIdentitySpeaks(roles.store, identity)) {
+        throw new FeatureRpcError(400, simulatedIdentityGrantRefusal(identity), { code: 'simulated-identity' });
+      }
       if (!roles.store.persistent) throw new ChatRoleStorageUnavailableError();
       if (type === 'chat-roles.grant') {
         const status = await roles.store.grant({ level, key: scope, ...identity, role: granting as ChatRole, ...(context.actor ? { grantedBy: context.actor } : {}) });
@@ -155,6 +173,7 @@ export async function dispatchChatRolesConsoleRpc(message: Record_, context: Cha
       return { status: 503, body: { success: false, code: error.code, error: error.message, type, requestId: message.requestId } };
     }
     const status = error instanceof FeatureRpcError ? error.status : 500;
-    return { status, body: { success: false, error: error instanceof FeatureRpcError ? error.message : '聊天角色操作失败', type, requestId: message.requestId } };
+    const extra = error instanceof FeatureRpcError ? error.extra : {};
+    return { status, body: { success: false, ...extra, error: error instanceof FeatureRpcError ? error.message : '聊天角色操作失败', type, requestId: message.requestId } };
   }
 }

@@ -377,18 +377,90 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 | 执行命令（`shell`） | `bash`，或带 `shell` 标签的工具 | `any_content` |
 | 写文件（`fileWrite`） | `write_file`、`edit_file`、`apply_patch`、`delete_file` 等，或带 `file_write` 标签 | `any_content` |
 | 向其他会话发消息（`outbound`） | 名称含 send/forward/notify 等，或带 `outbound` 标签 | `any_content` |
-| 修改配置（`config`） | 名称含 config/settings、安装插件等（`get_`/`list_` 等读取类除外），或带 `config` 标签 | `any_content` |
-| 定时任务（`schedule`） | 名称含 schedule/cron/reminder/timer 等（读取类除外），或带 `schedule` 标签 | `untrusted_content` |
+| 修改配置（`config`） | 名称含 config/settings、安装插件等（读取类除外，见下），或带 `config` 标签 | `any_content` |
+| 定时任务（`schedule`） | 名称含 schedule/cron/reminder/timer 等（读取类除外，见下），或带 `schedule` 标签 | `untrusted_content` |
 
 级别：`off` 不因来源确认；`untrusted_content` 读过外部内容后确认，**第一方只读工具的结果不算**；`any_content` 读过任何内容后确认（含第一方只读工具的结果）；`always` 每次都确认。普通工具和只读工具不受这道闸影响。
 
+**读取类不算高危（#1250）**：只凭名称归进「修改配置」「定时任务」的工具，如果是读取类就不因来源而弹确认：名称以读取动词开头（`get_`、`list_`、`show_`、`query_` 等），或以读取动词结尾（`_list`、`_get`、`_show`、`_status`，例如 `schedule_list`、`remind_list`、`config_get`），或工具定义里声明了 `readOnly: true`（Host 自带的 `schedule_list` 已声明）。`readOnly` 只认工具代码里的声明，不认模型给的参数。更严的标记优先：带 `schedule` / `config` / `shell` / `outbound` / `file_write` 标签、内置的执行命令 / 写文件 / 外发名称、`risk: 'dangerous'`、声明了 `riskCategory`、名称不是纯 ASCII，或名称里有写动词的工具照旧归类。写动词按名称的各种写法检查（不分大小写，驼峰与 `-` 按 `_` 拆开，例如 `schedule_Add_list`、`config_set-x_get` 都算写），动词表包括 `add`、`set`、`update`、`remove`、`delete`、`pause`、`resume`、`install`、`snooze`、`toggle`、`grant`、`revoke`、`dismiss`、`allow`、`block`、`deny`、`enable`、`disable`、`clear`、`reset`、`cancel`、`approve`、`kick`、`ban`、`mute` 等；名称里带白名单 / 黑名单一类的名单（`white_list`、`blacklist`、`allowlist`、`trust_list` 等）时，读取后缀也不算读取，因为它可能指写这份名单。`schedule_preview` 会当场执行提示词，仍算定时任务类。这条放宽只作用于来源确认，其余两处保持原来的规则：读取类工具结果是否算受信输出不变（`schedule_list` 列出的提示词可能是别人写的，结果仍算外部内容）；`requiresApproval: 'on-risk'` 下 `readOnly: true` 能否免去声明式审批也不变，名称属于配置 / 定时任务类的工具（包括插件提供的 `schedule_list`、`config_get`）照旧需要审批，无人值守时照旧按需要审批处理。Host 自带的 `schedule_list` 例外：它在工具定义里声明了 `requiresApproval: 'never'`，查看任务不弹审批卡（第 91 批：开了主人 shell 且审批模式为 `ask` 时主人原来每次都要确认，普通成员没人能审批时直接被拒）；角色与可见性过滤（只列出调用者能看到的任务）照旧生效，结果也仍算外部内容，之后的写操作照旧按来源确认。
+
 **受信输出**：第一方插件（包名是 `zhin.js` 或在 `@zhin.js/` 作用域下）里声明了 `readOnly: true` 的工具，结果算受信输出，例如天气、汇率。所以默认配置下「查一下天气，然后建个提醒」不需要确认，没有确认渠道的会话里也能完成；查完天气再执行命令、写文件、外发、改配置，仍然要确认。放宽只针对「创建」这一步：模型在读过任何内容（含受信输出）之后建的定时任务会记住这一点，每次到点运行（以及 `schedule_preview` 预演）都按读过外部内容处理，其中的执行命令、写文件、外发、改配置会被拒绝；`schedule_preview` 会当场执行提示词，不享受放宽（至少按 `any_content` 确认）。下面这些即使声明了只读也算外部内容：MCP 工具（包括上游标注 `readOnlyHint` 的）、`web_fetch` / `web_search`、文件与知识库工具（`read_file`、`grep`、`glob`、`list_dir`、`knowledge_search`、`get_local_assets`）、`memory_search`、`todo_read`、`get_self_profile`，以及带 `external_content` 标签的工具（如摸鱼日历、油价、金价、账目列表 / 汇总）。插件作者：只读工具如果会返回别人能写的文本（群成员昵称、入群申请留言等）、原样拼接上游自由文本或以前回合写入的文本，请加 `external_content` 标签。
 
-**背景消息里机器人自己的回复不算来源（#1250）**：上一回合的回复会作为背景消息出现在下一回合（会话游标停在入站消息上），模型仍能看到它，但它不会让回合算作「读过外部内容」——会话历史本身就不算来源，自己的回复与历史同等对待。只认本会话里 Agent 按原文投递的回复；成员的消息、场景事件，以及机器人经插件命令、定时任务、其他会话发出或被中间件改写过的消息仍算外部内容，进程重启后以前的回复也重新算作外部内容。读过外部内容（工具结果、成员消息等）的回合写的回复不在此列：它可能复述了注入内容，下一回合照旧计来源；重置会话（`/clear`）时投递记录一并清空。私聊里来源链写「私聊里的背景消息」，群聊写「群聊背景消息」（[ADR 0067 D7](../adr/0067-high-risk-confirm-tiers.md#d7-背景消息里机器人自己的回复不算来源-1250-own-reply-counts-as-background)）。
+**背景消息里机器人自己的回复不算来源（#1250）**：上一回合的回复会作为背景消息出现在下一回合（会话游标停在入站消息上），模型仍能看到它，但它不会让回合算作「读过外部内容」——会话历史本身就不算来源，自己的回复与历史同等对待。只认本会话里 Agent 按原文投递的回复；成员的消息、场景事件，以及机器人经插件命令、其他会话发出或被中间件改写过的消息仍算外部内容，进程重启后以前的回复也重新算作外部内容。定时任务投递见下一段。读过外部内容（工具结果、成员消息等）的回合写的回复不在此列：它可能复述了注入内容，下一回合照旧计来源；重置会话（`/clear`）时投递记录一并清空。私聊里来源链写「私聊里的背景消息」，群聊写「群聊背景消息」（[ADR 0067 D7](../adr/0067-high-risk-confirm-tiers.md#d7-背景消息里机器人自己的回复不算来源-1250-own-reply-counts-as-background)）。
+
+**本实例定时任务的干净投递不算来源（#1250）**：定时任务到点运行后投递到某个会话（例如每天投递到主人私聊的早报），下一回合这条消息会作为背景出现。满足以下全部条件时，它与 Agent 自己的回复同等对待，不会让回合算作「读过外部内容」：这次运行没有读过任何记录在案的内容（工具结果、网页、文件、背景消息、子 Agent 报告等，含第一方只读工具的结果），任务也不是在读过内容之后创建的（任务的来源记录为空）；任务不是由外部事件触发的事件任务；平台回执确认按原文发出了这一条消息（文本摘要一致，没被中间件改写，也没拆成多条）。投递记录只在本进程内存里，按平台消息与文本摘要记账，用户发的同样文字是另一条消息，不能借此豁免；进程重启后重新算作外部内容。豁免对象按任务的创建者判断：在聊天里创建的任务只对创建者本人的回合生效，与判断「谁创建了任务」的规则一致，要求同一 sender id、同一适配器、同一端点（同一个 IM 账号），且回合由人发起、不是合流回合；部署方创建、没有聊天创建者的任务（Console 或 CLI 创建的 `source: 'manual'` 任务、Profile 例程 `source: 'profile'`，来源须由创建方显式写明）对所有回合生效。没有写明来源的任务（例如插件直接添加、没有给 `source` 的任务；调度器不再把缺省来源当作 `manual`）、没有记录创建者的旧任务、创建者没有聊天地址的任务（A2A、MCP 等非 IM 来源）不享受豁免。运行中读过外部内容的任务，其投递仍按外部内容处理。
 
 **私聊里发起人自己的原文消息不算来源（#1250）**：私聊里发起人自己更早发的、没被处理的消息（例如不是指令的 `/clear`）会作为背景出现在下一回合，模型仍能看到它，但它不会让回合算作「读过外部内容」。只认同一平台、同一 endpoint、同一会话里与本回合发起人同一 sender id、且按入站原文存下的纯文本消息，并且这个适配器在能力画像里声明了 `messaging.inboundTextAuthoredBySender`（保证转发、引用、卡片都不会以纯文本段出现；目前有 sandbox、telegram、onebot11、napcat、discord）——核心在任何中间件之前用实例密钥给原文记下摘要（HMAC，绑定会话、消息、发送者和原文），读出时再核对，进程重启后旧证据失效。没声明这项能力的适配器（如 email、ipad-wechat、qq 官方、slack、lark、kook、钉钉）、带转发标记（Telegram 的转发、inline bot 结果、跨会话引用）、带引用、转发、媒体或 @ 的消息、别人发的消息、被改写或缺少证据的消息照旧计来源。群聊、频道不放宽，同样的消息仍计「群聊背景消息」。没被任何指令处理的 `/clear`、`/reset`、`/new`（大小写、全角斜杠都算）直接清空本会话的上下文（见[会话与会话树](#会话与会话树)）；清空与归档的确认都是固定文案，下一回合不计来源（[ADR 0067 D8](../adr/0067-high-risk-confirm-tiers.md#d8-私聊里发起人自己的原文消息不算来源-1250-own-unhandled-message-counts-as-background)）。
 
-审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批每次单独确认，不会沿用会话里已记住的批准。无人值守的回合（定时任务、后台事件等）没有人能确认，会直接拒绝，策略名为 `external-content-confirmation`。
+审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”，以及触发确认的规则和每个来源的类型（见下文[规则速查](#high-risk-rules)）。这类审批不会沿用会话里已记住的批准。
+
+**同一件事在一个回合里只确认一次（#1250）**：同一回合里，同一发起人用同一个工具对同一类高危动作（上表的类别）、同一目标确认过一次后，本回合后面的同类调用不再重复确认，前提是确认之后没有新的外部内容进入回合。按目标合并只用于修改配置和定时任务两类，而且只在工具输入定义里声明的参数恰好是一个标识参数（`id`、`job_id`、`target`、`group_id`、`user_id`、`path`、`key` 等，比对时去掉 `_` / `-` 并忽略大小写，类型须是单一的字符串或数字）加若干已知的取值参数（`cron`、`schedule_kind`、`delay_minutes`、`label`、`enabled`、`value`；改任务内容的 `prompt`、`description` 不在其中，改它们总要重新确认）时才按目标判断，限定在同一插件、同一 MCP 服务器、同一工具内；例如 `schedule_update` 之后再 `schedule_remove` 同一任务要再问一次。Host 自带的 `schedule_update` 的结果只含框架生成的结构化数据（任务 id、保存后的计划、启用状态、下次运行时间、固定提示）和本次调用自己给出的值：只在本次调用给了 `label` 时回显这个值，只在本次调用改了计划时回显保存后的计划（时区不回显），否则只回显计划类型，不回显别人写的标签、提示词或计划文字，所以它的成功结果不算来源，连续两次 `schedule_update` 同一任务只问一次；调用失败（返回错误或抛错）时，错误文字仍按外部内容记，下一次调用重新确认。这项豁免只覆盖 `schedule_update`，按工具定义判断（Host 的定义带 `trusted_output` 与 `untrusted_failure` 标签），插件提供的同名工具不受影响；`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume` 的结果仍按默认规则算外部内容。只读的 `schedule_list` 不弹确认，但它的结果（含别人写的提示词和标签）与 `schedule_preview` 的预演回复仍算外部内容。工具声明了其他任何参数（如 `field`、`slug`、`index`、`url`、`name`）、声明了多个标识参数、标识参数是数组或组合类型，或者调用里带了工具没有声明的参数时，按完全相同的参数判断。执行命令、写文件、向其他会话发消息三类一律按完全相同的参数判断：命令、文件内容、消息文字本身就是确认的内容，所以对同一主机的两条不同命令、给同一个人的两条不同消息、写同一个文件的两份不同内容各问一次。确认之后又读入新的外部内容（新的工具结果、网页、背景消息等，包括这次调用本身被记作外部内容的结果）时，下一次调用重新确认；同一个工具再读一次也算，例如用 `web_fetch` 读了另一个网址。目标不同、工具不同、类别不同、发起人不同（合流回合里按 `onBehalfOf` 区分）、下一回合都要重新确认；被拒绝或超时的确认不记录。一次确认不会带来比它本身更多的授权：只确认了意图（发起人本人确认）时，后续调用仍按原规则走普通审批；第一次调用本身不需要授权时，它的确认也不能代替后续调用需要的授权；需要主人的调用不会被管理员的确认覆盖。`requiresApproval: 'human'` 的工具每次都单独确认，危险工具硬闸不受影响。确认记录只在本回合的内存里，不持久化、不跨会话。无人值守的回合（定时任务、后台事件等）没有人能确认，会直接拒绝，策略名为 `external-content-confirmation`。
+
+#### 规则速查：哪一步会弹确认、为什么（#1250） {#high-risk-rules}
+
+下面三张表把上文分散的规则集中在一起，逐条对应代码；只描述现状，不是新规则。确认卡与审计记录也按这几张表写明原因（见表后的「确认卡写明规则与来源」）。
+
+**一、哪些工具算哪一类高危**（自上而下取第一条命中的规则）
+
+| 顺序 | 类别 | 命中条件 | 依据 |
+|---|---|---|---|
+| 1 | 执行命令 `shell` | 名称是 `bash`，或带 `shell` 标签 | 名字规则 / 标签 |
+| 2 | 向其他会话发消息 `outbound` | 带 `outbound` 标签，或名称里有一段是 `send`、`forward`、`broadcast`、`notify`、`email`、`mail`、`dm`、`post_message`、`private_message` | 标签 / 名字规则 |
+| 3 | 写文件 `file_write` | 带 `file_write` 标签，或名称（任一写法）是 `write_file`、`edit_file`、`multi_edit`、`apply_patch`、`delete_file`、`move_file`、`rename_file` | 标签 / 名字规则 |
+| 4 | 修改配置 `config` | 带 `config` 标签 | 标签 |
+| 5 | 定时任务 `schedule` | 带 `schedule` 标签 | 标签 |
+| 6 | 修改配置 `config` | 名称不以读取动词开头（`get_`、`read_`、`list_`、`show_`、`view_`、`query_`、`search_`、`find_`、`check_`），且有一段是 `config`、`configs`、`configuration`、`setting`、`settings`、`plugin_install`、`install_plugin`、`uninstall_plugin` | 名字规则 |
+| 7 | 定时任务 `schedule` | 名称不以读取动词开头，且有一段是 `schedule(s)`、`cron(s)`、`reminder(s)`、`remind`、`timer(s)`、`alarm(s)` | 名字规则 |
+
+读取类例外只作用于第 6、7 行（只凭名字归进配置 / 定时任务的工具），而且要同时满足：没有对应类别的标签；没有 `risk: 'dangerous'`；没有声明 `riskCategory`（`riskCategory` 本身不会把工具归进这五类，只会让读取例外失效）；名称是纯 ASCII；名称的各种写法里没有写动词，也没有白名单 / 黑名单一类的名单名词；并且工具代码声明了 `readOnly: true`，或名称以 `_list`、`_get`、`_show`、`_status` 结尾。反例：`schedule_add_list`、`schedule_Add_list`、`config_set-x_get`（有写动词）、`config_white_list`、`schedule_allowlist_get`（名单名词）仍归类。`schedule_preview` 不是读取类。细节见上文「读取类不算高危」。
+
+**二、每类在什么条件下要确认**（`ai.agent.injectionGuard.confirmHighRisk`）
+
+| 类别（配置键） | 默认级别 | 默认含义 |
+|---|---|---|
+| `shell` | `any_content` | 本回合记录过任何来源（含第一方只读结果）后确认 |
+| `fileWrite` | `any_content` | 同上 |
+| `outbound` | `any_content` | 同上 |
+| `config` | `any_content` | 同上 |
+| `schedule` | `untrusted_content` | 本回合记录过第一方只读结果以外的来源后确认；`schedule_preview` 至少按 `any_content`（显式写 `off` 时不确认） |
+
+| 级别 | 何时确认 |
+|---|---|
+| `off` | 不因来源确认 |
+| `untrusted_content` | 回合里有第一方只读结果以外的来源 |
+| `any_content` | 回合里有任何来源 |
+| `always` | 每次调用，不论来源 |
+
+字符串写法作用于所有类别：`external_content` 等于全部 `any_content`，`always`、`off` 原样作用；无法识别的值按 `any_content`，不会放宽。无人值守的回合（定时任务、后台事件）没有人能确认，需要确认时直接拒绝；即使把某类调低，到了无人值守、要靠自动审核放行的调用，仍按默认级别判断（只会更严）。另外，写发起人自己的 `user` 记忆不属于这五类，但回合里有任何来源时也会先请发起人确认意图（见[语义记忆](#语义记忆)）。
+
+**三、哪些东西算「读过内容」，以及例外**
+
+| 来源 | 什么时候记 | 不算来源的情况 |
+|---|---|---|
+| 工具结果 | 每次工具调用完成后；返回 `{ error }`、MCP `isError` 或抛出的错误文本也算 | harness 工具 `discover`、`load_tool`、`load_skill`、`ask_user`；带 `trusted_output` 标签或写进 `injectionGuard.trustedOutputTools` 的工具（对所有类别都不算）；取消、超时与本地策略拒绝等 harness 自己写的错误 |
+| 第一方只读结果（受信输出） | 第一方插件（`zhin.js` 或 `@zhin.js/*`）声明 `readOnly: true`、不是 `risk: 'dangerous'`、没有 `riskCategory`、按表一（不含读取例外）不属于任何高危类别的工具 | 只对 `any_content` 的类别算来源，`untrusted_content` 不算；返回错误时按外部内容记 |
+| 一定算外部内容的工具 | MCP 工具（即使上游标了只读）、`web_fetch`、`web_search`、`read_file`、`list_dir`、`glob`、`grep`、`knowledge_search`、`get_local_assets`、`memory_search`、`todo_read`、`get_self_profile`、带 `external_content` 标签的工具 | 无（`trusted_output` / `trustedOutputTools` 仍可声明为不算） |
+| 背景消息与场景事件 | 上一回合以来本会话新到的消息和事件 | 本会话里 Agent 按原文投递的回复；本实例定时任务的干净投递；私聊里发起人自己的原文消息（条件见上文三段） |
+| 识图 / 媒体描述 | 识图模型为用户图片、媒体生成的描述 | 无 |
+| 定时任务提示词 | 到点运行或 `schedule_preview` 的任务是在读过任何内容（含受信输出）后创建的 | 由人在 Console / CLI 创建、或创建时没读过内容的任务 |
+| 子 Agent | 子 Agent 与根回合共用同一条来源记录，它读到的内容直接计入；`ask`、`delegate`、`follow_up`、`board_read` 的结果按普通工具结果记 | 同工具结果 |
+
+同一回合里同一件事只确认一次的规则见上文「同一件事在一个回合里只确认一次」。
+
+代码位置：分类与级别在 `packages/im/agent/src/security/provenance.ts`（`classifyHighRiskAction`、`nameHighRiskCategory`、`resolveHighRiskConfirm`、`classifyToolOutput`、`TurnProvenance`），名称表在 `trust-level.ts`（`isOutboundToolName`、`isFileWriteToolName`），确认与无人值守的处理在 `packages/im/agent/src/tool/turn-tool-runtime.ts`，背景消息的例外在 `packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts` 与 `session/context-provenance.ts`，记忆写入的意图确认在 `security/policy-facade.ts`，合并确认在 `security/high-risk-confirmation-batch.ts`。
+
+**确认卡写明规则与来源（#1250）**：来源确认卡（策略 `external-content-confirmation`）在原来的原因与来源链之后多两行，例如：
+
+```text
+风险：这次创建或修改定时任务发生在读取外部内容之后，外部内容可能夹带了指令。
+来源链：主人的消息 → 工具 web_fetch 的结果 → 本次调用 schedule_add
+规则：`schedule_add` 被当成定时任务操作（名字规则）；这一类在本回合读过外部内容后需要确认，第一方只读结果不算（untrusted_content）。
+来源：web_fetch 读取的网页；本会话上一回合以来的群聊背景消息（2 条消息、0 个其他事件）
+```
+
+「规则」写类别、依据（名字规则或工具标签）与这次用的级别；「来源」按类型写每个来源（网页、搜索结果、工作区文件、知识库、已存记录、MCP 服务与工具、子 Agent、第一方只读结果、背景消息条数、识图描述、定时任务提示词），最多列 5 个。卡片只写来源类型、工具名、MCP 服务名和条数这类元数据，从不引用外部内容原文；工具名和 MCP 服务名可能由上游 MCP 服务自己起，按不可信文本处理：ASCII 名称只保留英文字母、数字和 `_ . : -`，其余字符换成 `_`；名称里的非 ASCII 字符（汉字、全角字母、形近的西里尔字母等）一律显示成 `\uXXXX` 转义，不显示成可读文字，也不做全角转半角，所以 `ｗｅｂ＿ｆｅｔｃｈ` 不会显示成 `web_fetch`，「规则」「来源」两行里的名称也写不出一句中文；超过 64 个字符的名称保留开头和结尾，中间用 `…` 省略。卡片文字跟随发起这一回合的消息的显示语言（`zh-CN` / `en`），即使确认的人是别人（例如群成员发起、主人确认）；卡片首行的动作描述（取自工具的说明）和普通审批里策略给出的原因不翻译，按原文显示。MCP 工具的说明由上游 MCP 服务自己写，所以首行会标明来源：前面加上 harness 写的固定标签「上游描述（MCP 服务 X 提供，未经核实）：」（英文卡片为 `Upstream description (from MCP server X, unverified): `），X 是按上面的名称规则转义后的服务名；上游说明只取第一行（任何换行符都算，包括 `\r`、`\v` 和 Unicode 行分隔符）和第一句；其中的控制字符、格式字符（双向覆盖、零宽字符等）、未分配与私用码位、不可见的填充字符（如韩文填充符、盲文空白）和连续空白折叠成一个空格，连续叠加的组合符号最多保留 2 个，超过 200 个码点截断并加 `…`。危险工具确认的首行把危险类别写在标签之前（`危险操作（类别）：上游描述…`），上游文字仿写不了类别。上游没有写说明时，首行改为 harness 自己写的「调用 MCP 服务 X 的工具 Y」（`Calling tool Y of MCP server X`），两个名字都按名称规则转义。第一方与插件工具的首行不变。标签之后的文字仍是未经核实的上游原文，上游也可能在说明里仿写一个标签（仿写的只会出现在真标签之后），所以确认时仍以「规则」「来源」两行为准，不要因为首行的文字就批准；危险工具的确认（`危险操作：`）同样带这个标签。每次来源确认写的决策审计 `tool_approval` 在 `payload` 里多三个字段：`rule`（如 `schedule.name`、`outbound.tag`）、`confirmLevel`（这次用的级别）和 `sourceKinds`（来源类型，如 `["tool_result","conversation_context"]`）。
+
+**发版说明**：高危确认规则（分类、级别、来源与例外）的变化在发版说明里单独成条，约定见[开发流程：高危确认规则变化](../contributing/development.md#high-risk-release-notes)。
 
 **IM 会话里的确认（#1250）**：实时 IM 回合在当前会话里发确认消息（经正常出站链；支持按钮的平台带按钮，纯文本平台按编号或文字回复），写明要执行的动作、关键参数（密钥类字段与令牌打码）和来源链。谁能回答：
 
@@ -411,7 +483,7 @@ ai:
 
 开启后管理员本人能批准的操作（#1250 安全审查）：
 
-- 声明了 `tags: ['admin_approvable']` 的工具（Host 自带的 `schedule_add` 已声明）的普通审批；读过外部内容后这类工具的确认，一次回答同时覆盖意图与授权。
+- 声明了 `tags: ['admin_approvable']` 的工具（Host 自带的 `schedule_add`、`schedule_update` 已声明）的普通审批；读过外部内容后这类工具的确认，一次回答同时覆盖意图与授权。
 - 写本会话的 `session` 记忆；写自己的 `user` 记忆前的意图确认（见[语义记忆](#语义记忆)的审批等级）。
 
 其余都需要主人，管理员本人不能批：敏感文件与受保护路径（如读取 `.git/config`、`.env`，文件策略的「需 Owner 确认」）、Shell 命令（exec 策略）、写 `global` / `platform` 记忆（ADR 0056 §2）、未声明 `admin_approvable` 的插件工具（`always` / `once` / `on-risk`）、自动审核 Agent 升级给人的审批、`requiresApproval: 'human'` 与危险工具硬闸。这些请求带 `requiresOwner`，或缺少 `adminMayApprove`，管理员的确认渠道直接返回「需要主人」，不弹提示。会话层 `admin`、被降级的会话层 owner 不算管理员审批人；读过外部内容后，若调用本身需要主人批准，管理员对意图的确认也不会代替主人。
@@ -424,7 +496,7 @@ ai:
 
 **`auto` 模式的风险**：`execApprovalMode: auto`（默认值）下，这类确认仍由审核 Agent 决定，行为不变。审核 Agent 看到的请求里带着模型生成的参数，外部内容中的提示注入可能影响它的判断，结果可能是放行。对高价值实例（能执行命令、改配置、对外发消息、管理群成员的 Bot）建议使用 `ask`，或保持 `confirmHighRisk` 的默认值（不要设为 `off`）并让主人在私聊里确认；`bypass` 只适合本机开发。
 
-`discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。其他工具如果结果完全可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`：这两种写法的结果对所有类别都不算来源（比受信输出更宽）。
+`discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。其他工具如果结果完全可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`：这两种写法的结果对所有类别都不算来源（比受信输出更宽）。成功结果完全由工具自己生成、但错误文字可能引用别处内容的工具，再加 `untrusted_failure` 标签：成功结果不算来源，失败（返回错误或抛错）仍按外部内容记。harness 工具和写进 `injectionGuard.trustedOutputTools` 的工具以部署者配置为准，失败也不算来源，`untrusted_failure` 对它们不起作用。
 
 **配置**：`confirmHighRisk` 可以按类别写，没写的类别用默认级别；也可以写一个字符串作用于所有类别：`external_content`（原来的含义，等于所有类别 `any_content`，查完天气建提醒也要确认）、`always`、`off`。显式写过的字符串不会被放宽。设成 `off` 会同时失去对执行命令、写文件、外发、改配置的保护，`zhin doctor` 会提示；只想少打扰，改关单个类别，例如 `confirmHighRisk: { schedule: off }`。
 
@@ -665,7 +737,7 @@ ai:
 | 记忆 / 检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
 | 媒体 | `generate_image`；配置 R2 后可审批调用 `upload_image(file_path)`；工具结果里的私有图片（MCP、插件、Seam 与内置工具）通过 `get_local_assets(asset_id)` 按需查看，见[图片存储](./index.md#ai-imagestorage) |
 | 元工具 | `discover`、`load_tool`、`load_skill` |
-| 定时 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
+| 定时 | `schedule_list`、`schedule_add`、`schedule_update`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
 
 **文件边界**：文件工具只能在当前回合授权的项目目录内工作。相对路径以该目录为根；绝对路径必须仍在其中；`~`、`../` 越界以及通过符号链接指向目录外的路径都会被拒绝。通过检查的规范化路径才会交给工具；`glob` / `grep` 不启动 shell 子进程。
 
@@ -768,7 +840,8 @@ routines:
 - 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
 - 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
 - **预演只试运行任务内容**：`schedule_preview` 与 `schedule_add` 的 `prompt` 是到点要执行的内容（例如「提醒我喝水」），不是建任务的请求，不含时间安排（时间放在 `cron` / `delay_minutes`）。预演回合不提供任何 `schedule_*` 工具，即使模型把「明天 8 点提醒我喝水」整句传进预演，预演也不会自己去建任务（以前会在无人值守下被拒，用户点了允许却收到「任务没建成」）。
-- **聊天里能看到、能管理哪些任务**：所有者（`owner` 角色）的 `schedule_list` 列出全部持久化任务，`schedule_remove` / `schedule_pause` / `schedule_resume` 可以管理任何任务。其他人（群管理员也一样）的 `schedule_list` 只列出**自己在聊天里创建的任务**（同一用户、同一平台账号与 endpoint）和**投递到当前会话的任务**——投递到当前会话的他人任务，会话成员都能看到它的提示词（prompt）和标签（label），不要在这类任务里写不想让会话成员看到的内容；删除、暂停、恢复只能针对自己创建的任务，任务不存在和不是自己的任务得到同一句`未找到你能管理的任务：<id>`，不会透露任务是否存在（所有者仍得到「未找到」）。在 Console、CLI 或 Profile 创建的任务没有聊天创建者，非 IM 来源（A2A、MCP、到点运行、远程 Mail 等）创建的任务也不认创建者（这些来源的身份是共用的 `a2a-client` / `mcp-client` / `schedule` 或对端自报的 id），都只有所有者能在聊天里看到和管理。Profile 例程在聊天里不能删除、暂停或恢复（重启时会按 Profile 还原），所有者也会被提示去 Profile 文件（`assistant.profile.file`，默认 `assistant.profile.yml`）修改。列表里任务指定的 Agent 若不在你当前会话能用的 Agent（`@名称` 可见范围加默认 `zhin`）之内，只显示「其他 Agent」（`agent_hidden: true`），不显示名称；任务指定的 Agent 已从配置删除时带 `agent_missing: true`，只有所有者能看到它的名称，其他人看到「其他 Agent」。插件注册的内存任务只有插件名与 cron 表达式，不含提示词和投递目标，照常列出。
+- **聊天里能看到、能管理哪些任务**：所有者（`owner` 角色）的 `schedule_list` 列出全部持久化任务，`schedule_update` / `schedule_remove` / `schedule_pause` / `schedule_resume` 可以管理任何任务。其他人（群管理员也一样）的 `schedule_list` 只列出**自己在聊天里创建的任务**（同一用户、同一平台账号与 endpoint）和**投递到当前会话的任务**——投递到当前会话的他人任务，会话成员都能看到它的提示词（prompt）和标签（label），不要在这类任务里写不想让会话成员看到的内容；修改、删除、暂停、恢复只能针对自己创建的任务，任务不存在和不是自己的任务得到同一句`未找到你能管理的任务：<id>`，不会透露任务是否存在（所有者仍得到「未找到」）。在 Console、CLI 或 Profile 创建的任务没有聊天创建者，非 IM 来源（A2A、MCP、到点运行、远程 Mail 等）创建的任务也不认创建者（这些来源的身份是共用的 `a2a-client` / `mcp-client` / `schedule` 或对端自报的 id），都只有所有者能在聊天里看到和管理。Profile 例程在聊天里不能修改、删除、暂停或恢复（重启时会按 Profile 还原），所有者也会被提示去 Profile 文件（`assistant.profile.file`，默认 `assistant.profile.yml`）修改。列表里任务指定的 Agent 若不在你当前会话能用的 Agent（`@名称` 可见范围加默认 `zhin`）之内，只显示「其他 Agent」（`agent_hidden: true`），不显示名称；任务指定的 Agent 已从配置删除时带 `agent_missing: true`，只有所有者能看到它的名称，其他人看到「其他 Agent」。插件注册的内存任务只有插件名与 cron 表达式，不含提示词和投递目标，照常列出。
+- **修改已有任务**：改时间、标签或启用状态用 `schedule_update`（按 `id`，可给 `cron`、`schedule_kind`、`delay_minutes`、`label`、`enabled`），不要用 `schedule_add` 新建再 `schedule_remove` 删除旧任务：重建的任务不会带上原任务的 Agent（列表里可能显示为「其他 Agent」、`agent_hidden: true`）、投递目标、创建者和执行计划。只给 `cron` 时沿用原来的 `schedule_kind`，只给 `schedule_kind` 时沿用原来的 cron；其余字段一律保持不变。沿用或显式给出的 `solar` 不会因 cron 的周字段是 `1-5` 被改成 `workday`（只有原任务不是 cron 计划且没给 `schedule_kind` 时，才与 `schedule_add` 一样推断）。`schedule_kind` 不区分大小写；`delay_minutes` 必须大于 0，且不能与 `cron` 或其他 `schedule_kind` 同时给；`at_ms`、`tz` 等工具说明里没有的参数会被拒绝。无效的 cron 直接报错，任务与原来的计时都不变；保存后任务仍启用却算不出下次运行时间时，结果带 `warning`。`workday`、`freeDay`、`holiday` 只取 cron 的时分秒（日、月、周三段写成 `*`，给 `0 0 9 * * 1-5` 会存成 `0 0 9 * * *`），因此**从 `workday` 改回 `solar` 时必须同时给出完整的 cron**（如 `schedule_kind: solar` 加 `cron: 0 0 9 * * 1-5`）：只给 `schedule_kind: solar` 会沿用 `0 0 9 * * *`，变成每天执行，原来的 `1-5` 不会恢复。任务正在执行时被修改，本次执行结束后按修改后的任务计算下次运行时间：改了计划的一次性任务不会在执行结束后被删除，也不会按旧计划自动重试；修改与执行结束后的状态写入按任务逐个串行，不会互相覆盖（执行本身不阻塞修改）。一次性任务若已执行完并被删除，之后到达的修改得到「未找到」。只改标签不会重置 `every` 等间隔任务的计时。谁能修改与 `schedule_remove` 相同，按写操作确认（与 `schedule_add` 同属定时类高危操作）；与 `schedule_add` 一样声明了 `admin_approvable`，开启 `ai.agent.approval.adminSelfApprove` 时，端点层或以上的管理员可以在自己的私聊里本人批准一次，否则只有主人能批。CLI 对应 `zhin schedule update`。
 - **指定执行的 Agent**：任务默认由 `zhin` 执行。要让某个任务（如早报）走 `ai.agents` 里配置的另一个 Agent，用 `zhin schedule add --agent <名称>` 创建，或 `zhin schedule set-agent <id> <名称>` / `--clear` 修改；聊天里 `schedule_add` 也接受可选的 `agent` 参数。名称必须是已配置的 Agent，否则报错并列出可用的 Agent。聊天里只能指定**你在当前会话里能用的** Agent：与 `@名称` 点名 Agent 时的可见范围相同（Agent 包的 `platforms` / `scopes` / `permissions` 过滤），再加上默认的 `zhin`；看不到的 Agent 与不存在的一样被拒绝，不会借此把任务交给它。只在 `ai.agents` 里配置、没有对应 Agent 包的 Agent 聊天里无法 @ 到，因此也只能用 CLI 或 Console 指定。
   - 聊天里的可见性**只在创建任务时检查**。之后即使撤销了你对该 Agent 的权限（改了 Agent 包的 `platforms` / `scopes` / `permissions` 或你的角色），已有任务仍由原 Agent 执行；要收回，用 `zhin schedule set-agent` / Console 修改或删除该任务。
   - `set-agent` 修改的是投递到原目标的任务，因此和创建时一样，要求对任务投递目标账号有 `endpoint.operate`，否则返回 403。

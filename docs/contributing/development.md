@@ -237,13 +237,16 @@ Git 历史中是否存在消费 patch changeset、提升 patch 版本并新增�
 内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
 进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。
 
-### 1.1 稳定线
+### 1.x 稳定线
 
 官方 npm 生态统一使用 1.1.x 稳定线。81 个未占用该版本号的包从 1.1.0 开始；
 7 个历史上已经发布过 1.1.0 的包使用各自在 1.1.x 中下一个可用 patch，因为 npm
 不允许复用已发布版本号。历史更高版本保留在 npm 以免破坏已有 lockfile，并标记为
 由对应包的 1.1.x 稳定版本取代。发布后每个官方包的 `latest` 与 `stable` 均指向其
-1.1.x 稳定版本，后续常规发布只增加 patch。
+1.1.x 稳定版本，后续常规发布只增加 patch。含不兼容公开 API 变更的发布经所有者批准后走 minor：
+在 `.changeset/version-policy.json` 的 `approvedNonPatchReleases` 里登记包名、目标版本 `X.Y.0` 与理由，
+`pnpm check:release-plan` 只放行登记过的 minor，major 一律拒绝。所以各包版本会前进到 1.10、1.14 等，
+仍属同一条 1.x 稳定线；下表只记录重置时的起始版本。
 
 | 1.1.0 已占用的包 | 稳定版本 |
 | --- | --- |
@@ -254,6 +257,16 @@ Git 历史中是否存在消费 patch changeset、提升 patch 版本并新增�
 | `@zhin.js/console-protocol` | `1.1.5` |
 | `@zhin.js/core` | `1.1.35` |
 | `@zhin.js/plugin-runtime` | `1.1.9` |
+
+### 高危确认规则变化 {#high-risk-release-notes}
+
+部署者需要能从发版说明里直接看出「哪一步会多弹或少弹确认」，所以高危确认规则（[规则速查](../ai/agent.md#high-risk-rules)里的分类、级别、来源与例外，以及确认卡写明的原因）的变化在发版说明里单独成条。
+
+当前的 changelog 生成器是 `.changeset/config.json` 里的默认 `@changesets/cli/changelog`：它只按 Major / Minor / Patch 分组，每个 changeset 的正文写成一条列表项（首行跟在提交哈希后面，其余行缩进在这一条里）；GitHub Release 的正文（`scripts/create-github-releases.mjs`）照抄该包 `CHANGELOG.md` 里这一版的内容。它不支持自定义分节，正文里写 `### 高危确认规则` 这样的标题只会落在某一条列表项里面。因此不改发布脚本，改用下面的约定：
+
+- 规则变化单独写一个 changeset 文件，文件名带 `high-risk`（例如 `.changeset/b95-1250-high-risk-explain.md`），不和其他改动混在同一个文件里，这样它在发版说明里是单独的一条。
+- 正文首行以固定前缀 `**高危确认规则**：` 开头，后面一句话说明对部署者的影响；判定没变、只改了说明或卡片文案时写「判定不变」。
+- 正文其余部分逐条列出变化（哪类工具、哪个级别、哪种来源或例外），同一提交里同步更新中英文文档的规则速查表。
 
 ## 发版（GitHub CI）
 

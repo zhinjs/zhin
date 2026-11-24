@@ -23,6 +23,8 @@ import { FeatureRpcError, type FeatureRpcReply } from './console-feature-rpc.js'
 
 export interface ChatRoleImportsRpcContext {
   readonly imports?: ChatRoleImportBook;
+  /** Aliases of the loaded local simulation adapters: an owner grant nobody speaks as there does not count (#1250). */
+  readonly simulatedAdapters?: () => readonly string[];
   /** ADR 0060 §4.1 (P3): `ai.personalPrincipals` import record; `acknowledge` marks it read as well. */
   readonly personal?: PersonalPrincipalImportBook;
   /** Applies a confirmed personal link. */
@@ -64,7 +66,7 @@ export async function dispatchChatRoleImportsConsoleRpc(message: Record<string, 
         ...(state.importedAcknowledgedAt ? { acknowledgedAt: state.importedAcknowledgedAt } : {}),
         pending: state.pending,
         ...(personalPending.length ? { personalPending: Object.freeze(personalPending) } : {}),
-        hasGlobalOwner: context.roles ? hasGlobalOwner(context.roles) : false,
+        hasGlobalOwner: context.roles ? hasGlobalOwner(context.roles, context.simulatedAdapters?.() ?? []) : false,
       });
     } else {
       const decision = input.decision;

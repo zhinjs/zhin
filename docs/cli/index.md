@@ -103,17 +103,21 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 | `build` / `publish` | 作用于整个 workspace，按依赖顺序处理（单个插件用 `zhin build` / `zhin pub`）。两者都先打印计划：会处理哪些包、版本，跳过了哪些包及原因（没有 `build` 脚本 / `private: true`）；计划为空时明确说明。`publish` 默认 dry-run（打印计划并运行 `pnpm publish --dry-run`），加 `--execute` 才把全部非 private 包发到 npm（需要 npm 登录；先用临时 dist-tag 发布，全部成功后改到 `--tag`），进度写入 `.zhin/publish-journal.json`，中断后用 `--resume` 继续。`--json` 只输出计划（含 `empty` 字段），不执行任何命令。dry-run 计划为空时退出码为 0，`--execute` / `--resume` 计划为空时退出码为 1 |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
-脚手架生成的项目里已有这些惯例脚本：
+脚手架生成的项目里已有这些惯例脚本（`zhin migrate` 给升级的项目补齐的也正是这一组，缺哪个补哪个，已有的不动）：
 
 ```json
 {
   "scripts": {
     "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
-    "stop": "zhin stop"
+    "stop": "zhin stop",
+    "preview": "zhin preview",
+    "build": "tsc --noEmit"
   }
 }
 ```
+
+要后台运行直接用 `zhin start`（默认就在后台），不需要单独的 `daemon` 脚本。
 
 ### service：系统服务 {#service}
 
@@ -169,6 +173,7 @@ Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
   - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
+  - 标准输入不是终端（管道、`< /dev/null`、CI）时，`init` / `user create` / `user passwd` / `init --reset-store` 不会进入交互提问，而是直接报错退出（退出码 1）并提示改用 `--password-stdin` / `--owner` / `--yes`；`zhin setup`、`zhin onboard`、不带插件名的 `zhin install` 同理。
 - **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户名、显示名、状态、角色绑定和**用户 id**（`ai.personalPrincipals` 的键写 `user:<用户 id>`），`--json` 输出 `{ users: [{ id, username, displayName, disabled, roles }] }`。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
 - **`init --reset-store`**：`.zhin/gateway.db` 丢失或被替换（项目数据库的标记 `zhin_gateway_store` 指向另一个 store）时 Console 保持关闭；确认放弃原有账号后用它重置（需先 `zhin stop`，会要求确认，`--yes` 跳过），重置记入新的审计日志，然后继续初始化。
 - **`migrate`**：把旧版存在项目数据库里的 Console 账号表迁入 `.zhin/gateway.db`（网关启动时也会自动执行；网关运行时只显示状态）。`--revert` 写回项目数据库并清空 gateway.db，降级到旧版本之前必须执行，需先 `zhin stop`。见[升级说明](../migrations/gateway-storage.md)。
@@ -250,7 +255,7 @@ zhin doctor [--fix] [--upgrade-l4]
 zhin doctor --live <host-url> [--json]
 ```
 
-检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项，不能自动修复的项仍列出「需手动修复」的方法，一项也修不了时会明确说明；有任何警告时不显示「所有检查通过」。网关运行时，Console「需要你处理」的每一项和暂时读不到的来源都列为警告，运行中网关与已安装的 `@zhin.js/gateway` 版本不一致时给出重启命令；网关未运行时读取 `.zhin/runtime-failures.json`，把其中记录的失败显示为「上次运行」：这个文件由实例（zhin.js）在运行中记下模型账号、适配器账号和 MCP 服务的最近一次失败，恢复后删除；还没有记录、或实例版本尚不写这个文件时，这一项不显示，也不报错。TypeScript 一项读取项目自己安装的版本（`node_modules/typescript`）和 `package.json` 声明的范围，不看 PATH 上的全局 `tsc`。「Zhin 包单实例」列出每个副本由谁依赖，例如 `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`，并给出具体修复（改哪个 `package.json`，或运行 `zhin migrate`）。`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项，不能自动修复的项仍列出「需手动修复」的方法，一项也修不了时会明确说明；有任何警告时不显示「所有检查通过」。网关运行时，Console「需要你处理」的每一项和暂时读不到的来源都列为警告，运行中网关与已安装的 `@zhin.js/gateway` 版本不一致时给出重启命令；网关未运行时读取 `.zhin/runtime-failures.json`，把其中记录的失败显示为「上次运行」：这个文件由实例（zhin.js）在运行中记下模型账号、适配器账号和 MCP 服务的最近一次失败，恢复后删除；还没有记录、或实例版本尚不写这个文件时，这一项不显示，也不报错。TypeScript 一项读取项目自己安装的版本（`node_modules/typescript`）和 `package.json` 声明的范围，不看 PATH 上的全局 `tsc`。「Zhin 包单实例」列出每个副本由谁依赖，例如 `zhin.js ×2：1.4.0 ← 根项目；1.2.0 ← plugins/foo ("~1.2.0")`，并给出具体修复（改哪个 `package.json`，或运行 `zhin migrate`）；副本经由其他已安装的包间接拖进来时，先沿依赖链指出是根项目或工作区成员的哪个直接依赖拖进了旧版本（如 `@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0 → @zhin.js/plugin-runtime@1.1.9`），`pnpm.overrides` 只作为最后一条建议。「已停更的 Zhin 包」检查根目录和每个工作区成员的 `package.json`：直接依赖了已并入或删除的 `@zhin.js` 包（例如 `@zhin.js/config-yaml`，已并入 `@zhin.js/runtime` 的 `YamlConfigDocument`）时给出警告，写明改用什么、删除这个依赖；项目源码 import 了已删除的子路径（如 `@zhin.js/agent/tools`，改从 `@zhin.js/tool` 导入 `defineAgentTool`）时也给出警告并列出文件与行号；这类包的最后版本仍依赖旧的 Zhin 包，用 overrides 压住只是掩盖，完整清单见[已并入或停更的包](../migrations/retired-packages.md)。`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。项目装了 `@zhin.js/gateway` 时，`doctor` 还在项目目录里加载网关的 `node-pty`：加载失败（多半是 pnpm 跳过了它的构建脚本）给出警告与修复命令，此时 Console 的本地终端不可用，见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
 HTTP 端口被占用、又不是本项目经控制套接字能连上的网关时，`doctor` 按配置的 `http.host` 与 TLS（`0.0.0.0` / `::` 换成回环地址）向 `<http|https>://<host>:<端口>/pub/health` 发一次不带任何凭据的请求，区分「另一个项目的 Zhin 网关」「本项目的另一个网关（控制套接字不可用）」「不经网关运行的 Zhin 实例」和其他程序（连接被拒、TLS 握手失败——例如自签证书——或超时时报「无法确认占用者」）；是别的项目的网关时，用它报告的项目标识与监听进程的工作目录比对，写出是哪个项目目录（pid），修复建议是到那里运行 `zhin stop` 或修改 `http.port`。项目根目录里还留着旧版脚手架生成的服务文件（按 `package.json` 的 `name`：`<name>.service`、`com.zhinjs.<name>.plist`、`install-service.ps1`、`<name>-task.xml`）时，「旧服务文件」一项提示可以删除，改用 `zhin service install`；`ecosystem.config.*` 只在 `package.json` 里没有 `pm2` 依赖、也没有 `pm2:*` 脚本时才提示。这一项只是提示（不计为警告），`doctor` 和 `--fix` 都不会删除文件。
 
@@ -281,13 +286,13 @@ zhin onboard [--quick] [--flow quickstart|full]
 zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides:` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。pnpm 工作区（`pnpm-workspace.yaml` 的 `packages`）里的每个包也一并升级 zhin 依赖：精确版本同样升级（保持精确），`workspace:`、`link:`、`file:` 等本地来源不动；scripts、engines 只改根目录。精确版本（如 `1.1.6`）默认保留，`--include-pinned` 才会一并升级；`npm:` 别名、`link:`、`file:`、git 等非 registry 来源即使加 `--include-pinned` 也保留（改写成 `^x.y.z` 会丢掉别名或来源）。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。已并入或停更的 `@zhin.js` 包（见[已并入或停更的包](../migrations/retired-packages.md)）不升级；「已停更的 Zhin 包」一步列出声明它们的 `package.json`、替代包，以及项目源码里要改写的 import（文件与行号，如 `src/config.ts:2 '@zhin.js/config-yaml' → '@zhin.js/runtime'`；已删除的子路径 `@zhin.js/agent/tools` 同样列出，改为 `@zhin.js/tool`）。`zhin migrate` 不自动改写源码，也不删除这些依赖：停更包导出的内容不一定全部搬进了替代包，改完 import 后自己删除依赖再运行 `pnpm install`。源码扫描跳过隐藏目录与 `node_modules`、`dist`、`build`、`out`、`coverage` 等依赖与构建产物目录；`lib` 也跳过，除非所在包的 `package.json`（`main` / `module` / `exports`）指向 `lib` 里的 `.js` 文件、且没有 `src` 目录（用纯 JavaScript 写的包，`lib` 就是源码）。最多读 5000 个源文件、访问 20000 个目录条目，达到上限时 `zhin migrate` 与 `zhin doctor` 都会提示「仅扫描了前 N 个源文件」；检查本身出错（如工作区文件读不了）时只打印警告，迁移照常继续。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。依赖升级到 registry（按项目 npm 配置，含镜像）上的最新发布：范围写成 `^x.y.z`，精确版本保持精确，`package.json#pnpm.overrides` 与 `pnpm-workspace.yaml` 的 `overrides:` 中的 `@zhin.js/*` 按目标 `zhin.js` 的依赖对齐。pnpm 工作区（`pnpm-workspace.yaml` 的 `packages`）里的每个包也一并升级 zhin 依赖：精确版本同样升级（保持精确），`workspace:`、`link:`、`file:` 等本地来源不动；scripts、engines 只改根目录。精确版本（如 `1.1.6`）默认保留，`--include-pinned` 才会一并升级；`npm:` 别名、`link:`、`file:`、git 等非 registry 来源即使加 `--include-pinned` 也保留（改写成 `^x.y.z` 会丢掉别名或来源）。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
 
 项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
-声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。项目明确禁止构建的包不会加入任何允许名单（`allowBuilds`、`onlyBuiltDependencies`）：列在 `ignoredBuiltDependencies` 或 `neverBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`；项目在上层 pnpm workspace 内时也读根目录的这两个文件）中，或 `allowBuilds` 里写成 `false`（含 `ssh2@1.16.0: false` 这类带版本的键）。计划里按所在名单显示「已跳过：在 ignoredBuiltDependencies 中」或「已跳过：在 neverBuiltDependencies 中」；被禁止的包同时在允许名单里时两处都不改，只打印冲突警告。`set this to true or false` 占位值之外的非布尔值（如 `'false'`、`no`）原样保留并警告。`--dry-run` 与实际执行写入的内容一致。见[原生依赖的构建脚本](../console/operations.md#native-build)。
+声明了 `@zhin.js/gateway` 的 pnpm 项目，`zhin migrate` 还在 `pnpm-workspace.yaml` 的 `allowBuilds` 中补齐网关原生依赖 `node-pty`、`ssh2`、`cpu-features`（没有该文件时创建；已有的 `true` / `false` 保留，pnpm 11 留下的 `set this to true or false` 占位值改为 `true`，已有的 `onlyBuiltDependencies` 列表也追加），随后的安装会构建它们。`package.json` 的 `packageManager` 字段固定了 pnpm 10 及更早版本、且项目有 pnpm 会读的 `onlyBuiltDependencies` 列表（`pnpm-workspace.yaml` 或根项目的 `package.json#pnpm`）时，三个包（`node-pty`、`ssh2`、`cpu-features`）一律只写进这个列表（已在列表里的不重复），不再写 `allowBuilds`（pnpm 10 按列表构建）；其余情况（固定了 pnpm 11，或没有固定 pnpm）照写 `allowBuilds`：pnpm 11 只读 `allowBuilds`，旧版 pnpm 忽略该键，重复写无害。是否跳过 `allowBuilds` 只看 `packageManager`，不看本机的 `pnpm --version`，因为部署或 CI 用的 pnpm 可能与本机不同（本机是 pnpm 10、CI 是 pnpm 11 时，不写就不会构建这三个包）。项目明确禁止构建的包不会加入任何允许名单（`allowBuilds`、`onlyBuiltDependencies`）：列在 `ignoredBuiltDependencies` 或 `neverBuiltDependencies`（`package.json#pnpm` 或 `pnpm-workspace.yaml`；项目在上层 pnpm workspace 内时也读根目录的这两个文件）中，或 `allowBuilds` 里写成 `false`（含 `ssh2@1.16.0: false` 这类带版本的键）。计划里按所在名单显示「已跳过：在 ignoredBuiltDependencies 中」或「已跳过：在 neverBuiltDependencies 中」；被禁止的包同时在允许名单里时两处都不改，只打印冲突警告。`set this to true or false` 占位值之外的非布尔值（如 `'false'`、`no`）原样保留并警告。`--dry-run` 与实际执行写入的内容一致。见[原生依赖的构建脚本](../console/operations.md#native-build)。
 
-pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会被留在旧版本（`Already up to date`）。因此 `zhin migrate` 把升级目标以 `name@version` 写进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（与 pnpm 在新脚手架里写的形式相同，已覆盖的条目不重复），安装后逐个读取 `node_modules` 列出每个包升级前后的实际版本；有包没装上声明的版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突等）。`zhin doctor` 也会在已安装版本不满足 `package.json` 声明时给出警告和修复命令。
+pnpm 11 默认不安装发布不满一天的版本（`minimumReleaseAge`），刚发布的 Zhin 版本会被留在旧版本（`Already up to date`）。因此 `zhin migrate` 把升级目标以 `name@version` 写进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（与 pnpm 在新脚手架里写的形式相同，已覆盖的条目不重复）。只在冷却期可能生效时才写：项目把 `minimumReleaseAge` 设为大于 0 的值，或没有设置、但项目可能用 pnpm 11 及以上。pnpm 版本只看 `packageManager` 字段：没有固定 pnpm 时，即使本机是 pnpm 10 也按「可能是 pnpm 11」处理，因为部署或 CI 可能用 pnpm 11；这时只有 `pnpm-workspace.yaml` 的 `minimumReleaseAge: 0` 能让它不写。读取位置随 pnpm 版本：pnpm 11 及以上只读 `pnpm-workspace.yaml`（pnpm 11 不再读 `package.json` 的 `pnpm` 字段，`.npmrc` 只读认证、registry、TLS 与代理设置，所以写在这两处的 `minimumReleaseAge: 0` 不关闭冷却期）；`packageManager` 固定 pnpm 10 及更早版本时，还读项目 `.npmrc`（`minimum-release-age`）与 `package.json#pnpm`。设为 `0`，或没有设置且固定的是 pnpm 10 及更早版本时不写，并打印一行原因（用户级与全局 pnpm 配置不读取）。migrate 在安装后逐个读取 `node_modules`，列出每个包升级前后的实际版本；有包没装上声明的版本时以失败退出并说明原因（发布冷却期、`overrides` 冲突等）。`zhin doctor` 也会在已安装版本不满足 `package.json` 声明时给出警告和修复命令。
 
 `zhin migrate` 只补当前脚手架也会创建的目录（`data/`、`plugins/`），不再创建 `src/plugins`；`SOUL.md` / `TOOLS.md` / `AGENTS.md` 只在项目使用 AI（配置启用 AI 或声明了 `@zhin.js/agent`）时补齐，仍是旧中文模板的文件会升级并留 `.bak`。
 
@@ -378,11 +383,11 @@ zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
 ### uninstall：卸载
 
 ```bash
-zhin uninstall plugin <name> [--remove-pkg]
+zhin uninstall plugin <name> [--remove-pkg] [--remove-dir]
 zhin uninstall adapter <name> [--remove-pkg]
 ```
 
-`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
+`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。卸载插件时若存在本地插件目录 `./plugins/<name>`：加 `--remove-dir` 直接删除、不再询问（交互终端也一样）；不加时在交互终端里询问（默认保留），非交互环境（管道、CI）保留目录。`package.json` 仍依赖这个本地包（没加 `--remove-pkg`，或还有其他实例在用）时，目录一律保留并给出提示，以免留下指向已删目录的依赖。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
 
 ### enable / disable：启用或停用插件实例 {#enable-disable}
 
@@ -593,6 +598,8 @@ zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
 zhin schedule add "0 0 8 * * *" --prompt "整理今日早报" --agent news
 zhin schedule set-agent <id> <agent>     # 修改任务由哪个 Agent 执行
 zhin schedule set-agent <id> --clear     # 恢复默认 Agent（zhin）
+zhin schedule update <id> --cron "0 0 8 * * *"   # 改时间，其余设置不变
+zhin schedule update <id> [--kind <kind>] [--at <iso8601> | --every <interval>] [--label <label>] [--enable | --disable]
 zhin schedule remove <id>
 zhin schedule pause <id>
 zhin schedule resume <id>
@@ -609,6 +616,10 @@ zhin schedule resume <id>
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
 已有任务改用别的 Agent 用 `zhin schedule set-agent <id> <agent>`，`--clear` 恢复默认 Agent；不必停服改数据库。名称同样按 `ai.agents` 校验，心跳任务始终由默认 Agent 执行、不能修改；Profile 例程会被拒绝（每次启动按 Profile 重新声明，请改 `assistant.profile.yml` 中该 routine 的 `agent` 字段）；任务有投递目标时需要该账号上的 `endpoint.operate`，否则 403。`zhin schedule list` 对 Agent 已从 `ai.agents` 删除的任务标出「⚠ Agent 不存在」。修改在下次运行时生效。两条命令都需要 `ops.schedule.write`（经 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent`；Console 对应 `cron:add` 的 `agent` 字段与 `cron:set-agent`）。
+
+修改已有任务的时间、标签或启用状态用 `zhin schedule update <id>`，不要删除后重建（重建会丢掉任务的 Agent、投递目标、创建者和执行计划）。`--cron`（或位置参数）给新的 cron，省略 `--kind` 时沿用任务原来的计划类型；只给 `--kind` 时沿用原来的 cron；`--at` / `--every` 改为单次或固定间隔（三类只能选一种）；`--label` 改标签，`--label ""` 清除；`--enable` / `--disable` 启用或停用。Agent、提示词、投递目标与创建者保持不变，修改后按新计划重新计算下次运行时间。至少要给一项修改，否则不发请求并以非零状态退出。经 `POST /api/assistant/jobs/update`，需要 `ops.schedule.write`；任务修改后仍会运行且有 IM 投递目标时，与 `resume` / `set-agent` 一样要求该账号上的 `endpoint.operate`：改时间、改标签或启用都需要，只有 `--disable` 不需要，被拒绝时 CLI 的提示也会这样说明。Profile 例程会被拒绝（400 `schedule_update_profile`，请改 `assistant.profile.yml`）。聊天里对应的工具是 `schedule_update`。
+
+`--kind` 可选 `solar`、`lunar`、`workday`、`freeDay`、`holiday`，不区分大小写。实例按与 `schedule_update` 相同的规则构造并校验计划：`workday`、`freeDay`、`holiday` 只取 cron 的时分秒（日、月、周写成 `*`，`--cron "0 0 9 * * 1-5"` 会存成 `0 0 9 * * *`）；cron 本身写错（字段数不对、取值越界，例如 `0 0 9 32 * *`）时返回 400 `schedule_invalid`，任务不变，CLI 说明原因并以非零状态退出。cron 语法正确但按该计划类型算不出运行时间（例如 `0 0 9 30 2 *`）时不算错误：`update` 照常保存并在响应里带 `warning`，`add` 照常保存。**从 `workday` 改回 `solar` 时请同时给出完整的 cron**，例如 `zhin schedule update <id> --kind solar --cron "0 0 9 * * 1-5"`：只给 `--kind solar` 会沿用 `0 0 9 * * *`、变成每天执行，原来的周一至周五不会恢复。保存后任务仍启用却算不出下次运行时间时，实例在响应里带 `warning`，CLI 会打印出来。`zhin schedule add` 的 `--kind` 同样不区分大小写、支持 `holiday`，并按同一规则校验。
 
 `zhin schedule resume`（`POST /api/assistant/jobs/resume`，Console 的 `cron:resume`）恢复后任务会再次向投递目标发送，因此与 `add` / `set-agent` 一样，任务有 IM 投递目标时要求该账号上的 `endpoint.operate`，否则 403 `schedule_target_forbidden`（Console RPC 在 `data.code` / `data.status` 中给出）；`pause` / `remove` 只停止投递，仍只需要 `ops.schedule.write`。被拒绝时 CLI 以非零状态退出并说明原因，例如「无法恢复任务 `<id>`：你没有权限向它的投递目标发消息（需要 `<adapter>` / `<endpoint>` 上的 endpoint.operate）」，并提示请管理员授权，或删除后以自己有权限的目标重新创建。`add` / `set-agent` 遇到 `schedule_agent_not_found` 时列出实例返回的可用 Agent（`data.available`），并提示用 `--agent` 或 `zhin schedule set-agent <id> <名称>` 改选；没有可用 Agent 时提示先在 `ai.agents` 中添加。
 

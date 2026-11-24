@@ -12,6 +12,7 @@ export type JobScheduleCli =
   | { kind: 'lunar'; cron: string; tz?: string }
   | { kind: 'workday'; cron: string; tz?: string }
   | { kind: 'freeDay'; cron: string; tz?: string }
+  | { kind: 'holiday'; cron: string; tz?: string }
   | { kind: 'every'; everyMs: number }
   | { kind: 'at'; atMs: number; deleteAfterRun?: boolean };
 

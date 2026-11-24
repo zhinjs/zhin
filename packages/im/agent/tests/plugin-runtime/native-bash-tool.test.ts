@@ -67,6 +67,23 @@ describe('native bash ToolFeature', () => {
     })).rejects.toThrow('Do not retry bash');
   });
 
+  it('tells the model not to retry when the isolated shell itself is unavailable (#1250 b96)', async () => {
+    const unavailable = new NativeBashToolFeature({ execute: async () => ({
+      stdout: '', stderr: 'docker: command not found', blocked: true,
+      blockReason: '隔离执行环境不可用：docker: command not found', isolationUnavailable: true,
+    }) });
+    await expect(unavailable.definition.execute({ command: 'ls' }, executionContext()))
+      .rejects.toThrow(/Shell is unavailable on this host: .*docker: command not found.*Do not retry bash/);
+
+    // A command the sandbox refuses is not an unavailable shell: another command may still run.
+    const refused = new NativeBashToolFeature({ execute: async () => ({
+      stdout: '', stderr: 'dangerous', blocked: true, blockReason: 'dangerous command',
+    }) });
+    const error = await refused.definition.execute({ command: 'rm -rf /' }, executionContext()).catch((e: Error) => e);
+    expect(String(error)).toContain('Command blocked by sandbox: dangerous command');
+    expect(String(error)).not.toContain('Do not retry');
+  });
+
   it('uses the policy working directory when cwd is omitted', async () => {
     const execute = vi.fn<BashExecutionPort['execute']>(async () => ({ stdout: '', stderr: '' }));
     const feature = new NativeBashToolFeature({ execute });

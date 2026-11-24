@@ -46,7 +46,7 @@ describe('MCP bridge annotations', () => {
     const { mcpToolToAgentTool } = await import('../../src/mcp-client/bridge.js');
     const tool = mcpToolToAgentTool({ name: 'list_issues', annotations: { readOnlyHint: true, destructiveHint: 'no' } }, 'github', async () => 'ok');
     expect(tool).toMatchObject({ name: 'github__list_issues', isReadOnly: false,
-      mcpOrigin: { server: 'github', tool: 'list_issues', hints: { readOnly: true } } });
-    expect(mcpToolToAgentTool({ name: 'x', annotations: [true] }, 'github', async () => 'ok').mcpOrigin).toEqual({ server: 'github', tool: 'x' });
+      mcpOrigin: { server: 'github', tool: 'list_issues', hints: { readOnly: true }, descriptionFromUpstream: expect.any(Boolean) } });
+    expect(mcpToolToAgentTool({ name: 'x', annotations: [true] }, 'github', async () => 'ok').mcpOrigin).toEqual({ server: 'github', tool: 'x', descriptionFromUpstream: false });
   });
 });

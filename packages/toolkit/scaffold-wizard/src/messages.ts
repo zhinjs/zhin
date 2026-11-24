@@ -1863,6 +1863,10 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "\n🚀 Zhin 配置向导\n",
     "en": "\n🚀 Zhin configuration wizard\n"
   },
+  "配置向导需要交互式终端（标准输入不是终端）：非交互请用 --yes 搭配 --adapter <name> / --enable-ai / --skip-adapters / --skip-ai / --bootstrap": {
+    "zh-CN": "配置向导需要交互式终端（标准输入不是终端）：非交互请用 --yes 搭配 --adapter <name> / --enable-ai / --skip-adapters / --skip-ai / --bootstrap",
+    "en": "The configuration wizard needs an interactive terminal (standard input is not a terminal). Without one, use --yes with --adapter <name> / --enable-ai / --skip-adapters / --skip-ai / --bootstrap"
+  },
   "已加载配置文件: {v0}\n": {
     "zh-CN": "已加载配置文件: {v0}\n",
     "en": "Loaded configuration: {v0}\n"

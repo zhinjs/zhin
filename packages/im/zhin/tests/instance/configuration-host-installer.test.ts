@@ -350,9 +350,9 @@ it('answers an authorizer refusal with the permit refusal itself and records per
     // execution-time check rejects) are one and the same text.
     await f.receive('!!config get bot.nickname', { sender: 'stranger' });
     const permitRefusal = lastReply(f.client);
-    // Both name the Root `bind` command with this endpoint's actual prefix.
-    expect(permitRefusal).toBe(describeGlobalOwnerRequired('en', { bindCommand: '!!bind' }));
-    expect(permitRefusal).toContain('「!!bind <code>」');
+    // Both name the bare `bind <code>`: it needs no command prefix (#1250 bind-hint-omits-command-prefix).
+    expect(permitRefusal).toBe(describeGlobalOwnerRequired('en'));
+    expect(permitRefusal).toContain('「bind <code>」 to the bot in a private chat (no command prefix needed)');
     refuse = true;
     await f.receive('!!config get bot.nickname', { sender: 'alice' });
     expect(lastReply(f.client)).toBe(permitRefusal);

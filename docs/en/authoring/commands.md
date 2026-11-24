@@ -195,7 +195,7 @@ export default defineCommand({
 });
 ```
 
-When unmet the command takes its denial reply: `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (「没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」; a platform group owner / admin is also told that platform standing is not a zhin role; the reply never names the missing role or who holds it), `owner@global` says a global chat owner is needed and where one is granted (the same text as the checks inside `restart` / `config`, `describeGlobalOwnerRequired()`; its `bind <code>` carries this account's actual command prefix, e.g. 「`!!bind <code>`」), `private()` answers 「此指令只能在私聊中使用，请私聊机器人发送。」, and the other conversation conditions keep the generic 「没有权限执行此指令。」. These texts have one source, `describeCommandDenial()` in `@zhin.js/permission`; subscription commands that decide with `canManageConversation()` reply with `describeConversationManagerDenial()` (`zhin.js/command`).
+When unmet the command takes its denial reply: `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」), zhin role conditions say where roles come from (「没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」; a platform group owner / admin is also told that platform standing is not a zhin role; the reply never names the missing role or who holds it), `owner@global` says a global chat owner is needed and where one is granted (the same text as the checks inside `restart` / `config`, `describeGlobalOwnerRequired()`; its `bind <code>` needs no command prefix, like `claim <code>`), `private()` answers 「此指令只能在私聊中使用，请私聊机器人发送。」, and the other conversation conditions keep the generic 「没有权限执行此指令。」. These texts have one source, `describeCommandDenial()` in `@zhin.js/permission`; subscription commands that decide with `canManageConversation()` reply with `describeConversationManagerDenial()` (`zhin.js/command`).
 
 Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the **Roles** tab of the Console object pages or with the `role grant` chat command. A platform group owner / admin is **not** a zhin role — commands for zhin functions use `admin` / `owner`, commands for platform functions use `platform:*`. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
 
@@ -277,6 +277,12 @@ export default defineCommand({
   ),
 });
 ```
+
+::: tip What a `.tsx` file costs in memory
+Node strips types from `.ts` files natively but cannot compile JSX. The first time the instance loads a `.tsx` file of your project, it registers the tsx loader to compile it; a project without `.tsx` files never registers it. Once registered, the instance process keeps the tsx modules and the esbuild child process tsx compiles with, about 16 MB together (about 15 MB of it the esbuild child).
+
+For a production deployment short on memory, write the command as `.ts` instead: render a component by name with `component('status-card', props)` (example below) or send a message segment with `raw()`. If the rendered component itself is a `components/*.tsx` file of the project, loading it registers the tsx loader just the same; to avoid tsx entirely, move the component into a separate plugin package compiled to `.js` before publishing, which needs no tsx at run time.
+:::
 
 You can also invoke a registered component by name:
 

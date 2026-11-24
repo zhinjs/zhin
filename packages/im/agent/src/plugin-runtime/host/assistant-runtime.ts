@@ -136,6 +136,8 @@ export function createAssistantScheduleRuntime(
     router: notificationRouter,
     defaultNotify,
     observations: history,
+    // #1250: a clean scheduled delivery is not background for the next turn of its creator.
+    deliveryLedger: agent.toldLedger,
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {
@@ -195,6 +197,7 @@ export function createAssistantScheduleRuntime(
         unschedulable: () => timerScheduler.listUnschedulable(),
         agents: () => Object.freeze(service.getBindingRegistry().listAgentNames()),
         setAgent: (id, agent) => timerScheduler.setJobAgent(id, agent),
+        update: (id, update) => timerScheduler.updateJob(id, update),
         defaultImNotify: () => {
           const fallback = defaultNotify?.channel === 'im' ? defaultNotify
             : profileDefaultNotify?.channel === 'im' ? profileDefaultNotify : undefined;

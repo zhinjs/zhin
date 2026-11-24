@@ -2,7 +2,7 @@
  * ADR 0060 §2.4 / §5.2: binding a chat identity to a Console user with a one-time code.
  *
  * - The Console user asks for a code (`chat-identities.bind-code.create`, permission
- *   `self.chat-identity`): 8 symbols, valid 10 minutes, single use; a new code replaces the user's
+ *   `self.chat-identity`): 8 symbols (at least one a digit), valid 10 minutes, single use; a new code replaces the user's
  *   previous one. The code is shown only to that user.
  * - The identity's holder sends `绑定 <码>` / `bind <code>` to the bot in a **private** chat: that
  *   proves control of the identity. In a group a correct code is revoked at once (bystanders saw
@@ -18,12 +18,25 @@
  *   tricked into sending someone else's code can tell.
  * - Audited as `chat-identities.bind` (`link_method: code`); logs and the audit carry only the
  *   first 8 hex digits of the code's SHA-256.
+ * - #1250 bind-hint-omits-command-prefix: like `认领 <码>`, `绑定 <码>` / `bind <code>` works without
+ *   the adapter's command prefix ({@link createChatIdentityBindGuard}, taken at the start of inbound;
+ *   the prefixed command still works). Taken only while some code is open and the text is the bind
+ *   shape (keyword first, then exactly one token): when the token is an open code (in a group it is
+ *   revoked), or in a private chat when it has the shape of one (8 symbols of the code alphabet; a
+ *   mistyped code is answered and counted). With no open code nothing is taken — `bind username`,
+ *   `绑定 82345678` and a project's own `绑定 <QQ号>` reach commands and the Agent — and no failure
+ *   is counted (the prefixed command answers 「不正确或已过期」 without counting either).
+ * - #1250 sandbox-transcript-shared-bind-code: whatever the guard does, a bind message is shown to
+ *   others only as `绑定 ***`, by its shape alone (`redactChatIdentityBindText`, `@zhin.js/kernel`):
+ *   the Sandbox hides it at its source, Core's records, Agent session messages, traces and inbound
+ *   logs hide it when written, and the conversation history route on replay.
  */
 import { randomInt, timingSafeEqual } from 'node:crypto';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
 import { createMessages, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { ChatIdentity } from '@zhin.js/core';
+import type { InboundSecretGuard, InboundSecretMatch, Message } from '@zhin.js/core/runtime';
 import { chatOwnerClaimCodeHash } from './chat-owner-claim.js';
 import { chatRoleMigrationAdapterKinds, type ChatRoleMigrationAdapterKind } from './chat-role-migration.js';
 import type { ChatBindOutcome, ChatPeople } from './chat-people.js';
@@ -37,6 +50,19 @@ export const CHAT_BIND_CODE_TTL_MS = 10 * 60_000;
 export const CHAT_BIND_MAX_FAILURES = 5;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
+
+/**
+ * A fresh bind code: {@link CODE_LENGTH} symbols drawn uniformly (`randomInt`, no modulo bias) from
+ * {@link ALPHABET}, redrawn until it holds a digit (#1250: the shape-only redaction of `绑定 <码>`
+ * requires one, so no code reads as a plain word). Claim codes have their own generator.
+ */
+function generateBindCode(): string {
+  for (;;) {
+    let code = '';
+    for (let index = 0; index < CODE_LENGTH; index += 1) code += ALPHABET[randomInt(ALPHABET.length)];
+    if (/\d/u.test(code)) return code;
+  }
+}
 
 const normalizeCode = (text: string) => text.toUpperCase().replace(/[\s-]/gu, '');
 
@@ -89,11 +115,7 @@ export class ChatIdentityBindCodes {
   constructor(options: Readonly<{ people: ChatPeople; now?: () => number; code?: () => string }>) {
     this.#people = options.people;
     this.#now = options.now ?? Date.now;
-    this.#code = options.code ?? (() => {
-      let code = '';
-      for (let index = 0; index < CODE_LENGTH; index += 1) code += ALPHABET[randomInt(ALPHABET.length)];
-      return code;
-    });
+    this.#code = options.code ?? generateBindCode;
   }
 
   #sweep(): void {
@@ -135,6 +157,30 @@ export class ChatIdentityBindCodes {
     this.#authority.set(consoleUserId, canManageGlobal);
   }
 
+  /** Whether `code` (as typed: case, spaces and `-` ignored) is a currently open code. */
+  isOpen(code: string): boolean {
+    this.#sweep();
+    return this.#find(normalizeCode(code)) !== undefined;
+  }
+
+  /** Whether any code is open right now (#1250: the prefix-free bind guard only acts then). */
+  get anyOpen(): boolean {
+    this.#sweep();
+    return this.#codes.size > 0;
+  }
+
+  /**
+   * Revokes `code` when it is open (#1250: a message carrying it was dropped before it was handled,
+   * so others may have seen it). Returns whether one was revoked.
+   */
+  revokeCode(code: string): boolean {
+    this.#sweep();
+    const open = this.#find(normalizeCode(code));
+    if (!open) return false;
+    this.#codes.delete(open.consoleUserId);
+    return true;
+  }
+
   #find(code: string): OpenCode | undefined {
     for (const open of this.#codes.values()) if (sameCode(open.code, code)) return open;
     return undefined;
@@ -165,6 +211,9 @@ export class ChatIdentityBindCodes {
     if (failures && now - failures.since >= CHAT_BIND_CODE_TTL_MS) this.#failures.delete(key);
     if ((this.#failures.get(key)?.count ?? 0) >= CHAT_BIND_MAX_FAILURES) return 'locked';
     if (!open) {
+      // #1250: failures count only while some code is open (a guess can then hit one); with none
+      // open the text was not aimed at a code, so nothing is locked.
+      if (this.#codes.size === 0) return 'invalid';
       const current = this.#failures.get(key) ?? { count: 0, since: now };
       current.count += 1;
       this.#failures.set(key, current);
@@ -281,4 +330,81 @@ export function installChatIdentityBind(options: Readonly<{ codes: ChatIdentityB
       },
     }));
   };
+}
+
+/**
+ * The bind shape (#1250): the keyword `绑定` / `bind` (any letter case) as the first word, whitespace,
+ * then exactly one token, and nothing else; up to three punctuation marks before the keyword (a
+ * command prefix such as `#` or `/`, a quote) and around the token (`<码>`) are ignored. `prefix`
+ * (the adapter's command prefix, which may be a word) may precede the keyword.
+ */
+const CHAT_BIND_TEXT = /^[^\p{L}\p{N}\s]{0,3}\s*(绑定|綁定|bind)\s+[^\p{L}\p{N}\s]{0,3}(\S+?)[^\p{L}\p{N}\s]{0,3}$/iu;
+/** What a bind code looks like once normalized: {@link CODE_LENGTH} symbols of {@link ALPHABET}. */
+const CODE_SHAPE = new RegExp(`^[${ALPHABET}]{${CODE_LENGTH}}$`, 'u');
+
+/** Whether `text` is a bind message, and its keyword (as typed) and code. */
+export function matchChatIdentityBindText(text: string, prefix = ''): Readonly<{ keyword: string; code: string }> | undefined {
+  const body = text.trim();
+  const candidates = prefix && body.startsWith(prefix) ? [body.slice(prefix.length).trim(), body] : [body];
+  for (const candidate of candidates) {
+    const match = CHAT_BIND_TEXT.exec(candidate);
+    if (match) return Object.freeze({ keyword: match[1]!, code: match[2]! });
+  }
+  return undefined;
+}
+
+/**
+ * #1250 bind-hint-omits-command-prefix: takes `绑定 <码>` / `bind <code>` at the start of inbound, with
+ * or without the command prefix, so the bind works like `认领 <码>` without one — only while some
+ * code is open (M1 review): with none open everything passes on, uncounted. While one is open: an
+ * open code is always taken (never recorded in history; in a group it is revoked and the sender
+ * told to use a private chat); in a private chat a token with the shape of a code is taken too
+ * (a wrong one is answered and counted, so guesses still lock the identity out). Anything else
+ * passes on (to commands or the Agent). A taken message dropped before it is handled revokes the
+ * open code it carried ({@link InboundSecretMatch.discard}).
+ */
+export function createChatIdentityBindGuard(options: Readonly<{ codes: ChatIdentityBindCodes }>): InboundSecretGuard {
+  const { codes } = options;
+  const guard: InboundSecretGuard = {
+    match: ({ text, prefix, conversation, snapshot }) => {
+      if (!codes.anyOpen) return undefined;
+      const shaped = matchChatIdentityBindText(text, prefix);
+      if (!shaped) return undefined;
+      const open = codes.isOpen(shaped.code);
+      if (!open && (conversation.kind !== 'private' || !CODE_SHAPE.test(normalizeCode(shaped.code)))) return undefined;
+      return Object.freeze({
+        name: 'bind',
+        redacted: `${shaped.keyword} ***`,
+        handle: (message: Message) => {
+          const resolved = resolveFeatureChatActor(snapshot, message);
+          const adapterKind = resolved.ok ? chatRoleMigrationAdapterKinds(snapshot)(resolved.actor.identity.adapter) : undefined;
+          return executeIdentityBind({ code: shaped.code, actor: resolved.ok ? resolved.actor : resolved.reason, adapterKind, locale: message.locale }, codes);
+        },
+        // Dropped before handling (not ready, our own echo, dedup failure): it was still seen.
+        discard: () => { codes.revokeCode(shaped.code); },
+      });
+    },
+  };
+  return Object.freeze(guard);
+}
+
+/**
+ * Several {@link InboundSecretGuard}s as one (the Runtime takes one): the first match wins; a native
+ * event is withheld when any guard says it carries a secret, and each guard revokes its own.
+ */
+export function combineInboundSecretGuards(...guards: readonly InboundSecretGuard[]): InboundSecretGuard {
+  const combined: InboundSecretGuard = {
+    match: input => {
+      for (const guard of guards) {
+        const matched: InboundSecretMatch | undefined = guard.match(input);
+        if (matched) return matched;
+      }
+      return undefined;
+    },
+    inspectNative: (payload, event) => guards.some(guard => guard.inspectNative?.(payload, event) === true),
+    discardNative: async (payload, event) => {
+      for (const guard of guards) await guard.discardNative?.(payload, event);
+    },
+  };
+  return Object.freeze(combined);
 }

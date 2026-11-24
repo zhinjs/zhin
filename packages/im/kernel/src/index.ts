@@ -52,11 +52,13 @@ export type { Dict } from './utils.js';
 export {
   isPromptPayloadKey,
   containsChatOwnerClaimCode,
+  isChatIdentityBindText,
   createChatOwnerClaimCodeScanner,
   foldChatOwnerClaimText,
   isSecretLikeKey,
   matchChatOwnerClaimText,
   redactApprovalDisplay,
+  redactChatIdentityBindText,
   redactChatOwnerClaimText,
   registerChatOwnerClaimCode,
   redactDecisionPayload,

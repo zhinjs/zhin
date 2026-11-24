@@ -69,6 +69,12 @@ export interface AdapterContext<TConfig = unknown> extends ConstructionContext<T
   readonly endpointId: string;
   /** Adapter module local name, stable across expanded Endpoint entries. */
   readonly name: string;
+  /**
+   * ADR 0060 §5.4: only for a trusted local simulation Adapter (`isTrustedSimulationAdapter`: profile
+   * `runtime.sandbox`, package `@zhin.js/adapter-sandbox`) and only when the Root provides it, bound
+   * to this Adapter; see `AdapterConsoleSpeakerPort`.
+   */
+  readonly consoleSpeaker?: import('./adapter-types.js').AdapterConsoleSpeakerPort;
 }
 
 /**

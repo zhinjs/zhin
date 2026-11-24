@@ -26,11 +26,15 @@ import {
   syncWorkspaceYamlOverrides,
   upgradeProjectDependencies,
   upgradeWorkspacePackages,
+  reportRetiredPackages,
 } from '../src/commands/migrate.js';
 import { cachedRegistryLookup, npmRegistryLookup } from '../src/utils/registry-version.js';
 import { expandWorkspaceBraces, listWorkspacePackageDirs, workspaceGlobToRegExp } from '../src/utils/workspace-packages.js';
 import { describeScheduleRefusal, scheduleCommand } from '../src/commands/schedule.js';
 import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
+
+// Built at run time so the source has no literal import of the removed subpath (check:agent-tool-authoring-boundaries).
+const REMOVED_TOOLS_SUBPATH = ['@zhin.js', 'agent', 'tools'].join('/');
 
 // `zhin schedule` only talks to this project's gateway (#1250): a stand-in whose local-socket
 // fetch delegates to the stubbed global fetch while `gateway.running` is set.
@@ -333,7 +337,7 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': '1.1.0', '@zhin.js/agent': '~1.1.0', '@zhin.js/tool': 'latest' },
       devDependencies: { '@zhin.js/cli': '=1.1.0' },
     }, null, 2));
@@ -364,7 +368,7 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies,
     }, null, 2));
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -395,7 +399,7 @@ describe('migrate', () => {
     const original = JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': '^1.1.0', '@zhin.js/cli': '^1.1.0' },
       pnpm: { overrides: {
         '@zhin.js/core': '1.1.0',
@@ -450,7 +454,7 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': '^9.4.2', '@zhin.js/cli': '^9.4.2' },
       pnpm: { overrides: { '@zhin.js/core': '4.0.0', '@zhin.js/cli': '4.0.0' } },
     }, null, 2));
@@ -470,7 +474,7 @@ describe('migrate', () => {
     const original = JSON.stringify({
       name: 'demo',
       engines: { node: '>=22.19.0' },
-      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', daemon: 'zhin start --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', preview: 'zhin preview', build: 'tsc --noEmit' },
       dependencies: { 'zhin.js': existing, '@zhin.js/agent': existing },
     }, null, 2);
     fs.writeFileSync(pkgPath, original);
@@ -690,10 +694,13 @@ describe('migrate', () => {
     fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', dependencies: { 'zhin.js': '1.0.0' } }, null, 2));
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    expect(pkg.scripts).toMatchObject({
+    // Exactly the scripts of a new create-zhin-app project: no `daemon` (#1250).
+    expect(pkg.scripts).toEqual({
       dev: 'zhin start --foreground --watch source config',
       start: 'zhin start --foreground --mode production --no-watch',
-      daemon: 'zhin start --mode production --no-watch',
+      stop: 'zhin stop',
+      preview: 'zhin preview',
+      build: 'tsc --noEmit',
     });
   });
 
@@ -716,6 +723,15 @@ describe('migrate', () => {
     expect(fs.readFileSync(path.join(tmp, 'TOOLS.md'), 'utf-8')).toBe(TOOLS_MD_TEMPLATE);
     // 旧内容被备份
     expect(fs.readFileSync(path.join(tmp, 'SOUL.md.bak'), 'utf-8')).toBe(oldSoul);
+  });
+
+  it('upgradeBootstrapFiles 生成的 AGENTS.md 只写真实存在的提醒/调度工具，不再写 cron_add (#1250 b96)', () => {
+    upgradeBootstrapFiles(tmp, false);
+    const agents = fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf-8');
+    expect(agents).not.toContain('cron_add');
+    expect(agents).toContain('`reminder_create`');
+    expect(agents).toContain('`schedule_add`');
+    expect(agents).toContain('`schedule_update`');
   });
 
   it('upgradeBootstrapFiles 不误伤用户自定义文件', () => {
@@ -746,7 +762,7 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
   it('appends the missing allowBuilds entries and keeps the existing workspace settings and comments', () => {
     const pkgPath = botPackage();
     fs.writeFileSync(path.join(tmp, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
-    const original = "# project workspace\npackages:\n  - '.'\n  - 'plugins/*'\nallowBuilds:\n  esbuild: true\n  node-pty: true\n";
+    const original = "# project workspace\npackages:\n  - '.'\n  - 'plugins/*'\nminimumReleaseAge: 1440\nallowBuilds:\n  esbuild: true\n  node-pty: true\n";
     fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), original);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
@@ -762,6 +778,7 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     expect(written).toContain('# project workspace');
     expect(workspace()).toEqual({
       packages: ['.', 'plugins/*'],
+      minimumReleaseAge: 1440,
       allowBuilds: { esbuild: true, 'node-pty': true, ssh2: true, 'cpu-features': true },
       minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
@@ -799,16 +816,17 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
   it('fills an empty allowBuilds key and keeps long strings on one line', () => {
     const pkgPath = botPackage();
     const long = 'x'.repeat(120);
-    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), `packages:\n  - '.'\ncatalog:\n  foo: "${long} ${long}"\nallowBuilds:\n`);
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), `packages:\n  - '.'\nminimumReleaseAge: 1440\ncatalog:\n  foo: "${long} ${long}"\nallowBuilds:\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     const written = fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8');
     expect(written).toContain(`  foo: "${long} ${long}"\n`);
     expect(workspace()).toEqual({
       packages: ['.'],
+      minimumReleaseAge: 1440,
       catalog: { foo: `${long} ${long}` },
       allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
-      // pnpm projects also list the upgrade targets for pnpm 11's release-age gate (#1250).
+      // A project that sets minimumReleaseAge also lists the upgrade targets (#1250).
       minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
   });
@@ -818,10 +836,11 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
     vi.spyOn(console, 'log').mockImplementation(() => {});
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: false })).toBe(true);
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).pnpm.onlyBuiltDependencies).toEqual(['esbuild', 'node-pty', 'ssh2', 'cpu-features']);
+    // pnpm 10 builds every gateway package from the onlyBuiltDependencies lists it reads (node-pty
+    // already listed, ssh2 / cpu-features appended): no allowBuilds key for any of them, and no
+    // release-age exclusions without minimumReleaseAge (#1250).
     expect(workspace()).toEqual({
-      allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true },
       onlyBuiltDependencies: ['node-pty', 'ssh2', 'cpu-features'],
-      minimumReleaseAgeExclude: ['@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2'],
     });
 
     fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - sharp\n  - ssh2\n');
@@ -1056,6 +1075,97 @@ describe('schedule (running Host)', () => {
     expect(requests[1].body).toEqual({ id: 'j1', agent: null });
   });
 
+  it('update 只发送指定的修改并输出新的计划；Agent 等保持不变 (#1250 b90)', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { job: {
+      id: 'brief', label: '早报', enabled: true, schedule: { kind: 'solar', cron: '0 0 8 * * *' },
+      action: { kind: 'agent', prompt: '早报', agent: 'briefing' }, notify: { channel: 'silent' }, createdAt: 1, updatedAt: 2,
+      state: { nextRunAtMs: Date.UTC(2026, 10, 24, 0) } } } } }));
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.join(' ')); });
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'workday', '--label', '每日早报', '--disable']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '0 0 7 * * *', '--enable', '--label', '']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--every', '1h']);
+    expect(requests.map(request => [new URL(request.url).pathname, request.body])).toEqual([
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { cron: '0 0 8 * * *' } }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { kind: 'workday' }, label: '每日早报', enabled: false }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { cron: '0 0 7 * * *' }, label: null, enabled: true }],
+      ['/api/assistant/jobs/update', { id: 'brief', schedule: { kind: 'every', everyMs: 60 * 60 * 1000 } }],
+    ]);
+    const output = lines.join('\n');
+    expect(output).toContain('已更新任务: brief（Agent、提示词与投递目标保持不变）');
+    expect(output).toContain('计划:   solar 0 0 8 * * *');
+    expect(output).toContain(`下次:   ${formatDateTime(Date.UTC(2026, 10, 24, 0))}`);
+  });
+
+  it('update 参数无效时不发请求；Host 拒绝时说明原因并以 1 退出 (#1250 b90)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    const invalid: [string[], string][] = [
+      [['update', 'brief'], '请至少指定一项修改'],
+      [['update', 'brief', '--enable', '--disable'], '--enable 与 --disable 只能二选一'],
+      [['update', 'brief', '--cron', '0 8 * * *', '--every', '1h'], '只能选一种'],
+      [['update', 'brief', '--kind', 'weekly'], '--kind 无效'],
+      [['update', 'brief', '--cron', '8 * *'], 'cron 须为 5 或 6 段'],
+      [['update', 'brief', '--at', '2000-01-01T00:00:00Z'], '--at 必须是未来'],
+    ];
+    for (const [args, message] of invalid) {
+      await expect(scheduleCommand.parseAsync(['node', 'zhin', ...args])).rejects.toThrow('process.exit:1');
+      expect(String(error.mock.calls.at(-1)?.[0])).toContain(message);
+    }
+    expect(requests).toHaveLength(0);
+    stubHost(() => ({ status: 404, body: { success: false, code: 'not_found', error: '任务不存在: ghost' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'ghost', '--disable'])).rejects.toThrow('process.exit:1');
+    expect(requests.map(request => new URL(request.url).pathname)).toEqual(['/api/assistant/jobs/update']);
+    stubHost(() => ({ status: 403, body: { success: false, code: 'schedule_target_forbidden',
+      error: '没有向该账号投递的权限：需要 icqq / bot-1 上的 endpoint.operate' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--cron', '0 8 * * *'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('无法修改任务 brief：你没有权限向它的投递目标发消息（需要 icqq / bot-1 上的 endpoint.operate）');
+    expect(info.mock.calls.map(call => String(call[0])).join('\n')).toContain('--disable');
+    // A label change on a job that stays enabled needs the same permission: the hint says so.
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--label', '新标签'])).rejects.toThrow('process.exit:1');
+    expect(String(info.mock.calls.at(-1)?.[0])).toContain('改标签');
+    expect(String(info.mock.calls.at(-1)?.[0])).toContain('只有停用任务（--disable）不需要');
+  });
+
+  it('update：--kind 不区分大小写并支持 holiday；打印实例返回的 warning (#1250 b90 review)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    stubHost(() => ({ status: 200, body: { success: true, data: {
+      job: { id: 'brief', enabled: true, schedule: { kind: 'holiday', cron: '0 0 9 * * *' }, action: { kind: 'agent', prompt: '早报' },
+        notify: { channel: 'silent' }, createdAt: 1, updatedAt: 2, state: {} },
+      warning: '任务已启用，但按新计划算不出下次运行时间，它不会自动执行；请检查 cron 或改用其他计划' } } }));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'HOLIDAY']);
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'brief', '--kind', 'freeday']);
+    expect(requests.map(request => request.body.schedule)).toEqual([{ kind: 'holiday' }, { kind: 'freeDay' }]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('算不出下次运行时间'));
+    // add: the same kinds.
+    stubHost(() => ({ status: 201, body: { success: true, data: { job: { id: 'sched_1' } } } }));
+    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '0 0 9 * * *', '--kind', 'Holiday', '--prompt', '节日']);
+    expect(requests[0]!.body.schedule).toEqual({ kind: 'holiday', cron: '0 0 9 * * *' });
+  });
+
+  it('update：实例以 400 schedule_invalid 拒绝计划时说明原因、提示改回 solar 要给完整 cron，并以 1 退出 (#1250 b90 review)', async () => {
+    const { logger } = await import('../src/utils/logger.js');
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`process.exit:${code}`); }) as never);
+    stubHost(() => ({ status: 400, body: { success: false, code: 'schedule_invalid',
+      error: 'cron 表达式无效: Calendar cron requires * for day, month, and weekday fields' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'water', '--cron', '0 0 9 * * 1-5'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('无法修改任务 water：cron 表达式无效: Calendar cron requires * for day, month, and weekday fields');
+    const hints = info.mock.calls.map(call => String(call[0])).join('\n');
+    expect(hints).toContain('--kind solar --cron');
+    expect(hints).toContain('不会自动恢复');
+    // A plain 400 (invalid_argument) shows the instance's explanation as it is.
+    stubHost(() => ({ status: 400, body: { success: false, code: 'invalid_argument', error: '计划类型无效: weekly，可选 solar | lunar | workday | freeDay | holiday' } }));
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'water', '--kind', 'solar'])).rejects.toThrow('process.exit:1');
+    expect(error).toHaveBeenLastCalledWith('计划类型无效: weekly，可选 solar | lunar | workday | freeDay | holiday');
+  });
+
   it('resume 被投递目标拒绝（403 schedule_target_forbidden）时说明原因并以 1 退出 (#1250 b61)', async () => {
     const { logger } = await import('../src/utils/logger.js');
     const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
@@ -1195,5 +1305,161 @@ describe('schedule (running Host)', () => {
       '    Agent:  news',
       '    Agent:  zhin（默认）',
     ]);
+  });
+});
+
+describe('migrate: release-age exclusions, allowBuilds and retired packages (#1250 retired-package-not-flagged)', () => {
+  const bot = (extra: Record<string, unknown> = {}, workspaceText = "packages:\n  - '.'\n") => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      private: true,
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin start --foreground --watch source config', start: 'zhin start --foreground --mode production --no-watch', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: { 'zhin.js': '9.4.1', '@zhin.js/cli': '9.4.1', '@zhin.js/gateway': '9.4.1', '@zhin.js/adapter-icqq': '1.0.0' },
+      ...extra,
+    }, null, 2));
+    fs.writeFileSync(path.join(tmp, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), workspaceText);
+    return pkgPath;
+  };
+  const workspace = () => yaml.parse(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8'));
+  const run = (pkgPath: string, pnpm: string | undefined) => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true, pnpmVersion: () => pnpm });
+    return log.mock.calls.flat().join('\n');
+  };
+
+  it('writes no minimumReleaseAgeExclude with --include-pinned when the project sets no minimumReleaseAge (pnpm 10 pinned)', () => {
+    const output = run(bot({ packageManager: 'pnpm@10.30.0' }), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+    expect(output).toContain('项目未设置 minimumReleaseAge（packageManager 固定的 pnpm 10 默认不启用），不写 minimumReleaseAgeExclude');
+  });
+
+  it('writes minimumReleaseAgeExclude without a packageManager pin although the local pnpm is 10 (CI may run pnpm 11)', () => {
+    const output = run(bot(), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    expect(output).not.toContain('不写 minimumReleaseAgeExclude');
+    // Unpinned, .npmrc / package.json#pnpm turn the gate off for pnpm 10 only: pnpm 11 ignores them.
+    run(bot({ pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    // A pnpm-workspace.yaml value of 0 is read by every pnpm that has the gate.
+    run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 0\n"), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+  });
+
+  it('writes the exclusions where pnpm reads minimumReleaseAge: pnpm-workspace.yaml, .npmrc, package.json#pnpm', () => {
+    run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 1440\n"), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toEqual(['@zhin.js/adapter-icqq@9.4.2', '@zhin.js/cli@9.4.2', '@zhin.js/gateway@9.4.2', 'zhin.js@9.4.2']);
+
+    const npmrc = bot({ packageManager: 'pnpm@10.30.0' });
+    fs.writeFileSync(path.join(tmp, '.npmrc'), 'registry=https://registry.npmjs.org/\nminimum-release-age=60\n');
+    run(npmrc, '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    fs.rmSync(path.join(tmp, '.npmrc'));
+
+    run(bot({ packageManager: 'pnpm@10.30.0', pnpm: { minimumReleaseAge: 30 } }), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+  });
+
+  it('reads minimumReleaseAge only from pnpm-workspace.yaml under pnpm 11 (package.json#pnpm and .npmrc are ignored there)', () => {
+    // pnpm 11 ignores the package.json pnpm field: its default one-day gate still applies.
+    const output = run(bot({ pnpm: { minimumReleaseAge: 0 } }), '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    expect(output).not.toContain('不写 minimumReleaseAgeExclude');
+
+    // pnpm 11 reads only auth / registry / TLS / proxy settings from .npmrc.
+    const npmrc = bot();
+    fs.writeFileSync(path.join(tmp, '.npmrc'), 'minimum-release-age=0\n');
+    run(npmrc, '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    fs.rmSync(path.join(tmp, '.npmrc'));
+
+    // A pinned pnpm 10 still honours both.
+    run(bot({ packageManager: 'pnpm@10.30.0', pnpm: { minimumReleaseAge: 0 } }), '10.30.0');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+  });
+
+  it('follows pnpm 11\'s default gate, and an explicit 0 turns it off', () => {
+    run(bot(), '11.27.1');
+    expect(workspace().minimumReleaseAgeExclude).toHaveLength(4);
+    const output = run(bot({}, "packages:\n  - '.'\nminimumReleaseAge: 0\n"), '11.27.1');
+    expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
+    expect(output).toContain('pnpm-workspace.yaml 的 minimumReleaseAge 为 0（不拦新版本），不写 minimumReleaseAgeExclude');
+  });
+
+  it('writes no allowBuilds key under a pinned pnpm 10 for any gateway package an onlyBuiltDependencies list covers', () => {
+    const output = run(bot({ packageManager: 'pnpm@10.30.0' }, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
+    // ssh2 / cpu-features follow the same rule as node-pty: appended to the list pnpm 10 reads.
+    expect(workspace()).not.toHaveProperty('allowBuilds');
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+    expect(output).toContain('node-pty: 已在 pnpm-workspace.yaml onlyBuiltDependencies 中，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('ssh2: 加入 pnpm-workspace.yaml onlyBuiltDependencies，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).toContain('cpu-features: 加入 pnpm-workspace.yaml onlyBuiltDependencies，packageManager 固定的 pnpm 10 会构建它，不再写 allowBuilds');
+    expect(output).not.toContain('allowBuilds.');
+  });
+
+  it('still writes allowBuilds without a packageManager pin when the local pnpm is 10 (a deployment may run pnpm 11)', () => {
+    const output = run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '10.30.0');
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+    expect(output).not.toContain('不再写 allowBuilds');
+  });
+
+  it('writes allowBuilds as before when the pnpm version is unknown (it may be pnpm 11)', () => {
+    run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), undefined);
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+    expect(workspace().onlyBuiltDependencies).toEqual(['node-pty', 'ssh2', 'cpu-features']);
+  });
+
+  it('still writes allowBuilds under pnpm 11, which no longer reads onlyBuiltDependencies', () => {
+    run(bot({}, "packages:\n  - '.'\nonlyBuiltDependencies:\n  - node-pty\n"), '11.27.1');
+    expect(workspace().allowBuilds).toEqual({ 'node-pty': true, ssh2: true, 'cpu-features': true });
+  });
+
+  it('does not upgrade a retired package and lists it with its replacement and the imports to rewrite', () => {
+    const pkgPath = bot({ devDependencies: { '@zhin.js/config-yaml': '^1.1.0' } });
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'src', 'config.ts'), "// '@zhin.js/config-yaml' in a comment\nimport { YamlConfigDocument } from '@zhin.js/config-yaml';\n");
+    fs.mkdirSync(path.join(tmp, 'node_modules', '@zhin.js', 'config-yaml'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'node_modules', '@zhin.js', 'config-yaml', 'index.js'), "export * from '@zhin.js/config-yaml';\n");
+    const output = run(pkgPath, '10.30.0');
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).devDependencies['@zhin.js/config-yaml']).toBe('^1.1.0');
+    expect(output).toContain('@zhin.js/config-yaml: 已并入或停更，不升级');
+    expect(registry.calls).not.toContain('@zhin.js/config-yaml@latest');
+
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(1);
+    const report = lines.join('\n');
+    expect(report).toContain('package.json 的 devDependencies 依赖 @zhin.js/config-yaml（^1.1.0）：已停更并入 @zhin.js/runtime');
+    expect(report).toContain("import { YamlConfigDocument } from '@zhin.js/runtime'");
+    expect(report).toContain("src/config.ts:2 '@zhin.js/config-yaml' → '@zhin.js/runtime'");
+    expect(report).not.toContain('node_modules');
+    // Nothing is rewritten.
+    expect(fs.readFileSync(path.join(tmp, 'src', 'config.ts'), 'utf8')).toContain("from '@zhin.js/config-yaml'");
+  });
+
+  it('lists an import of the deleted subpath @zhin.js/agent/tools with @zhin.js/tool (#1250)', () => {
+    bot();
+    fs.mkdirSync(path.join(tmp, 'tools', 'echo'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'tools', 'echo', 'index.ts'), `// old: '${REMOVED_TOOLS_SUBPATH}'\nimport { defineAgentTool } from '${REMOVED_TOOLS_SUBPATH}';\n`);
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(0);
+    const report = lines.join('\n');
+    expect(report).toContain("tools/echo/index.ts:2 '@zhin.js/agent/tools' → '@zhin.js/tool'：子路径 @zhin.js/agent/tools 已删除：defineAgentTool 改从 @zhin.js/tool 导入");
+    expect(report).not.toContain('index.ts:1');
+  });
+
+  it('reports retired packages of a workspace member and nothing for a clean project', () => {
+    bot({}, "packages:\n  - 'plugins/*'\n");
+    const lines: string[] = [];
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(0);
+    expect(lines.join('\n')).toContain('没有依赖已并入或停更的 @zhin.js 包');
+    fs.mkdirSync(path.join(tmp, 'plugins', 'foo'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'plugins', 'foo', 'package.json'), JSON.stringify({ name: 'foo', dependencies: { '@zhin.js/isolate': '^1.0.0' } }));
+    lines.length = 0;
+    expect(reportRetiredPackages(tmp, line => lines.push(line))).toBe(1);
+    expect(lines.join('\n')).toContain('plugins/foo/package.json 的 dependencies 依赖 @zhin.js/isolate（^1.0.0）：已并入 @zhin.js/runtime');
   });
 });

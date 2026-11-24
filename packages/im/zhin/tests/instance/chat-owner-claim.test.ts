@@ -197,3 +197,56 @@ describe('chat owner claim code (ADR 0060 §3.3)', () => {
     expect(claim.active).toBe(false);
   });
 });
+
+describe('#1250 owner-hints-dead-end-sandbox-only', () => {
+  it('with only simulation adapters, the log and zhin status point at the Sandbox path; a grant nobody speaks as keeps the claim open', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-claim-'));
+    directories.push(root);
+    const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
+    // An owner grant on a typed Sandbox sender: nobody ever speaks as it.
+    await roles.store.grant({ level: 'global', key: '', adapter: 'sandbox', userId: 'sandbox-user', role: 'owner' });
+    const lines: string[] = [];
+    const claim = new ChatOwnerClaim({ roles, projectRoot: root, logger: { info: line => { lines.push(line); }, warn: line => { lines.push(line); } },
+      code: () => 'AAAA2222', now: () => 42, pid: 4242, adapters: () => ({ simulated: ['sandbox'], simulationOnly: true }) });
+    await claim.refresh();
+    expect(claim.active).toBe(true);
+    expect(lines.join('\n')).toContain('以我的聊天身份发言');
+    expect(lines.join('\n')).not.toContain('AAAA2222');
+    expect(JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'))).toMatchObject({ code: 'AAAA2222', simulationOnly: true });
+    await claim.dispose();
+    // A real platform beside it: the usual claim text, no flag in the file.
+    const other = new ChatOwnerClaim({ roles, projectRoot: root, logger: { info() {}, warn: line => { lines.push(line); } },
+      code: () => 'BBBB3333', now: () => 42, pid: 4242, adapters: () => ({ simulated: ['sandbox'], simulationOnly: false }) });
+    lines.length = 0;
+    await other.refresh();
+    expect(lines.join('\n')).toContain('认领 <码>');
+    expect(JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'))).not.toHaveProperty('simulationOnly');
+    await other.dispose();
+  });
+
+  it('#1250 L3: a later generation that changes the adapters refreshes simulationOnly; the open code stays', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-claim-generations-'));
+    directories.push(root);
+    const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
+    let landscape = { simulated: ['sandbox'], simulationOnly: true };
+    let codes = 0;
+    const lines: string[] = [];
+    const claim = new ChatOwnerClaim({ roles, projectRoot: root, logger: { info() {}, warn: line => { lines.push(line); } },
+      code: () => ['CCCC4444', 'DDDD5555'][codes++]!, now: () => 42, pid: 4242, adapters: () => landscape });
+    const file = async () => JSON.parse(await readFile(join(root, CHAT_OWNER_CLAIM_FILE), 'utf8'));
+    await claim.refresh();
+    expect(await file()).toMatchObject({ code: 'CCCC4444', simulationOnly: true });
+    // The next generation adds a real platform.
+    landscape = { simulated: ['sandbox'], simulationOnly: false };
+    lines.length = 0;
+    await claim.refresh();
+    expect(await file()).toEqual({ version: 1, code: 'CCCC4444', pid: 4242, createdAt: 42 });
+    expect(lines.join('\n')).toContain('认领 <码>');
+    // Unchanged adapters: nothing is logged or written again.
+    lines.length = 0;
+    await claim.refresh();
+    expect(lines).toEqual([]);
+    expect(codes).toBe(1);
+    await claim.dispose();
+  });
+});

@@ -20,6 +20,8 @@ Use this for a single Bot, a multi-Bot collaboration venue, or Remote Console. T
 
 Use `/pub/health` and `/pub/ready` for health checks; see [6. Monitoring and alerts](#_6-monitoring-and-alerts).
 
+For rules deployers keep running into (yml accounts are only a first-start seed, `--watch` does not save re-logins, MCP servers must be bound to an Agent, when fallback models switch, and more) see [Gotchas and counter-intuitive behavior](./gotchas.md).
+
 ## 1. Release baseline
 
 - Use Node `>=22.19.0` (projects and the compiled IM library) and commit the lockfile.
@@ -207,6 +209,8 @@ zhin service stop --user    # stays stopped; zhin service start starts it again
 
 On macOS, use the same commands without `--user` (launchd). `zhin service install` is the one recommended way to run the bot as a service: the file is generated on the spot with the current absolute `node` and project CLI paths and restarts the gateway only after a failure; see the [CLI reference](../cli/index.md#service). Keep one restart owner: with systemd, launchd, or Kubernetes, let the external supervisor own a foreground gateway (`--foreground`). Use the background `zhin start` only for a directly managed bare-metal process.
 
+An instance started with `--no-watch` watches no files and does not analyze the imports of the modules it loads at startup; the first explicit reload (for example an Agent self-change) analyzes them once and keeps the graph current from then on. A `.tsx` file in the project keeps the tsx loader resident in the instance; if memory is tight, see [Commands · what a `.tsx` file costs in memory](../authoring/commands.md). Neither the instance nor the gateway loads the scaffold wizard (`@zhin.js/scaffold-wizard`) at startup; the gateway loads it on demand the first time the Console uses a plugin check, the official plugin candidates or the Console setup, and it then stays resident until the process exits. This is by design: it costs nothing until used, and a later use does not load it again.
+
 Advanced: in an existing PM2 setup, create the project with `create-zhin-app --with pm2` (adds `ecosystem.config.cjs` and `pm2:*` scripts); Docker is covered by the templates above.
 
 The gateway (ADR 0054) is long-lived and supervises the instance: Console restarts, dependency changes and instance crashes are handled by restarting the instance inside the gateway; after a crash storm the instance stays `crashed` while the gateway stays online (the Console shows the logs and can start it again). The gateway exits with code 0 on SIGTERM / `zhin stop` and non-zero when it fails to start; an external supervisor only needs to restart it after an abnormal exit. Exit codes and a systemd example: [zhin start](../cli/runtime.md#exit-codes).
@@ -231,6 +235,8 @@ To use the Console SQL editor on PostgreSQL / MySQL, create the restricted accou
 ## 6. Monitoring and alerts
 
 Monitor the HTTP probe, restart count, Endpoint health, SSE recovery gaps, error rate, database capacity, collaborations (Engagements) frozen and waiting for a human, and Agent failure/cancellation ratio.
+
+Memory: what the instance's resident memory consists of, the measuring script and the V8 options to tune (`--max-semi-space-size`, `--max-old-space-size`) are in [Memory usage and measurement](./memory.md).
 
 In the foreground the instance logs go to stdout and `.zhin/logs/instance.log`; in the background the gateway's own output goes to `.zhin/logs/gateway.log` and the instance logs to `.zhin/logs/instance.log`, rotated past 10 MiB (5 files kept). Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
 

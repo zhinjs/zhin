@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0067）
+## 现存 ADR 列表（0034–0068）
 
 ### 服务插件与平台适配器契约
 
@@ -68,6 +68,12 @@ sidebar: false
 | [ADR 0063](./0063-console-plugin-ui-unification.md) | Console 与插件页面 UI 统一——Console 组件抽成 `@zhin.js/console-ui`（放在 zhinjs/zhin），插件页必须用统一页面外壳，插件页挂成插件详情页签并进入命令面板，`zk-` 弃用后在 minor 中删除（P4 已删除 `@zhin.js/client/ui`、`zk-`、旧令牌别名与蓝图 `mark`）（D1–D10、D12–D14 按推荐，D11 所有者已定）；增补 D15–D22（zhinjs/console#111 设计规则：三层令牌由 `@zhin.js/console-ui` 统一生成，对 Console 强制并由 stylelint、ESLint、生成的 Tailwind 主题和 Playwright 审计约束，对第三方插件页面推荐使用组件库、只设一组很小的硬性底线，`zhin plugin check` 只提示；本仓库的官方插件完整遵守全部规则，自 P2 起 D8 第 1–3 条、第 4–6 条和 Playwright 全项审计在 CI 中为错误） | Accepted（P1–P4 已实施） | `@zhin.js/console-ui`（新）、`@zhin.js/client`（声明式页面 / 适配器页 / 评论审批页渲染器）、`@zhin.js/pagemanager`、`@zhin.js/page`、`@zhin.js/cli`（`plugin check`）、Console 前端（`zhinjs/console`） |
 
 ---
+
+### 运行时资源占用与发布产物
+
+| ADR | 标题 | 状态 | 核心落盘模块 |
+| --- | --- | --- | --- |
+| [ADR 0068](./0068-lazy-capabilities-and-bundled-packages.md) | 约定目录能力按清单惰性加载，官方包发布时打包成少量文件——实测模块约占常驻内存的 5%–15%；推荐先打包官方包（esbuild 多入口 + splitting），再惰性化技能 / 子 Agent 私有工具与组件，命令惰性视堆快照归因再定（开放问题 11 项） | 提议 | `@zhin.js/feature-kit`（`discovery.ts`、`provider.ts`）、`@zhin.js/runtime`（清单 worker 与缓存）、`@zhin.js/tool`、`@zhin.js/component`、`@zhin.js/command`、官方包构建脚本、`scripts/measure-instance-memory.mjs` |
 
 ## 早期奠基 ADR 摘要（代码中引用的历史架构契约）
 

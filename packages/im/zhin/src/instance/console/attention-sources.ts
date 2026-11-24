@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { ROOT_CONFIG_FILE_NAMES, type SnapshotLease } from '@zhin.js/plugin-runtime';
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, isEndpointConfigDivergence } from '@zhin.js/adapter';
 import { commandFeatureId, isCommandIndex, type CommandRouteClaimant } from '@zhin.js/command';
 import type {
   AttentionCommandClaimant,
@@ -19,6 +19,7 @@ import type {
 } from './attention.js';
 import { DEFAULT_ERROR_LOG_WINDOW_HOURS } from './attention.js';
 import { hasGlobalOwner } from '../chat-roles.js';
+import { chatAdapterLandscape } from '../chat-role-migration.js';
 import { personalPrincipalEndpointOf, personalPrincipalPending } from '../chat-personal-principals.js';
 import { listMcpServerStatus } from './agent-runtime-resolver.js';
 import { resolveCurrentAgentConsole } from './agent-console.js';
@@ -104,8 +105,10 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
             if (!node || node.parent !== snapshot.root) continue;
             let drift;
             try { drift = await adapter.configDrift(); } catch { continue; }
-            if (!drift.entries.length) continue;
-            const ids = (kind: string) => drift.entries.filter(entry => entry.kind === kind).map(entry => entry.id);
+            // Accounts added in the Console were never in the file: not drift (#1250).
+            const entries = drift.entries.filter(isEndpointConfigDivergence);
+            if (!entries.length) continue;
+            const ids = (kind: string) => entries.filter(entry => entry.kind === kind).map(entry => entry.id);
             rows.push({ instanceKey: node.instanceKey, adapter: adapter.descriptor.name,
               configOnly: ids('config_only'), savedOnly: ids('snapshot_only'), changed: ids('changed') });
           }
@@ -213,9 +216,17 @@ export function createAttentionSources(composition: ConsoleRpcComposition, optio
               return { consoleUserId: entry.consoleUserId, adapter: entry.adapter!, ...(endpoint ? { endpoint } : {}), userId: entry.subjectId, at: entry.at };
             })
           : [];
+        // #1250: simulation adapters of this generation — an owner grant nobody speaks as there does
+        // not count, and a Sandbox-only project is pointed at 「以我的聊天身份发言」 (claims are refused there).
+        let landscape: ReturnType<typeof chatAdapterLandscape> = { simulated: [], simulationOnly: false };
+        if (snapshots) {
+          const lease = snapshots.acquire();
+          try { landscape = chatAdapterLandscape(lease.value); } finally { lease.release(); }
+        }
         return {
-          hasGlobalOwner: hasGlobalOwner(roles),
+          hasGlobalOwner: hasGlobalOwner(roles, landscape.simulated),
           claimOpen: featureStores.claim?.active === true,
+          ...(landscape.simulationOnly ? { simulationOnly: true } : {}),
           ...(imported.length ? { imported: { at: state?.importedAt ?? imported[0]!.at, entries: imported } } : {}),
           pending: state?.pending ?? [],
           ...(personal.length ? { personal: { at: Math.min(...personal.map(entry => entry.at)),

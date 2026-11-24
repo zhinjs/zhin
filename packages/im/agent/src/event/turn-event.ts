@@ -187,6 +187,12 @@ export interface TurnEndEvent {
    * `server`, `timeout`, ... or `unknown`); `service` the display name of the selected model's account.
    */
   modelFailure?: Readonly<{ kind: string; message: string; service?: string }>;
+  /**
+   * #1250 `scheduled-delivery-counts-as-background`: set by the turn engine when no recorded source
+   * (tool result, background message, perception, scheduled prompt, delegated report) reached the model
+   * in this turn. Absent means it did, or the producer does not say (treat as tainted).
+   */
+  contentProvenance?: 'clean';
   /** Control-only ingress links its own principal/journal to the affected turn. */
   control?: Readonly<{
     intent: 'steer' | 'follow_up' | 'observe';

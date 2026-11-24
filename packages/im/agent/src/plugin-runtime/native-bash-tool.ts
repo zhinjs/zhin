@@ -34,6 +34,8 @@ export interface BashExecutionResult {
   readonly stderr: string;
   readonly blocked?: boolean;
   readonly blockReason?: string;
+  /** The isolated environment (Docker, its image) is unavailable: no command can run (#1250 b96). */
+  readonly isolationUnavailable?: boolean;
   readonly timedOut?: boolean;
   /**
    * Self files (`BOT.md`, `AGENTS.md`, root config…) the isolated shell created at the project
@@ -264,6 +266,13 @@ export class NativeBashToolFeature {
       signal: context.signal,
       policy: context.policy,
     });
+    if (result.blocked && result.isolationUnavailable) {
+      // #1250 b96: no other command can run either; a model retrying bash only burns the turn.
+      throw new Error(
+        `Shell is unavailable on this host: ${result.blockReason ?? 'isolated environment unavailable'}. `
+        + 'Do not retry bash until the environment is restored; tell the user it is unavailable here.',
+      );
+    }
     if (result.blocked) {
       throw new Error(`Command blocked by sandbox: ${result.blockReason ?? 'unknown reason'}`);
     }

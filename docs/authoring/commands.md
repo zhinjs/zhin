@@ -195,7 +195,7 @@ export default defineCommand({
 });
 ```
 
-不满足时走命令的拒绝回复：`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」），zhin 角色条件说明角色从哪里来（「没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」，平台群主 / 管理员另说明平台身份不等于 zhin 角色；不点名缺哪个角色或谁持有），`owner@global` 说明需要全局聊天主人以及去哪里授予（与 `restart` / `config` 内部校验同一段文案，`describeGlobalOwnerRequired()`；其中的 `绑定 <码>` 带上本账号实际的命令前缀，如「`!!绑定 <码>`」），`private()` 提示「此指令只能在私聊中使用，请私聊机器人发送。」，其余会话条件保持通用的「没有权限执行此指令。」。这些文案只有一处来源：`@zhin.js/permission` 的 `describeCommandDenial()`；订阅类命令用 `canManageConversation()` 判定时，拒绝回复用 `describeConversationManagerDenial()`（`zhin.js/command`）。
+不满足时走命令的拒绝回复：`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令。机器人不是本群管理员（或无法确认其身份）。」），zhin 角色条件说明角色从哪里来（「没有权限执行此指令。此功能需要 zhin 角色。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。」，平台群主 / 管理员另说明平台身份不等于 zhin 角色；不点名缺哪个角色或谁持有），`owner@global` 说明需要全局聊天主人以及去哪里授予（与 `restart` / `config` 内部校验同一段文案，`describeGlobalOwnerRequired()`；其中的 `绑定 <码>` 不需要命令前缀，与 `认领 <码>` 相同），`private()` 提示「此指令只能在私聊中使用，请私聊机器人发送。」，其余会话条件保持通用的「没有权限执行此指令。」。这些文案只有一处来源：`@zhin.js/permission` 的 `describeCommandDenial()`；订阅类命令用 `canManageConversation()` 判定时，拒绝回复用 `describeConversationManagerDenial()`（`zhin.js/command`）。
 
 角色来自当前真实消息（Runtime 写入的 `sender.chatRole`），授予记录存在项目数据库：在 Console 对象页的「角色」页签或聊天命令 `角色 授予` 中管理。平台群主 / 管理员**不会**自动成为 zhin 角色——管 zhin 功能的命令写 `admin` / `owner`，管平台功能的命令写 `platform:*`。详见[聊天角色](../concepts/chat-roles.md)；旧写法 `role(master)`、`scene_admin`、`platform(adapter,perm)` 的对照见[升级到聊天角色](../migrations/chat-roles.md#permits)。
 
@@ -279,6 +279,12 @@ export default defineCommand({
   ),
 });
 ```
+
+::: tip `.tsx` 文件的内存代价
+Node 原生只能去掉 `.ts` 的类型，不能编译 JSX。实例第一次加载项目里的 `.tsx` 文件时，才会注册 tsx 加载器来编译它；项目里没有 `.tsx`，就不会注册。一旦注册，这个实例进程会一直带着 tsx 的模块和它用来编译的 esbuild 子进程，合计约 16MB（esbuild 子进程约 15MB）。
+
+内存紧张的生产部署可以改用 `.ts`：用 `component('status-card', props)` 按名字渲染组件（见下面的例子），或者 `raw()` 发送消息段。注意被渲染的组件如果本身也写在项目的 `components/*.tsx` 里，加载它同样会注册 tsx 加载器；要完全避开，需要把组件放进单独的插件包、发布前编译成 `.js`，这样实例运行时就不需要 tsx。
+:::
 
 也可以按名字调用已注册的组件：
 

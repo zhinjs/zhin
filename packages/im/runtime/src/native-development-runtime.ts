@@ -8,9 +8,10 @@ import {
 import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Dispose } from '@zhin.js/plugin-runtime';
-import {
+// Type-only: the index (and es-module-lexer's WebAssembly memory) loads on first use (#1250).
+import type {
   ModuleDependencyIndex,
-  type ModuleDependencyAnalysis,
+  ModuleDependencyAnalysis,
 } from './module-dependency-index.js';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 import { withToolPackageInstallHint } from './missing-tool-package.js';
@@ -24,6 +25,19 @@ import { getEsmCacheEvictor, type EsmCacheEvictor } from './esm-cache-evictor.js
 export interface NativeDevelopmentModuleRuntimeOptions {
   readonly projectRoot: string;
   readonly watch?: boolean;
+  /**
+   * When the import graph of loaded entries is analyzed (#1250 `prod-runs-dependency-index`).
+   * `eager` analyzes every entry as it loads, so file watching can map a changed helper back to its
+   * entries at once. `lazy` loads entries without analysis and without loading `es-module-lexer`;
+   * the graph is built from the loaded entries the first time `prepareInvalidation()` runs (an
+   * explicit reload under `--no-watch`) and kept up to date from then on; each later call also
+   * analyzes any committed entry the graph does not know yet. An entry whose analysis fails is
+   * reported as a `ZhinModuleRuntimeWarning` process warning (code `ZHIN_DEPENDENCY_ANALYSIS_FAILED`)
+   * and makes `requiresProcessRestart()` answer true for every other importable source (not
+   * Markdown or YAML) while it stays loaded.
+   * Defaults to `eager` with `watch` and `lazy` without it.
+   */
+  readonly dependencyTracking?: 'eager' | 'lazy';
   /** Optional scoped loader used only when the active Node loader rejects TSX. */
   readonly tsxLoader?: TsxModuleLoader;
   /**
@@ -65,10 +79,17 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   readonly #projectRoot: string;
   readonly #watchEnabled: boolean;
   readonly #tsxLoader: TsxModuleLoader | undefined;
-  // Package-name imports are followed only into watched roots: nothing else reports a change.
-  readonly #dependencies = new ModuleDependencyIndex({
-    followPackageImport: (source) => this.#watchRoots.some((root) => isWithin(root, source)),
-  });
+  /** Created on first use: by every load when tracking is eager, else by `prepareInvalidation()`. */
+  #dependencies?: ModuleDependencyIndex;
+  #dependenciesReady?: Promise<ModuleDependencyIndex>;
+  /** Lazy tracking: the in-flight `prepareInvalidation()` pass that brings the graph up to date. */
+  #graphReady?: Promise<void>;
+  /**
+   * Lazy tracking: committed entries whose import analysis failed. Their imports are unknown, so
+   * a reload of any other source cannot be planned safely while one of them is loaded.
+   */
+  readonly #unanalyzedEntries = new Set<string>();
+  readonly #eagerDependencies: boolean;
   readonly #watchers = new Set<PortableSourceWatcher>();
   #pendingDependencies?: Map<string, ModuleDependencyAnalysis>;
   #watchRoots: readonly string[];
@@ -96,6 +117,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     ensureTypeScriptSpecifierRemap();
     this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#watchEnabled = options.watch ?? true;
+    this.#eagerDependencies = (options.dependencyTracking ?? (this.#watchEnabled ? 'eager' : 'lazy')) === 'eager';
     this.#tsxLoader = options.tsxLoader;
     this.#watchRoots = normalizeWatchRoots([this.#projectRoot]);
     this.#evictionOption = options.evictRetiredModules ?? process.env.ZHIN_HMR_EVICT !== '0';
@@ -105,8 +127,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#assertOpen();
     const normalized = normalizeSourcePath(source);
     if (isNativeTypeScriptSource(normalized)) assertNativeTypeScriptSupport();
+    // Lazy tracking skips the analysis until an explicit reload first needs the graph.
+    const dependencies = this.#eagerDependencies ? await this.#dependencyIndex() : this.#dependencies;
     const analysis = this.#pendingDependencies?.get(normalized)
-      ?? await this.#dependencies.analyze(normalized);
+      ?? await dependencies?.analyze(normalized);
     const url = pathToFileURL(normalized);
     if (!this.#entryRevisions.has(normalized)) this.#entryRevisions.set(normalized, this.#revision);
     url.searchParams.set('zhin-generation', String(this.#entryRevisions.get(normalized)));
@@ -128,22 +152,92 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     }
     const revision = this.#entryRevisions.get(normalized) ?? this.#revision;
     if (this.#pendingDependencies) {
-      this.#pendingDependencies.set(normalized, analysis);
+      if (analysis) this.#pendingDependencies.set(normalized, analysis);
       this.#pendingRevisions?.set(normalized, revision);
     } else {
-      this.#dependencies.commit(normalized, analysis);
+      if (analysis) dependencies?.commit(normalized, analysis);
       this.#committedRevisions.set(normalized, revision);
     }
     return loaded;
   }
 
+  /**
+   * Makes the dependency queries (`affectedSources`, `staleDependents`, `requiresProcessRestart`,
+   * `invalidate`) complete before a reload. With lazy tracking the first call loads the index and
+   * analyzes the committed entries as they are on disk now; later loads keep it current, and every
+   * later call analyzes the committed entries still missing from the graph (an entry whose load began
+   * before the index existed commits without analysis) and retries those whose analysis failed. A
+   * failed call (the index could not load) is not cached.
+   */
+  prepareInvalidation(): Promise<void> {
+    this.#assertOpen();
+    if (this.#eagerDependencies) return Promise.resolve();
+    // Every call reconciles, so an entry committed after an earlier pass took its snapshot (a load
+    // that started before the index existed) still joins the graph; concurrent calls share a pass.
+    this.#graphReady ??= this.#reconcileGraph().finally(() => { this.#graphReady = undefined; });
+    return this.#graphReady;
+  }
+
+  /** Analyzes every committed entry the graph does not know yet, including earlier failures. */
+  async #reconcileGraph(): Promise<void> {
+    const index = await this.#dependencyIndex();
+    const attempted = new Set<string>();
+    for (;;) {
+      const missing = [...this.#committedRevisions.keys()]
+        .filter((entry) => !attempted.has(entry) && !index.hasEntry(entry));
+      if (missing.length === 0) break;
+      for (const entry of missing) {
+        attempted.add(entry);
+        let analysis: ModuleDependencyAnalysis;
+        try {
+          analysis = await index.analyze(entry);
+        } catch (error) {
+          // Kept as unknown: `requiresProcessRestart` falls back to a restart while it is loaded.
+          if (this.#committedRevisions.has(entry) && !this.#unanalyzedEntries.has(entry)) {
+            this.#unanalyzedEntries.add(entry);
+            emitDependencyAnalysisWarning(entry, error);
+          }
+          continue;
+        }
+        this.#unanalyzedEntries.delete(entry);
+        // The entry may have been retired, or reloaded with a fresher analysis, meanwhile.
+        if (this.#committedRevisions.has(entry) && !index.hasEntry(entry)) index.commit(entry, analysis);
+      }
+    }
+  }
+
+  /** True while a loaded entry other than `source` has imports the graph could not analyze. */
+  #hasUnanalyzedEntryBesides(source: string): boolean {
+    for (const entry of this.#unanalyzedEntries) {
+      if (entry === source) continue;
+      if (this.#committedRevisions.has(entry) && !this.#dependencies?.hasEntry(entry)) return true;
+    }
+    return false;
+  }
+
+  #dependencyIndex(): Promise<ModuleDependencyIndex> {
+    if (this.#dependencies) return Promise.resolve(this.#dependencies);
+    this.#dependenciesReady ??= import('./module-dependency-index.js').then(({ ModuleDependencyIndex: Index }) => {
+      // Package-name imports are followed only into watched roots: nothing else reports a change.
+      this.#dependencies ??= new Index({
+        followPackageImport: (source) => this.#watchRoots.some((root) => isWithin(root, source)),
+      });
+      return this.#dependencies;
+    }).catch((error: unknown) => {
+      // A failed load is not cached: the next reload tries again (as `scaffold-wizard-loader`).
+      this.#dependenciesReady = undefined;
+      throw error;
+    });
+    return this.#dependenciesReady;
+  }
+
   invalidate(source: string): void | Promise<void> {
-    const impacted = this.#dependencies.affectedSources(source, this.#isRevisionable);
-    const packageTargets = this.#dependencies.changedPackageImportTargets(
+    const impacted = this.#dependencies?.affectedSources(source, this.#isRevisionable) ?? [];
+    const packageTargets = this.#dependencies?.changedPackageImportTargets(
       source,
       (file) => this.#revisionableRoots.find((root) => isWithinRoot(root, file)),
-    );
-    this.#dependencies.invalidate(source);
+    ) ?? [];
+    this.#dependencies?.invalidate(source);
     this.#revision += 1;
     for (const entry of new Set([normalizeSourcePath(source), ...impacted])) {
       this.#entryRevisions.set(entry, this.#revision);
@@ -158,13 +252,15 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     return Promise.all([this.#rootsPublished, revisionsPublished]).then(() => undefined);
   }
 
+  /** Without a dependency graph yet (lazy tracking before `prepareInvalidation()`), only the source itself. */
   affectedSources(source: string): readonly string[] {
-    return this.#dependencies.affectedSources(source, this.#isRevisionable);
+    return this.#dependencies?.affectedSources(source, this.#isRevisionable)
+      ?? Object.freeze([normalizeSourcePath(source)]);
   }
 
   /** Loaded entries that keep their old instance of the source after a reload (#1250). */
   staleDependents(source: string): readonly string[] {
-    return this.#dependencies.staleDependents(source, this.#isRevisionable);
+    return this.#dependencies?.staleDependents(source, this.#isRevisionable) ?? [];
   }
 
   updateRevisionableRoots(roots: readonly string[]): void {
@@ -185,10 +281,13 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // The HMR coordinator turns this into a visible process restart reason.
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
     if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
+    // Lazy tracking: an entry whose analysis failed may import this source; only a restart is safe.
+    // Sources no JS import can reach (Markdown, YAML) keep their normal reload decision below.
+    if (isModuleImportableSource(normalized) && this.#hasUnanalyzedEntryBesides(normalized)) return true;
     // Native ESM query revisions do not invalidate CommonJS require.cache.
     // Keep .cjs/.cts entries and their statically discovered closure on the
     // process boundary until the module runtime owns a CJS cache transaction.
-    if (this.#dependencies.hasCommonJsImpact(normalized)) return true;
+    if (['.cjs', '.cts'].includes(extname(normalized)) || this.#dependencies?.hasCommonJsImpact(normalized)) return true;
     // A helper with one or more loaded entry importers is safe: the planner
     // invalidates those owned entries and the generation query refreshes their
     // complete project-local import closure.
@@ -240,18 +339,21 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   commitGeneration(sources: readonly string[]): void {
     this.#assertOpen();
     for (const [entry, analysis] of this.#pendingDependencies ?? []) {
-      this.#dependencies.commit(entry, analysis);
+      this.#dependencies?.commit(entry, analysis);
     }
     this.#pendingDependencies = undefined;
     for (const [entry, revision] of this.#pendingRevisions ?? []) this.#committedRevisions.set(entry, revision);
     this.#pendingRevisions = undefined;
-    this.#dependencies.retain(sources);
+    this.#dependencies?.retain(sources);
     const retained = new Set(sources.map(normalizeSourcePath));
     for (const entry of this.#entryRevisions.keys()) {
       if (!retained.has(entry)) this.#entryRevisions.delete(entry);
     }
     for (const entry of this.#committedRevisions.keys()) {
       if (!retained.has(entry)) this.#committedRevisions.delete(entry);
+    }
+    for (const entry of this.#unanalyzedEntries) {
+      if (!retained.has(entry)) this.#unanalyzedEntries.delete(entry);
     }
     this.#evictRetiredRevisions();
   }
@@ -307,7 +409,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     if (sameRoots(this.#watchRoots, next)) return;
     this.#watchRoots = next;
     // Cached closures followed package imports by the previous roots.
-    this.#dependencies.invalidateAll();
+    this.#dependencies?.invalidateAll();
     for (const watcher of this.#watchers) watcher.replaceRoots(next);
   }
 
@@ -328,9 +430,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     for (const watcher of this.#watchers) watcher.close();
     this.#watchers.clear();
     this.#pendingDependencies = undefined;
-    this.#dependencies.clear();
+    this.#dependencies?.clear();
     this.#entryRevisions.clear();
     this.#committedRevisions.clear();
+    this.#unanalyzedEntries.clear();
     this.#pendingRevisions = undefined;
     this.#packageFileRevisions.clear();
     if (this.#revisionableRoots.length > 0) {
@@ -550,6 +653,29 @@ function isIgnoredSource(root: string, source: string): boolean {
 
 function isExecutableSource(source: string): boolean {
   return ['.cjs', '.cts', '.js', '.mjs', '.mts', '.ts', '.tsx'].includes(extname(source));
+}
+
+/**
+ * Watched source types that no `import` can load: Node has no loader for them and the module
+ * runtime registers none. JSON stays importable (`with { type: 'json' }`), as does any unknown type.
+ */
+const nonImportableExtensions = new Set(['.md', '.yaml', '.yml']);
+
+function isModuleImportableSource(source: string): boolean {
+  return !nonImportableExtensions.has(extname(source));
+}
+
+/**
+ * Lazy tracking: reports an entry whose import analysis failed, once per failure (#1250). While it
+ * stays loaded, every reload of another importable source falls back to a process restart.
+ */
+function emitDependencyAnalysisWarning(entry: string, error: unknown): void {
+  const reason = error instanceof Error ? error.message : String(error);
+  process.emitWarning(
+    `Cannot analyze the imports of ${entry}: ${reason}. Until it is analyzed, reloading any other `
+      + 'module source restarts the process instead of reloading in place.',
+    { type: 'ZhinModuleRuntimeWarning', code: 'ZHIN_DEPENDENCY_ANALYSIS_FAILED', detail: JSON.stringify({ entry }) },
+  );
 }
 
 function isNativeTypeScriptSource(source: string): boolean {

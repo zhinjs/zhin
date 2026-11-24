@@ -35,7 +35,7 @@ import type {
 } from '../schedule-domain/execution-history.js';
 import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
-import type { ScheduleJob, ScheduleJobState, JobSchedule } from './types.js';
+import type { ScheduleJob, ScheduleJobState, ScheduleJobUpdate, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
 import { ScheduleJobAgentError, profileJobAgentMessage } from './schedule-agent.js';
 import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
@@ -102,6 +102,29 @@ export function jobScheduleToResolved(schedule: JobSchedule, timezone = 'Asia/Sh
     default:
       return null;
   }
+}
+
+/** Same timing (#1250 b90): stored schedules are plain JSON, so their serialization compares. */
+function sameJobSchedule(a: JobSchedule, b: JobSchedule): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Throws when a calendar (cron) schedule cannot be evaluated, so `updateJob` never stores a job
+ * that could not fire (#1250 b90). Other kinds are checked by their callers.
+ */
+function assertEvaluableSchedule(schedule: JobSchedule): void {
+  if (!('cron' in schedule)) return;
+  // `code: 'schedule_invalid'`: the Console routes answer it as a 400, not an internal error.
+  const invalid = (message: string) => Object.assign(new Error(message), { code: 'schedule_invalid' as const });
+  let resolved: ResolvedJob | null;
+  try {
+    resolved = jobScheduleToResolved(schedule);
+    if (resolved) getNextRun(resolved, new Date());
+  } catch (error) {
+    throw invalid(`cron 表达式无效: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!resolved) throw invalid(`无法解析计划: ${schedule.kind}`);
 }
 
 export function isRuntimeSchedulable(job: ScheduleJob, now = Date.now()): boolean {
@@ -207,6 +230,16 @@ export class TimerScheduler {
   /** Pending automatic retries after a transient model failure (#1250 b40), by job id; in memory only. */
   readonly #modelRetries = new Map<string, () => void>();
   readonly #inFlight = new Set<Promise<void>>();
+  /**
+   * Per-job write lock (#1250 b90 review): `updateJob` / `removeJob` / `pauseJob` / `resumeJob` /
+   * `setJobAgent` and the state writes that follow a run (re-read, outcome and next run, removing a
+   * finished one-shot) run one at a time per job, so a change made while the run finishes is neither
+   * overwritten by the old timing nor deleted with the one-shot it turned into a recurring job. The
+   * run itself (the Agent turn) is not under the lock: a change made while it runs waits only for
+   * those few store writes. The lock lives in this instance only: two schedulers sharing one store
+   * are not serialised against each other (a runtime runs a single scheduler).
+   */
+  readonly #jobLocks = new Map<string, Promise<void>>();
 
   constructor(options: TimerSchedulerOptions) {
     this.store = options.store;
@@ -223,6 +256,18 @@ export class TimerScheduler {
       defaultMaxRetries: this.queueCfg.maxRetries,
       defaultTimeoutMs: this.queueCfg.defaultTimeoutMs,
     });
+  }
+
+  async #withJobLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.#jobLocks.get(id) ?? Promise.resolve();
+    const run = previous.then(fn);
+    const settled = run.then(() => undefined, () => undefined);
+    this.#jobLocks.set(id, settled);
+    try {
+      return await run;
+    } finally {
+      if (this.#jobLocks.get(id) === settled) this.#jobLocks.delete(id);
+    }
   }
 
   getDataDir(): string {
@@ -378,47 +423,62 @@ export class TimerScheduler {
       ...(job.schedule.kind === 'at' ? { scheduledAt: job.schedule.atMs } : {}),
     });
 
-    const lastExecutedAt = Date.now();
-    // #1250 b40: a run that failed because the model service was temporarily unavailable is retried
-    // later (about 5, then 10 minutes) through this scheduler's clock, never by blocking. Only when
-    // nothing it did can be repeated twice (no committed or unknown tool effect; a failed run sends
-    // no reply) and the job is still scheduled.
     const modelFailure = result.success ? undefined : result.modelFailure;
-    const registered = job.enabled && this.disposes.has(jobId);
-    const retryInMs = modelFailure?.transient && source === 'scheduled' && registered
-      && (result.replay?.disposition ?? 'safe') === 'safe'
-      ? SCHEDULE_MODEL_RETRY_DELAYS_MS[retried] : undefined;
-    const retryAt = retryInMs === undefined ? undefined : lastExecutedAt + retryInMs;
-    // The next run is recorded with the outcome, in the same write (#1250).
-    // Paused or removed while it ran: no longer registered, so no next run.
-    const regularNext = this.#trackNextRun({ ...job, enabled: registered, state: { ...job.state, lastExecutedAt } });
-    const nextRunAtMs = retryAt !== undefined && (regularNext === undefined || retryAt < regularNext) ? retryAt : regularNext;
-    const lastError = !result.success || result.status === 'degraded'
-      ? retryInMs !== undefined
-        ? `${result.error ?? 'unknown error'}${pendingModelRetryNote(retryInMs, retried + 1)}`
-        : modelFailure && retried > 0 ? `${result.error ?? 'unknown error'}；已自动重试 ${retried} 次，不再重试` : result.error
-      : undefined;
-    if (retryInMs !== undefined) {
-      logger.warn(formatCompact({ op: 'schedule_model_retry', job: jobId, kind: modelFailure!.kind,
-        attempt: retried + 1, in_ms: retryInMs }));
-      try {
-        const dispose = this.#scheduler.register(`${jobId}#model-retry`, 'at', async () => {
-          this.#modelRetries.delete(jobId);
-          await this.runJob(jobId, 'scheduled', retried + 1);
-        }, { atMs: retryAt! });
-        this.#modelRetries.set(jobId, dispose);
-      } catch (error) {
-        logger.warn(`model retry not scheduled for ${jobId}: ${error instanceof Error ? error.message : String(error)}`);
+    // The run's own state writes, under the job's lock (#1250 b90 review): a change made in between
+    // waits for them, or is read by them, never half of each.
+    const { retryInMs } = await this.#withJobLock(jobId, async () => {
+      const lastExecutedAt = Date.now();
+      // #1250 b90: the job may have been changed (`schedule_update`) while it ran; what follows the run
+      // (its next run, an automatic retry, removing a finished one-shot) goes by the job as stored now,
+      // not by the snapshot it ran with.
+      const latest = await this.store.getJob(jobId);
+      const current = latest ?? job;
+      const rescheduled = latest !== undefined && !sameJobSchedule(latest.schedule, job.schedule);
+      // #1250 b40: a run that failed because the model service was temporarily unavailable is retried
+      // later (about 5, then 10 minutes) through this scheduler's clock, never by blocking. Only when
+      // nothing it did can be repeated twice (no committed or unknown tool effect; a failed run sends
+      // no reply) and the job is still scheduled, on the timing it ran with.
+      const registered = current.enabled && this.disposes.has(jobId);
+      const retryInMs = modelFailure?.transient && source === 'scheduled' && registered && !rescheduled
+        && (result.replay?.disposition ?? 'safe') === 'safe'
+        ? SCHEDULE_MODEL_RETRY_DELAYS_MS[retried] : undefined;
+      const retryAt = retryInMs === undefined ? undefined : lastExecutedAt + retryInMs;
+      // The next run is recorded with the outcome, in the same write (#1250).
+      // Paused or removed while it ran: no longer registered, so no next run.
+      const regularNext = this.#trackNextRun({ ...current, enabled: registered, state: { ...current.state, lastExecutedAt } });
+      const nextRunAtMs = retryAt !== undefined && (regularNext === undefined || retryAt < regularNext) ? retryAt : regularNext;
+      const lastError = !result.success || result.status === 'degraded'
+        ? retryInMs !== undefined
+          ? `${result.error ?? 'unknown error'}${pendingModelRetryNote(retryInMs, retried + 1)}`
+          : modelFailure && retried > 0 ? `${result.error ?? 'unknown error'}；已自动重试 ${retried} 次，不再重试` : result.error
+        : undefined;
+      if (retryInMs !== undefined) {
+        logger.warn(formatCompact({ op: 'schedule_model_retry', job: jobId, kind: modelFailure!.kind,
+          attempt: retried + 1, in_ms: retryInMs }));
+        try {
+          const dispose = this.#scheduler.register(`${jobId}#model-retry`, 'at', async () => {
+            this.#modelRetries.delete(jobId);
+            await this.runJob(jobId, 'scheduled', retried + 1);
+          }, { atMs: retryAt! });
+          this.#modelRetries.set(jobId, dispose);
+        } catch (error) {
+          logger.warn(`model retry not scheduled for ${jobId}: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
-    }
 
-    await this.store.updateJobState(jobId, {
-      lastExecutedAt,
-      // #1250 b33: a run that finished without doing what was asked is `degraded`, with its cause.
-      lastStatus: !result.success ? 'error' : result.status === 'degraded' ? 'degraded' : 'ok',
-      lastError,
-      nextRunAtMs,
-      retryCount: retryInMs !== undefined ? retried + 1 : !result.success && retried > 0 ? retried : undefined,
+      await this.store.updateJobState(jobId, {
+        lastExecutedAt,
+        // #1250 b33: a run that finished without doing what was asked is `degraded`, with its cause.
+        lastStatus: !result.success ? 'error' : result.status === 'degraded' ? 'degraded' : 'ok',
+        lastError,
+        nextRunAtMs,
+        retryCount: retryInMs !== undefined ? retried + 1 : !result.success && retried > 0 ? retried : undefined,
+      });
+      // A one-shot job moved to another time or turned into a recurring one while it ran is kept.
+      if (result.success && !rescheduled && current.schedule.kind === 'at' && current.schedule.deleteAfterRun) {
+        await this.#removeJobUnlocked(jobId);
+      }
+      return { retryInMs };
     });
 
     const degraded = result.success && result.status === 'degraded' ? result.degraded : undefined;
@@ -448,10 +508,6 @@ export class TimerScheduler {
           notify, content: msg, jobId, label: job.label, locale: resolveLocale(job.locale),
         }).catch(() => {});
       }
-    }
-
-    if (result.success && job.schedule.kind === 'at' && job.schedule.deleteAfterRun) {
-      await this.removeJob(jobId);
     }
   }
 
@@ -571,7 +627,9 @@ export class TimerScheduler {
       state: job.state ?? {},
       enabled: job.enabled ?? true,
     };
-    full.source = job.source ?? 'manual';
+    // #1250: no default `source`. The deployer's paths (Console, CLI, Profile) set `manual` / `profile`
+    // themselves, and only those count as the deployer's jobs (`recordCleanScheduledDelivery`): a job
+    // added without one (a plugin calling `addJob`) must not pass for one. Readers treat absent as manual.
     // An `im` job must carry a complete target: storing one without would fail later (and in SQL
     // storage while encoding it), long after the caller got its answer.
     full.notify = parseJobNotify(resolveEffectiveNotify(full.notify, this.defaultNotify));
@@ -582,6 +640,10 @@ export class TimerScheduler {
   }
 
   async removeJob(id: string): Promise<boolean> {
+    return this.#withJobLock(id, () => this.#removeJobUnlocked(id));
+  }
+
+  async #removeJobUnlocked(id: string): Promise<boolean> {
     const ok = await this.store.removeJob(id);
     if (!ok) return false;
     this.#unschedulable.delete(id);
@@ -595,6 +657,10 @@ export class TimerScheduler {
   }
 
   async pauseJob(id: string): Promise<boolean> {
+    return this.#withJobLock(id, () => this.#pauseJob(id));
+  }
+
+  async #pauseJob(id: string): Promise<boolean> {
     const job = await this.store.getJob(id);
     if (!job) return false;
     job.enabled = false;
@@ -612,6 +678,10 @@ export class TimerScheduler {
   }
 
   async resumeJob(id: string): Promise<boolean> {
+    return this.#withJobLock(id, () => this.#resumeJob(id));
+  }
+
+  async #resumeJob(id: string): Promise<boolean> {
     const job = await this.store.getJob(id);
     if (!job) return false;
     job.enabled = true;
@@ -623,12 +693,58 @@ export class TimerScheduler {
   }
 
   /**
+   * Changes a job in place (#1250 b90): its schedule, label and whether it is enabled; every other
+   * field (Agent, prompt, delivery, creator, plan) stays as stored. `null`: no such job. The job is
+   * re-registered with its new timing and its next run recomputed; disabling it works like
+   * `pauseJob`. Callers refuse profile routines (re-declared from the Profile on every start).
+   */
+  async updateJob(id: string, update: ScheduleJobUpdate): Promise<ScheduleJob | null> {
+    // An invalid cron is refused before anything changes: the job keeps its timer and timing.
+    if (update.schedule) assertEvaluableSchedule(update.schedule);
+    return this.#withJobLock(id, () => this.#updateJob(id, update));
+  }
+
+  async #updateJob(id: string, update: ScheduleJobUpdate): Promise<ScheduleJob | null> {
+    const job = await this.store.getJob(id);
+    if (!job) return null;
+    const wasEnabled = job.enabled;
+    if (update.schedule) job.schedule = update.schedule;
+    if (update.label === null) delete job.label;
+    else if (update.label !== undefined) job.label = update.label;
+    if (update.enabled !== undefined) job.enabled = update.enabled;
+    job.updatedAt = Date.now();
+    // Only a new timing or a changed enabled state re-registers the timer: a label change alone keeps
+    // an `every` / `scatter` interval where it is.
+    const retime = update.schedule !== undefined || job.enabled !== wasEnabled;
+    if (retime) {
+      const dispose = this.disposes.get(id);
+      if (dispose) {
+        dispose();
+        this.disposes.delete(id);
+      }
+    }
+    // A pending automatic retry belongs to the old timing (#1250 b40).
+    if (update.schedule || !job.enabled) {
+      this.#cancelModelRetry(id);
+      job.state = { ...withoutPendingModelRetry(job.state), nextRunAtMs: undefined };
+    }
+    await this.store.upsertJob(job);
+    if (retime && isRuntimeSchedulable(job)) this.registerOne(job);
+    const next = await this.#syncNextRun(job);
+    return { ...job, state: { ...job.state, nextRunAtMs: next } };
+  }
+
+  /**
    * Sets the Agent an `agent` job runs on, or clears it (`undefined`: back to the default `zhin`),
    * #1250 b52. The next run reads the stored job, so no re-registration is needed. `null`: no such
    * job. Throws {@link ScheduleJobAgentError} for a heartbeat job (always the default Agent) and for
    * a profile routine (re-declared from the Assistant Profile on every start: change it there).
    */
   async setJobAgent(id: string, agent: string | undefined): Promise<ScheduleJob | null> {
+    return this.#withJobLock(id, () => this.#setJobAgent(id, agent));
+  }
+
+  async #setJobAgent(id: string, agent: string | undefined): Promise<ScheduleJob | null> {
     const job = await this.store.getJob(id);
     if (!job) return null;
     if (job.action.kind !== 'agent') throw new ScheduleJobAgentError('schedule_agent_heartbeat', `心跳任务不能指定 Agent: ${id}`);

@@ -12,6 +12,7 @@ import type {
 } from '../http-host.js';
 import type { HttpHostAddress, HttpHostOptions } from '../host-options.js';
 import { TokenRegistry } from '../token-registry.js';
+import type { ConsolePrincipal } from '../access-control.js';
 import { httpHostAddressProvider as addressProvider, type AddressAwareHttpHost } from '../addresses.js';
 import { createHttpHost, type ProcessHttpHost } from './server.js';
 
@@ -70,6 +71,8 @@ export function createHttpHostGroup(
     listRoutes: () => surface.listRoutes(),
     get address() { return surface.address; },
     get tokenRegistry() { return surface.tokenRegistry; },
+    // Any of the listeners' routers: they serve one surface with one registry.
+    isHostIssuedPrincipal: (value: unknown): value is ConsolePrincipal => listeners.some(listener => listener.isHostIssuedPrincipal(value)),
     async listen(): Promise<HttpHostAddress> {
       try {
         for (const listener of listeners) {

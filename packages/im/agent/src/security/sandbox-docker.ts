@@ -289,6 +289,7 @@ export async function executeInDocker(
       timedOut: false,
       blocked: true,
       blockReason: imageCheck.error,
+      isolationUnavailable: true,
     };
   }
 

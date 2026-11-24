@@ -265,14 +265,18 @@ Tags are created by the real publish flow and never need to be created ahead of 
 Internal peer dependencies use `workspace:^` so compatible internal minor releases publish as caret
 ranges instead of exact versions, which would otherwise push unrelated upstream packages to major. Private examples do not participate in Changesets versioning or tags.
 
-### 1.1 stable line
+### 1.x stable line
 
 The official npm ecosystem uses the 1.1.x stable line. Eighty-one packages whose 1.1.0 version
 was still available start at 1.1.0. Seven packages that had already published 1.1.0 use their next
 available 1.1.x patch because npm does not permit version reuse. Historical higher versions remain
 available to preserve existing lockfiles and are marked as superseded by the corresponding 1.1.x
 stable release. Each official package points both `latest` and `stable` to that release; routine
-releases then increment patch only.
+releases then increment patch only. A release with an incompatible public API change goes out as a
+minor once the owner approves it: the package, its target version `X.Y.0` and the reason are listed in
+`approvedNonPatchReleases` of `.changeset/version-policy.json`, and `pnpm check:release-plan` lets only
+those minors through and refuses every major. Package versions therefore move on to 1.10, 1.14 and so
+on within the same 1.x line; the table below records only the versions at the reset.
 
 | Package whose 1.1.0 is reserved | Stable version |
 | --- | --- |
@@ -283,6 +287,16 @@ releases then increment patch only.
 | `@zhin.js/console-protocol` | `1.1.5` |
 | `@zhin.js/core` | `1.1.35` |
 | `@zhin.js/plugin-runtime` | `1.1.9` |
+
+### High-risk confirmation rule changes {#high-risk-release-notes}
+
+Deployers need to see in the release notes which step will ask more or less often, so changes to the high-risk confirmation rules (the categories, levels, sources and exceptions of the [rule reference](../ai/agent.md#high-risk-rules), and the reasons the confirmation card states) get their own entry.
+
+The changelog generator is the default `@changesets/cli/changelog` set in `.changeset/config.json`: it groups only by Major / Minor / Patch and writes each changeset's summary as one list item (the first line after the commit hash, the other lines indented inside that item); the GitHub Release body (`scripts/create-github-releases.mjs`) copies that version's section of the package's `CHANGELOG.md`. It has no custom sections: a heading such as `### 高危确认规则` in a summary would only end up inside one list item. The release scripts stay as they are; the convention is:
+
+- Rule changes go into a changeset file of their own whose name contains `high-risk` (for example `.changeset/b95-1250-high-risk-explain.md`), never mixed with other changes, so they form a separate entry in the release notes.
+- Its first line starts with the fixed prefix `**高危确认规则**：` followed by one sentence on what changes for deployers; when only the explanation or the card text changed, it says the decisions are unchanged.
+- The rest lists each change (which tools, which level, which source or exception), and the same commit updates the rule reference tables of the Chinese and English docs.
 
 ## Publishing (GitHub CI)
 

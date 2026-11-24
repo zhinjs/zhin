@@ -78,6 +78,7 @@ import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
 import { createFeatureHost } from './feature-host-installer.js';
 import { createChatOwnerClaimGuard } from './chat-owner-claim.js';
+import { combineInboundSecretGuards, createChatIdentityBindGuard } from './chat-identity-bind.js';
 import { PersonalPrincipalImportBook } from './chat-personal-principals.js';
 import { setProjectPluginEnabled } from '@zhin.js/runtime';
 import {
@@ -154,6 +155,8 @@ export class InstanceGatewayRequiredError extends Error {
 type InstanceHttpHost = HttpHost & GenerationAdmissionBindable<HttpHost> & {
   listen(): Promise<HttpHostAddress | undefined>;
   close(): Promise<void>;
+  /** ADR 0060 §5.4: whether this Host attached that very principal object to a route or socket. */
+  isHostIssuedPrincipal(value: unknown): boolean;
 };
 
 /** Loads the Node transport only in standalone mode: the bridged instance never loads `node:http` / `ws`. */
@@ -285,6 +288,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const featureHost = createFeatureHost({
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots, projectRoot: options.root,
     personalPrincipalImports,
+    // ADR 0060 §5.4: the Sandbox identity port trusts only principals this Host issued.
+    isHostIssuedPrincipal: value => httpHost.isHostIssuedPrincipal(value),
     ...(controlChannel ? { gatewayMessages: controlChannel } : {}),
     afterLoad: async (roles, candidate, overrides, audit) => {
       await chatRoleMigration.complete(roles, {
@@ -303,8 +308,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   chatPeopleRef.current = featureHost.people;
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles, observe: sighting => featureHost.observe(sighting) });
-  // #1250: claim-shaped messages are taken before anything records, logs or routes them.
-  const im = new ImRuntime({ enrichSender: senderEnricher, inboundSecret: createChatOwnerClaimGuard({ claim: featureHost.claim }) });
+  // #1250: claim-shaped messages are taken before anything records, logs or routes them; bind
+  // messages (`绑定 <码>`) the same way, so neither needs the command prefix.
+  const im = new ImRuntime({ enrichSender: senderEnricher, inboundSecret: combineInboundSecretGuards(
+    createChatOwnerClaimGuard({ claim: featureHost.claim }),
+    ...(featureHost.stores.bindCodes ? [createChatIdentityBindGuard({ codes: featureHost.stores.bindCodes })] : [])) });
   im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });

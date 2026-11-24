@@ -82,6 +82,7 @@ export type {
   ScheduleJobCreator,
   ScheduleJobExecutionPlan,
   ScheduleJobProvenance,
+  ScheduleJobUpdate,
   JobAction,
   JobNotify,
   JobSchedule,
@@ -105,12 +106,13 @@ export {
 export { rehydrateTurnActiveSkills } from './schedule-skills.js';
 export {
   addScheduleJob,
+  buildCronJobSchedule,
   generateScheduleJobId,
   parseScheduleAddFromToolArgs,
   parseScheduleAddFromRpcMessage,
   parseScheduleNotifyFromRpc,
 } from './schedule-job-service.js';
-export type { ScheduleAddInput, ScheduleInvocationContext } from './schedule-job-service.js';
+export type { CronJobScheduleErrorCode, ScheduleAddInput, ScheduleInvocationContext } from './schedule-job-service.js';
 export {
   ScheduleJobAgentError,
   type ScheduleJobAgentErrorCode,
