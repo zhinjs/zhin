@@ -1,5 +1,11 @@
 # @zhin.js/plugin-earthquake
 
+## 0.2.1
+
+### Patch Changes
+
+- @zhin.js/tool@1.1.26
+
 ## 0.2.0
 
 ### Minor Changes

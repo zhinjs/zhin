@@ -1,5 +1,68 @@
 # @zhin.js/cli
 
+## 1.10.0
+
+### Minor Changes
+
+- d2ca29a: #1250 第 90 批：就地修改定时任务与确认卡编号。
+
+  - 就地修改定时任务（schedule-update-missing）：新增 Agent 工具 `schedule_update`，按 `id` 修改 `cron`、`schedule_kind`、`delay_minutes`、`label`（空字符串清除）与 `enabled`，任务的 Agent、提示词、投递目标、创建者、执行计划、预算与来源记录一律保持不变；只给 `cron` 时沿用原来的 `schedule_kind`（以及时区、节假日设置），只给 `schedule_kind` 时沿用原来的 cron。谁能修改与 `schedule_remove` / `schedule_pause` / `schedule_resume` 相同（非 owner 只能改自己在聊天里创建的任务，非 IM 来源和 Console / CLI 创建的任务只有 owner 能改，Profile 例程一律指向 Profile 文件）；它与 `schedule_add` 同属定时类高危操作，按写操作确认。`schedule_add` 的说明提示修改已有任务请用 `schedule_update`，不要删除后重建（重建会丢掉隐藏的 Agent 等设置）。`schedule_update` 列入保留工具名（预演里同样没有它）。`@zhin.js/agent`：`TimerScheduler` 新增 `updateJob(id, update)`（重新注册计时并重算下次运行时间；停用等同暂停），新增类型 `ScheduleJobUpdate`，Assistant 运行时 `jobs` 端口新增可选 `update`。修复 `schedule_kind: 'freeDay'` 因大小写归一化退回 `solar` 的问题（`schedule_add` 与 Profile 例程同样受影响）。`schedule_update` 在写库之前校验新计划：无效 cron 直接报错（任务与原计时不变，`updateJob` 也会拒绝），`delay_minutes` 须大于 0 且不能与 `cron` / 其他 `schedule_kind` 同时给，`schedule_kind` 不区分大小写，`at_ms`、`tz` 等未提供的参数会被拒绝；沿用或显式给出的 `solar` 不再因周字段 `1-5` 被推断为 `workday`（`buildJobScheduleFromCronInput` 新增可选参数 `inferWorkday`，`schedule_add` 行为不变）；保存后仍启用却算不出下次运行时间时结果带 `warning`。任务执行中被修改时，执行结束后按最新任务计算下次运行时间与自动重试（计划已改则不按旧计划重试），改了计划的一次性任务不会在执行结束后被删除；只改标签不再重新注册计时（不重置 `every` / `scatter` 的间隔起点）。
+  - CLI：新增 `zhin schedule update <id> [cron] [--cron <expr>] [--kind <kind>] [--at <iso8601> | --every <interval>] [--label <label>] [--enable | --disable]`，经新路由 `POST /api/assistant/jobs/update`（与其他任务写操作一样需要 `ops.schedule.write`，由已有的 `/assistant/jobs` 前缀规则覆盖）；任务修改后仍会运行且有 IM 投递目标时，与 `resume` / `set-agent` 一样要求该账号上的 `endpoint.operate`（改标签也需要，只停用不需要，拒绝提示里写明），Profile 例程返回 400 `schedule_update_profile`。成功时输出新的计划、状态与下次运行时间，并说明 Agent、提示词与投递目标未变。
+  - 确认卡编号不再一直增长（interaction-number-keeps-growing）：同一会话里没有仍在等待回答的卡片时，新卡片的数字按钮从 1 重新编号；仍有待答卡片时，新卡片接着往后编号，不与待答卡片冲突。卡片的提问结束（回答、取消、超时）后即不再占用编号；两次无效回答后只发提醒文字、不重发卡片时，仍在显示的卡片继续占用编号，直到提问真正结束或被新卡片替换；已结束卡片的旧编号在过期前仍会被认出并提示已过期，新卡片的同号按钮优先。
+  - 复核修复：`TimerScheduler` 的 `updateJob` / `removeJob` / `pauseJob` / `resumeJob` / `setJobAgent` 与任务执行结束后的状态写入（重读任务、记录结果与下次运行时间、删除已完成的一次性任务）按任务 id 串行，修改不再被旧计划的下次运行时间覆盖，一次性任务也不会在修改后连同新计时被删除（执行本身不持锁，执行期间的修改不被阻塞）；一次性任务已执行完并删除后到达的修改得到「未找到」。`POST /api/assistant/jobs/update` 与 `POST /api/assistant/jobs` 按与 `schedule_update` 相同的规则构造并校验计划（`@zhin.js/agent` 新增 `buildCronJobSchedule`）：`workday` / `freeDay` / `holiday` 只取 cron 的时分秒（`0 0 9 * * 1-5` 不再在调度器里抛错成 500），计划类型不区分大小写并支持 `holiday`，求值失败返回 400 `schedule_invalid`，修改后仍启用却算不出下次运行时间时响应带 `warning`；CLI 打印该 warning，对 `schedule_invalid` 说明原因并提示从 workday 改回 solar 需给出完整 cron，`--kind` 不区分大小写并支持 `holiday`。确认卡在只发提醒文字的阶段沿用仍在显示的卡片的按钮（原生按钮不再提示已过期）；卡片结束时若在提问会话里找不到它（出站会话与提问会话不同），会在所有会话里查找并释放编号。
+
+### Patch Changes
+
+- 8fb5872: #1250 第 87 批：角色与 Sandbox（ADR 0060 §5.4）。
+
+  - 「以我的聊天身份发言」第一条消息即生效（sandbox-speak-as-me）：还没有 Sandbox 身份时，服务端在处理这条消息前为已登录的 Console 用户建立 `console-<用户 id>`（与 `chat-identities.simulated.ensure` 同一次写入与同一门槛），并以它发言，不再依赖页面先发 RPC。（行为变化）Sandbox 的「以我的聊天身份发言」现在与该 RPC 一样**需要 Console 权限 `self.chat-identity`**（内置角色都带）：没有时消息按模拟身份发送，回显 `asMeUnavailable: 'needs-self-chat-identity'`，页面关闭开关并说明缺这项权限。这一写能力不放在插件可读的 `chatRolesToken` 上：`@zhin.js/adapter` 新增 Root 私有（仅 Adapter Feature 投影时可读）的 `simulatedConsoleSpeakerToken` 与类型 `SimulatedConsoleSpeakerHost` / `AdapterConsoleSpeakerPort`，实例提供它，Adapter Feature 只给**受信的**模拟适配器（新增 `declaresLocalSimulation` / `isTrustedSimulationAdapter` / `isTrustedSimulationAdapterPackage` / `TRUSTED_SIMULATION_ADAPTER_PACKAGES`：能力画像声明 `runtime.sandbox` 且所属包是 `@zhin.js/adapter-sandbox`；第三方插件声明 `runtime.sandbox` 仍按模拟适配器对待，但拿不到端口）一个按所属插件绑定的 `AdapterContext.consoleSpeaker`（`ensure(conversation, principal)`）。适配器交出的 principal 不被信任其内容：`@zhin.js/host-http` 的路由新增（不在插件可见的按代绑定 Host 上的）`isHostIssuedPrincipal(value)`，按 Host 实例记录它交给路由 / socket 的 principal 对象（深度冻结），`createBridgedHttpHost` 与 Node Host（含多监听组）同样提供；实例只接受自己的 Host 交出的那个对象，适配器构造的同形对象（哪怕带全局 `iam.manage`）、拷贝或别的 Host 的 principal 一律拒绝（`not-host-issued`），不写任何人、身份或链接；之后 `self.chat-identity` 与全局 `iam.manage` 才从该 principal 判断，且只写该插件的模拟适配器、该适配器上的会话。建立失败或 10 秒内未完成时消息按模拟身份发送，回显带 `asMeUnavailable: 'identity-failed'` 与 `asMeError`；Sandbox 页面在这种情况（以及 `needs-global-iam`）下关闭开关并显示原因。同一连接上的消息按到达顺序处理；连接关闭（含 `principal-revoked`）后已排队、尚未执行的帧不再派发。
+  - 不再给模拟发送者授予角色（grant-owner-to-simulated-identity-silent）：模拟适配器上只有 Console Sandbox 身份（其人链接了 Console 用户）会发言，`chat-roles.grant` 给 `sandbox-user` 这类自填 id 授予时返回 400 `simulated-identity` 并指引「以我的聊天身份发言」，聊天中的 `角色 授予` 同样拒绝（撤销照常）。「是否已有全局 owner」（认领、「需要你处理」、`zhin status`、`suggestGlobalOwner`、聊天无主提示）不再把只落在这类 id 上的 owner 授予算作有效。
+  - `绑定 <码>` 免命令前缀（bind-hint-omits-command-prefix）：与 `认领 <码>` 一样在入站最早处接手（带前缀也有效）。（行为变化）**只在存在开放的绑定码时才免前缀接手**：有效码一律接手（不进会话历史、日志脱敏；群聊中作废并提示改私聊），私聊里形如绑定码的错码也接手（回复「不正确或已过期」并计数，5 次锁 10 分钟）；没有任何开放码时什么都不接手、也不计失败，`bind username`、`绑定 82345678` 与项目自己的 `绑定 <QQ号>` 之类命令照常到达命令和 Agent。被接手的消息在处理前被丢弃时，它携带的开放码作废。`@zhin.js/permission` 的全局 owner 说明改为固定的「绑定 <码>（不需要命令前缀）」，`bindCommand` / `commandPrefix` 仍接受但不再影响文案；「需要你处理」的绑定提示同步。`@zhin.js/agent`：主人 `approve` 指令的拒绝文案随之变为「绑定 <码>（不需要命令前缀）」（原为带本账号前缀的「/绑定 <码>」/「!bind <code>」），不再向 `describeGlobalOwnerRequired` 传 `commandPrefix`。
+  - 只装了模拟适配器时的引导（owner-hints-dead-end-sandbox-only）：`zhin status`、启动日志、「需要你处理」的 `chat-roles.no-owner`（`state.simulationOnly`）、聊天中的无主提示，以及认领 / 绑定在模拟适配器上的拒绝文案，都改为指向「在 Sandbox 打开『以我的聊天身份发言』，再到『聊天角色』把全局 owner 授予这个身份」。每次换代（适配器增减）都会重新判断是否已有全局 owner 并刷新认领码文件与日志中的 `simulationOnly` 引导（已开放的认领码不轮换）。
+  - 最近发言人（chat-recent-speakers-empty）：模拟发送者按设计不记录；`@zhin.js/console-protocol` 的 `ConsoleChatIdentitiesRecentResult` 新增 `simulatedSendersOmitted`（作用范围内的模拟适配器别名），`ConsoleChatIdentity` 新增 `simulatedSender`（模拟适配器上永不发言的 id），供 Console 显示「模拟发送者不出现在这里」，代替空列表与「90 天内没有发言」。
+
+- 1bbed63: #1250 第 88 批：CLI 无终端时不再卡住、迁移脚本与脚手架一致、Console 新增账号不算配置漂移、CLI 输出不夹数据库日志。
+
+  - `@zhin.js/cli`：标准输入不是终端（管道、`< /dev/null`、CI）时，`zhin console user create` / `user passwd` 不带 `--password-stdin`、`zhin console init` 的交互向导（或只给 `--owner` 没给 `--password-stdin`）、`zhin console init --reset-store` 不带 `--yes` 不再进入交互提问一直等待，而是直接报错退出（退出码 1）并提示改用 `--password-stdin` / `--owner` / `--yes`。`zhin setup` 的交互步骤、`zhin onboard`、不带插件名的 `zhin install` 同样直接报错；`zhin setup --global` 在无终端时直接报错，不再先创建一个空的 `~/.zhin`；`zhin setup --bootstrap` 遇到已存在的引导文件与 `--yes` 一样跳过；`zhin uninstall plugin` 无终端时不再询问、保留本地插件目录，新增 `--remove-dir` 直接删除本地插件目录且不询问（交互终端同样）。`ConsoleCliIo` 新增可选 `interactive()`。
+  - `@zhin.js/cli`：`zhin migrate` 不再给项目加 `scripts.daemon`，补齐的 scripts 与 `create-zhin-app` 新项目完全一致（`dev` / `start` / `stop` / `preview` / `build`，已有的不动）；`RECOMMENDED_START_SCRIPTS` 去掉 `daemon`，新增 `RECOMMENDED_PROJECT_SCRIPTS` / `LEGACY_PROJECT_SCRIPTS`，测试直接与脚手架的 `CREATE_BOT_SCRIPTS` 比对。
+  - `@zhin.js/scaffold-wizard`：`zhin setup` 无终端时的报错文案加入 `WIZARD_MESSAGES`，`--locale en` 显示英文。
+  - `create-zhin-app`：新项目的 scripts 抽成 `src/scripts.ts` 的 `CREATE_BOT_SCRIPTS`（内容不变）。
+  - `@zhin.js/adapter`：在 Console 新增的账号（`Adapter.add`）记 `origin: 'console'`，替换账号时沿用，从配置导入或写回配置文件时去掉（写回失败则保留），所以写回后再从配置文件删掉仍算漂移。这样的账号不在配置文件里不算漂移：`configDrift()` 仍把它列为 `snapshot_only` 并带 `origin: 'console'`（可写回），启动日志的 `endpoint_config_drift` 警告不再列它；新增 `isEndpointConfigDivergence()`。账号元数据（`list()`）不含 `origin`。
+  - `zhin.js`：Console「需要你处理」的账号差异项（以及据此计数的 `zhin status` / `zhin doctor`）不再包含 Console 新增的账号；「已不在配置文件（仍按已保存账号运行）」改为「仅存在于已保存账号中（配置文件里没有，仍按已保存账号运行；若是有意删除，请在账号页删除该账号，或写回配置文件）」，英文同步。
+  - `@zhin.js/database`：`Database disconnected from dialect: …`、PostgreSQL / MySQL 的连接池创建与关闭、MongoDB 的连接关闭、Redis 的连接建立 / 就绪 / 关闭日志降为 debug，`zhin doctor` 等 CLI 命令的输出里不再出现 `[INFO] [database] …` 行。
+
+- c6edbc1: #1250 第 96 批：部署者知识收回上游（deployment-knowledge-upstream）。
+
+  - `schedule_add` 的说明写明何时用它（到点由 AI 生成内容、调用工具，或按日历 cron 运行），只是到点发固定文案的提醒时若有 `reminder_create` 优先用它，提醒必须真正建任务、不要只写进记忆，并说明没有 `cron_add` 工具；`tools` 参数说明写明其实际语义：写明后到点只能用这些工具，省略且没给 `skills` 时按 prompt 关键词自动挑选（可能漏选），只给 `skills` 不给 `tools` 时到点没有任何工具。后一种情况 `schedule_add` 的结果现在带 `warning`。
+  - `bash`：隔离执行环境（Docker 或其镜像）不可用时，工具返回「Shell is unavailable on this host … Do not retry bash in this conversation」，不再与被沙箱拒绝的单条命令混在一起；`SandboxResult` 新增可选字段 `isolationUnavailable`。bash 可用时行为不变。
+  - 脚手架生成的 `BOT.md` 与 `zhin migrate` 生成的 `AGENTS.md` 不再写不存在的 `cron_add`，改为说明 `reminder_create`、`schedule_add`、`schedule_update` 的分工。
+  - 文档：新增「常见问题与反直觉行为」（`docs/operations/gotchas.md`，中英），从生产部署页链接。
+
+- 466d5b9: #1250 第 97 批：已并入、改名或停更的 `@zhin.js` 包与已删除的子路径（retired-package-not-flagged），以及 `zhin migrate` 的 pnpm 设置。
+
+  - `@zhin.js/gateway/project` 新增公开导出：常量 `RETIRED_ZHIN_PACKAGES`、`REMOVED_ZHIN_SUBPATHS`、`RETIRED_PACKAGES_DOCS_URL`，函数 `findRetiredZhinPackage(name)`、`findRemovedZhinSubpath(specifier)`、`findRetiredDependencies(manifest)`、`findRetiredImports(source)`，类型 `RetiredZhinPackage`、`RetiredPackageImport`、`RemovedZhinSubpath`、`RetiredDependency`、`RetiredImportUse`。
+  - 清单按仓库历史覆盖 registry 上已不在工作区的 28 个 `@zhin.js` 包：并入（`@zhin.js/config-yaml`、`@zhin.js/config-file`、`@zhin.js/isolate` 并入 `@zhin.js/runtime`，`@zhin.js/interaction` 并入 `@zhin.js/im-contract/interaction`，`@zhin.js/ai-provider` 并入 `@zhin.js/ai/provider`，`@zhin.js/console-types` 并入 `@zhin.js/contract`）、改名（`@zhin.js/plugin-test-kit` → `@zhin.js/testing`，`@zhin.js/adapter-process` → `@zhin.js/adapter-sandbox`，`@zhin.js/game-shared` → `@zhin.js/game-kit`，`@zhin.js/console-core` → `@zhin.js/pagemanager`，`@zhin.js/plugin-github-notify` → `@zhin.js/adapter-github`）、删除并由其他包接手（`@zhin.js/plugin-voice` → `@zhin.js/speech`，`@zhin.js/plugin-html-renderer`、`@zhin.js/satori` → `@zhin.js/html-renderer`，`@zhin.js/sensitive-filter` → `@zhin.js/plugin-content-moderation`）、删除且由 `zhin start` 装配取代（`@zhin.js/console`、`@zhin.js/console-app`、`@zhin.js/http`、`@zhin.js/http-host`、`@zhin.js/host-api`、`@zhin.js/host-router`、`@zhin.js/workroom`），历史里找不到接手者的（`@zhin.js/dependency`、`@zhin.js/devteam`、`@zhin.js/hmr`、`@zhin.js/queue-runtime`、`@zhin.js/storage-port`、`@zhin.js/types`）统一标为「已停更，无直接替代」，只提示删除依赖。`@zhin.js/config-yaml` 条目写明 `YamlConfigDocumentError` 改名为 `ConfigFileDocumentError`、两个错误类改为继承它。已删除的子路径 `@zhin.js/agent/tools` 指向 `@zhin.js/tool`（`defineAgentTool`）。文档新增「升级：已并入或停更的包」。
+  - `findRetiredImports` 线性扫描源码：跳过行注释与块注释，整体读取字符串字面量，所以注释和其他字符串里的写法不算；表达式起始处（运算符、`(`、`,`、`=`、`return` 等之后）的 `/` 按正则字面量整体跳过（含字符类与转义），其中的反引号或 `/*` 不再吞掉后面几行的 import；JSX 文本里的引号与反引号仍按代码读取（已知局限）。停更包只导出包根时，带子路径的 import 只给操作、不给替代路径。
+  - 源码扫描另外跳过 `build`、`out`；`lib` 在所在包的 `main` / `module` / `exports` 指向其中的 `.js` 且没有 `src` 时照常扫描；最多读 5000 个源文件、访问 20000 个目录条目，达到上限时 doctor 与 migrate 提示「仅扫描了前 N 个源文件」。migrate 的这一步出错时与 doctor 一样只给警告，迁移继续。
+  - `zhin doctor` 新增「已停更的 Zhin 包」：根目录或 pnpm 工作区成员的 `package.json` 直接依赖清单中的包时给出警告，写明改用什么、删除这个依赖；源码 import 已删除的子路径时同样警告并列出文件与行号。
+  - 「Zhin 包单实例」报重复时，先沿依赖链指出是根项目或工作区成员的哪个直接依赖拖进了旧版本（如 `@zhin.js/config-yaml@1.1.0 → @zhin.js/runtime@1.1.0 → @zhin.js/plugin-runtime@1.1.9`），这份旧版本同时被工作区成员直接依赖时也照样指出；该依赖已停更时直接给出替代改法，同一个停更包拖进多份旧版本时只给一条，`pnpm.overrides` 只作为最后一条建议。
+  - `zhin migrate` 不再升级清单中的包，新增「已停更的 Zhin 包」一步，列出声明它们的 `package.json` 与项目源码中要改写的 import（文件与行号，含已删除的子路径）；不自动改写源码、不删除依赖。
+  - （行为变化）`zhin migrate`（含 `--include-pinned`）只在冷却期生效时才写 `minimumReleaseAgeExclude`：项目把 `minimumReleaseAge` 设为大于 0，或未设置但项目可能用 pnpm 11+。pnpm 版本只看 `packageManager`：没有固定 pnpm 时，即使本机是 pnpm 10 也按可能是 pnpm 11 处理（部署或 CI 可能用 pnpm 11），只有 `pnpm-workspace.yaml` 的 `minimumReleaseAge: 0` 能让它不写。pnpm 11+ 只读 `pnpm-workspace.yaml` 的设置（不读 `package.json#pnpm`，`.npmrc` 只读认证与 registry 类设置）；`packageManager` 固定 pnpm 10 及更早时还读项目 `.npmrc`（`minimum-release-age`）与 `package.json#pnpm`。`zhin doctor` / migrate 解释版本未装上的原因时按同样规则读取。
+  - （行为变化）`packageManager` 固定 pnpm 10 及更早、且项目有 pnpm 会读的 `onlyBuiltDependencies` 列表时，网关原生依赖 `node-pty`、`ssh2`、`cpu-features` 一律只写进该列表，不再另写 `allowBuilds`；其余情况（固定 pnpm 11，或没有固定 pnpm）照写 `allowBuilds`（pnpm 11 只读 `allowBuilds`，旧版 pnpm 忽略该键）。本机 `pnpm --version` 不参与这一判断：本机是 pnpm 10、部署或 CI 是 pnpm 11 时，不写就不会构建这三个包。
+
+- Updated dependencies [8fb5872]
+- Updated dependencies [1bbed63]
+- Updated dependencies [99947de]
+- Updated dependencies [aadbab4]
+- Updated dependencies [c6edbc1]
+- Updated dependencies [466d5b9]
+  - @zhin.js/host-http@1.8.1
+  - @zhin.js/console-protocol@1.10.0
+  - @zhin.js/scaffold-wizard@1.4.6
+  - @zhin.js/runtime@1.8.0
+  - @zhin.js/gateway@1.9.0
+  - @zhin.js/pagemanager@1.3.1
+
 ## 1.9.2
 
 ### Patch Changes

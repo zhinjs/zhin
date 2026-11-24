@@ -1,5 +1,12 @@
 # @zhin.js/mcp
 
+## 1.1.34
+
+### Patch Changes
+
+- d9fe381: README 更正 HTTP 端口：未配置 `http.port` 时运行时默认是 8068，不再写回退 8086。
+  - @zhin.js/tool@1.1.26
+
 ## 1.1.33
 
 ### Patch Changes

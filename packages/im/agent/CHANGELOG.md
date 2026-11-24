@@ -1,5 +1,91 @@
 # @zhin.js/agent
 
+## 1.11.0
+
+### Minor Changes
+
+- d2ca29a: #1250 第 90 批：就地修改定时任务与确认卡编号。
+
+  - 就地修改定时任务（schedule-update-missing）：新增 Agent 工具 `schedule_update`，按 `id` 修改 `cron`、`schedule_kind`、`delay_minutes`、`label`（空字符串清除）与 `enabled`，任务的 Agent、提示词、投递目标、创建者、执行计划、预算与来源记录一律保持不变；只给 `cron` 时沿用原来的 `schedule_kind`（以及时区、节假日设置），只给 `schedule_kind` 时沿用原来的 cron。谁能修改与 `schedule_remove` / `schedule_pause` / `schedule_resume` 相同（非 owner 只能改自己在聊天里创建的任务，非 IM 来源和 Console / CLI 创建的任务只有 owner 能改，Profile 例程一律指向 Profile 文件）；它与 `schedule_add` 同属定时类高危操作，按写操作确认。`schedule_add` 的说明提示修改已有任务请用 `schedule_update`，不要删除后重建（重建会丢掉隐藏的 Agent 等设置）。`schedule_update` 列入保留工具名（预演里同样没有它）。`@zhin.js/agent`：`TimerScheduler` 新增 `updateJob(id, update)`（重新注册计时并重算下次运行时间；停用等同暂停），新增类型 `ScheduleJobUpdate`，Assistant 运行时 `jobs` 端口新增可选 `update`。修复 `schedule_kind: 'freeDay'` 因大小写归一化退回 `solar` 的问题（`schedule_add` 与 Profile 例程同样受影响）。`schedule_update` 在写库之前校验新计划：无效 cron 直接报错（任务与原计时不变，`updateJob` 也会拒绝），`delay_minutes` 须大于 0 且不能与 `cron` / 其他 `schedule_kind` 同时给，`schedule_kind` 不区分大小写，`at_ms`、`tz` 等未提供的参数会被拒绝；沿用或显式给出的 `solar` 不再因周字段 `1-5` 被推断为 `workday`（`buildJobScheduleFromCronInput` 新增可选参数 `inferWorkday`，`schedule_add` 行为不变）；保存后仍启用却算不出下次运行时间时结果带 `warning`。任务执行中被修改时，执行结束后按最新任务计算下次运行时间与自动重试（计划已改则不按旧计划重试），改了计划的一次性任务不会在执行结束后被删除；只改标签不再重新注册计时（不重置 `every` / `scatter` 的间隔起点）。
+  - CLI：新增 `zhin schedule update <id> [cron] [--cron <expr>] [--kind <kind>] [--at <iso8601> | --every <interval>] [--label <label>] [--enable | --disable]`，经新路由 `POST /api/assistant/jobs/update`（与其他任务写操作一样需要 `ops.schedule.write`，由已有的 `/assistant/jobs` 前缀规则覆盖）；任务修改后仍会运行且有 IM 投递目标时，与 `resume` / `set-agent` 一样要求该账号上的 `endpoint.operate`（改标签也需要，只停用不需要，拒绝提示里写明），Profile 例程返回 400 `schedule_update_profile`。成功时输出新的计划、状态与下次运行时间，并说明 Agent、提示词与投递目标未变。
+  - 确认卡编号不再一直增长（interaction-number-keeps-growing）：同一会话里没有仍在等待回答的卡片时，新卡片的数字按钮从 1 重新编号；仍有待答卡片时，新卡片接着往后编号，不与待答卡片冲突。卡片的提问结束（回答、取消、超时）后即不再占用编号；两次无效回答后只发提醒文字、不重发卡片时，仍在显示的卡片继续占用编号，直到提问真正结束或被新卡片替换；已结束卡片的旧编号在过期前仍会被认出并提示已过期，新卡片的同号按钮优先。
+  - 复核修复：`TimerScheduler` 的 `updateJob` / `removeJob` / `pauseJob` / `resumeJob` / `setJobAgent` 与任务执行结束后的状态写入（重读任务、记录结果与下次运行时间、删除已完成的一次性任务）按任务 id 串行，修改不再被旧计划的下次运行时间覆盖，一次性任务也不会在修改后连同新计时被删除（执行本身不持锁，执行期间的修改不被阻塞）；一次性任务已执行完并删除后到达的修改得到「未找到」。`POST /api/assistant/jobs/update` 与 `POST /api/assistant/jobs` 按与 `schedule_update` 相同的规则构造并校验计划（`@zhin.js/agent` 新增 `buildCronJobSchedule`）：`workday` / `freeDay` / `holiday` 只取 cron 的时分秒（`0 0 9 * * 1-5` 不再在调度器里抛错成 500），计划类型不区分大小写并支持 `holiday`，求值失败返回 400 `schedule_invalid`，修改后仍启用却算不出下次运行时间时响应带 `warning`；CLI 打印该 warning，对 `schedule_invalid` 说明原因并提示从 workday 改回 solar 需给出完整 cron，`--kind` 不区分大小写并支持 `holiday`。确认卡在只发提醒文字的阶段沿用仍在显示的卡片的按钮（原生按钮不再提示已过期）；卡片结束时若在提问会话里找不到它（出站会话与提问会话不同），会在所有会话里查找并释放编号。
+
+### Patch Changes
+
+- 20aa347: **高危确认卡片**：首行标明 MCP 工具的说明来自上游（#1250）。
+
+  - MCP 工具的确认卡片（来源确认、普通审批与危险工具确认）首行前加上 harness 写的固定标签「上游描述（MCP 服务 X 提供，未经核实）：」，英文卡片为 `Upstream description (from MCP server X, unverified): `；X 按「规则」「来源」两行的名称规则转义（ASCII 只保留 `[A-Za-z0-9_.:-]`，非 ASCII 写成 `\uXXXX`，超过 64 个字符首尾保留、中间用 `…`）。
+  - 上游说明只取第一行（任何换行符都算，包括 `\r`、`\v` 和 Unicode 行分隔符）和第一句；控制字符、格式字符（双向覆盖、零宽字符等）、未分配与私用码位、不可见的填充字符和连续空白折叠成一个空格，叠加的组合符号最多保留 2 个，超过 200 个码点截断并加 `…`，不能再冒充「规则」「来源」行。
+  - 危险工具确认的首行把危险类别写在标签之前；旧的 MCP 桥接（`mcp-client/bridge.ts`）生成的工具同样带标签。
+  - 上游没有写说明时，首行改为 harness 自己写的「调用 MCP 服务 X 的工具 Y」（`Calling tool Y of MCP server X`），两个名字都转义。
+  - 第一方与插件工具的首行不变。确认时仍以「规则」「来源」两行为准。
+
+- 8fb5872: #1250 第 87 批：角色与 Sandbox（ADR 0060 §5.4）。
+
+  - 「以我的聊天身份发言」第一条消息即生效（sandbox-speak-as-me）：还没有 Sandbox 身份时，服务端在处理这条消息前为已登录的 Console 用户建立 `console-<用户 id>`（与 `chat-identities.simulated.ensure` 同一次写入与同一门槛），并以它发言，不再依赖页面先发 RPC。（行为变化）Sandbox 的「以我的聊天身份发言」现在与该 RPC 一样**需要 Console 权限 `self.chat-identity`**（内置角色都带）：没有时消息按模拟身份发送，回显 `asMeUnavailable: 'needs-self-chat-identity'`，页面关闭开关并说明缺这项权限。这一写能力不放在插件可读的 `chatRolesToken` 上：`@zhin.js/adapter` 新增 Root 私有（仅 Adapter Feature 投影时可读）的 `simulatedConsoleSpeakerToken` 与类型 `SimulatedConsoleSpeakerHost` / `AdapterConsoleSpeakerPort`，实例提供它，Adapter Feature 只给**受信的**模拟适配器（新增 `declaresLocalSimulation` / `isTrustedSimulationAdapter` / `isTrustedSimulationAdapterPackage` / `TRUSTED_SIMULATION_ADAPTER_PACKAGES`：能力画像声明 `runtime.sandbox` 且所属包是 `@zhin.js/adapter-sandbox`；第三方插件声明 `runtime.sandbox` 仍按模拟适配器对待，但拿不到端口）一个按所属插件绑定的 `AdapterContext.consoleSpeaker`（`ensure(conversation, principal)`）。适配器交出的 principal 不被信任其内容：`@zhin.js/host-http` 的路由新增（不在插件可见的按代绑定 Host 上的）`isHostIssuedPrincipal(value)`，按 Host 实例记录它交给路由 / socket 的 principal 对象（深度冻结），`createBridgedHttpHost` 与 Node Host（含多监听组）同样提供；实例只接受自己的 Host 交出的那个对象，适配器构造的同形对象（哪怕带全局 `iam.manage`）、拷贝或别的 Host 的 principal 一律拒绝（`not-host-issued`），不写任何人、身份或链接；之后 `self.chat-identity` 与全局 `iam.manage` 才从该 principal 判断，且只写该插件的模拟适配器、该适配器上的会话。建立失败或 10 秒内未完成时消息按模拟身份发送，回显带 `asMeUnavailable: 'identity-failed'` 与 `asMeError`；Sandbox 页面在这种情况（以及 `needs-global-iam`）下关闭开关并显示原因。同一连接上的消息按到达顺序处理；连接关闭（含 `principal-revoked`）后已排队、尚未执行的帧不再派发。
+  - 不再给模拟发送者授予角色（grant-owner-to-simulated-identity-silent）：模拟适配器上只有 Console Sandbox 身份（其人链接了 Console 用户）会发言，`chat-roles.grant` 给 `sandbox-user` 这类自填 id 授予时返回 400 `simulated-identity` 并指引「以我的聊天身份发言」，聊天中的 `角色 授予` 同样拒绝（撤销照常）。「是否已有全局 owner」（认领、「需要你处理」、`zhin status`、`suggestGlobalOwner`、聊天无主提示）不再把只落在这类 id 上的 owner 授予算作有效。
+  - `绑定 <码>` 免命令前缀（bind-hint-omits-command-prefix）：与 `认领 <码>` 一样在入站最早处接手（带前缀也有效）。（行为变化）**只在存在开放的绑定码时才免前缀接手**：有效码一律接手（不进会话历史、日志脱敏；群聊中作废并提示改私聊），私聊里形如绑定码的错码也接手（回复「不正确或已过期」并计数，5 次锁 10 分钟）；没有任何开放码时什么都不接手、也不计失败，`bind username`、`绑定 82345678` 与项目自己的 `绑定 <QQ号>` 之类命令照常到达命令和 Agent。被接手的消息在处理前被丢弃时，它携带的开放码作废。`@zhin.js/permission` 的全局 owner 说明改为固定的「绑定 <码>（不需要命令前缀）」，`bindCommand` / `commandPrefix` 仍接受但不再影响文案；「需要你处理」的绑定提示同步。`@zhin.js/agent`：主人 `approve` 指令的拒绝文案随之变为「绑定 <码>（不需要命令前缀）」（原为带本账号前缀的「/绑定 <码>」/「!bind <code>」），不再向 `describeGlobalOwnerRequired` 传 `commandPrefix`。
+  - 只装了模拟适配器时的引导（owner-hints-dead-end-sandbox-only）：`zhin status`、启动日志、「需要你处理」的 `chat-roles.no-owner`（`state.simulationOnly`）、聊天中的无主提示，以及认领 / 绑定在模拟适配器上的拒绝文案，都改为指向「在 Sandbox 打开『以我的聊天身份发言』，再到『聊天角色』把全局 owner 授予这个身份」。每次换代（适配器增减）都会重新判断是否已有全局 owner 并刷新认领码文件与日志中的 `simulationOnly` 引导（已开放的认领码不轮换）。
+  - 最近发言人（chat-recent-speakers-empty）：模拟发送者按设计不记录；`@zhin.js/console-protocol` 的 `ConsoleChatIdentitiesRecentResult` 新增 `simulatedSendersOmitted`（作用范围内的模拟适配器别名），`ConsoleChatIdentity` 新增 `simulatedSender`（模拟适配器上永不发言的 id），供 Console 显示「模拟发送者不出现在这里」，代替空列表与「90 天内没有发言」。
+
+- 99947de: fix(1250): 共享 Sandbox 不再泄露绑定码；`attention.list` 下发 `state.simulationOnly`（第 89 批）
+
+  - sandbox-transcript-shared-bind-code：新增 `redactChatIdentityBindText` / `isChatIdentityBindText`（`@zhin.js/kernel`，经 `@zhin.js/core` / `zhin.js` 导出），按形态（「绑定 / bind」后只有一个形如绑定码的参数：8 位绑定码字母表，至少含一位数字（绑定码生成时总含数字，无数字则重抽），至多用空白或 `-` 拆成两段；带不带命令前缀）把绑定消息改成 `绑定 ***`，不看码是否仍有效；`bind username`、`绑定 ABCDEFGH`、`BIND ME PLEASE` 等照常保留，形如绑定码的参数（如 `绑定 23456789`）在 Sandbox 中也会被改写。Sandbox 端点在回显、广播、日志、`platform.receive` 与交给 Runtime 之前就脱敏，发送者气泡由回显替换为脱敏文本；Core 会话记录、`receive` / `dispatch_miss` 日志、Agent 会话消息与 trace 写入时按形态兜底；会话历史接口回放时再脱敏一次，覆盖已落盘的旧记录。认领码行为不变。
+  - `chat-roles.no-owner` 的「需要你处理」条目下发 `state: { simulationOnly }`（`ConsoleAttentionItem.state` / `ConsoleAttentionItemState`，可选字段），供 Console 显示「打开 Sandbox」（客户端后续接入，目前尚无消费方）；revision 计算不变。
+  - ADR 0060 与中英文文档记录后续项「沙盒会话按 Console 用户隔离」。
+
+- 699da76: #1250 第 91 批：减少私聊里修改定时任务的确认次数。
+
+  - 只读工具不算高危写操作（schedule-list-classified-high-risk）：只凭名称归进「修改配置」「定时任务」类的工具，名称以读取动词结尾（`_list`、`_get`、`_show`、`_status`，如 `schedule_list`、`remind_list`、`config_get`）或工具定义声明了 `readOnly: true` 时，不再因来源而确认；Host 的 `schedule_list` 声明了 `readOnly: true`。更严的标记优先：类别标签、内置的执行命令 / 写文件 / 外发名称、`risk: 'dangerous'`、`riskCategory`、非 ASCII 名称、名称里的写动词照旧归类。写动词按名称的各种写法检查（不分大小写，驼峰与 `-` 按 `_` 拆开，`schedule_Add_list`、`config_set-x_get` 都算写），动词表含 `snooze`、`toggle`、`grant`、`revoke`、`dismiss`、`allow`、`block`、`deny`、`enable`、`disable`、`clear`、`reset`、`cancel`、`approve`、`kick`、`ban`、`mute` 等；带白名单 / 黑名单一类名单（`white_list`、`blacklist`、`allowlist` 等）的名称，读取后缀不算读取。这条放宽只作用于来源确认：结果是否算受信输出不变（`schedule_list` 仍算外部内容），`on-risk` 下 `readOnly: true` 能否免去声明式审批也不变（名称属于配置 / 定时任务类的工具照旧需要审批）。`readOnlyDeclarationApplies` 与改前（0595c96c5）结果一致。
+  - 本实例定时任务的干净投递不算背景来源（scheduled-delivery-counts-as-background）：到点运行没有读过任何记录在案的内容、任务也不是读过内容后创建的、不是外部事件任务，且平台回执确认按原文发出一条消息时，这条投递记入进程内的投递记录（按平台消息与文本摘要）。豁免对象：聊天里创建的任务只对创建者本人（同一 sender id、同一适配器、同一端点，与任务归属判断一致）由人发起、非合流的回合生效；部署方创建、没有聊天创建者的任务（Console / CLI 的 `source: 'manual'`、Profile 的 `source: 'profile'`，须显式写明）对所有回合生效；没有写明 `source` 的任务（`TimerScheduler.addJob` 与 `addScheduleJob` 不再把缺省来源补成 `manual`，读取方照旧按 `manual` 显示）、没有记录创建者的旧任务、创建者没有聊天地址的任务不享受豁免。运行中读过外部内容的投递、被改写的投递，以及用户发的同样文字照旧算来源。
+  - 同一件事一个回合只确认一次（confirm-every-step-no-batch）：同一回合、同一发起人、同一工具、同一高危类别、同一目标确认过一次后，本回合后续调用不再重复确认，前提是确认之后没有新的外部内容进入回合（新读入的工具结果、网页、背景消息等会让下一次调用重新确认；同一个工具再读一次也算，如 `web_fetch` 另一个网址：`TurnProvenance` 记一个只增不减的外部内容入账次数，受信结果变为外部内容也计一次，确认时记下当时的次数，之后次数变了就不再沿用）。按目标合并只用于修改配置、定时任务两类，且采用白名单：工具输入定义里声明的参数恰好是一个标识参数（`id` / `job_id` / `target` / `path` / `key` 等，去掉 `_`、`-` 并忽略大小写比对，类型须是单一的字符串或数字）加已知取值参数（`cron`、`schedule_kind`、`delay_minutes`、`label`、`enabled`、`value`；`prompt`、`description` 不在其中），调用也只带声明过的参数时才按目标合并（限同一插件、同一 MCP 服务器、同一工具）；有其他任何参数（如 `field`、`slug`、`index`、`url`、`name`）、多个标识参数、数组 / 组合类型的标识，一律按完全相同的参数；执行命令、写文件、外发消息一律只有参数完全相同的调用才沿用确认。目标、工具、类别、发起人不同或进入下一回合都会重新确认；被拒绝、超时的确认不记录；一次确认不会覆盖比它本身更多的授权（只确认意图时普通审批照常进行，需要主人的调用不会被管理员的确认覆盖）；`requiresApproval: 'human'` 的工具每次单独确认。记录只在本回合内存里。
+  - Host 自带的 `schedule_list` 声明 `requiresApproval: 'never'`，查看任务不再弹审批卡：此前开了主人 shell 且审批模式为 `ask` 时主人每次查看都要确认，普通成员在没人能审批的私聊里直接被拒。只改这一个 Host 工具，插件提供的同名或配置 / 定时任务类工具不受影响（`readOnlyDeclarationApplies` 不变）；角色与可见性过滤照旧，结果仍算外部内容。
+  - `schedule_update` 与 `schedule_add` 一样声明 `admin_approvable`（`ADMIN_APPROVABLE_TOOL_TAG`）：开启 `ai.agent.approval.adminSelfApprove` 时，端点层或以上的管理员可在自己的私聊里本人批准一次。
+  - 已知遗留：此前没写来源、被调度器默认记成 `manual` 落库的任务（插件直接调用 `addJob` 建的）无法区分，仍按部署方任务享受干净投递的豁免；新建的任务不再有这个默认值。
+
+  新增公开 API（`@zhin.js/agent`，均为可选字段）：`TaskExecutorDeps.deliveryLedger`、`TaskExecutionResult.contentClean`（继承自 `ScheduleExecutionResult`）、`TurnOutcome` 完成态的 `contentProvenance`、`TurnEndEvent.contentProvenance`。
+
+- b483c83: **高危确认规则**：判定不变；来源确认卡与审计记录写明是哪条规则、哪些来源触发了确认（#1250 第 95 批 high-risk-rules-explain）。
+
+  - 来源确认卡（策略 `external-content-confirmation`）在原因与来源链之后多两行：「规则」写工具被归进哪一类、依据是名字规则还是工具标签、这次用的级别（如「规则：`schedule_add` 被当成定时任务操作（名字规则）；这一类在本回合读过外部内容后需要确认，第一方只读结果不算（untrusted*content）。」，`schedule_preview` 被抬到 `any_content` 时另行说明）；「来源」按类型写每个来源（网页、搜索结果、工作区文件、知识库、已存记录、MCP 服务与工具、子 Agent、第一方只读结果、背景消息条数、识图描述、定时任务提示词），最多 5 个。只写来源类型、工具名、MCP 服务名、条数等元数据，不引用外部内容原文；工具名与 MCP 服务名可能由上游 MCP 服务决定，ASCII 名称只保留英文字母、数字和 `* . : -`，非 ASCII 字符一律显示为 `\uXXXX`转义（不显示汉字句子，全角`ｗｅｂ＿ｆｅｔｃｈ`不会显示成`web_fetch`），超长名称保留首尾、中间用 `…`；定时任务里存下的未知来源键不原样显示。英文卡片的条数按单复数书写（`1 message`、`1 more source`）。
+  - 卡片文字跟随发起回合那条消息的显示语言（`zh-CN` / `en`，确认人可能是别人），原因、来源链与问题里的字段标签（命令、工作目录、目标文件、本次参数、风险）一并本地化；首行动作描述与普通审批的策略原因不翻译；默认中文文案与之前一致。
+  - 来源确认写的决策审计 `tool_approval` 在 `payload` 里多 `rule`（如 `schedule.name`、`outbound.tag`）、`confirmLevel`、`sourceKinds` 三个字段；`sourceKinds` 与卡片使用同一份发卡前的来源快照（含无人值守与无确认渠道的拒绝）。
+  - 文档（`docs/ai/agent.md`、`docs/en/ai/agent.md`）新增「规则速查」三张表：哪些工具算哪一类高危与读取例外、每类在什么级别下确认、哪些东西算读过内容及各自例外；`docs/contributing/development.md` 写明高危确认规则变化在发版说明里单独成条的约定。
+
+  没有新增公开 API。
+
+- c6edbc1: #1250 第 96 批：部署者知识收回上游（deployment-knowledge-upstream）。
+
+  - `schedule_add` 的说明写明何时用它（到点由 AI 生成内容、调用工具，或按日历 cron 运行），只是到点发固定文案的提醒时若有 `reminder_create` 优先用它，提醒必须真正建任务、不要只写进记忆，并说明没有 `cron_add` 工具；`tools` 参数说明写明其实际语义：写明后到点只能用这些工具，省略且没给 `skills` 时按 prompt 关键词自动挑选（可能漏选），只给 `skills` 不给 `tools` 时到点没有任何工具。后一种情况 `schedule_add` 的结果现在带 `warning`。
+  - `bash`：隔离执行环境（Docker 或其镜像）不可用时，工具返回「Shell is unavailable on this host … Do not retry bash in this conversation」，不再与被沙箱拒绝的单条命令混在一起；`SandboxResult` 新增可选字段 `isolationUnavailable`。bash 可用时行为不变。
+  - 脚手架生成的 `BOT.md` 与 `zhin migrate` 生成的 `AGENTS.md` 不再写不存在的 `cron_add`，改为说明 `reminder_create`、`schedule_add`、`schedule_update` 的分工。
+  - 文档：新增「常见问题与反直觉行为」（`docs/operations/gotchas.md`，中英），从生产部署页链接。
+
+- 7572286: **高危确认规则**：同一回合里连续两次用 Host 自带的 `schedule_update` 修改同一任务，只确认一次（#1250）。
+
+  - `schedule_update` 的结果不再回显本次调用没有设置的标签（主人可以修改别人的任务，标签可能是别人写的）：只有本次调用给了 `label` 时才带上这个值（清除标签时为 `null`）。结果里的计划只在本次调用改了计划时回显，并且只保留结构化字段（时区不回显；没改计划时只回显计划类型），事件任务的 `eventId` / `source` / `eventType` 等文字不再回显，完整内容请用 `schedule_list` 查看。
+  - Host 自带的 `schedule_update` 的定义带上 `trusted_output` 与新增的 `untrusted_failure` 标签：成功结果只含框架生成的结构化数据和本次调用给出的值，不再记为外部内容，所以确认之后再改同一任务会沿用确认；调用失败（返回错误或抛错）时，错误文字仍按外部内容记，下一次调用重新确认。豁免按工具定义判断，插件提供的同名工具不受影响；其他定时任务工具（`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_list`、`schedule_preview`）的结果仍算外部内容。
+
+- b947d1b: **定时任务**：保存时就拒收无效的时区（#1250）。
+
+  - `schedule_add`、RPC 添加任务和 `schedule_update` 改计划时，`tz` 必须是运行时（`Intl`，调度器用的也是它）认识的时区：IANA 时区名（如 `Asia/Shanghai`、`Etc/GMT-8`、`UTC`）或 `+08:00` 这类偏移，前后空格会去掉；否则返回「时区无效」，不保存任务。以前这样的值会原样存下，要等任务注册时才失败，而且会在 `schedule_list`、Console 和 CLI 里原样显示。
+  - Assistant Profile 里某个 routine 无法生成任务时（时区无效、通知配置有误等），跳过这一条并记一条 `profile_routine_invalid` 警告，其他 routine 照常同步（以前一条出错会中断整轮同步）。这条 routine 以前同步过的任务会被停用，并在任务状态里写明原因，不会继续按旧配置运行。
+  - 已经存下的无效时区不做迁移：这样的任务本来就注册不上，用 `schedule_update` 或 Console 改计划时会提示「该任务保存的时区无效…请删除后重建」，改标签、启停或用 `delay_minutes` 改为一次性任务照常可用。
+
+- Updated dependencies [8fb5872]
+- Updated dependencies [1bbed63]
+- Updated dependencies [99947de]
+- Updated dependencies [d2ca29a]
+  - @zhin.js/adapter@1.6.1
+  - @zhin.js/permission@1.3.1
+  - @zhin.js/database@1.2.3
+  - @zhin.js/kernel@1.7.0
+  - @zhin.js/core@1.15.0
+  - @zhin.js/ai@1.9.1
+  - @zhin.js/tool@1.1.26
+  - @zhin.js/harness@1.1.1
+
 ## 1.10.0
 
 ### Minor Changes

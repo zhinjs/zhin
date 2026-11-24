@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-qq",
-  "version": "1.1.37",
+  "version": "1.1.38",
   "description": "QQ official bot adapter: private, group and guild channel messages over the WebSocket gateway.",
   "keywords": [
     "zhin.js",

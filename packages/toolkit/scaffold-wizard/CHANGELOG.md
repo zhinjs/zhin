@@ -1,5 +1,29 @@
 # @zhin.js/scaffold-wizard
 
+## 1.4.6
+
+### Patch Changes
+
+- 1bbed63: #1250 第 88 批：CLI 无终端时不再卡住、迁移脚本与脚手架一致、Console 新增账号不算配置漂移、CLI 输出不夹数据库日志。
+
+  - `@zhin.js/cli`：标准输入不是终端（管道、`< /dev/null`、CI）时，`zhin console user create` / `user passwd` 不带 `--password-stdin`、`zhin console init` 的交互向导（或只给 `--owner` 没给 `--password-stdin`）、`zhin console init --reset-store` 不带 `--yes` 不再进入交互提问一直等待，而是直接报错退出（退出码 1）并提示改用 `--password-stdin` / `--owner` / `--yes`。`zhin setup` 的交互步骤、`zhin onboard`、不带插件名的 `zhin install` 同样直接报错；`zhin setup --global` 在无终端时直接报错，不再先创建一个空的 `~/.zhin`；`zhin setup --bootstrap` 遇到已存在的引导文件与 `--yes` 一样跳过；`zhin uninstall plugin` 无终端时不再询问、保留本地插件目录，新增 `--remove-dir` 直接删除本地插件目录且不询问（交互终端同样）。`ConsoleCliIo` 新增可选 `interactive()`。
+  - `@zhin.js/cli`：`zhin migrate` 不再给项目加 `scripts.daemon`，补齐的 scripts 与 `create-zhin-app` 新项目完全一致（`dev` / `start` / `stop` / `preview` / `build`，已有的不动）；`RECOMMENDED_START_SCRIPTS` 去掉 `daemon`，新增 `RECOMMENDED_PROJECT_SCRIPTS` / `LEGACY_PROJECT_SCRIPTS`，测试直接与脚手架的 `CREATE_BOT_SCRIPTS` 比对。
+  - `@zhin.js/scaffold-wizard`：`zhin setup` 无终端时的报错文案加入 `WIZARD_MESSAGES`，`--locale en` 显示英文。
+  - `create-zhin-app`：新项目的 scripts 抽成 `src/scripts.ts` 的 `CREATE_BOT_SCRIPTS`（内容不变）。
+  - `@zhin.js/adapter`：在 Console 新增的账号（`Adapter.add`）记 `origin: 'console'`，替换账号时沿用，从配置导入或写回配置文件时去掉（写回失败则保留），所以写回后再从配置文件删掉仍算漂移。这样的账号不在配置文件里不算漂移：`configDrift()` 仍把它列为 `snapshot_only` 并带 `origin: 'console'`（可写回），启动日志的 `endpoint_config_drift` 警告不再列它；新增 `isEndpointConfigDivergence()`。账号元数据（`list()`）不含 `origin`。
+  - `zhin.js`：Console「需要你处理」的账号差异项（以及据此计数的 `zhin status` / `zhin doctor`）不再包含 Console 新增的账号；「已不在配置文件（仍按已保存账号运行）」改为「仅存在于已保存账号中（配置文件里没有，仍按已保存账号运行；若是有意删除，请在账号页删除该账号，或写回配置文件）」，英文同步。
+  - `@zhin.js/database`：`Database disconnected from dialect: …`、PostgreSQL / MySQL 的连接池创建与关闭、MongoDB 的连接关闭、Redis 的连接建立 / 就绪 / 关闭日志降为 debug，`zhin doctor` 等 CLI 命令的输出里不再出现 `[INFO] [database] …` 行。
+
+- c6edbc1: #1250 第 96 批：部署者知识收回上游（deployment-knowledge-upstream）。
+
+  - `schedule_add` 的说明写明何时用它（到点由 AI 生成内容、调用工具，或按日历 cron 运行），只是到点发固定文案的提醒时若有 `reminder_create` 优先用它，提醒必须真正建任务、不要只写进记忆，并说明没有 `cron_add` 工具；`tools` 参数说明写明其实际语义：写明后到点只能用这些工具，省略且没给 `skills` 时按 prompt 关键词自动挑选（可能漏选），只给 `skills` 不给 `tools` 时到点没有任何工具。后一种情况 `schedule_add` 的结果现在带 `warning`。
+  - `bash`：隔离执行环境（Docker 或其镜像）不可用时，工具返回「Shell is unavailable on this host … Do not retry bash in this conversation」，不再与被沙箱拒绝的单条命令混在一起；`SandboxResult` 新增可选字段 `isolationUnavailable`。bash 可用时行为不变。
+  - 脚手架生成的 `BOT.md` 与 `zhin migrate` 生成的 `AGENTS.md` 不再写不存在的 `cron_add`，改为说明 `reminder_create`、`schedule_add`、`schedule_update` 的分工。
+  - 文档：新增「常见问题与反直觉行为」（`docs/operations/gotchas.md`，中英），从生产部署页链接。
+
+- Updated dependencies [aadbab4]
+  - @zhin.js/runtime@1.8.0
+
 ## 1.4.5
 
 ### Patch Changes
