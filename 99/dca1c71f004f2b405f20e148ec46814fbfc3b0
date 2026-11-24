@@ -1,0 +1,19 @@
+packages/im/core/tests/plugin-runtime/conversation-context-hygiene.test.ts
+  s_3af98dc156b60a::t_d1d80a064c7180 136-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "99dca1c71f004f2b405f20e148ec46814fbfc3b0",
+  "prompts": {},
+  "sessions": {
+    "s_3af98dc156b60a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8833b2c4-6e1f-4bd7-943b-a7e92f777a6e",
+        "model": "unknown"
+      },
+      "human_author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
