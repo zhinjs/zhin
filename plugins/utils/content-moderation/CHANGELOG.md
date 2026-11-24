@@ -1,5 +1,16 @@
 # @zhin.js/plugin-content-moderation
 
+## 1.1.37
+
+### Patch Changes
+
+- Updated dependencies [8fb5872]
+- Updated dependencies [99947de]
+- Updated dependencies [d2ca29a]
+  - @zhin.js/permission@1.3.1
+  - @zhin.js/core@1.15.0
+  - @zhin.js/tool@1.1.26
+
 ## 1.1.36
 
 ### Patch Changes

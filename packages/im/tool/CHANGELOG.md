@@ -1,5 +1,12 @@
 # @zhin.js/tool
 
+## 1.1.26
+
+### Patch Changes
+
+- Updated dependencies [8fb5872]
+  - @zhin.js/permission@1.3.1
+
 ## 1.1.25
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/middleware
 
+## 1.1.23
+
+### Patch Changes
+
+- Updated dependencies [8fb5872]
+  - @zhin.js/permission@1.3.1
+
 ## 1.1.22
 
 ### Patch Changes

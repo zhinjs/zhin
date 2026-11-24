@@ -1,5 +1,12 @@
 # @zhin.js/command
 
+## 1.5.1
+
+### Patch Changes
+
+- Updated dependencies [8fb5872]
+  - @zhin.js/permission@1.3.1
+
 ## 1.5.0
 
 ### Minor Changes

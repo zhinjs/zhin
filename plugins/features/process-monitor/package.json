@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/process-monitor",
-  "version": "1.1.25",
+  "version": "1.1.26",
   "description": "Records starts, restarts and crashes, with a status command and a Console panel for memory and uptime.",
   "keywords": [
     "zhin.js",
