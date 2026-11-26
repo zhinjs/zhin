@@ -32,9 +32,10 @@ import type { JobSchedule, ScheduleJob } from './assistant/types.js';
  * #1250 b98: tags of the Host's `schedule_update`, whose successful result carries only what the harness
  * wrote (the id, the saved timing, the enabled state, fixed messages) and what the caller wrote in this
  * call, never text someone else wrote (a job's prompt or a label the call did not set). It is trusted
- * output (not a source for the provenance gate); a failure still counts as external content. Only this
- * definition carries them (the exemption approved for #1250 covers `schedule_update` alone): a plugin
- * tool of the same name is judged by its own declaration.
+ * output (not a source for the provenance gate); a failure still counts as external content.
+ * #1250 b107 (owner-approved): the Host's `schedule_add` too: its successful result is the new id, a
+ * fixed message with the harness-formatted run time and a fixed warning, never the prompt or label. Only
+ * these two definitions carry them: a plugin tool of the same name is judged by its own declaration.
  */
 const HARNESS_RESULT_TAGS = Object.freeze([TRUSTED_OUTPUT_TAG, UNTRUSTED_FAILURE_TAG]);
 
@@ -229,7 +230,9 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         return { success: true, id: job.id, message: '已添加调度任务', ...(warning ? { warning } : {}) };
       },
       // #1250: an admin may confirm creating a scheduled task in their own private chat (allow once).
-      [ADMIN_APPROVABLE_TOOL_TAG],
+      // b107: its success result is harness output (see `HARNESS_RESULT_TAGS`), so changing the job just
+      // created in the next turn does not count that reply as background content.
+      [ADMIN_APPROVABLE_TOOL_TAG, ...HARNESS_RESULT_TAGS],
     ),
     registration(
       'schedule_preview',
