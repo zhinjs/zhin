@@ -47,6 +47,21 @@ function privateMessage(messageId: number, text: string) {
   };
 }
 
+/** Records every gateway admission so a duplicate can be asserted after that admission settles. */
+function trackGateway(receive: (event: EndpointEvent) => void) {
+  const runs: Promise<unknown>[] = [];
+  const gateway = createTestEndpointEventGateway({
+    async receive(event) { receive(event); },
+  });
+  const run = gateway.run.bind(gateway);
+  gateway.run = (operation) => {
+    const result = run(operation);
+    runs.push(Promise.resolve(result));
+    return result;
+  };
+  return { gateway, settled: () => Promise.all(runs) };
+}
+
 function textsOf(payload: unknown): { id: string; content: string } {
   if (!payload || typeof payload !== 'object') return { id: '', content: '' };
   const message = 'message' in payload && payload.message && typeof payload.message === 'object'
@@ -62,6 +77,7 @@ describe('napcat forward WebSocket admission', () => {
   function candidate() {
     const ws = socket();
     const received: EndpointEvent[] = [];
+    const tracker = trackGateway(event => { received.push(event); });
     return createEndpointHarness(() => new NapCatWsEndpoint({
       id: endpointId('candidate'),
       config: resolveNapCatConfig({
@@ -84,8 +100,8 @@ describe('napcat forward WebSocket admission', () => {
       id: 'candidate',
       capabilities: ['inbound', 'outbound'],
       operations: ['recall'],
-      gateway: createTestEndpointEventGateway({ async receive(event) { received.push(event); } }),
-    }).then(harness => ({ ...harness, ws, received }));
+      gateway: tracker.gateway,
+    }).then(harness => ({ ...harness, ws, received, settled: tracker.settled }));
   }
 
   it('keeps transport open separate from generation admission and publishes the candidate frame once', async () => {
@@ -99,7 +115,7 @@ describe('napcat forward WebSocket admission', () => {
       await vi.waitFor(() => expect(f.received.filter(event => event.name === 'message.receive')).toHaveLength(1));
       f.ws.emit('message', JSON.stringify(incoming));
       f.ws.emit('message', JSON.stringify(privateMessage(8, 'second')));
-      await vi.waitFor(() => expect(f.received.filter(event => event.name === 'message.receive')).toHaveLength(2));
+      await f.settled();
       expect(f.received.filter(event => event.name === 'message.receive').map(event => textsOf(event.payload))).toEqual([
         { id: '7', content: 'first' },
         { id: '8', content: 'second' },
@@ -115,8 +131,10 @@ describe('napcat forward WebSocket admission', () => {
     try {
       await f.start();
       await f.stop();
-      f.endpoint.ingest(privateMessage(9, 'late'));
-      await Promise.resolve();
+      const ingest = vi.spyOn(f.endpoint, 'ingest');
+      f.ws.emit('message', JSON.stringify(privateMessage(9, 'late')));
+      await f.settled();
+      expect(ingest).not.toHaveBeenCalled();
       expect(f.received).toHaveLength(0);
       expect(f.ws.send).not.toHaveBeenCalled();
       expect(f.index.describe()[0]?.transportState).toBe('stopped');
@@ -197,6 +215,9 @@ describe('napcat account isolation', () => {
     let accept!: (connection: unknown) => void;
     const http = { ws: () => ({ onConnection(fn: typeof accept) { accept = fn; return vi.fn(); } }) };
     const received: Array<{ id: string; content: string }> = [];
+    const tracker = trackGateway(event => {
+      if (event.name === 'message.receive') received.push(textsOf(event.payload));
+    });
     const harness = await createEndpointHarness(() => new NapCatWssEndpoint({
       id: endpointId('replaced'),
       http: http as never,
@@ -207,7 +228,7 @@ describe('napcat account isolation', () => {
       name: 'napcat-replaced',
       capabilities: ['inbound', 'outbound'],
       operations: ['recall'],
-      gateway: createTestEventGateway({ receive: (payload) => { received.push(textsOf(payload)); } }),
+      gateway: tracker.gateway,
     });
     const connect = (ws: ReturnType<typeof socket>) => accept(wsConnectionFromMock({
       socket: ws,
@@ -229,7 +250,8 @@ describe('napcat account isolation', () => {
       expect(ingest).toHaveBeenCalledOnce();
       await vi.waitFor(() => expect(received).toEqual([{ id: '1', content: 'current' }]));
       second.emit('message', JSON.stringify(privateMessage(1, 'current-again')));
-      await new Promise(resolve => setTimeout(resolve, 30));
+      await vi.waitFor(() => expect(ingest).toHaveBeenCalledTimes(2));
+      await tracker.settled();
       expect(received).toEqual([{ id: '1', content: 'current' }]);
       expect(harness.index.describe()[0]?.transportState).toBe('open');
     } finally {
@@ -320,6 +342,9 @@ describe('napcat HTTP offline contracts', () => {
     hosts.push(http);
     async function account(label: string, path: string, token: string) {
       const received: Array<{ id: string; content: string }> = [];
+      const tracker = trackGateway(event => {
+        if (event.name === 'message.receive') received.push(textsOf(event.payload));
+      });
       const config = resolveNapCatConfig({
         connection: 'http',
         id: label,
@@ -337,9 +362,9 @@ describe('napcat HTTP offline contracts', () => {
         name: `napcat-${label}`,
         capabilities: ['inbound', 'outbound'],
         operations: ['recall'],
-        gateway: createTestEventGateway({ receive: (payload) => { received.push(textsOf(payload)); } }),
+        gateway: tracker.gateway,
       });
-      return { harness, received };
+      return { harness, received, settled: tracker.settled };
     }
     const left = await account('http-left', '/napcat/left', 'token-left');
     const right = await account('http-right', '/napcat/right', 'token-right');
@@ -361,12 +386,12 @@ describe('napcat HTTP offline contracts', () => {
       const early = await post(port, '/napcat/left', 'token-left', 1, 'too-early');
       expect(early.status).toBe(200);
       await early.text();
-      await new Promise(resolve => setImmediate(resolve));
+      await left.settled();
       expect(left.received).toEqual([]);
       left.harness.open();
       right.harness.open();
       expect(left.harness.index.describe()[0]?.admitted).toBe(true);
-      await new Promise(resolve => setImmediate(resolve));
+      await left.settled();
       expect(left.received).toEqual([]);
 
       const wrongToken = await post(port, '/napcat/left', 'token-right', 2, 'wrong-token');
@@ -388,7 +413,7 @@ describe('napcat HTTP offline contracts', () => {
       const duplicate = await post(port, '/napcat/left', 'token-left', 7, 'only-left-again');
       expect(duplicate.status).toBe(200);
       await duplicate.text();
-      await new Promise(resolve => setImmediate(resolve));
+      await left.settled();
       expect(left.received).toEqual([{ id: '7', content: 'only-left' }]);
       const query = await fetch(`http://127.0.0.1:${port}/napcat/left?access_token=token-left`, {
         method: 'POST',
