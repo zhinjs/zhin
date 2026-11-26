@@ -24,7 +24,7 @@
  * 审计写 `tool_approval` / `tool_hard_gate` / `ops_cooldown`（`ai_decision_events`）；审计写失败不影响判定。
  */
 import { redactApprovalDisplay, type DecisionEventInput, type DecisionReasonCode } from '../decision-events.js';
-import { describeApprovalAction, type ApprovalActionTool } from '../tool/approval-presentation.js';
+import { describeApprovalAction, markdownLiteral, type ApprovalActionTool } from '../tool/approval-presentation.js';
 import {
   isApprovalPortAvailable,
   requestApprovalOutcome,
@@ -948,8 +948,8 @@ export function formatHardGateQuestion(
     // append a look-alike category of its own after the real one.
     `危险操作${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}：${describeApprovalAction({ ...tool, name: toolName }, 'zh-CN')}`,
     // #1250 review: the prompt may be shown in a chat; mask secrets. The Console card and the
-    // same-argument fingerprint keep the exact arguments.
-    `本次参数：${stableJson(redactApprovalDisplay(input))}`,
+    // same-argument fingerprint keep the exact arguments. #1250 b102: shown literally, never as Markdown.
+    `本次参数：${markdownLiteral(stableJson(redactApprovalDisplay(input)))}`,
     entry ? `Console 审批：${entry.id}` : undefined,
     '需逐次确认，超时拒绝。',
   ].filter((line): line is string => Boolean(line)).join('\n');

@@ -379,7 +379,7 @@ export function createRuntimeApprovalPort(options: {
           // Presentation marker only: lets a surface (Sandbox Console) label this as an approval.
           purpose: 'approval',
           title: approvalText(locale, 'title'),
-          description: input.question,
+          description: approvalCardMarkdown(input.question),
           tip: approvalText(locale, input.humanOnly ? 'humanTip' : 'tip'),
           options: [
             { label: approvalText(locale, input.humanOnly ? 'reject' : 'rejectAlways'), value: 'reject', aliases: REJECT_ALIASES },
@@ -439,6 +439,17 @@ export const MASTER_NOT_PRESENT_REASON = 'the bot owner did not address the bot 
 const REJECT_ALIASES = Object.freeze(['否', 'no']);
 const APPROVE_ALIASES = Object.freeze(['确认', 'yes']);
 
+/**
+ * #1250 b102: the approval question as the card's Markdown. Every line of the question is a line of its own
+ * (action, rule, sources, arguments …); in CommonMark a single line break only joins the lines of one
+ * paragraph, so each one ends in a hard line break (two trailing spaces, invisible everywhere and kept as
+ * plain whitespace by the plain-text fallback) instead of running into the next. Text the harness did not
+ * write is already an inline code span in the question (`markdownLiteral`).
+ */
+export function approvalCardMarkdown(question: string): string {
+  return question.split('\n').map((line, index, lines) => index < lines.length - 1 && line.trim() ? `${line}  ` : line).join('\n');
+}
+
 /** A one-shot confirmation: "allow once" or "reject", no remembered or shared grants. */
 async function askOnce(interaction: UserInteraction, input: ApprovalRequestInput, locale: Locale): Promise<ApprovalOutcome> {
   try {
@@ -446,7 +457,7 @@ async function askOnce(interaction: UserInteraction, input: ApprovalRequestInput
       type: 'select',
       purpose: 'approval',
       title: approvalText(locale, 'title'),
-      description: input.question,
+      description: approvalCardMarkdown(input.question),
       tip: approvalText(locale, 'selfTip'),
       options: [
         { label: approvalText(locale, 'reject'), value: 'reject', aliases: REJECT_ALIASES },

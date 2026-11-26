@@ -3,7 +3,7 @@ import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-ou
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { MessageAliasTable } from '@zhin.js/ai';
 import { isOwnScheduledDelivery, sessionKeyLedgerId } from '../memory/told-ledger.js';
-import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, ownPrivateInbound, plannedReplyTexts, unrepresentedConversationBlocks } from '../session/context-provenance.js';
+import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, ownPrivateInbound, plannedReplyTexts, summarizeCountedMessages, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -291,9 +291,10 @@ async function* runInteractiveTurn(
   if (counted.length) {
     // #1250 high-risk-rules-explain: the counts only describe the source on the approval card.
     const messages = counted.filter(block => block.eventType === 'message.created' || block.eventType === 'message.updated').length;
+    const summaries = summarizeCountedMessages(counted, context.turn.principal.subjectId);
     provenance.record({ kind: 'conversation_context',
       ...(context.turn.origin.kind === 'im' ? { scene: context.turn.origin.scope } : {}),
-      messages, events: counted.length - messages });
+      messages, events: counted.length - messages, ...(summaries.length ? { summaries } : {}) });
   }
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {

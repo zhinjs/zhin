@@ -112,7 +112,7 @@ describe('TurnToolRuntime', () => {
       expect(requestApproval.mock.calls[index]![0]).toMatchObject({
         humanOnly: true,
         requestId: `turn:kick-${index + 1}`,
-        question: expect.stringContaining(`本次参数：{"group_id":${args.group_id},"reason":"${args.reason}","user_id":${args.user_id}}`),
+        question: expect.stringContaining(`本次参数：\`{"group_id":${args.group_id},"reason":"${args.reason}","user_id":${args.user_id}}\``),
       });
     }
     expect(execute).toHaveBeenCalledExactlyOnceWith(approved, expect.anything());
@@ -127,7 +127,7 @@ describe('TurnToolRuntime', () => {
     await runtime.execute('danger', { arbitrary: 'value' }, 'ordinary');
 
     expect(requestApproval.mock.calls[0]![0].question).toBe(
-      '调整当前会话设置\n本次参数：{"arbitrary":"value"}',
+      '调整当前会话设置\n本次参数：`{"arbitrary":"value"}`',
     );
   });
 
@@ -152,7 +152,7 @@ describe('TurnToolRuntime', () => {
         humanOnly: true,
         requestId: `turn:tainted-${index + 1}`,
         scopeKey: `external-content-confirmation:turn:tainted-${index + 1}`,
-        question: expect.stringContaining('本次参数：{"group_id":129043431,"reason":"明确广告","user_id":123456789}'),
+        question: expect.stringContaining('本次参数：`{"group_id":129043431,"reason":"明确广告","user_id":123456789}`'),
       });
       expect(request.remember).toBeUndefined();
     }
@@ -573,7 +573,7 @@ describe('TurnToolRuntime', () => {
       question: expect.stringContaining('cargo'),
     }));
     expect(requestApproval.mock.calls[0]?.[0].scopeKey).toContain(process.cwd());
-    expect(requestApproval.mock.calls[0]?.[0].question).toContain(`工作目录：${process.cwd()}`);
+    expect(requestApproval.mock.calls[0]?.[0].question).toContain(`工作目录：\`${process.cwd()}\``);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 

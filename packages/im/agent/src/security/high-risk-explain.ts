@@ -7,10 +7,12 @@
  * as having read content. It names sources by metadata only (source kind, tool name, MCP server name,
  * counts): the card never quotes the content itself, so text from a web page or a background message
  * cannot reach the approver through it, and names (which an MCP server chooses) are reduced to a safe
- * character set, with non-ASCII shown escaped.
+ * character set, with non-ASCII shown escaped. A counted background message is named by its sender and
+ * time only; the sender's stored name and id are shown literally (`markdownLiteralName`).
  */
 import { createMessages, resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
-import type { HighRiskActionKind, HighRiskConfirmLevel, ProvenanceSource } from './provenance.js';
+import type { BackgroundMessageSummary, HighRiskActionKind, HighRiskConfirmLevel, ProvenanceSource } from './provenance.js';
+import { markdownLiteralName } from '../tool/approval-presentation.js';
 import type { InitiatorTrustLevel } from './trust-level.js';
 
 /** Why a tool is in its high-risk category: a category tag the author set, or the name rule. */
@@ -100,7 +102,16 @@ const messages = createMessages({
   srcMcp: { 'zh-CN': 'MCP 服务 {server} 的工具 {tool} 的结果', en: 'result of tool {tool} from MCP server {server}' },
   srcTrusted: { 'zh-CN': '{tool} 的第一方只读结果', en: 'first-party read-only result of {tool}' },
   srcTool: { 'zh-CN': '工具 {tool} 返回的结果', en: 'result returned by tool {tool}' },
-  srcBackground: { 'zh-CN': '本会话上一回合以来的{scene}背景消息{counts}', en: '{scene}background messages of this conversation since the last turn{counts}' },
+  srcBackground: { 'zh-CN': '本会话上一回合以来的{scene}背景消息{counts}{detail}', en: '{scene}background messages of this conversation since the last turn{counts}{detail}' },
+  srcBackgroundDetail: { 'zh-CN': '：{list}', en: ': {list}' },
+  srcBackgroundMore: { 'zh-CN': '等 {count} 条', en: 'and {count} more' },
+  srcBackgroundSeparator: { 'zh-CN': '、', en: ', ' },
+  msgFromBot: { 'zh-CN': '机器人自己发的消息{at}', en: 'a message the bot sent{at}' },
+  msgFromInitiator: { 'zh-CN': '本回合发起人自己的消息{at}', en: 'a message from this turn\'s initiator{at}' },
+  msgFromUnknown: { 'zh-CN': '发送者不明的消息{at}', en: 'a message from an unknown sender{at}' },
+  msgFromOther: { 'zh-CN': '{sender}的消息{at}', en: 'a message from {sender}{at}' },
+  msgSender: { 'zh-CN': '{name}（id {id}）', en: '{name} (id {id})' },
+  msgAt: { 'zh-CN': '（{time}）', en: ' ({time})' },
   srcScenePrivate: { 'zh-CN': '私聊', en: 'private-chat ' },
   srcSceneGroup: { 'zh-CN': '群聊', en: 'group ' },
   srcSceneChannel: { 'zh-CN': '频道', en: 'channel ' },
@@ -154,6 +165,16 @@ export function safeDisplayName(name: string): string {
   return `${head.join('')}…${tail.join('')}`;
 }
 
+/**
+ * #1250 b102: a name as the card shows it: `safeDisplayName` inside one inline code span. The safe
+ * character set has no backtick, so the span always closes where it should, and `_` / `.` / `:` in a name
+ * never turn into emphasis on any renderer (some, like Telegram's, pair `_` across two names on a line).
+ * The plain-text fallback strips the backticks, so the name reads as before there.
+ */
+export function codeDisplayName(name: string): string {
+  return `\`${safeDisplayName(name)}\``;
+}
+
 /** English needs a singular form; the Chinese text is the same for any count. */
 function plural(locale: Locale | undefined, one: MessageKey, many: MessageKey, count: number): string {
   return t(locale, count === 1 ? one : many, { count });
@@ -186,7 +207,7 @@ function t(locale: Locale | undefined, key: MessageKey, params?: Record<string, 
   return messages(resolveLocale(locale), key, params);
 }
 
-/** The short chain shown since #727, e.g. `主人的消息 → 工具 web_fetch 的结果 → 本次调用 bash`. */
+/** The short chain shown since #727, e.g. `主人的消息 → 工具 \`web_fetch\` 的结果 → 本次调用 \`bash\``. */
 export function describeProvenanceChain(
   sources: readonly ProvenanceSource[],
   initiator: InitiatorTrustLevel,
@@ -199,7 +220,7 @@ export function describeProvenanceChain(
     t(locale, `initiator_${initiator}`),
     ...shown,
     ...(hidden > 0 ? [plural(locale, 'chainHiddenOne', 'chainHidden', hidden)] : []),
-    t(locale, 'chainCall', { tool: safeDisplayName(toolName) }),
+    t(locale, 'chainCall', { tool: codeDisplayName(toolName) }),
   ].join(t(locale, 'chainSeparator'));
 }
 
@@ -254,7 +275,7 @@ export function formatProvenanceCardReason(input: Readonly<{
 function chainItem(source: ProvenanceSource, locale?: Locale): string {
   switch (source.kind) {
     case 'tool_result':
-      return t(locale, source.trusted ? 'chainToolTrusted' : 'chainTool', { tool: safeDisplayName(source.toolName) });
+      return t(locale, source.trusted ? 'chainToolTrusted' : 'chainTool', { tool: codeDisplayName(source.toolName) });
     case 'conversation_context': return chainConversation(source.scene, locale);
     case 'media_perception': return t(locale, 'chainMedia');
     case 'scheduled_prompt': return t(locale, 'chainScheduled', { sources: scheduledSources(source.sources, locale) });
@@ -284,7 +305,7 @@ function persistedSource(key: string, locale?: Locale): string {
   if (key.startsWith('tool:')) {
     const trusted = key.endsWith(':trusted');
     const name = key.slice('tool:'.length, trusted ? -':trusted'.length : undefined);
-    return t(locale, trusted ? 'chainToolTrusted' : 'chainTool', { tool: safeDisplayName(name) });
+    return t(locale, trusted ? 'chainToolTrusted' : 'chainTool', { tool: codeDisplayName(name) });
   }
   if (key === 'conversation_context') return chainConversation(undefined, locale);
   if (key === 'media_perception') return t(locale, 'chainMedia');
@@ -292,12 +313,48 @@ function persistedSource(key: string, locale?: Locale): string {
   return t(locale, 'chainUnknownKey');
 }
 
+/** #1250: longest sender name or id shown for a background message, in code points (before `…`). */
+const MAX_SENDER_CHARS = 32;
+
+/**
+ * #1250 `interaction-answer-counts-as-background`: which background messages counted — who sent them and
+ * when, never their content. A sender's name and id are untrusted text, shown literally
+ * (`markdownLiteralName`); "the bot" / "this turn's initiator" are harness labels from stored ids.
+ */
+function backgroundDetail(source: Extract<ProvenanceSource, { kind: 'conversation_context' }>, locale?: Locale): string {
+  const summaries = source.summaries ?? [];
+  if (!summaries.length) return '';
+  const shown = summaries.map(summary => backgroundMessage(summary, locale));
+  const more = (source.messages ?? summaries.length) - summaries.length;
+  return t(locale, 'srcBackgroundDetail', {
+    list: [...shown, ...(more > 0 ? [t(locale, 'srcBackgroundMore', { count: more })] : [])].join(t(locale, 'srcBackgroundSeparator')),
+  });
+}
+
+function backgroundMessage(summary: BackgroundMessageSummary, locale?: Locale): string {
+  const at = summary.at !== undefined ? t(locale, 'msgAt', { time: clockTime(summary.at) }) : '';
+  if (summary.from !== 'other') {
+    return t(locale, summary.from === 'bot' ? 'msgFromBot' : summary.from === 'initiator' ? 'msgFromInitiator' : 'msgFromUnknown', { at });
+  }
+  const id = markdownLiteralName(summary.senderId, MAX_SENDER_CHARS);
+  const name = summary.senderName && summary.senderName !== summary.senderId
+    ? markdownLiteralName(summary.senderName, MAX_SENDER_CHARS) : '';
+  return t(locale, 'msgFromOther', { sender: name ? t(locale, 'msgSender', { name, id }) : id, at });
+}
+
+/** `HH:MM:SS` in the process time zone (the clock the bot's other times use). */
+function clockTime(ms: number): string {
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return '?';
+  return [date.getHours(), date.getMinutes(), date.getSeconds()].map(part => String(part).padStart(2, '0')).join(':');
+}
+
 function sourceDetail(source: ProvenanceSource, locale?: Locale): string {
   switch (source.kind) {
     case 'tool_result': {
-      const tool = safeDisplayName(source.toolName);
+      const tool = codeDisplayName(source.toolName);
       if (source.trusted) return t(locale, 'srcTrusted', { tool });
-      if (source.mcpServer !== undefined) return t(locale, 'srcMcp', { tool, server: safeDisplayName(source.mcpServer) });
+      if (source.mcpServer !== undefined) return t(locale, 'srcMcp', { tool, server: codeDisplayName(source.mcpServer) });
       if (WEB_PAGE_TOOLS.has(source.toolName)) return t(locale, 'srcWebPage', { tool });
       if (WEB_SEARCH_TOOLS.has(source.toolName)) return t(locale, 'srcWebSearch', { tool });
       if (FILE_TOOLS.has(source.toolName)) return t(locale, 'srcFiles', { tool });
@@ -315,7 +372,7 @@ function sourceDetail(source: ProvenanceSource, locale?: Locale): string {
           messages: plural(locale, 'countMessagesOne', 'countMessages', source.messages ?? 0),
           events: plural(locale, 'countEventsOne', 'countEvents', source.events ?? 0),
         }) : '';
-      return t(locale, 'srcBackground', { scene: t(locale, scene), counts });
+      return t(locale, 'srcBackground', { scene: t(locale, scene), counts, detail: backgroundDetail(source, locale) });
     }
     case 'media_perception': return t(locale, 'srcMedia');
     case 'scheduled_prompt': return t(locale, 'srcScheduled', { sources: scheduledSources(source.sources, locale) });

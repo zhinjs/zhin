@@ -459,16 +459,40 @@ describe('bridge HTTP', () => {
       else request.signal.addEventListener('abort', () => { aborted = true; });
     }));
     await opened(context);
-    await expect(context.transport.fetch(new Request('http://gateway/hang'))).rejects.toMatchObject({ code: 'timeout' });
+    await expect(context.transport.fetch(new Request('http://gateway/hang'))).rejects.toMatchObject({ code: 'timeout', dispatched: true });
     await until(() => aborted, 'instance handler aborted after timeout');
 
     const pending = context.transport.fetch(new Request('http://gateway/hang'));
     await until(() => context.host.activeStreams > 0, 'in flight');
     context.disconnect();
     await expect(pending).rejects.toBeInstanceOf(InstanceTransportError);
-    await expect(pending).rejects.toMatchObject({ code: 'instance-offline' });
-    await expect(context.transport.fetch(new Request('http://gateway/hang'))).rejects.toMatchObject({ code: 'instance-offline' });
+    // Sent before the instance went away: it may have run.
+    await expect(pending).rejects.toMatchObject({ code: 'instance-offline', dispatched: true });
+    // Refused before anything is sent.
+    await expect(context.transport.fetch(new Request('http://gateway/hang'))).rejects.toMatchObject({ code: 'instance-offline', dispatched: false });
     await context.host.close();
+  });
+
+  it('#1250 b103: a stopping instance ends an open exchange with instance-error while the transport is still ready', async () => {
+    const context = await started();
+    context.host.route('GET', '/hang', () => new Promise<Response>(() => undefined));
+    await opened(context);
+    const pending = context.transport.fetch(new Request('http://gateway/hang'));
+    await until(() => context.host.activeStreams > 0, 'in flight');
+    await context.host.close();
+    await expect(pending).rejects.toMatchObject({ code: 'instance-error', message: 'Instance stopping', dispatched: true });
+    // Only the process exit (detach) takes the transport down; the gateway maps this by supervisor state.
+    expect(context.transport.ready).toBe(true);
+    // A request sent after close() is not answered by the closed host (it stopped listening to the
+    // channel): it waits for the process exit, which the gateway maps to 503 with Retry-After.
+    const late = context.transport.fetch(new Request('http://gateway/hang'));
+    let settled = false;
+    void late.then(() => { settled = true; }, () => { settled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+    context.disconnect();
+    expect(context.transport.ready).toBe(false);
+    await expect(late).rejects.toMatchObject({ code: 'instance-offline', dispatched: true });
   });
 
   it('carries the gateway principal and still authorizes against the permission map', async () => {

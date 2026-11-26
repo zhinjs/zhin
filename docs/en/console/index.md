@@ -139,7 +139,7 @@ Diagnostics are kept in memory for the last 15 minutes, at most 500 records; fin
 
 ### When the instance is offline {#instance-offline}
 
-When the gateway returns `503 instance_unavailable` (the instance is not running), `504 instance_timeout` (no answer in time) or `502 instance_error` (the answer failed or the instance is overloaded), every page shows an **Instance unavailable** banner at the top: it counts down `Retry-After` and retries automatically, and offers **Retry now** and **View instance**.
+When the gateway returns `503 instance_unavailable` (the instance is not running, or is stopping, restarting or starting), `504 instance_timeout` (no answer in time) or `502 instance_error` (the answer failed or the instance is overloaded), every page shows an **Instance unavailable** banner at the top: it counts down `Retry-After` and retries automatically, and offers **Retry now** and **View instance**.
 
 - Access control, Instance and Terminal are served by the gateway and keep working; other pages show **Instance unavailable** in the affected sections instead of blocking the whole page. When the instance is back the banner disappears and sections re-read automatically.
 - On the Instance page, read the state and **Logs before the failure**, fix the cause, then **Start** or **Restart** (needs `ops.restart`). See [Instance](./operations.md#instance).

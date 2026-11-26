@@ -520,28 +520,76 @@ describe('GatewayHttpServer instance availability', () => {
     expect((await fetch(`${origin}/webhook/x`)).status).toBe(502);
   });
 
-  it('maps InstanceTransportError codes to 503 / 504 / 502', async () => {
+  it('maps InstanceTransportError codes to 503 / 504 / 502 while the instance is running', async () => {
     const transport = new FakeTransport();
-    const { origin } = await startServer(transport, { state: () => 'stopping' });
-    transport.handler = async () => { throw new InstanceTransportError('instance-offline', 'gone'); };
+    const { origin } = await startServer(transport, { state: () => 'running' });
+    transport.handler = async () => { throw new InstanceTransportError('instance-offline', 'gone', { dispatched: false }); };
     const offline = await fetch(`${origin}/webhook/x`);
     expect(offline.status).toBe(503);
     expect(offline.headers.get('retry-after')).toBe('7');
-    expect(await offline.json()).toEqual({ success: false, code: 'instance_unavailable', requestOutcome: 'not-dispatched', state: 'stopping', error: expect.any(String) });
-    transport.handler = async () => { throw new InstanceTransportError('timeout', 'slow'); };
+    expect(await offline.json()).toEqual({ success: false, code: 'instance_unavailable', requestOutcome: 'not-dispatched', state: 'running', error: expect.any(String) });
+    // Went away after the request was sent: it may have run.
+    transport.handler = async () => { throw new InstanceTransportError('instance-offline', 'exited', { dispatched: true }); };
+    const lost = await fetch(`${origin}/webhook/x`);
+    expect(lost.status).toBe(503);
+    expect(await lost.json()).toMatchObject({ code: 'instance_unavailable', requestOutcome: 'unknown' });
+    transport.handler = async () => { throw new InstanceTransportError('timeout', 'slow', { dispatched: true }); };
     const timeout = await fetch(`${origin}/webhook/x`);
     expect(timeout.status).toBe(504);
     expect(timeout.headers.get('retry-after')).toBeNull();
-    expect(await timeout.json()).toEqual({ success: false, code: 'instance_timeout', requestOutcome: 'unknown', state: 'stopping', error: expect.any(String) });
-    transport.handler = async () => { throw new InstanceTransportError('instance-error', 'handler failed'); };
+    expect(await timeout.json()).toEqual({ success: false, code: 'instance_timeout', requestOutcome: 'unknown', state: 'running', error: expect.any(String) });
+    transport.handler = async () => { throw new InstanceTransportError('instance-error', 'handler failed', { dispatched: true }); };
     const failed = await fetch(`${origin}/webhook/x`);
     expect(failed.status).toBe(502);
-    expect(await failed.json()).toEqual({ success: false, code: 'instance_error', requestOutcome: 'unknown', state: 'stopping', error: expect.any(String) });
+    expect(failed.headers.get('retry-after')).toBeNull();
+    expect(await failed.json()).toEqual({ success: false, code: 'instance_error', requestOutcome: 'unknown', state: 'running', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('overloaded', 'busy'); };
     const busy = await fetch(`${origin}/webhook/x`);
     expect(busy.status).toBe(502);
     expect(busy.headers.get('retry-after')).toBe('7');
     expect(await busy.json()).toMatchObject({ code: 'instance_error', requestOutcome: 'not-dispatched' });
+  });
+
+  it('answers 503 with Retry-After for every forward failure while the instance stops, restarts or starts (#1250 b103)', async () => {
+    const transport = new FakeTransport();
+    let state = 'stopping';
+    const { origin } = await startServer(transport, { state: () => state });
+    // A stopping instance ends its open exchanges (`http.response.error`) while the transport is still ready.
+    const failures: Array<[string, () => Error, 'not-dispatched' | 'unknown']> = [
+      ['instance-error', () => new InstanceTransportError('instance-error', 'Instance stopping', { dispatched: true }), 'unknown'],
+      ['timeout', () => new InstanceTransportError('timeout', 'slow', { dispatched: true }), 'unknown'],
+      ['overloaded', () => new InstanceTransportError('overloaded', 'busy', { dispatched: false }), 'not-dispatched'],
+      ['plain error', () => new Error('channel closed'), 'unknown'],
+    ];
+    for (const current of ['stopping', 'starting', 'backoff']) {
+      state = current;
+      for (const [label, failure, requestOutcome] of failures) {
+        transport.handler = async () => { throw failure(); };
+        const response = await fetch(`${origin}/webhook/x`);
+        expect(response.status, `${current} ${label}`).toBe(503);
+        expect(response.headers.get('retry-after'), `${current} ${label}`).toBe('7');
+        expect(await response.json(), `${current} ${label}`).toEqual({ success: false, code: 'instance_unavailable', requestOutcome, state: current, error: expect.any(String) });
+      }
+    }
+    // Back to running: real instance failures are reported as they are again.
+    state = 'running';
+    transport.handler = async () => { throw new InstanceTransportError('instance-error', 'handler failed', { dispatched: true }); };
+    expect((await fetch(`${origin}/webhook/x`)).status).toBe(502);
+  });
+
+  it('passes the instance\'s own error responses through unchanged, whatever the supervisor state', async () => {
+    const transport = new FakeTransport();
+    let state = 'running';
+    const { origin } = await startServer(transport, { state: () => state });
+    for (const current of ['running', 'stopping']) {
+      state = current;
+      for (const status of [500, 502, 404]) {
+        transport.handler = async () => jsonResponse(status, { from: 'instance', status });
+        const response = await fetch(`${origin}/webhook/x`);
+        expect(response.status, `${current} ${status}`).toBe(status);
+        expect(await response.json()).toEqual({ from: 'instance', status });
+      }
+    }
   });
 });
 

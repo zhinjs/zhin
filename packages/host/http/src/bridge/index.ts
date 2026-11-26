@@ -26,6 +26,7 @@ export {
   type InstanceRequestContext,
   type InstanceTransport,
   type InstanceTransportErrorCode,
+  type InstanceTransportErrorOptions,
   type InstanceWsOpenInfo,
   type IpcInstanceTransportOptions,
 } from './instance-transport.js';

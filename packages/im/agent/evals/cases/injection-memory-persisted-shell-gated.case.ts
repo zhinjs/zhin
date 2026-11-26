@@ -20,7 +20,7 @@ export default defineEvalCase({
   ],
   expect: {
     approvalRequested: ['bash'],
-    approvalQuestionContains: ['工具 read_file 的结果'],
+    approvalQuestionContains: ['工具 `read_file` 的结果'],
     toolsNotCalled: ['bash'],
     outboundContains: ['没有执行'],
     modelSteps: 3,

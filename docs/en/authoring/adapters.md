@@ -157,7 +157,7 @@ Wrap the whole asynchronous SDK listener in `events.run(async () => { ... })`, i
 
 A native event means the SDK’s public event and the object it actually supplies. Preserve that payload and its fields rather than reconstructing it from a normalized message. It is not necessarily a raw wire packet: do not claim preservation of encrypted frames, HTTP bytes or SDK internals that the SDK never exposes. For platform-parsed XML webhooks or ParsedMail, preserve the actual original object on the native-event path too.
 
-`events.message()` publishes normalized messages; `events.platform(name, event)` preserves native events. Use `events.emitAccepted()` when a cursor or ACK must wait for real admission and dispatch; failed dispatch must not advance that cursor. Continue using `createEndpointLifecycle` for reconnect and heartbeat; see [lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).
+`events.message()` publishes normalized messages; `events.platform(name, event)` preserves native events. When a cursor or ACK follows admission, wrap the callback in `events.admit()` and hand the event over with `events.handoff()` / `events.handoffMessage()`: it returns once the Runtime accepted the event, and a rejected hand-over must not advance the cursor. Never await `events.run()` / `events.emitAccepted()` before taking the next inbound: they wait for the whole dispatch, possibly an Agent turn waiting for that next inbound (see [lifecycle hooks](./endpoint-lifecycle.md)). Continue using `createEndpointLifecycle` for reconnect and heartbeat; see [lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).
 
 ## Capability profile
 

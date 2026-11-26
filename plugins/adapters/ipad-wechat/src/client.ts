@@ -6,7 +6,8 @@
  * - `run()` is the single long-lived owner (login/restore → NewInit → online);
  *   `stop()` + awaiting `run()` before `close()`; `logout()` is never called.
  * - A `message` listener's promise is the ACK: it resolves only after Zhin
- *   admitted the message; while input is closed it waits instead of failing,
+ *   admitted the message — accepted it, not finished dispatching it (an Agent
+ *   turn may wait for the next delivery); while input is closed it waits instead of failing,
  *   and on stop it rejects so the SDK keeps the delivery for the next run.
  * - Every send uses a fresh `operationId` and is acknowledged only after a
  *   terminal result; an unknown result is reported as `unknown`, never resent.
@@ -146,7 +147,14 @@ export class IpadWechatClient extends EventEmitter {
   protected receiveInboundCallback<T>(receive: () => T | Promise<T>): Promise<T> {
     try { return Promise.resolve(receive()); } catch (error) { return Promise.reject(error); }
   }
+  /** Resolves once the Runtime accepted the event, never after its dispatch (#1250 adapter-inbound-deadlock). */
   protected publishAccepted(name: string, payload: unknown): Promise<unknown> { this.emit(name, payload); return Promise.resolve(); }
+  /** A dispatch that failed after the delivery was ACKed is not redelivered; keep it in the log. */
+  protected reportDispatch(dispatched: Promise<unknown>, target: string): void {
+    void dispatched.catch((error: unknown) => {
+      this.#logger.warn(formatCompact({ op: 'dispatch', ok: false, target, error: describe(error) }));
+    });
+  }
   protected publishPlatform(name: string, event: unknown): Promise<unknown> { this.emit(name, event); return Promise.resolve(); }
   protected inboundConversation(conversation: Readonly<{ kind: 'private' | 'group'; id: string }>): unknown { return conversation; }
   protected reportSelf(_account: string | null): void {}

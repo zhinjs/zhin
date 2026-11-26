@@ -112,7 +112,7 @@ describe('ADR 0067 D2/D3: levels and config shape', () => {
     provenance.record({ kind: 'tool_result', toolName: 'weather', trusted: true });
     expect(provenance.requiresConfirmation('any_content')).toBe(true);
     expect(provenance.requiresConfirmation('untrusted_content')).toBe(false);
-    expect(provenance.describeChain('owner', 'bash')).toContain('工具 weather 的结果（第一方只读）');
+    expect(provenance.describeChain('owner', 'bash')).toContain('工具 `weather` 的结果（第一方只读）');
     // The same tool later recorded as external never stays trusted.
     provenance.record({ kind: 'tool_result', toolName: 'weather' });
     expect(provenance.requiresConfirmation('untrusted_content')).toBe(true);
@@ -169,7 +169,7 @@ describe('ADR 0067 D6: TurnToolRuntime under the default configuration', () => {
     await runtime.execute('fetch_page', { url: 'https://example.com' }, 'c1');
     await expect(runtime.execute(name, { command: 'ls', text: 'x' }, 'c2'))
       .resolves.toMatchObject({ status: 'denied', policy: PROVENANCE_POLICY });
-    expect(approval.questions[0]).toContain('工具 fetch_page 的结果 → 本次调用');
+    expect(approval.questions[0]).toContain('工具 `fetch_page` 的结果 → 本次调用');
     expect(execute).not.toHaveBeenCalled();
   });
 

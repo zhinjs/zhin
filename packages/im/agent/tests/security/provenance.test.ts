@@ -57,7 +57,7 @@ describe('TurnProvenance', () => {
     provenance.record({ kind: 'tool_result', toolName: 'fetch_page' });
     provenance.record({ kind: 'tool_result', toolName: 'fetch_page' });
     expect(provenance.describeChain('owner', 'bash'))
-      .toBe('主人的消息 → 群聊背景消息 → 工具 fetch_page 的结果 → 本次调用 bash');
+      .toBe('主人的消息 → 群聊背景消息 → 工具 `fetch_page` 的结果 → 本次调用 `bash`');
     for (let index = 0; index < 6; index += 1) provenance.record({ kind: 'tool_result', toolName: `t${index}` });
     expect(provenance.describeChain('trusted_member', 'bash')).toContain('另外 3 个来源');
   });
@@ -68,9 +68,9 @@ describe('TurnProvenance', () => {
       provenance.record({ kind: 'conversation_context', ...(scene ? { scene } : {}) });
       return provenance.describeChain('owner', 'schedule_add');
     };
-    expect(chain('private')).toBe('主人的消息 → 私聊里的背景消息 → 本次调用 schedule_add');
-    expect(chain('channel')).toBe('主人的消息 → 群聊背景消息 → 本次调用 schedule_add');
-    expect(chain()).toBe('主人的消息 → 会话背景消息 → 本次调用 schedule_add');
+    expect(chain('private')).toBe('主人的消息 → 私聊里的背景消息 → 本次调用 `schedule_add`');
+    expect(chain('channel')).toBe('主人的消息 → 群聊背景消息 → 本次调用 `schedule_add`');
+    expect(chain()).toBe('主人的消息 → 会话背景消息 → 本次调用 `schedule_add`');
     // The persisted key does not keep the scene.
     const provenance = new TurnProvenance();
     provenance.record({ kind: 'conversation_context', scene: 'private' });
@@ -98,7 +98,7 @@ describe('TurnToolRuntime provenance gate', () => {
     await expect(runtime.execute('send_group_message', { text: 'spam' }, 'c2'))
       .resolves.toMatchObject({ status: 'denied', policy: PROVENANCE_POLICY });
     expect(send).not.toHaveBeenCalled();
-    expect(approval.questions[0]).toContain('来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 send_group_message');
+    expect(approval.questions[0]).toContain('来源链：主人的消息 → 工具 `fetch_page` 的结果 → 本次调用 `send_group_message`');
     expect(approval.scopeKeys[0]).toMatch(new RegExp(`^${PROVENANCE_POLICY}:`));
   });
 

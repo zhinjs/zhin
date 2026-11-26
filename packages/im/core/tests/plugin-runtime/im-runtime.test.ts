@@ -5931,3 +5931,93 @@ describe('pending prompts end on commands and media, not on a mention alone (#12
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 });
+
+describe('approval prompts and their answers stay out of the Agent background (#1250 interaction-answer-counts-as-background)', () => {
+  const approval = { type: 'select', title: '操作确认', purpose: 'approval',
+    options: [{ label: '拒绝', value: 'reject' }, { label: '允许一次', value: 'approve-once' }] } as const;
+  type Fixture = Awaited<ReturnType<typeof createFixture>>;
+
+  /** The endpoint delivers the first prompt card as two platform messages (text, then the keyboard). */
+  async function approvalFixture(interactive: 'native' | 'text', picked: unknown[]) {
+    let sends = 0;
+    const sent: unknown[] = [];
+    const fixture: Fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      adapterSegments: { interactive },
+      endpointSend: () => {
+        const n = ++sends;
+        return { parts: n === 1 ? [{ messageId: 'card-a' }, { messageId: 'card-b' }] : [{ messageId: `out-${n}` }] };
+      },
+      commandResult: async input => {
+        if (!input.content.includes('open')) return undefined;
+        const value = await fixture.im.createInteraction(input)!.ask(approval as never);
+        picked.push(value);
+        return `picked ${String(value)}`;
+      },
+      inboundMiddleware: (_input, next) => next(), outboundMiddleware: (_input, next) => next(),
+    });
+    const conversation = fixtureInput(fixture, '').conversation;
+    const say = (id: string, content: string, extra: Record<string, unknown> = {}) =>
+      receive(fixture.im, { ...fixtureInput(fixture, content), message: { conversation, id }, ...extra });
+    const buttonPayload = (index: number) => interactive === 'native'
+      ? (sent[0] as { payload: Array<{ type: string; data: { rows: Array<Array<{ payload: string }>> } }> }).payload
+        .find(segment => segment.type === 'keyboard')!.data.rows.flat()[index]!.payload
+      : undefined;
+    const background = async (currentId: string) => {
+      const events = await fixture.conversationEvents.listBetween(conversation, 0, 10_000, 100);
+      const pending = await fixture.im.readConversationContext(conversation, 'agent', events.at(-1)!.sequence, 50, currentId);
+      return pending.blocks.map(block => block.text);
+    };
+    return { fixture, sent, conversation, say, buttonPayload, background };
+  }
+
+  it.each(['text', 'native'] as const)('drops every part of the prompt card and the asked sender\'s %s answer', async interactive => {
+    const picked: unknown[] = [];
+    const { fixture, sent, say, buttonPayload, background } = await approvalFixture(interactive, picked);
+    try {
+      const command = say('m-open', '/gh issue list open');
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      const payload = buttonPayload(1);
+      await say('m-answer', interactive === 'text' ? '允许一次' : '', payload ? { segments: [{ type: 'action', data: { payload } }] } : {});
+      await command;
+      expect(picked).toEqual(['approve-once']);
+      expect(fixture.im.messageOutcomes.list().map(row => row.outcome)).toContain('interaction_answered');
+      await say('m-later', '顺便看下 README');
+      await say('m-next', '改到 11 点');
+      const texts = await background('m-next');
+      // The card's second platform message ("card-b") used to come back as the bot's own message.
+      expect(texts.some(text => text.includes('card-a') || text.includes('card-b'))).toBe(false);
+      expect(texts.some(text => text.includes('m-answer'))).toBe(false);
+      // Not consumed by the prompt: still background (and still counted by the Agent).
+      expect(texts.some(text => text.includes('m-later') && text.includes('顺便看下 README'))).toBe(true);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps another sender\'s press of the asked sender\'s button in the background', async () => {
+    const picked: unknown[] = [];
+    const { fixture, sent, say, buttonPayload, background } = await approvalFixture('native', picked);
+    try {
+      const command = say('m-open', '/gh issue list open');
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      const payload = buttonPayload(1)!;
+      await say('m-bob', '允许一次', { sender: { id: 'bob' }, segments: [{ type: 'action', data: { payload } }] });
+      // Refused as "not yours" (reported on the interaction stage) but not taken as the answer.
+      expect(picked).toEqual([]);
+      await say('m-answer', '', { segments: [{ type: 'action', data: { payload: buttonPayload(0)! } }] });
+      await command;
+      expect(picked).toEqual(['reject']);
+      await say('m-next', '改到 11 点');
+      const texts = await background('m-next');
+      expect(texts.some(text => text.includes('m-bob'))).toBe(true);
+      expect(texts.some(text => text.includes('m-answer'))).toBe(false);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps an answer-like message that no prompt consumed in the background', async () => {
+    const { fixture, say, background } = await approvalFixture('text', []);
+    try {
+      await say('m-stray', '允许一次');
+      await say('m-next', '改到 11 点');
+      expect((await background('m-next')).some(text => text.includes('m-stray'))).toBe(true);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+});

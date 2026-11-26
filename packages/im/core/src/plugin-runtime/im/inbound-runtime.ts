@@ -445,6 +445,10 @@ export class InboundRuntime {
           textAuthoredBySender: adapterDeclaresInboundTextAuthoredBySender(adapter, lease.value, conversation),
         });
         recorded.sequence = conversationSequence;
+        // #1250 adapter-inbound-deadlock: the message is now this Runtime's (recorded, about to be routed).
+        // A handed-off Endpoint takes its platform's next inbound from here on instead of after this
+        // dispatch, which may be an Agent turn waiting for exactly that next inbound (a button, an answer).
+        acceptInboundEvent(source);
         let result: MessageDispatchResult = Object.freeze({ matched: false });
         let reply: InboundOutcome['reply'];
         ledger.markAddressed(isAddressedMessage(message));
@@ -849,4 +853,11 @@ function logSafeError(failure: unknown): string {
   const text = redactSecretText(failure instanceof Error ? failure.message : String(failure)).replace(/\p{Cc}+/gu, ' ').trim();
   const chars = [...text];
   return chars.length > MAX_LOGGED_ERROR_CHARS ? `${chars.slice(0, MAX_LOGGED_ERROR_CHARS - 1).join('')}…` : text;
+}
+
+/** Tell a handed-off Endpoint its event was accepted; its callback can never fail the message. */
+function acceptInboundEvent(source: EndpointEvent): void {
+  try { source.accepted?.(); } catch (error) {
+    logger.warn(formatCompact({ op: 'inbound_accept_callback_failed', error: logSafeError(error) }));
+  }
 }

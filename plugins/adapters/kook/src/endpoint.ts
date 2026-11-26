@@ -337,12 +337,20 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
     return messageId;
   }
 
+  /** Settles once the event was handed to the Runtime, never after its dispatch (#1250 adapter-inbound-deadlock). */
   async admitEvent(event: KookWebhookEventData): Promise<void> {
-    return this[endpointSpec].events.run(async () => {
+    return this[endpointSpec].events.admit(async () => {
       if (normalizeKookButtonEvent(event)) {
         if (!this.#open) throw new Error('KOOK endpoint is closed');
         const button = normalizeKookButtonEvent(event)!;
-        await this[endpointSpec].events.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, button, this.#sentConversations.get(button.sourceMessageId)));
+        const { dispatched } = await this[endpointSpec].events.handoff('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, button, this.#sentConversations.get(button.sourceMessageId)));
+        void dispatched.catch((error: unknown) => {
+          this.#logger.warn(formatCompact({
+            op: 'kook_dispatch_failed',
+            target: button.channelId,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        });
         return;
       }
       void this[endpointSpec].events.platform(String(event.type ?? 'event'), event).catch((error) => {

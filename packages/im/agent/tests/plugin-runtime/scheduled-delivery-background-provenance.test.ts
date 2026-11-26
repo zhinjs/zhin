@@ -33,7 +33,7 @@ import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import { addScheduleJob } from '../../src/assistant/schedule-job-service.js';
 
 /** #1250 high-risk-rules-explain: the background source carries its counts (approval card only). */
-const BACKGROUND_COUNTS = { messages: expect.any(Number), events: expect.any(Number) };
+const BACKGROUND_COUNTS = { messages: expect.any(Number), events: expect.any(Number), summaries: expect.any(Array) };
 
 const conversation = { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private', id: 'owner' } as const;
 const BRIEFING = '早报：今天晴，最高 25 度。';

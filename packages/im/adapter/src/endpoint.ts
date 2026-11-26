@@ -8,6 +8,7 @@ import {
 import { getLogger } from '@zhin.js/logger';
 import type {
   EndpointEvent,
+  EndpointHandoff,
   EndpointIdentity,
   EndpointSendRequest,
   EndpointSendResult,
@@ -26,6 +27,7 @@ export type {
   EndpointConversation,
   EndpointEvent,
   EndpointEventSink,
+  EndpointHandoff,
   EndpointIdentity,
   EndpointIncomingMessage,
   EndpointSendRequest,
@@ -67,6 +69,11 @@ const endpointBrand = Symbol.for('zhin.adapter.endpoint/1');
 const endpointBind = Symbol.for('zhin.adapter.endpoint-bind/1');
 const endpointRetire = Symbol.for('zhin.adapter.endpoint-retire/1');
 const PRE_ADMISSION_EVENT_LIMIT = 256;
+
+function once(callback: () => void): () => void {
+  let called = false;
+  return () => { if (called) return; called = true; callback(); };
+}
 const endpointLogger = getLogger('adapter.endpoint');
 
 function normalizeSelfUserId(value: unknown): string | undefined {
@@ -256,7 +263,22 @@ export abstract class EndpointRuntime<TClient = unknown> {
     return this.#receiveInbound(receive, this.#inboundScope.getStore());
   }
 
-  #receiveInbound<T>(receive: () => T | Promise<T>, parent?: InboundReceiptScope): Promise<T> {
+  /**
+   * #1250 adapter-inbound-deadlock: the same receipt scope as {@link runInbound}, settled with the
+   * callback's own result. Its descendants still pin the receipt and are drained by close/stop (and by an
+   * enclosing scope), but the caller — a poll loop, an SDK ACK, an HTTP response — is not held by them.
+   */
+  admitInbound<T>(receive: () => T | Promise<T>): Promise<T> {
+    let own!: { resolve(value: T): void; reject(error: unknown): void };
+    const settled = new Promise<T>((resolve, reject) => { own = { resolve, reject }; });
+    const operation = this.#receiveInbound(receive, this.#inboundScope.getStore(), own);
+    // The callback never ran (generation refused it): the operation carries that outcome.
+    void operation.then(own.resolve, own.reject);
+    return settled;
+  }
+
+  #receiveInbound<T>(receive: () => T | Promise<T>, parent?: InboundReceiptScope,
+    own?: { resolve(value: T): void; reject(error: unknown): void }): Promise<T> {
     if (!this.#events) throw new Error('Endpoint emitted before it was bound to a runtime generation');
     if (this.#admissionState === 'retired' && !parent?.active) return Promise.reject(new Error('Endpoint generation is retired'));
     if (this.#ingressSuspended && !parent?.active) return Promise.reject(new Error('Endpoint ingress is closed'));
@@ -273,7 +295,9 @@ export abstract class EndpointRuntime<TClient = unknown> {
           if (!asynchronous) scope.active = false;
         }
         catch (error) { scope.active = false; received = Promise.reject(error); }
-        return Promise.resolve(received).finally(async () => {
+        const settled = Promise.resolve(received);
+        if (own) void settled.then(own.resolve, own.reject);
+        return settled.finally(async () => {
           scope.active = false;
           // Native SDK callbacks may deliberately detach a child normalizer or
           // dispatch. Its accepted descendants still belong to this Root receipt.
@@ -323,15 +347,44 @@ export abstract class EndpointRuntime<TClient = unknown> {
     return this.#publishInScope(name, payload, true);
   }
 
-  #publishInScope<TPayload>(name: string, payload: TPayload, accepted: boolean): Promise<unknown> {
-    const parent = this.#inboundScope.getStore();
-    if ((this.#ingressSuspended || this.#admissionState === 'retired') && !parent?.active) {
-      return this.#publish(name, payload, accepted);
-    }
-    return this.#receiveInbound(() => this.#publish(name, payload, accepted), parent);
+  /**
+   * #1250 adapter-inbound-deadlock: publish with {@link emitAccepted}'s admission, but resolve once the
+   * Runtime accepted the event ({@link EndpointEvent.accepted}; a Runtime that never calls it is taken to
+   * accept on a successful dispatch). The dispatch stays a child of the current receipt and is reported
+   * through {@link EndpointHandoff.dispatched}. Rejects only when the event was not accepted.
+   */
+  protected emitHandoff<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<EndpointHandoff> {
+    let settle!: { resolve(value: unknown): void; reject(error: unknown): void };
+    const dispatched = new Promise<unknown>((resolve, reject) => { settle = { resolve, reject }; });
+    // Its reader owns a dispatch failure; an unread one must not become an unhandled rejection.
+    dispatched.catch(() => undefined);
+    const handoff: EndpointHandoff = Object.freeze({ dispatched });
+    return new Promise<EndpointHandoff>((resolve, reject) => {
+      let handedOver = false;
+      const handed = () => { handedOver = true; resolve(handoff); };
+      let operation: Promise<unknown>;
+      try { operation = this.#publishInScope(name, payload, true, once(handed)); }
+      catch (error) { reject(error); return; }
+      void operation.then((value) => {
+        settle.resolve(value);
+        resolve(handoff);
+      }, (error: unknown) => {
+        settle.reject(error);
+        if (!handedOver) reject(error);
+      });
+    });
   }
 
-  #publish<TPayload, TName extends string>(name: TName, payload: TPayload, accepted: boolean): Promise<unknown> {
+  #publishInScope<TPayload>(name: string, payload: TPayload, accepted: boolean, handed?: () => void): Promise<unknown> {
+    const parent = this.#inboundScope.getStore();
+    if ((this.#ingressSuspended || this.#admissionState === 'retired') && !parent?.active) {
+      return this.#publish(name, payload, accepted, handed);
+    }
+    return this.#receiveInbound(() => this.#publish(name, payload, accepted, handed), parent);
+  }
+
+  #publish<TPayload, TName extends string>(name: TName, payload: TPayload, accepted: boolean,
+    onAccepted?: () => void): Promise<unknown> {
     if (!this.#events || !this.#identity) {
       throw new Error('Endpoint emitted before it was bound to a runtime generation');
     }
@@ -340,12 +393,15 @@ export abstract class EndpointRuntime<TClient = unknown> {
     if (this.#ingressSuspended && !this.#inboundScope.getStore()?.active) return accepted
       ? Promise.reject(new Error('Endpoint ingress is closed')) : Promise.resolve(undefined);
     this.#executionSignal.throwIfAborted();
-    const event = Object.freeze({
+    const event: EndpointEvent = {
       name,
       payload,
       endpoint: this.#identity,
       client: this.client,
-    });
+    };
+    // Not enumerable: a callback, never part of the event's data (spreads, logs, Handler views).
+    if (onAccepted) Object.defineProperty(event, 'accepted', { value: onAccepted, enumerable: false });
+    Object.freeze(event);
     if (this.#admissionState === 'pending') {
       if (this.#pendingEvents.length >= PRE_ADMISSION_EVENT_LIMIT) {
         const dropped = this.#pendingEvents.shift();

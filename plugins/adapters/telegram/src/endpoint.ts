@@ -3,7 +3,7 @@ import { createTelegramStreaming } from './streaming.js';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle,
   type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
-  type EndpointControl, type EndpointManagement, type EndpointSendRequest, type EndpointTransportState,
+  type EndpointControl, type EndpointHandoff, type EndpointManagement, type EndpointSendRequest, type EndpointTransportState,
   InboundDeduper, TtlLookupCache,
 } from 'zhin.js/adapter';
 /**
@@ -415,12 +415,16 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     }).catch(() => this.#logger.debug('Inbound callback was not admitted'));
   }
 
+  /**
+   * Resolves once the Runtime holds the message, not after its dispatch (#1250 adapter-inbound-deadlock):
+   * the dispatch may be an Agent turn waiting for this chat's next update, e.g. an inline-button press.
+   */
   async #admitWithSenderRole({ message: msg, conversation, signal, event = msg }: TelegramMessageAdmission): Promise<void> {
     const permit = await this.#resolveGroupSenderPermit(msg, signal);
     signal.throwIfAborted();
     // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
     const mentioned = this.#isBotMentioned(msg);
-    await this[endpointSpec].events.emitAccepted('message.receive', {
+    this.#reportDispatch(`${conversation.kind}:${conversation.id}`, await this[endpointSpec].events.handoff('message.receive', {
       event,
       ...(typeof msg.date === 'number' ? { platformSentAt: msg.date * 1_000 } : {}),
       conversation,
@@ -445,6 +449,17 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         // The bot's own handle (getMe), so `/command@<bot>` can be told apart from another bot's command.
         ...(this.#botUsername ? { botUsername: this.#botUsername } : {}),
       }),
+    }));
+  }
+
+  /** A dispatch that failed after its hand-over is not retried (the update is acknowledged); keep it in the log. */
+  #reportDispatch(target: string, handoff: EndpointHandoff): void {
+    void handoff.dispatched.catch((err: unknown) => {
+      this.#logger.warn(formatCompact({
+        op: 'telegram_dispatch_failed',
+        target,
+        error: err instanceof Error ? err.message : String(err),
+      }));
     });
   }
 
@@ -540,7 +555,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     const conversation = msg
       ? telegramInboundConversation(endpointKey, msg.chat)
       : telegramInboundConversation(endpointKey, { id: query.from.id, type: 'private' });
-    await this[endpointSpec].events.emitAccepted('message.receive', {
+    this.#reportDispatch(`${conversation.kind}:${conversation.id}`, await this[endpointSpec].events.handoff('message.receive', {
       event,
       conversation,
       message: { conversation, id: query.id },
@@ -553,12 +568,16 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         payload: query.data,
         sourceMessageId: msg ? String(msg.message_id) : undefined,
       }),
-    });
+    }));
   }
 
-  /** Used by webhook / polling handlers. */
+  /**
+   * Used by webhook / polling handlers. Settles once the update was handed to the Runtime (#1250
+   * adapter-inbound-deadlock), so the offset / webhook ACK advances then and the next update is fetched
+   * while this one's dispatch — possibly an Agent turn waiting for that very update — runs on.
+   */
   async handleUpdate(update: TelegramUpdate): Promise<void> {
-    return this[endpointSpec].events.run(async () => {
+    return this[endpointSpec].events.admit(async () => {
       if (!this.#admission) throw new Error('Telegram endpoint is not accepting updates');
       if (!Number.isSafeInteger(update.update_id) || update.update_id < 0) {
         throw new TypeError('Telegram update_id must be a non-negative safe integer');

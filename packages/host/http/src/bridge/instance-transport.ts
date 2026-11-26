@@ -62,7 +62,9 @@ export interface InstanceWsOpenInfo {
  *   `Response` (body streamed with backpressure; cancelling it cancels the instance side).
  *   Rejects with {@link InstanceTransportError}: `instance-offline` (not ready / went away
  *   before the head), `timeout` (no head in time), `instance-error` (failed before the head),
- *   `overloaded` (too many streams), or with `request.signal.reason` when aborted.
+ *   `overloaded` (too many streams), or with `request.signal.reason` when aborted; its
+ *   `dispatched` says whether the request was sent to the instance (`false`: not ready /
+ *   overloaded, safe to retry; `true`: it may have run).
  * - `openWebSocket()`: `peer` is the gateway's accepted client socket. Resolves true once the
  *   instance accepted (frames then flow both ways, closes propagate); false when it rejected,
  *   timed out or is offline: the caller then closes `peer`. Peer frames sent before acceptance
@@ -78,10 +80,22 @@ export interface InstanceTransport {
 
 export type InstanceTransportErrorCode = 'instance-offline' | 'timeout' | 'instance-error' | 'overloaded';
 
+export interface InstanceTransportErrorOptions {
+  /**
+   * Whether the request reached the instance: `false` when it was refused before anything was sent
+   * (offline, too many streams), `true` once it was sent. Omitted means not known.
+   */
+  readonly dispatched?: boolean;
+}
+
 export class InstanceTransportError extends Error {
-  constructor(readonly code: InstanceTransportErrorCode, message: string) {
+  /** See {@link InstanceTransportErrorOptions.dispatched}; `undefined` when not known. */
+  readonly dispatched: boolean | undefined;
+
+  constructor(readonly code: InstanceTransportErrorCode, message: string, options: InstanceTransportErrorOptions = {}) {
     super(message);
     this.name = 'InstanceTransportError';
+    this.dispatched = options.dispatched;
   }
 }
 
@@ -254,7 +268,7 @@ export class IpcInstanceTransport implements InstanceTransport {
     this.#tableReceived = false;
     for (const [id, exchange] of [...this.#exchanges]) {
       this.#exchanges.delete(id);
-      const error = new InstanceTransportError('instance-offline', reason);
+      const error = new InstanceTransportError('instance-offline', reason, { dispatched: true });
       exchange.gate.close(error);
       exchange.abort.abort(error);
       exchange.settleHead(error);
@@ -278,8 +292,8 @@ export class IpcInstanceTransport implements InstanceTransport {
 
   async fetch(request: Request, context: InstanceRequestContext = {}): Promise<Response> {
     request.signal.throwIfAborted();
-    if (!this.ready) throw new InstanceTransportError('instance-offline', 'Instance is offline');
-    if (this.activeStreams >= this.#limits.maxStreams) throw new InstanceTransportError('overloaded', 'Too many concurrent instance streams');
+    if (!this.ready) throw new InstanceTransportError('instance-offline', 'Instance is offline', { dispatched: false });
+    if (this.activeStreams >= this.#limits.maxStreams) throw new InstanceTransportError('overloaded', 'Too many concurrent instance streams', { dispatched: false });
     const headers = toBridgeHeaders(request.headers);
     if (headSize(request.url, headers) > this.#limits.maxHeadBytes) return new Response(null, { status: 431 });
     const id = `h${++this.#sequence}`;
@@ -310,7 +324,7 @@ export class IpcInstanceTransport implements InstanceTransport {
     request.signal.addEventListener('abort', onClientAbort, { once: true });
     exchange.abort.signal.addEventListener('abort', () => request.signal.removeEventListener('abort', onClientAbort), { once: true });
     const timer = setTimeout(() => {
-      this.#cancelExchange(id, new InstanceTransportError('timeout', `Instance did not answer within ${this.#responseTimeoutMs} ms`), 'Gateway timeout');
+      this.#cancelExchange(id, new InstanceTransportError('timeout', `Instance did not answer within ${this.#responseTimeoutMs} ms`, { dispatched: true }), 'Gateway timeout');
     }, this.#responseTimeoutMs);
     timer.unref?.();
     if (hasBody) {
@@ -525,7 +539,7 @@ export class IpcInstanceTransport implements InstanceTransport {
         const exchange = this.#exchanges.get(message.id);
         if (!exchange?.body) return;
         if (!exchange.body.push(message.payload.chunk)) {
-          this.#cancelExchange(message.id, new InstanceTransportError('instance-error', 'Response body exceeded the granted credit'), 'Credit exceeded');
+          this.#cancelExchange(message.id, new InstanceTransportError('instance-error', 'Response body exceeded the granted credit', { dispatched: true }), 'Credit exceeded');
         }
         return;
       }
@@ -539,7 +553,7 @@ export class IpcInstanceTransport implements InstanceTransport {
       case 'http.response.error': {
         const exchange = this.#exchanges.get(message.id);
         if (!exchange) return;
-        const error = new InstanceTransportError('instance-error', message.payload.message);
+        const error = new InstanceTransportError('instance-error', message.payload.message, { dispatched: true });
         exchange.settleHead(error);
         exchange.body?.fail(error);
         this.#finishExchange(message.id);

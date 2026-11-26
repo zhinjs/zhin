@@ -85,7 +85,7 @@ interface HttpHost {
 **请求流**（网关唯一的 HTTP 服务器，监听 `http.port`，`http.base` 默认 `/api`）：
 
 1. **网关自有路由**——网关直接处理：`{base}/auth/*`（含初始化，ADR 0049）、`{base}/gateway/*`（§4、§5）、`{base}/console/terminal*`（ADR 0051）、`/pub/health`、本地 Console 静态资源。
-2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance_unavailable', state }`（带 `Retry-After`）；实例在期限内没有响应 `504 { code: 'instance_timeout' }`；其他桥接失败（实例处理出错、流过多）`502 { code: 'instance_error' }`；认证通过后连同主体一起转发给实例。
+2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance_unavailable', state }`（带 `Retry-After`）；监管器处于停止、重启或启动阶段（`state` 不是 `running`）时，转发失败一律按离线答 503（停止中的实例会先以错误结束未完成的请求）；运行中的实例在期限内没有响应 `504 { code: 'instance_timeout' }`；其他桥接失败（实例处理出错、流过多）`502 { code: 'instance_error' }`；`requestOutcome` 只在请求确实没送到实例时为 `not-dispatched`，否则为 `unknown`；实例自己返回的响应（含 500 / 502）原样转发；认证通过后连同主体一起转发给实例。
 3. **实例注册的其他路由**（适配器 Webhook、反向 WS 等）——不认证，原样转发，鉴权由插件自己负责，与今天一致。
 
 **认证只在网关**（B1.4）：会话、API 令牌与初始化令牌都由网关在自己的数据库连接上解析；实例的令牌表是“关闭”的——不认开放 Host、不认初始化令牌、不解析任何 bearer，权限只来自随请求转发的主体（开放 Host 时网关转发 `{ kind: 'bootstrap', open: true }`，初始化令牌转发 `{ kind: 'bootstrap', open: false }`）。实例自己的协议面（MCP / A2A）按转发主体判断 `mcp.access` / `a2a.access`。早期的过渡消息 `auth.authenticate` / `auth.result` / `auth.state` / `auth.audit` 已删除（协议版本 3）。
