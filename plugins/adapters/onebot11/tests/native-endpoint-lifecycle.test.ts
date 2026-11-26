@@ -62,8 +62,10 @@ describe('OneBot11 native Endpoint lifecycle through the real Index', () => {
       expect(f.endpoint.start).toBe(Onebot11Client.prototype.start);
       expect(f.endpoint.stop).toBe(Onebot11Client.prototype.stop);
       await f.start();
+      expect(f.index.describe()[0]).toMatchObject({ admitted: false, transportState: 'open' });
       expect(f.received).toHaveLength(0);
       f.open();
+      expect(f.index.describe()[0]?.admitted).toBe(true);
       await vi.waitFor(() => expect(f.received.filter(event => event.name === 'message.receive')).toHaveLength(1));
       const message = f.received.find(event => event.name === 'message.receive');
       expect(message?.client).toBe(f.endpoint);

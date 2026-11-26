@@ -61,15 +61,16 @@ Telegram 尚未配置端点时，也可使用 `.env` 中的 `TELEGRAM_TOKEN` / `
 
 ## 已有自动化覆盖
 
-| 项目 | QQ 官方 | Telegram |
-| --- | --- | --- |
-| 入站归一与出站 | 私聊、群、频道、媒体与平台回执 | 私聊、群、频道、媒体与平台回执 |
-| 故障反馈 | SDK 失败、审核拒绝、缺少消息 ID 时拒绝成功 | 403/429/500 不自动重发；缺少有效消息 ID 时拒绝成功 |
-| 生命周期 | 关闭时拒绝入站、停机释放 SDK、两个账号隔离与迟到事件 | 关闭时拒绝入站、停机中止长轮询、重复启动不重复轮询、持续失败退避、退避监听器回收、取消后迟到批次不派发、入站权限查询跨关闭/重启隔离与双账号缓存隔离 |
-| Webhook | 签名、回调与 Host 路由测试 | secretToken 校验与 Host 路由测试 |
-| 框架共享契约 | AdapterIndex generation 与 Endpoint lifecycle 测试 | 同左 |
+| 项目 | QQ 官方 | Telegram | OneBot11 | NapCat |
+| --- | --- | --- | --- | --- |
+| 入站归一与出站 | 私聊、群、频道、媒体与平台回执 | 私聊、群、频道、媒体与平台回执 | 私聊、群、引用、提及、CQ/段转换与平台回执 | 私聊、群、临时会话、自发过滤、CQ/段转换；正向 WS 与 HTTP POST 入站 |
+| 故障反馈 | SDK 失败、审核拒绝、缺少消息 ID 时拒绝成功 | 403/429/500 不自动重发；缺少有效消息 ID 时拒绝成功 | 失败与畸形响应保持 unknown；缺少 message_id 不重发；不支持的段为 not_sent | HTTP 401/429/500 不重发；传输失败不重试；缺少 message_id 与取消结果为 unknown |
+| 生命周期 | 关闭时拒绝入站、停机释放 SDK、两个账号隔离与迟到事件 | 关闭时拒绝入站、停机中止长轮询、重复启动不重复轮询、持续失败退避、退避监听器回收、取消后迟到批次不派发、入站权限查询跨关闭/重启隔离与双账号缓存隔离 | 初始连接失败不重连、建立后才重连；关闭拒绝入站；反向连接替换后旧 socket 不入站；双账号入站与回复隔离；停机取消在途发送 | 正向/反向 WS 重连与替换隔离；关闭与未 open 不入站；同一代重复 message_id 只派发一次；双账号入站与回复隔离；停机取消在途发送 |
+| Webhook | 签名、回调与 Host 路由测试 | secretToken 校验与 Host 路由测试 | 反向 WS access_token，未配置时仅回环（无 HTTP Webhook） | HTTP post_path 与 access_token 隔离，停机后路径 404；反向 WS access_token，未配置时仅回环 |
+| 框架共享契约 | AdapterIndex generation 与 Endpoint lifecycle 测试 | 同左 | 同左；传输 open 与 generation 未准入分离，候选帧在 open 后只发布一次，回滚丢弃 | 同左；正向 WS 同样分离候选帧与传输状态。HTTP 在未准入时仍返回 200 且不入站 |
 
-具体断言在 `plugins/adapters/qq/tests/`、`plugins/adapters/telegram/tests/` 和
+具体断言在 `plugins/adapters/qq/tests/`、`plugins/adapters/telegram/tests/`、
+`plugins/adapters/onebot11/tests/`、`plugins/adapters/napcat/tests/` 和
 `packages/im/adapter/tests/`；这些证据不等同于真实平台验收。
 
 ## 升档前仍需取得的证据
