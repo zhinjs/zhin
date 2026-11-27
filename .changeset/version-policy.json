@@ -1,4 +1,11 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": []
+  "approvedNonPatchReleases": [
+    {
+      "package": "@zhin.js/console-ui",
+      "type": "minor",
+      "version": "1.3.0",
+      "reason": "所有者已批准（2026-11-27 会话）：组件库改为「柔光卡片」设计规范（ADR 0063 增补 D34–D41）——令牌换成柔光卡片的颜色、8 档字号、4px 间距、圆角 20/24/28、暖色阴影与新的动效；跟随系统的浅色 / 深色加 data-theme 手动切换；现有组件改外观并新增变体（Button white/text/danger-text/danger、loading，Badge neutral/solid/tone，StatusBadge 改为点 + 文字）；新增 Tile、Chip、Segmented、Stepper、StatusDot、Banner、Toast/Toaster/useToast、HeroCard、ListGroup/ListRow/ListCaption/ChangedDot、NavPill/NavIcon/IconButton、TabBar/TabBarItem、Aurora、ActionBar。1.2.1 已发布，本次为 1.3.0。"
+    }
+  ]
 }

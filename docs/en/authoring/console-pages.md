@@ -530,16 +530,16 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 
 The Console follows one set of rules for information density, typography, spacing and responsive layout (the "设计规则" addendum of [ADR 0063](../../adr/0063-console-plugin-ui-unification.md)). They are mandatory for the Console's own pages; for third-party plugin pages they are **recommended**, plus a small set of hard-floor rules; the official plugins in this repository (zhinjs/zhin `plugins/**`) **follow them in full** since ADR 0063 P2 and serve as reference implementations (see the end of this section).
 
-**Recommended: compose the Console's components instead of styling things yourself.** Pages written as a pure blueprint (`definePageBlueprint`) are rendered by the Console and need no extra work: the renderers now use the unified component library (ADR 0063 P2) and follow the rules automatically. For hand-written `.tsx` pages, compose the Console's components and use its semantic tokens rather than hard-coding font sizes, radii, shadows or padding, or arbitrary Tailwind values (`p-[…]` and the like), and do not use native `<button>`, `<select>` or `<table>` in place of components. If you use Tailwind, keep spacing to the 8 standard keys `1`, `2`, `3`, `4`, `6`, `8`, `12` and `16` (the 8-step scale from 0.25 to 4rem); other keys such as `p-5` or `gap-2.5` are off the scale. Why:
+**Recommended: compose the Console's components instead of styling things yourself.** Pages written as a pure blueprint (`definePageBlueprint`) are rendered by the Console and need no extra work: the renderers now use the unified component library (ADR 0063 P2) and follow the rules automatically. For hand-written `.tsx` pages, compose the Console's components and use its semantic tokens rather than hard-coding font sizes, radii, shadows or padding, or arbitrary Tailwind values (`p-[…]` and the like), and do not use native `<button>`, `<select>` or `<table>` in place of components. If you use Tailwind, keep spacing to the keys on the 4px grid: `1`, `2`, `3`, `4`, `5`, `6`, `8`, `10`, `12` and `16` (4–64px); other keys such as `p-7` or `gap-2.5` are off the scale. Why:
 
 - your page looks like part of the same product when it sits next to the Console's own pages;
 - the type scale, spacing, narrow-screen layout changes (tables turning into cards, for example), touch target sizes, focus styles and light/dark mode all come with the components, and your page follows when the Console adjusts its styles later.
 
 The unified component library is `@zhin.js/console-ui` (with a precompiled `styles.css`; see [its README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)). The renderers of declarative, adapter and comment review pages use it (ADR 0063 P2); hand-written pages follow "[Page shell and components](#page-shell)" below. `@zhin.js/client/ui` was removed in ADR 0063 P4, see "[Upgrading from @zhin.js/client/ui](#upgrade-client-ui)".
 
-Its `tokens/tokens.mjs` is the single source of the scale (ADR 0063 P1b): spacing `space-1`…`space-8` is the Tailwind keys `1`, `2`, `3`, `4`, `6`, `8`, `12`, `16` (`space-5` is `p-6`), font sizes `label` / `body` / `section` / `title` / `display`, weights `regular` / `medium` / `strong`, radii `r-0`…`r-4` / `full`, shadows `e-1`…`e-3`; content width is `reading` (60rem, settings and forms) or `data` (120rem, lists and tables, the default). Hand-written pages that use Tailwind can import the generated `@zhin.js/console-ui/theme.css`, so off-scale keys simply do not exist; `@zhin.js/console-ui/audit` is the same layout audit and can be run against your own pages.
+Its `tokens/tokens.mjs` is the single source of the scale (ADR 0063 P1b; from 1.3.0 with the "soft cards" values, D34–D41): spacing `space-1`…`space-8` plus `space-4-5` (20px) and `space-6-5` (40px) are the Tailwind keys `1`, `2`, `3`, `4`, `5`, `6`, `8`, `10`, `12`, `16` (`space-5` is `p-6`); eight font sizes `xs` 12 / `sm` 13 / `md` 14 / `lg` 15 / `xl` 17 / `2xl` 22 / `title` 26 / `display` 32 (the old names `label` / `body` / `section` are aliases of `sm` / `md` / `xl`); weights `regular` / `medium` / `strong`; radii `r-0`…`r-7` / `full` (web cards 28, phone cards 24, inputs 14, every button a pill); shadows `e-1`…`e-3` (shadow-sm / md / lg); content width is `reading` (60rem, settings and forms) or `data` (80rem = 1280px, lists and tables, the default). Hand-written pages that use Tailwind can import the generated `@zhin.js/console-ui/theme.css`, so off-scale keys simply do not exist; `@zhin.js/console-ui/audit` is the same layout audit and can be run against your own pages.
 
-Use colors by role (ADR 0063 D23–D25, zhinjs/console#125): the brand color `brand` (`#76EEC6` light, `#7FFFD4` dark, the same under every palette) is only for the one solid primary button of a view, `Button variant="primary"`; as text or a thin line (links, selection) use `brand-text`. States use only the signal colors `signal-*-fill` (fills and marks) and `signal-*-text` (text), and steady states (running, succeeded, 0 failures) get no color; charts use `chart-1`…`chart-8`. Dangerous actions on a page use `variant="destructive"` (ghost) or `destructive-outline`; the solid red `destructive-solid` appears only in confirmation dialogs. Motion uses only `--console-motion-fast` / `-base` / `-slow` and `--console-ease-out`.
+Use colors by role (ADR 0063 D34, "soft cards"): the primary color is black or white only (`primary`: the one solid primary button per screen, `Button variant="primary"`, selection, switches); surfaces and text are warm greys (`bg` → `surface` → `sunken` → `raised`; text is only `ink` / `muted` / `faint`); color is for content only, and light (`tint-1`…`5` fills with `accent-1`…`5` icon colors — icon colors draw shapes, never text); states use `ok` / `warn` / `danger` (each with a `-bg`) and `progress` for work in progress; no blue or purple. The brand color `brand` is only for the brand mark. The names the Console and plugins already use (`--background`, `--primary`, `--muted-foreground`, `--border`, `--destructive`, …) map onto the new colors, so no code changes are needed. Dangerous actions on a page use `variant="danger-text"` or `destructive-outline`; the solid red `destructive-solid` (alias `danger`) appears only in confirmation dialogs. Motion uses only `--console-motion-fast` / `-base` / `-slow` / `-exit` and `--console-ease-out` / `-fast` / `-exit`. The full rules and the component list are in "[Soft cards: components and usage](#soft-cards)" below.
 
 **Custom UI is allowed.** Interfaces the components cannot cover (charts, canvases, games, workspaces) may be designed your own way, but please follow the same rules as far as you can.
 
@@ -565,7 +565,7 @@ Use colors by role (ADR 0063 D23–D25, zhinjs/console#125): the brand color `br
 | 2 | Custom page header: `<h1>`, or `PageHeader` / `PluginPage` imported from `@zhin.js/client/ui` (removed; importing it fails the build) | Put the title in `definePage({ title })` and header actions in `usePageChrome()`; start sections at `<h2>` |
 | 3 | Fixed content width: `width` / `max-width` of at least 640px or 40rem (styles, CSS, `max-w-[…]` / `w-[…]`, `max-w-2xl` and up, `max-w-prose`, `max-w-screen-*`), or setting `--console-content-max` yourself | Remove it and leave it to the shell; use `definePage({ fullWidth: true })` for full width |
 | 4 | Raw style values: literal font size, font weight, radius, shadow, padding, margin or gap in a `style` attribute, a style object whose name ends in `style` / `styles`, a CSS string or a stylesheet (`0`, keywords such as `auto` / `none`, and `var(--console-…)` are fine) | Components, or `var(--console-…)` semantic tokens |
-| 5 | Off-scale Tailwind classes: arbitrary values (`p-[…]`, `rounded-[…]`, `text-[…]`; references to Console tokens such as `p-(--console-…)` are fine), off-scale spacing keys (`p-5`, `gap-2.5`), default `shadow` / `shadow-sm` … `shadow-2xl` | Spacing keys `1`, `2`, `3`, `4`, `6`, `8`, `12`, `16`, radius `0`–`4` / `full`, shadows `e1`–`e3`, or components |
+| 5 | Off-scale Tailwind classes: arbitrary values (`p-[…]`, `rounded-[…]`, `text-[…]`; references to Console tokens such as `p-(--console-…)` are fine), off-scale spacing keys (`p-7`, `gap-2.5`), default `shadow` / `shadow-sm` … `shadow-2xl` | Spacing keys `1`, `2`, `3`, `4`, `5`, `6`, `8`, `10`, `12`, `16`, radius `0`–`7` / `full` / `pill`, shadows `e1`–`e3`, or components |
 | 6 | Native `<button>`, `<input>`, `<textarea>`, `<table>`, `<dialog>` | `Button`, `Input`, `Textarea`, `Table`, `Dialog` |
 
 Rule 3 is an approximation: a static check cannot tell which element is the page's root container, so a fixed width of at least 640px / 40rem is taken to set the content width.
@@ -615,18 +615,75 @@ export default function Feeds() {
 
 A page that writes its own `<h1>`, `PageHeader` or `PluginPage` breaks the rule (`zhin plugin check` reports it). The full component list is in the [`@zhin.js/console-ui` README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md); its layout components and content blocks switch layout by the width of **their own container** (container queries, not the viewport):
 
-- **Page and sections**: `PageShell` `width` tells reading / form pages (`reading`, 60rem) from data pages (`data`, 120rem, the default) and full-width pages (`full`, i.e. `definePage({ fullWidth: true })`); sections use `Section` (an `<h2>` title, one description, section actions), card grids `Grid` (`auto-fit`, `min` is the narrowest column), statistics `StatGrid` + `StatCard` (two per row in a narrow container; `StatCard` takes a unit, a badge and a footer such as a progress meter), list + detail `ListDetail` (side by side from 90rem, otherwise the detail opens in a side sheet).
+- **Page and sections**: `PageShell` `width` tells reading / form pages (`reading`, 60rem) from data pages (`data`, 80rem = 1280px, the default) and full-width pages (`full`, i.e. `definePage({ fullWidth: true })`); sections use `Section` (an `<h2>` title, one description, section actions), card grids `Grid` (`auto-fit`, `min` is the narrowest column), statistics `StatGrid` + `StatCard` (two per row in a narrow container; `StatCard` takes a unit, a badge and a footer such as a progress meter), list + detail `ListDetail` (side by side from 90rem, otherwise the detail opens in a side sheet).
 - **Tables**: below 40rem of its own width `Table` turns every row into a card, each cell labelled with its column; `priority="secondary"` columns are left out of the cards, and nothing scrolls sideways.
 - **Actions**: header actions go through `usePageChrome({ menuActions, moreActions })` or `PageActions` (folded into 「更多」 below 40rem), row actions through `RowActions` (one labelled main action, the rest in the `MoreMenu`); every action has a visible label, and dangerous ones are outline buttons with a confirmation dialog.
 - **Overlays and touch**: selects, popovers and dialogs are bottom drawers at phone width; interactive controls are at least 44px there (checkboxes, radios, switches and inline links get a larger hit area with `.console-touch`).
-- **Status**: `StatusBadge` only colors states that need attention; normal ones are muted.
-- **Empty states** (ADR 0063 D28): `EmptyState` is one 64px line-art illustration + one sentence + at most one action, e.g. `illustration="tasks"` with the `action` `{ label: 'New scheduled task', variant: 'primary', onSelect }`. The seven illustrations are `messages`, `tasks`, `logs`, `table`, `record`, `not-found` and `generic`; without copy the illustration's own sentence is used. Do not write a bare "No data".
+- **Status**: `StatusBadge` (alias `StatusDot`) is a dot and a word in five tones, `ok` / `warn` / `danger` / `neutral` / `progress`; `Badge` is a light pill (versions, counts, "enabled").
+- **Empty states** (ADR 0063 D28, D41): `EmptyState` is an icon tile (or a 64px line-art illustration) + a title + at most one action, with optional `presets` (one-tap chips) below, e.g. `illustration="tasks"` with the `action` `{ label: 'New scheduled task', variant: 'primary', onSelect }`. The seven illustrations are `messages`, `tasks`, `logs`, `table`, `record`, `not-found` and `generic`; without copy the illustration's own sentence is used. Do not write a bare "No data".
 - **Forms** (D29): secondary fields (fallback models, unset slots) use `variant="ghost"` (`Input`, `Textarea`, `SelectField`, `SearchableSelectField`, `DateField`, `DateTimeField`), which shows a border only on hover or focus. Dates use `DateField` (value `YYYY-MM-DD`) and `DateTimeField` (value `YYYY-MM-DDTHH:mm`) instead of the browser's native date inputs; values are local-time ISO strings, an empty string when cleared, and the pickers work from the keyboard.
 - **Short identifiers and icons** (D30, D31): package names, RPC names and IDs use `InlineCode` (monospace, a very light fill, no border), not bordered chips. Lucide icons use `strokeWidth={CONSOLE_ICON_STROKE_WIDTH}` (1.75), 16px inside controls and 18px in navigation; icons in lists and toolbars are not put in tinted squares.
 - **Fonts** (D33): the library only defines the font stacks (Inter / JetBrains Mono first, then system fonts); the Console loads the fonts, so plugin pages do not bring their own.
 - **Content blocks** (P2): `ContentStack`, `FormField`, `KeyValueList` (one column in a narrow container), `ProgressMeter`, `Sparkline`, `Timeline`, `Disclosure` (raw IDs and JSON collapsed by default), `CodeText`, `JsonBlock`, `MediaPreview`, `RecordCard` (`Card` + `KeyValueList`) and `LoadingBlock`. They complement the components above without repeating them: sections, grids, stat cards and table cards are the P1b components.
 
 The rules live in the components, and tokens and breakpoints are defined once in `tokens/tokens.mjs`; `@zhin.js/console-ui`'s own styles are held to them by the shared stylelint / ESLint rules (`@zhin.js/console-ui/stylelint`, `@zhin.js/console-ui/eslint`), which plugins can enable for their own styles too.
+
+### Soft cards: components and usage {#soft-cards}
+
+From 1.3.0 `@zhin.js/console-ui` draws the "soft cards" design ([ADR 0063](../../adr/0063-console-plugin-ui-unification.md) D34–D41): large radii, borderless white cards, pill buttons, a black / white primary color and light, colorful content. Existing pages take the new look without code changes; new pages combine the components below.
+
+**Components**
+
+| To show | Use |
+| --- | --- |
+| Cards, sub-blocks | `Card` (white, borderless, shadow-sm); a `Card` inside a card is a sunken sub-block |
+| The one most important thing on the page | `HeroCard` (`hero` / `hero-2` gradients, at most one per page) |
+| Category icons | `Tile` (40; `size="sm"` 32 / `"lg"` 48; `tone` 1–5, or neutral) |
+| Primary and other actions | `Button`: `primary` (one per screen), `secondary` (default), `white` (on tints and hero cards), `text` (cancel, reset), `danger-text`, `danger` (confirm dialogs only); `size="sm"` 36; `loading` while waiting |
+| Filters, multi-select | `Chip` (`pressed` → `aria-pressed`, optional `tone` tint) |
+| 2–4 exclusive options | `Segmented` (or `Tabs` with panels — same look) |
+| Quantities | `Stepper` (the value carries its unit: `unit="times"`) |
+| Switches, checkboxes, radios | `Switch`, `Checkbox`, `RadioGroup` |
+| Inputs | `Input`, `Textarea`, `SelectField`, `SearchableSelectField`, `DateField` (48 tall; `aria-invalid` for errors) |
+| Lists | `ListCaption` (group caption, outside the card) + `ListGroup` + `ListRow` (`icon`, `title`, `description`, `end`; `selected`, `plain`, `changed`) |
+| Tables | `Table` (turns into cards in narrow containers) |
+| States | `StatusDot` (dot + word), `Badge` (light pill) |
+| A state that needs action | `Banner` (one short state + one small white button) |
+| The result of an action | `useToast().toast('Saved', { onUndo })` (needs a `Toaster` around the page; the Console provides it) |
+| Bottom actions | `ActionBar` (text button left, primary right) |
+| Loading | `Skeleton` (the size of the real content), never "Loading…" |
+| Empty | `EmptyState` (icon + title + button; `presets` for one-tap presets) |
+
+`NavPill`, `NavIcon`, `TabBar` and `Aurora` are for the Console shell; plugin pages rarely need them.
+
+**Category colors**
+
+- The five category colors are "light tint fill + icon color": `Tile tone={n}`, `Badge tone={n}`, `Chip tone={n}`, Tailwind `bg-tint-n` / `text-accent-n`. Icon colors draw shapes (icons, charts, dots) and **never text**; text in a tile is `ink`.
+- **Plugin pages always use group 2** (`tint-2` / `accent-2`, pink / rose): the Console marks "plugins" with group 2 in the plugin list and plugin details, so the things that stand for the plugin on its own page (its icon, its items) use it too — the same thing has the same color everywhere. To tell several kinds of things inside a plugin apart you may use the other groups, one fixed group per kind, and at most one icon color per row.
+- Never use color for state (states are `ok` / `warn` / `danger`), never colored text to mark something clickable (text buttons are ink with an underline), no large dark or saturated blocks, no blue or purple.
+
+**One primary button per screen**
+
+`Button variant="primary"` (solid black / white) appears once per screen, for that screen's next step; everything else is `secondary`, `white` or `text`. In dialogs the primary button is rightmost; a dangerous confirmation uses `danger` (solid red). With `usePageChrome({ menuActions })`, give only one action `tone: 'primary'`.
+
+**Let components explain themselves**: name a switch by what it does instead of adding "when on, …" below it; put the unit in the field ("60 s", "2 cards"); a banner is one state plus one action ("Notifications off · Turn on"); mark only changed settings with the `changed` dot and write "Default 0" under them.
+
+**Copy length** (Chinese characters; keep English equally short)
+
+| Where | At most |
+| --- | --- |
+| Page title | 6 |
+| Button | 2–4, at most 6, starts with a verb |
+| List description | one line, 18 |
+| Group caption | 6 |
+| Banner | one state ≤ 8 + one button |
+| Sheet / confirm title | 8; confirm dialogs ask a question |
+| Toast | 8 + optional "Undo" |
+| Error reason | 18 |
+
+No "please", no exclamation marks; one name per thing across the plugin.
+
+**Theme**: components follow the Console's light / dark theme (`.dark` or `data-theme="dark"`; with neither, the system preference) and respect reduced motion. Plugin styles read tokens only — no hard-coded colors and no theme detection of your own.
 
 ### Upgrading from @zhin.js/client/ui {#upgrade-client-ui}
 
