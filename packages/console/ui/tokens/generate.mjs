@@ -58,7 +58,8 @@ function semanticDeclarations(size, filter, indent) {
 
 /** Re-targets the hand-written colour mapping onto the theme selectors (and the system-dark query). */
 function colorMappingCss() {
-  const source = readFileSync(join(here, 'colors.css'), 'utf8').trim();
+  // A Windows checkout may have CRLF line endings; the block patterns below match LF only.
+  const source = readFileSync(join(here, 'colors.css'), 'utf8').replace(/\r\n?/gu, '\n').trim();
   const dark = /\n {2}\.dark \{\n([\s\S]*?)\n {2}\}\n/u.exec(source);
   if (!dark) throw new Error('tokens/colors.css: missing the `.dark { … }` block');
   const indented = dark[1].split('\n').map((line) => `  ${line}`).join('\n');
