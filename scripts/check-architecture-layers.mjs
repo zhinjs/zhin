@@ -169,20 +169,73 @@ function walkTs(dir, acc) {
 }
 
 /**
- * 获取文件所属的层级
- * @param {string} filePath - 文件路径
+ * 仓库相对路径所属的层级。层级路径写成 POSIX 形式，比较前先把 Windows 反斜杠换成 `/`
+ * （否则 `packages\\im\\core\\src\\x.ts` 匹配不上 `packages/im/core`）。
+ * @param {string} relativePath - 仓库相对路径（POSIX 或 Windows 分隔符）
  * @returns {string|null} - 层级路径或 null
  */
-function getLayerForFile(filePath) {
-  const relativePath = path.relative(repoRoot, filePath);
-
+export function layerForRelativePath(relativePath) {
+  const posix = relativePath.replace(/\\/gu, '/');
   for (const layerPath of layerPathsBySpecificity) {
-    if (relativePath.startsWith(layerPath + '/') || relativePath.startsWith(layerPath + '\\')) {
-      return layerPath;
-    }
+    if (posix.startsWith(`${layerPath}/`)) return layerPath;
   }
-
   return null;
+}
+
+/**
+ * 获取文件所属的层级
+ * @param {string} filePath - 文件路径（绝对路径）
+ * @param {{ pathImpl?: typeof path, root?: string }} [options] - 测试时可注入 `path.win32` 与仓库根
+ * @returns {string|null} - 层级路径或 null
+ */
+export function getLayerForFile(filePath, { pathImpl = path, root = repoRoot } = {}) {
+  return layerForRelativePath(pathImpl.relative(root, filePath));
+}
+
+/** @type {Map<string, string | null>} */
+const packageDirCache = new Map();
+
+/**
+ * Nearest directory (repo-relative, POSIX) at or above `relativePath` that holds a package.json,
+ * or `null` when none exists below the repository root.
+ * @param {string} relativePath repo-relative path of a file or directory
+ * @returns {string | null}
+ */
+export function owningPackageDir(relativePath) {
+  let dir = path.posix.dirname(relativePath.split(path.sep).join('/'));
+  const visited = [];
+  let found = null;
+  while (dir && dir !== '.' && !dir.startsWith('..')) {
+    if (packageDirCache.has(dir)) { found = packageDirCache.get(dir); break; }
+    visited.push(dir);
+    if (fs.existsSync(path.join(repoRoot, dir, 'package.json'))) { found = dir; break; }
+    dir = path.posix.dirname(dir);
+  }
+  for (const entry of visited) packageDirCache.set(entry, found);
+  return found;
+}
+
+/**
+ * Resolves a relative (or absolute) import of `sourceFile` to its repo-relative target and the
+ * packages / layers on both sides.
+ * @param {string} sourceFile repo-relative source path
+ * @param {string} importPath
+ */
+export function resolveRelativeImport(sourceFile, importPath) {
+  // POSIX first, so a Windows-style `packages\\im\\core\\src\\x.ts` resolves the same on every OS.
+  const source = sourceFile.replace(/\\/gu, '/');
+  const absolute = path.resolve(repoRoot, path.posix.dirname(source), importPath);
+  const target = path.relative(repoRoot, absolute).split(path.sep).join('/');
+  const sourcePackage = owningPackageDir(source);
+  const targetPackage = target.startsWith('..') ? null : owningPackageDir(`${target}/x`);
+  const targetLayer = target.startsWith('..') ? null : getLayerForFile(path.join(repoRoot, target, 'x'));
+  return {
+    target,
+    sourcePackage,
+    targetPackage,
+    targetLayer,
+    samePackage: sourcePackage !== null && sourcePackage === targetPackage,
+  };
 }
 
 /**
@@ -192,28 +245,54 @@ function getLayerForFile(filePath) {
  * @param {string} importPath - 导入路径
  * @returns {{ valid: boolean, targetLayer?: string, reason?: string }}
  */
-function checkImport(sourceLayer, sourceFile, importPath) {
-  // 相对导入总是允许的
+export function checkImport(sourceLayer, sourceFile, importPath) {
+  let targetLayerPath;
   if (importPath.startsWith('.') || importPath.startsWith('/')) {
-    return { valid: true };
-  }
-
-  // 解析包名
-  let packageName = importPath;
-  if (importPath.startsWith('@')) {
-    // Scoped package: @scope/name
-    const parts = importPath.split('/');
-    packageName = parts.slice(0, 2).join('/');
+    // 相对导入：解析成实际文件，判断它落在哪个包里。同包内允许。
+    // - 包的 `src/` 源码一律不得跨包相对导入：构建产物会指向包外的 src，tsc 的 rootDir 也会出错；
+    //   用包名导入。
+    // - 其余文件（`evals/`、`tests/` 等）跨包时按目标包所在层级走与包名导入相同的层级规则；目标不在
+    //   任何已登记层级（或不在任何包里）时报错。
+    // - 工具配置（`*.config.ts` 继承根配置）不受此限。
+    const relative = resolveRelativeImport(sourceFile, importPath);
+    const posixSource = sourceFile.replace(/\\/gu, '/');
+    if (relative.samePackage || /(?:^|\/)[\w.-]+\.config\.[cm]?ts$/u.test(posixSource)) {
+      return { valid: true };
+    }
+    if (relative.sourcePackage && posixSource.startsWith(`${relative.sourcePackage}/src/`)) {
+      return {
+        valid: false,
+        targetLayer: relative.targetLayer ?? undefined,
+        reason: `Source file in "${relative.sourcePackage}/src" imports "${relative.target}" of another package by relative path`
+          + '; the build output would point outside the package (and break tsc rootDir), import the package by name instead',
+      };
+    }
+    if (!relative.targetLayer || !relative.targetPackage) {
+      return {
+        valid: false,
+        reason: `Relative import leaves package "${relative.sourcePackage ?? '(none)'}" for "${relative.targetPackage ?? relative.target}"`
+          + ', which is outside every architecture layer; import a declared package by name instead',
+      };
+    }
+    targetLayerPath = relative.targetLayer;
   } else {
-    // Regular package: name
-    packageName = importPath.split('/')[0];
-  }
+    // 解析包名
+    let packageName = importPath;
+    if (importPath.startsWith('@')) {
+      // Scoped package: @scope/name
+      const parts = importPath.split('/');
+      packageName = parts.slice(0, 2).join('/');
+    } else {
+      // Regular package: name
+      packageName = importPath.split('/')[0];
+    }
 
-  // 获取目标层级路径
-  const targetLayerPath = packageNameToPath[packageName];
-  if (!targetLayerPath) {
-    // 未知包，允许（可能是外部依赖）
-    return { valid: true };
+    // 获取目标层级路径
+    targetLayerPath = packageNameToPath[packageName];
+    if (!targetLayerPath) {
+      // 未知包，允许（可能是外部依赖）
+      return { valid: true };
+    }
   }
 
   // 检查是否是同一包内的导入（允许）

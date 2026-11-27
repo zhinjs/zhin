@@ -28,5 +28,11 @@
     "file": "plugins/adapters/discord/agents/discord/skills/discord-guild/tools/create_thread/index.ts",
     "call": "threads.create",
     "reason": "Creates a thread channel (no message content). Current channel only."
+  },
+  {
+    "file": "packages/host/a2a/src/http-handlers.ts",
+    "rule": "platform_client_send",
+    "text": "await transport.sendMessage",
+    "reason": "`transport` is the A2A JSON-RPC server transport (SendMessage / SendMessageStream of the A2A protocol), not an IM Endpoint; A2A replies never enter the IM outbound chain."
   }
 ]

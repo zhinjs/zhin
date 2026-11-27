@@ -193,19 +193,30 @@ describe('dotenv files stay out of the project file manager (issue #1250)', () =
 
   it('opens the Agent bootstrap files and the knowledge directory', async () => {
     await withProject(async (root) => {
-      const paths = ['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'HEARTBEAT.md', 'knowledge/faq.md', 'knowledge/guides/setup.txt'];
+      const paths = ['AGENTS.md', 'BOT.md', 'SOUL.md', 'TOOLS.md', 'HEARTBEAT.md', 'knowledge/faq.md', 'knowledge/guides/setup.txt'];
       for (const relativePath of paths) {
         expect(isProjectPathAllowed(relativePath)).toBe(true);
         await saveProjectFile(root, relativePath, `# ${relativePath}`);
         await expect(readProjectFile(root, relativePath)).resolves.toMatchObject({ content: `# ${relativePath}` });
       }
       const tree = await buildProjectFileTree(root);
-      expect(tree.map(entry => entry.name)).toEqual(expect.arrayContaining(['AGENTS.md', 'SOUL.md', 'TOOLS.md', 'HEARTBEAT.md', 'knowledge']));
+      expect(tree.map(entry => entry.name)).toEqual(expect.arrayContaining(['AGENTS.md', 'BOT.md', 'SOUL.md', 'TOOLS.md', 'HEARTBEAT.md', 'knowledge']));
       const knowledge = tree.find(entry => entry.name === 'knowledge');
       expect(knowledge?.children?.map(entry => entry.name)).toEqual(['guides', 'faq.md']);
       expect(isProjectPathAllowed('knowledge/node_modules/x.md')).toBe(false);
       expect(isProjectPathAllowed('MEMORY.md')).toBe(false);
     });
+  });
+
+  it('lists every bootstrap file the bot reads, BOT.md included (#1250)', async () => {
+    // Intentional cross-package sync check: host-http must not depend on @zhin.js/agent (layer rule), so
+    // the test reads the agent's bootstrap file list from source to keep the project-file allowlist in
+    // step with it. Test-only; production code never imports across these packages.
+    const { BOOTSTRAP_FILENAMES, BOT_BOOTSTRAP_FILENAMES } = await import('../../../im/agent/src/bootstrap.js');
+    for (const name of new Set([...BOOTSTRAP_FILENAMES, ...BOT_BOOTSTRAP_FILENAMES])) {
+      expect(isProjectPathAllowed(name)).toBe(true);
+    }
+    expect(isProjectPathAllowed('data/BOT.md')).toBe(false);
   });
 
   it('refuses dot files and dot directories anywhere in the path (#1250 review)', async () => {

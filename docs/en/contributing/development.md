@@ -94,7 +94,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 
 | Check | Description |
 | --- | --- |
-| Architecture Layers (`pnpm check:architecture`) | Layer dependency direction (basic -> kernel -> ai -> core -> agent -> zhin) |
+| Architecture Layers (`pnpm check:architecture`) | Layer dependency direction (basic -> kernel -> ai -> core -> agent -> zhin); source under a package's `src/` must not import another package by relative path (import it by name), relative imports from `evals/`, `tests/` and the like follow the target package's layer, `*.config.ts` is exempt; paths are compared in POSIX form (so the check also works on Windows) |
 | Dependency Policy (`pnpm check:dependency-policy`) | Scaffold dependency policy, Changesets config, and internal peer ranges |
 | Release Plan (`pnpm check:release-plan`) | Patch only; the gate rejects minor/major, including bumps inferred through dependency propagation |
 | No Koa Import (`pnpm check:no-koa`) | Plugins must not directly import koa |
@@ -119,8 +119,8 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | --- | --- |
 | IM Send Path (`pnpm check:harness-paths`) | Must not bypass the Adapter.sendMessage unified chain |
 | IM Session SSOT (`pnpm check:im-session-ssot`) | IM scene/session identity resolution uses core SSOT |
-| No Platform Branches (`pnpm check:no-platform-branches`) | Platform name literals and platform-keyed tables (`icqq`, `discord`…) are forbidden in core / agent / ai / adapter `src`, the instance composition root `packages/im/zhin/src/instance` and the management gateway `packages/host/gateway/src`; differences must read the adapter capability profile (ADR 0044). Exceptions are listed in `scripts/no-platform-branches-allowlist.json` with a reason |
-| Removed Plugin API (`pnpm check:no-removed-plugin-api`) | Removed Plugin lookup APIs must not reappear in production source |
+| No Platform Branches (`pnpm check:no-platform-branches`) | Platform name literals and platform-keyed tables (`icqq`, `discord`…) are forbidden in core / agent / ai / adapter `src`, the instance composition root `packages/im/zhin/src/instance` and the management gateway `packages/host/gateway/src`; differences must read the adapter capability profile (ADR 0044). Exceptions are listed in `scripts/no-platform-branches-allowlist.json` with a reason and a `text` fragment that limits them to specific lines. Platform names are collected from `plugins/adapters/*`; a new adapter id that is a common word (`line`, `email`, `sandbox`) brings false positives, so `check-no-platform-branches.test.ts` keeps a snapshot of the collected names that must be confirmed for every new adapter, adding common words to `LITERAL_ONLY_NAMES` (literals only, no object keys) |
+| Removed Plugin API (`pnpm check:no-removed-plugin-api`) | Removed Plugin lookup APIs, `bootstrapNode` and `zhin.js/node` (including `require.resolve`, `import.meta.resolve`, backticks and subpaths; specifiers assembled at run time are not handled) must not reappear in production source; detector code is exempt line by line (`DESCRIBES_REMOVED_API`), never as a whole file |
 
 **AI Layer**
 

@@ -28,8 +28,10 @@ export const FILE_MANAGER_ALLOWED = Object.freeze([
   'plugin.cjs',
   'schema.json',
   // Agent workspace bootstrap files (`@zhin.js/agent` bootstrap.ts, timer heartbeat) and the
-  // conventional knowledge base directory (`ai.knowledge.baseDir`).
+  // conventional knowledge base directory (`ai.knowledge.baseDir`). A non-empty root `BOT.md`
+  // replaces `AGENTS.md` as the bot's instructions (`BOT_BOOTSTRAP_FILENAME`).
   'AGENTS.md',
+  'BOT.md',
   'SOUL.md',
   'TOOLS.md',
   'HEARTBEAT.md',

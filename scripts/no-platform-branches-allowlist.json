@@ -2,11 +2,31 @@
   {
     "file": "packages/im/agent/src/security/ops-cooldown.ts",
     "name": "qq",
+    "text": "const TARGET_FIELDS = [",
     "reason": "'qq' is a request-field name in TARGET_FIELDS (a tool argument that carries a QQ number), not a platform comparison."
   },
   {
     "file": "packages/im/adapter/src/capability-profile.ts",
     "name": "sandbox",
-    "reason": "`runtime.sandbox` is the ADR 0044 capability FIELD an adapter declares (types and validator schema), not a platform comparison."
+    "text": "readonly sandbox?: boolean;",
+    "reason": "`runtime.sandbox` is the ADR 0044 capability FIELD an adapter declares (type declaration), not a platform comparison."
+  },
+  {
+    "file": "packages/im/adapter/src/capability-profile.ts",
+    "name": "sandbox",
+    "text": "runtime: obj({ sandbox: FLAG })",
+    "reason": "`runtime.sandbox` is the ADR 0044 capability FIELD an adapter declares (validator schema), not a platform comparison."
+  },
+  {
+    "file": "packages/im/agent/src/collaboration/turn-collaboration.ts",
+    "name": "line",
+    "text": "kind === 'line'",
+    "reason": "`ResultBatchPlan.kind === 'line'` is the plan that shows a one-line failure notice for withheld delegated results, not the LINE platform (the adapter id is now collected from plugins/adapters/line)."
+  },
+  {
+    "file": "packages/im/agent/src/collaboration/turn-collaboration.ts",
+    "name": "line",
+    "text": "kind: 'line'",
+    "reason": "Same ResultBatchPlan kind (type member and the plan the builder returns), not the LINE platform."
   }
 ]

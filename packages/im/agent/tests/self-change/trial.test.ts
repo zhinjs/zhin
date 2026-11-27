@@ -58,18 +58,84 @@ describe('checkSelfChangeFiles', () => {
     ]);
   });
 
-  it('rejects harness-forbidden imports but ignores them in comments', async () => {
+  it('rejects harness-forbidden imports, and fails closed on forbidden code written in comments', async () => {
     const checks = await checkSelfChangeFiles([
       { path: 'commands/send.ts', content: `${command}export function x(bot: any) { return bot.$sendMessage({}); }\n` },
       { path: 'commands/koa.ts', content: `import type { Context } from 'koa';\n${command}` },
       { path: 'commands/kernel.ts', content: `import { x } from '@zhin.js/kernel';\n${command}` },
       { path: 'commands/legacy.ts', content: `import { bootstrapNode } from 'zhin.js/node';\n${command}` },
-      { path: 'commands/ok.ts', content: `// do not call bot.$sendMessage( here\n/* import 'koa' */\n${command}` },
+      // The rules also run on the raw text (#1250 review M1), so forbidden code in a comment fails too.
+      { path: 'commands/commented.ts', content: `// do not call bot.$sendMessage( here\n/* import 'koa' */\n${command}` },
+      { path: 'commands/ok.ts', content: `// reply with message.$reply() instead\n/* no koa here */\n${command}` },
     ]);
     expect(failures(checks)).toEqual([
       'commands/send.ts:forbidden_import', 'commands/koa.ts:forbidden_import', 'commands/kernel.ts:forbidden_import', 'commands/legacy.ts:forbidden_import',
+      'commands/commented.ts:forbidden_import',
     ]);
     expect(checks.find(check => check.path === 'commands/legacy.ts' && check.status === 'failed')!.message).toContain('bootstrapNode');
+  });
+
+  it('does not let comment markers inside strings, templates or regexes hide code (#1250 review M1)', async () => {
+    const hidden = [
+      "const u = 'a//'; await endpoint.send(req);",
+      'const a = "/*"; await endpoint.send(req); const b = "*/";',
+      'const t = `//${1}`; await endpoint.send(req);',
+      'const t = `/*${"*/"}`; await endpoint.send(req); const z = `*/`;',
+      'const r = /\\/\\//u; await endpoint.send(req);',
+      "const u = 'a//'; import('zhin.js/node');",
+      "const u = 'a//'; const k = await import('koa');",
+    ];
+    const checks = await checkSelfChangeFiles(hidden.map((line, index) => ({
+      path: `commands/hidden-${index}.ts`,
+      content: `${command}export async function run(endpoint: any, req: any) {\n${line}\n}\n`,
+    })));
+    expect(failures(checks)).toEqual(hidden.map((_line, index) => `commands/hidden-${index}.ts:forbidden_import`));
+  });
+
+  it('catches non-null, cast, optional-call, bracket and multi-line send forms (#1250 review M2)', async () => {
+    const forms = [
+      'await endpoint!.send(req);',
+      'await (endpoint as Endpoint).send(req);',
+      'await endpoint?.send?.(req);',
+      "await endpoint['send'](req);",
+      'await bot["$sendMessage"](req);',
+      'await endpoint\n    .send(req);',
+      'await this.client\n  ?.sendMessage(chatId, text);',
+    ];
+    const checks = await checkSelfChangeFiles(forms.map((line, index) => ({
+      path: `commands/form-${index}.ts`,
+      content: `${command}export async function run(endpoint: any, bot: any, req: any) {\n${line}\n}\n`,
+    })));
+    expect(failures(checks)).toEqual(forms.map((_line, index) => `commands/form-${index}.ts:forbidden_import`));
+  });
+
+  it('rejects every zhin.js/node import form the harness script rejects (#1250 review M3)', async () => {
+    const imports = [
+      'const m = await import(`zhin.js/node`);',
+      "import { x } from 'zhin.js/node/sub';",
+      "const p = require.resolve('zhin.js/node');",
+      "const p = import.meta.resolve('zhin.js/node');",
+    ];
+    const checks = await checkSelfChangeFiles(imports.map((line, index) => ({ path: `commands/node-${index}.ts`, content: `${line}\n${command}` })));
+    expect(failures(checks)).toEqual(imports.map((_line, index) => `commands/node-${index}.ts:forbidden_import`));
+    const ok = await checkSelfChangeFiles([{ path: 'commands/nodes.ts', content: `import { x } from 'zhin.js/nodes';\n${command}` }]);
+    expect(failures(ok)).toEqual([]);
+  });
+
+  it('allows SDK / WebSocket / MCP send() calls that are not IM sends (#1250 review M4)', async () => {
+    const legal = [
+      'await client.send(new PutObjectCommand({ Bucket, Key, Body }));',
+      'transport.send(frame);',
+      'await sdk.send(command);',
+      'await this.client.send(request);',
+    ];
+    const checks = await checkSelfChangeFiles(legal.map((line, index) => ({
+      path: `commands/sdk-${index}.ts`,
+      content: `${command}export async function run(client: any, transport: any, sdk: any, frame: any) {\n${line}\n}\n`,
+    })));
+    expect(failures(checks)).toEqual([]);
+    const im = await checkSelfChangeFiles([{ path: 'commands/im.ts', content: `${command}export const f = (client: any) => client.sendGroupMsg(1, 'x');\n` }]);
+    expect(failures(im)).toEqual(['commands/im.ts:forbidden_import']);
   });
 
   it('strips comments in linear time and never lets an unclosed /* hide an import', async () => {
