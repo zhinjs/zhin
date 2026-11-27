@@ -53,6 +53,9 @@ const zhCN = {
   'refresh.auto': '{0}s 自动',
   'actions.more': '更多',
   'listDetail.detail': '详情',
+  'stepper.decrease': '减少',
+  'stepper.increase': '增加',
+  'toast.undo': '撤销',
 } as const;
 
 export type ConsoleUiMessageKey = keyof typeof zhCN;
@@ -98,6 +101,9 @@ const en: ConsoleUiMessages = {
   'refresh.auto': '{0}s auto',
   'actions.more': 'More',
   'listDetail.detail': 'Details',
+  'stepper.decrease': 'Decrease',
+  'stepper.increase': 'Increase',
+  'toast.undo': 'Undo',
 };
 
 export const CONSOLE_UI_MESSAGES: Readonly<Record<ConsoleUiLocale, ConsoleUiMessages>> = Object.freeze({

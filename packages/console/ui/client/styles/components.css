@@ -2,7 +2,8 @@
  * @zhin.js/console-ui — component styles (the `console-*` classes the components use).
  * ADR 0063 D15–D18: values are semantic (tier-2) tokens only; layout follows the width of the
  * component's container (`@container console`), never the viewport. Checked by stylelint
- * (`pnpm --filter @zhin.js/console-ui lint:css`).
+ * (`pnpm --filter @zhin.js/console-ui lint:css`). Look: soft cards (D34–D41) — borderless cards,
+ * pill buttons, black / white primary, light category colours. New components: soft.css.
  */
 @layer components {
   /* ── Page shell (D18): flexible inline padding, content width = min(100%, content-max). ── */
@@ -50,9 +51,9 @@
   .console-page-title {
     margin: 0;
     font-size: var(--console-text-title);
-    font-weight: var(--console-weight-strong);
+    font-weight: var(--console-weight-medium);
     line-height: var(--console-leading-title);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
     color: hsl(var(--foreground));
     text-wrap: balance;
     overflow-wrap: anywhere;
@@ -60,8 +61,8 @@
   .console-page-description {
     max-width: 70ch;
     margin: 0;
-    font-size: var(--console-text-body);
-    line-height: var(--console-leading-body);
+    font-size: var(--console-text-sm);
+    line-height: var(--console-leading-sm);
     color: hsl(var(--muted-foreground));
     text-wrap: pretty;
   }
@@ -77,7 +78,7 @@
     .console-page-header-body {
       flex-direction: row;
       flex-wrap: wrap;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
       column-gap: var(--console-section-gap);
     }
@@ -109,12 +110,13 @@
     margin: 0;
     font-size: var(--console-text-section);
     line-height: var(--console-leading-section);
-    font-weight: var(--console-weight-strong);
+    font-weight: var(--console-weight-medium);
     letter-spacing: 0;
   }
   .console-section-description {
     margin: 0;
-    font-size: var(--console-text-body);
+    font-size: var(--console-text-sm);
+    line-height: var(--console-leading-sm);
     color: hsl(var(--muted-foreground));
   }
   .console-grid {
@@ -148,10 +150,108 @@
     line-height: var(--console-leading-label);
   }
   .console-control:focus-visible { outline: var(--console-focus-ring); outline-offset: var(--console-focus-ring-offset); }
-  .console-control[aria-invalid="true"] { border-color: hsl(var(--destructive)); }
-  .console-control[aria-invalid="true"]:focus-visible { outline-color: hsl(var(--destructive)); }
+  .console-control[aria-invalid="true"] { border-color: hsl(var(--console-danger)); }
+  .console-control[aria-invalid="true"]:focus-visible { outline-color: hsl(var(--console-danger)); }
   .console-control:disabled { cursor: not-allowed; }
-  .console-control[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+  /* Disabled: 40 % (D37). */
+  .console-control[data-disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  /*
+   * Text fields (D39): 48 tall, radius 14, 1px control border; hover muted, focus ink border plus a
+   * 2px ink ring with a 2px surface gap; errors via aria-invalid.
+   */
+  .console-field {
+    min-height: var(--console-control-height);
+    padding-inline: var(--console-control-padding-inline);
+    border: var(--console-control-border) solid hsl(var(--console-control));
+    border-radius: var(--console-control-radius);
+    background: hsl(var(--console-surface));
+    color: hsl(var(--console-ink));
+    font-size: var(--console-text-md);
+    line-height: var(--console-leading-md);
+    /* Only the border eases; the focus ring appears at once. */
+    transition: border-color var(--console-motion-fast) var(--console-ease-fast);
+  }
+  .console-field::placeholder { color: hsl(var(--console-faint)); }
+  .console-field:hover { border-color: hsl(var(--console-muted)); }
+  .console-field:focus-visible {
+    border-color: hsl(var(--console-ink));
+    outline: none;
+    box-shadow: var(--console-field-focus-ring);
+  }
+  .console-field[aria-invalid="true"],
+  .console-field[aria-invalid="true"]:hover { border-color: hsl(var(--console-danger)); }
+  .console-field[aria-invalid="true"]:focus-visible {
+    box-shadow: var(--console-field-error-ring);
+  }
+  .console-field:disabled,
+  .console-field[data-disabled] { opacity: 0.4; cursor: not-allowed; }
+  .console-field[data-variant="ghost"] { border-color: transparent; background: transparent; }
+  .console-field[data-variant="ghost"]:hover,
+  .console-field[data-variant="ghost"][aria-expanded="true"],
+  .console-field[data-variant="ghost"][data-state="open"] { border-color: hsl(var(--console-control)); }
+  .console-field[data-variant="ghost"]:focus-visible { border-color: hsl(var(--console-ink)); }
+  textarea.console-field {
+    padding-block: var(--console-field-padding-block);
+  }
+
+  /*
+   * Buttons (D39): pills; 48 default, 36 compact. Hover lays 4 % ink over the fill, press scales to
+   * 98 %, focus is the 2px ring with a 2px gap, disabled 40 %, loading keeps the width.
+   */
+  .console-button {
+    position: relative;
+    border-radius: var(--console-pill-radius);
+    padding-inline: var(--console-button-padding-inline);
+    font-size: var(--console-text-lg);
+    font-weight: var(--console-weight-medium);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--console-motion-fast) var(--console-ease-fast), box-shadow var(--console-motion-fast) var(--console-ease-fast), color var(--console-motion-fast) var(--console-ease-fast), transform var(--console-motion-fast) var(--console-ease-fast);
+  }
+  .console-button:hover:not(:disabled, [aria-busy="true"]) {
+    background-image: linear-gradient(hsl(var(--console-ink) / 0.04), hsl(var(--console-ink) / 0.04));
+  }
+  .console-button:active:not(:disabled, [aria-busy="true"]) {
+    background-image: linear-gradient(hsl(var(--console-ink) / 0.08), hsl(var(--console-ink) / 0.08));
+    transform: scale(0.98);
+  }
+  .console-button:disabled,
+  .console-button[aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
+  .console-button[data-size="sm"] {
+    padding-inline: var(--console-button-padding-inline-compact);
+    font-size: var(--console-text-sm);
+  }
+  .console-button[data-size="icon"] {
+    padding-inline: 0;
+  }
+  .console-button[data-variant="primary"]:hover:not(:disabled, [aria-busy="true"]) {
+    background-color: hsl(var(--console-primary-hover));
+    background-image: none;
+  }
+  /* Text buttons: ink with an underline; colour never marks a link (D34). */
+  .console-button[data-variant="text"],
+  .console-button[data-variant="link"] {
+    padding-inline: var(--console-text-button-padding-inline);
+    text-decoration: underline;
+    text-decoration-color: hsl(var(--console-control));
+    text-underline-offset: 0.1875rem;
+  }
+  .console-button[data-variant="text"]:hover,
+  .console-button[data-variant="link"]:hover { text-decoration-color: currentcolor; }
+  .console-button[data-variant="danger-text"],
+  .console-button[data-variant="destructive"] { padding-inline: var(--console-text-button-padding-inline); }
+  /* Loading: the label stays in the box (keeps the width and the accessible name) but is transparent; the spinner sits on top. */
+  .console-button[aria-busy="true"] { cursor: progress; }
+  .console-button[aria-busy="true"] > :not(.console-button-spinner) { opacity: 0; }
+  .console-button-spinner {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 1.125rem;
+    height: 1.125rem;
+  }
 
   /* Hit area of small controls (checkbox, switch, radio, pills): 44 × 44 px below 40rem (D18). */
   .console-touch {
@@ -167,16 +267,31 @@
     translate: -50% -50%;
   }
 
+  /*
+   * Menu items (D40): 46 tall, radius 14; danger items last. The pointer highlight is a sunken fill
+   * only; keyboard focus is primary-soft with the 2px focus ring drawn inside the item. Radix focuses
+   * the item under the pointer by script and browsers may count that as :focus-visible, so the menu
+   * content says which input is in use (`data-input`, input-modality.ts); without it (a host's own
+   * Radix content), :focus-visible alone decides.
+   */
   .console-menu-item {
-    min-height: var(--console-control-height-compact);
+    min-height: var(--console-popover-item-height);
     border-radius: var(--console-popover-item-radius);
+    font-size: var(--console-text-lg);
   }
+  .console-menu-item[data-highlighted] { background: hsl(var(--console-sunken)); outline: none; }
+  .console-menu-item:focus-visible:not([data-input="pointer"] *) {
+    background: hsl(var(--console-primary-soft));
+    outline: none;
+    box-shadow: var(--console-focus-ring-inset);
+  }
+  .console-menu-item[data-variant="danger"] { color: hsl(var(--console-danger)); }
 
-  /* ── Card: hairline, no shadow when static (D16); hover e-1 on wide containers. ── */
+  /* ── Card (D39): no border; white card with shadow-sm; radius 24 on phones, 28 on the web. ── */
   .console-card {
-    border: var(--console-card-border) solid hsl(var(--border));
+    border: var(--console-card-border) solid transparent;
     border-radius: var(--console-card-radius);
-    background: var(--console-surface-raised);
+    background: hsl(var(--console-surface));
     box-shadow: var(--console-card-elevation);
     min-width: 0;
     transition: border-color var(--console-motion-fast) var(--console-ease-out), box-shadow var(--console-motion-fast) var(--console-ease-out);
@@ -185,13 +300,12 @@
     cursor: pointer;
   }
   .console-card--interactive:hover {
-    border-color: transparent;
     box-shadow: var(--console-card-hover-elevation);
   }
-  /* Nested radius = outer radius − outer padding, never below 0 (D16). */
+  /* A card inside a card is a sunken sub-block (radius 18, no shadow). */
   .console-card .console-card {
-    border-radius: max(0rem, calc(var(--console-card-radius) - var(--console-card-padding)));
-    background: var(--console-surface-inset);
+    border-radius: var(--console-sub-radius);
+    background: hsl(var(--console-sunken));
     box-shadow: none;
   }
   .console-card[data-edge] {
@@ -200,7 +314,7 @@
   @container console (width < 40rem) {
     .console-card[data-edge] {
       margin-inline: calc(-1 * var(--console-page-padding-inline));
-      border-inline-width: 0;
+      box-shadow: none;
     }
   }
   .console-card-header {
@@ -210,6 +324,7 @@
     padding: var(--console-card-padding);
     padding-bottom: var(--console-stack-gap);
   }
+  .console-card-header .console-section-title { font-size: var(--console-text-xl); line-height: var(--console-leading-xl); }
   .console-card-content {
     padding: var(--console-card-padding);
     padding-top: 0;
@@ -225,30 +340,66 @@
     padding-top: 0;
   }
 
-  /* ── Badge: one implementation (D16), hairline, full radius. ── */
+  /* ── Badge (D39): a light pill — 12px medium text on the state's -bg (or sunken), no border. ── */
   .console-badge {
     display: inline-flex;
     align-items: center;
     gap: var(--console-heading-gap);
     height: var(--console-badge-height);
     padding: 0 var(--console-badge-padding-inline);
-    border: var(--console-control-border) solid transparent;
+    border: 0;
     border-radius: var(--console-badge-radius);
-    font-size: var(--console-text-label);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-muted));
+    font-size: var(--console-text-xs);
     font-weight: var(--console-weight-medium);
-    line-height: 1;
+    line-height: var(--console-leading-xs);
     white-space: nowrap;
   }
-    /*
-   * Signal badges (zhinjs/console#125): the bright fill tints the badge, the text token carries the
-   * label (≥ 4.5:1 on the tint). Danger is the strongest — failures outrank successes, and
-   * 「正常」 / 「成功」 are no badge at all (.console-status-quiet).
+  .console-badge-success { background: hsl(var(--console-ok-bg)); color: hsl(var(--console-ok)); }
+  .console-badge-info { background: hsl(var(--console-sunken)); color: hsl(var(--console-ink)); }
+  .console-badge-warning { background: hsl(var(--console-warn-bg)); color: hsl(var(--console-warn)); }
+  .console-badge-danger { background: hsl(var(--console-danger-bg)); color: hsl(var(--console-danger)); }
+  .console-badge-neutral { background: hsl(var(--console-sunken)); color: hsl(var(--console-muted)); }
+  .console-badge-solid { background: hsl(var(--console-primary)); color: hsl(var(--console-on-primary)); }
+  .console-badge-outline { background: transparent; box-shadow: var(--console-hairline-ring); color: hsl(var(--console-ink)); }
+  .console-badge[data-tone="1"] { background: hsl(var(--console-tint-1)); color: hsl(var(--console-ink)); }
+  .console-badge[data-tone="2"] { background: hsl(var(--console-tint-2)); color: hsl(var(--console-ink)); }
+  .console-badge[data-tone="3"] { background: hsl(var(--console-tint-3)); color: hsl(var(--console-ink)); }
+  .console-badge[data-tone="4"] { background: hsl(var(--console-tint-4)); color: hsl(var(--console-ink)); }
+  .console-badge[data-tone="5"] { background: hsl(var(--console-tint-5)); color: hsl(var(--console-ink)); }
+
+  /*
+   * ── Status (D39): a dot and a word, never colour alone. ok / warn / danger take their colour,
+   * neutral is muted, progress is ink text with a breathing progress dot (shell.css animates it). ──
    */
-  .console-badge-success { border-color: hsl(var(--console-signal-success-fill) / 0.3); background: hsl(var(--console-signal-success-fill) / 0.12); color: hsl(var(--console-signal-success-text)); }
-  .console-badge-info { border-color: hsl(var(--console-signal-info-fill) / 0.3); background: hsl(var(--console-signal-info-fill) / 0.12); color: hsl(var(--console-signal-info-text)); }
-  .console-badge-warning { border-color: hsl(var(--console-signal-warning-fill) / 0.45); background: hsl(var(--console-signal-warning-fill) / 0.12); color: hsl(var(--console-signal-warning-text)); }
-  .console-badge-danger { border-color: hsl(var(--console-signal-danger-fill) / 0.55); background: hsl(var(--console-signal-danger-fill) / 0.12); color: hsl(var(--console-signal-danger-text)); font-weight: var(--console-weight-strong); }
-  /* 「正常」 and neutral states: muted text, no colored badge (D15 第 1 条). */
+  .console-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--console-control-gap);
+    font-size: var(--console-text-sm);
+    font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-sm);
+    white-space: nowrap;
+  }
+  .console-status::before {
+    content: "";
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--console-pill-radius);
+    background: currentcolor;
+  }
+  .console-status[data-tone="ok"] { color: hsl(var(--console-ok)); }
+  .console-status[data-tone="warn"] { color: hsl(var(--console-warn)); }
+  .console-status[data-tone="danger"] { color: hsl(var(--console-danger)); }
+  .console-status[data-tone="neutral"] { color: hsl(var(--console-muted)); }
+  .console-status[data-tone="progress"] { color: hsl(var(--console-ink)); }
+  .console-status[data-tone="progress"]::before {
+    background: hsl(var(--console-progress));
+    box-shadow: var(--console-progress-halo);
+  }
+  /* Kept for compatibility (ADR 0063 D15 第 1 条): the quiet, neutral state text. */
   .console-status-quiet {
     display: inline-flex;
     align-items: center;
@@ -273,31 +424,40 @@
   }
   .console-table table {
     width: 100%;
-    border-collapse: collapse;
-    font-size: var(--console-text-label);
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--console-text-md);
+    line-height: var(--console-leading-md);
   }
   .console-table[data-density="compact"] table {
     --console-control-height: var(--console-control-height-compact);
   }
+  /* sc-table (D39): 12px muted headers, 12px cells, a line above every row, selected rows primary-soft + bar. */
   .console-table th,
   .console-table td {
-    padding-block: var(--console-list-row-padding);
-    padding-inline: var(--console-list-row-padding-inline);
+    padding: var(--console-cell-padding);
     vertical-align: middle;
     text-align: left;
   }
   .console-table th {
-    border-bottom: var(--console-card-border) solid hsl(var(--border));
-    color: hsl(var(--muted-foreground));
+    padding-block: var(--console-list-row-padding);
+    color: hsl(var(--console-muted));
+    font-size: var(--console-text-xs);
     font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-xs);
     white-space: nowrap;
   }
-  .console-table tbody tr {
-    border-bottom: var(--console-card-border) solid hsl(var(--border) / 0.7);
-    transition: background-color var(--console-motion-fast) var(--console-ease-out);
+  .console-table td {
+    border-top: var(--console-divider-width) solid hsl(var(--console-line));
   }
-  .console-table tbody tr:last-child { border-bottom-width: 0; }
+  .console-table tbody tr {
+    transition: background-color var(--console-motion-fast) var(--console-ease-fast);
+  }
   .console-table tbody tr:hover { background: var(--console-surface-hover); }
+  .console-table tr[aria-selected="true"] td,
+  .console-table tr[data-state="selected"] td { background: hsl(var(--console-primary-soft)); }
+  .console-table tr[aria-selected="true"] td:first-child,
+  .console-table tr[data-state="selected"] td:first-child { box-shadow: var(--console-selected-bar); }
   .console-table [data-numeric] { text-align: right; font-variant-numeric: tabular-nums; }
   @container console (width < 40rem) {
     .console-table-scroll { overflow-x: visible; }
@@ -321,14 +481,13 @@
       flex-direction: column;
       gap: var(--console-stack-gap);
     }
-    .console-table tbody tr,
-    .console-table tbody tr:last-child {
-      border: var(--console-card-border) solid hsl(var(--border));
-      border-radius: var(--console-card-radius);
+    .console-table tbody tr {
+      border-radius: var(--console-sub-radius);
       padding: var(--console-stack-gap) var(--console-card-padding);
-      background: var(--console-surface-raised);
+      background: hsl(var(--console-sunken));
     }
-    .console-table tbody tr:hover { background: var(--console-surface-raised); }
+    .console-table tbody tr:hover { background: hsl(var(--console-sunken)); }
+    .console-table td { border-top-width: 0; }
     .console-table td {
       display: flex;
       align-items: center;
@@ -350,7 +509,7 @@
     z-index: 50;
     overflow: hidden;
     border-radius: var(--console-popover-radius);
-    background: hsl(var(--popover));
+    background: hsl(var(--console-raised));
     color: hsl(var(--popover-foreground));
     box-shadow: var(--console-popover-elevation);
     padding: var(--console-popover-padding);
@@ -364,13 +523,7 @@
     position: fixed;
     inset: 0;
     z-index: 50;
-    background: hsl(0 0% 0% / 0.4);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-  }
-  .dark .console-dialog-overlay,
-  .dark .console-sheet-overlay {
-    background: hsl(0 0% 0% / 0.6);
+    background: var(--console-scrim);
   }
   .console-dialog {
     position: fixed;
@@ -380,17 +533,19 @@
     display: grid;
     gap: var(--console-stack-gap);
     width: calc(100% - 2rem);
-    max-width: 32rem;
+    max-width: 30rem;
     max-height: calc(100dvh - 2.5rem);
     overflow-y: auto;
     translate: -50% -50%;
     border-radius: var(--console-dialog-radius);
-    background: hsl(var(--popover));
-    color: hsl(var(--popover-foreground));
+    background: hsl(var(--console-raised));
+    color: hsl(var(--console-ink));
     box-shadow: var(--console-dialog-elevation);
     padding: var(--console-dialog-padding);
     outline: none;
   }
+  .console-dialog .console-section-title,
+  .console-sheet-content .console-section-title { font-size: var(--console-text-xl); line-height: var(--console-leading-xl); }
   .console-dialog-header {
     display: flex;
     flex-direction: column;
@@ -404,25 +559,24 @@
     justify-content: flex-end;
     gap: var(--console-inline-gap);
   }
+  /* Close: a 40px flat round icon button (sunken). */
   .console-dialog-close {
     position: absolute;
-    right: var(--console-stack-gap);
-    top: var(--console-stack-gap);
+    right: var(--console-card-padding);
+    top: var(--console-card-padding);
     display: inline-grid;
     place-items: center;
-    width: var(--console-control-height-compact);
-    height: var(--console-control-height-compact);
-    border-radius: var(--console-control-radius);
-    border: var(--console-control-border) solid transparent;
-    background: transparent;
-    color: hsl(var(--muted-foreground));
+    width: var(--console-control-height-medium);
+    height: var(--console-control-height-medium);
+    border-radius: var(--console-pill-radius);
+    border: 0;
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-ink));
     cursor: pointer;
     transition: background-color var(--console-motion-fast) var(--console-ease-out), color var(--console-motion-fast) var(--console-ease-out), border-color var(--console-motion-fast) var(--console-ease-out);
   }
   .console-dialog-close:hover {
-    background: var(--console-surface-muted);
-    border-color: var(--console-border-subtle);
-    color: hsl(var(--foreground));
+    background-image: linear-gradient(hsl(var(--console-ink) / 0.04), hsl(var(--console-ink) / 0.04));
   }
   .console-dialog-close:focus-visible {
     outline: var(--console-focus-ring);
@@ -434,24 +588,23 @@
     display: flex;
     flex-direction: column;
     gap: var(--console-stack-gap);
-    background: hsl(var(--popover));
-    color: hsl(var(--popover-foreground));
+    background: hsl(var(--console-raised));
+    color: hsl(var(--console-ink));
     box-shadow: var(--console-dialog-elevation);
     padding: var(--console-dialog-padding);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
+  /* Web drawer (D40): 480 wide, floats 12px off the edges with all corners rounded. */
   .console-sheet-content[data-side="right"] {
-    inset: 0 0 0 auto;
-    width: min(34rem, 94vw);
-    height: 100dvh;
-    border-radius: var(--console-sheet-radius) 0 0 var(--console-sheet-radius);
+    inset: 0.75rem 0.75rem 0.75rem auto;
+    width: min(30rem, calc(100vw - 1.5rem));
+    border-radius: var(--console-sheet-radius);
   }
   .console-sheet-content[data-side="left"] {
-    inset: 0 auto 0 0;
-    width: min(24rem, 90vw);
-    height: 100dvh;
-    border-radius: 0 var(--console-sheet-radius) var(--console-sheet-radius) 0;
+    inset: 0.75rem auto 0.75rem 0.75rem;
+    width: min(24rem, calc(100vw - 1.5rem));
+    border-radius: var(--console-sheet-radius);
   }
   .console-sheet-content[data-side="bottom"] {
     inset: auto 0 0 0;
@@ -464,8 +617,6 @@
     flex-direction: column;
     gap: var(--console-heading-gap);
     padding-right: var(--console-dialog-close-clearance);
-    padding-bottom: var(--console-stack-gap);
-    border-bottom: var(--console-card-border) solid var(--console-border-subtle);
   }
   .console-sheet-body {
     flex: 1;
@@ -482,23 +633,21 @@
     justify-content: flex-end;
     gap: var(--console-inline-gap);
     padding-top: var(--console-stack-gap);
-    border-top: var(--console-card-border) solid var(--console-border-subtle);
   }
+  /* Dialog title row: a 48 category tile (D40). */
   .console-confirm-icon {
     display: inline-grid;
     place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: var(--console-size-tile-lg);
+    height: var(--console-size-tile-lg);
     flex-shrink: 0;
-    border-radius: var(--console-control-radius);
-    background: hsl(var(--console-signal-info-fill) / 0.12);
-    border: var(--console-control-border) solid hsl(var(--console-signal-info-fill) / 0.3);
-    color: hsl(var(--console-signal-info-text));
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-ink));
   }
   .console-confirm-icon.is-destructive {
-    background: hsl(var(--console-signal-danger-fill) / 0.12);
-    border-color: hsl(var(--console-signal-danger-fill) / 0.55);
-    color: hsl(var(--console-signal-danger-text));
+    background: hsl(var(--console-danger-bg));
+    color: hsl(var(--console-danger));
   }
 
   /* ── Stat cards: auto-fit grid, two side by side below 40rem (D18 第 3 条). ── */
@@ -514,10 +663,10 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: var(--console-inline-gap);
-    border: var(--console-card-border) solid hsl(var(--border));
+    gap: var(--console-heading-gap);
+    border: var(--console-card-border) solid transparent;
     border-radius: var(--console-card-radius);
-    background: hsl(var(--card));
+    background: hsl(var(--console-surface));
     padding: var(--console-card-padding);
     box-shadow: var(--console-card-elevation);
   }
@@ -530,7 +679,7 @@
     transition: border-color var(--console-motion-fast) var(--console-ease-out), box-shadow var(--console-motion-fast) var(--console-ease-out);
   }
   .console-stat-card.is-link:hover {
-    border-color: var(--console-border-strong);
+    box-shadow: var(--console-card-hover-elevation);
   }
   .console-stat-card.is-link:focus-visible {
     outline: var(--console-focus-ring);
@@ -550,8 +699,9 @@
     align-items: center;
     gap: var(--console-inline-gap);
     color: hsl(var(--muted-foreground));
-    font-size: var(--console-text-label);
-    font-weight: var(--console-weight-medium);
+    font-size: var(--console-text-sm);
+    font-weight: var(--console-weight-regular);
+    line-height: var(--console-leading-sm);
   }
   .console-stat-label svg { width: 1rem; height: 1rem; }
   .console-stat-value {
@@ -559,22 +709,23 @@
     font-size: var(--console-text-display);
     font-weight: var(--console-weight-strong);
     line-height: var(--console-leading-display);
-    letter-spacing: -0.03em;
+    letter-spacing: -0.01em;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
+  /* The unit follows the number at 14px muted (D35). */
   .console-stat-value small {
     margin-left: var(--console-heading-gap);
     color: hsl(var(--muted-foreground));
-    font-size: var(--console-text-section);
-    font-weight: var(--console-weight-medium);
+    font-size: var(--console-text-md);
+    font-weight: var(--console-weight-regular);
     letter-spacing: 0;
   }
   .console-stat-sub {
     overflow: hidden;
     color: hsl(var(--muted-foreground));
-    font-size: var(--console-text-label);
+    font-size: var(--console-text-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -585,12 +736,12 @@
    */
   .console-stat-card.is-danger .console-stat-value { color: hsl(var(--console-signal-danger-text)); }
   .console-stat-card.is-danger .console-stat-label svg { color: hsl(var(--console-signal-danger-fill)); }
-  .console-stat-card.is-danger { border-color: hsl(var(--console-signal-danger-fill) / 0.55); }
+  .console-stat-card.is-danger { background: hsl(var(--console-danger-bg)); box-shadow: none; }
   .console-stat-card.is-warning .console-stat-value { color: hsl(var(--console-signal-warning-text)); }
   .console-stat-card.is-warning .console-stat-label svg { color: hsl(var(--console-signal-warning-fill)); }
   .console-stat-card.is-pressed {
-    border-color: hsl(var(--console-brand-text) / 0.7);
-    background: hsl(var(--console-brand-tint));
+    background: hsl(var(--console-primary-soft));
+    box-shadow: var(--console-selected-bar);
   }
   .console-ring-gauge {
     position: relative;
@@ -634,7 +785,7 @@
   }
   .console-info-hint:hover { background: hsl(var(--accent)); }
   .console-info-hint > svg { width: 0.875rem; height: 0.875rem; color: hsl(var(--muted-foreground)); }
-  .console-info-hint.is-warning { background: hsl(var(--console-signal-warning-fill) / 0.12); color: hsl(var(--console-signal-warning-text)); }
+  .console-info-hint.is-warning { background: hsl(var(--console-warn-bg)); color: hsl(var(--console-warn)); }
   .console-info-hint.is-warning > svg { color: currentColor; }
   .console-info-hint-panel { width: min(22rem, calc(100vw - 2rem)); font-size: var(--console-text-body); line-height: var(--console-leading-body); }
   .console-info-hint-panel > p + p { margin-top: var(--console-heading-gap); color: hsl(var(--muted-foreground)); }
@@ -670,18 +821,19 @@
   .console-brand[data-size="lg"] .console-brand-name { font-size: var(--console-text-title); line-height: var(--console-leading-title); }
 
   /*
-   * ── Empty state (ADR 0063 D28): 64px line art (48px compact) or an icon, both brand-text at a
-   * 1.5px stroke; one sentence; at most one action. ──
+   * ── Empty state (D41, was D28): an icon tile (or the line art), a title, one button; one-tap
+   * presets below as chips. No explanatory paragraph beyond one short sentence. ──
    */
   .console-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--console-heading-gap);
+    gap: var(--console-stack-gap);
     padding: var(--console-section-gap) var(--console-card-padding);
     text-align: center;
   }
   .console-empty[data-compact] {
+    gap: var(--console-inline-gap);
     padding: var(--console-stack-gap) var(--console-card-padding);
   }
   .console-empty-art {
@@ -689,43 +841,54 @@
     flex-shrink: 0;
     width: 4rem;
     height: 4rem;
-    margin-bottom: var(--console-heading-gap);
-    color: hsl(var(--console-brand-text));
+    color: hsl(var(--console-muted));
   }
   /* The stroke stays 1.5px at every size. */
   .console-empty-art * { vector-effect: non-scaling-stroke; }
-  .console-empty[data-compact] .console-empty-art { width: 3rem; height: 3rem; margin-bottom: 0; }
+  .console-empty[data-compact] .console-empty-art { width: 3rem; height: 3rem; }
+  .console-empty-tile {
+    display: grid;
+    place-items: center;
+    width: var(--console-size-tile-lg);
+    height: var(--console-size-tile-lg);
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-ink));
+  }
+  .console-empty[data-compact] .console-empty-tile { width: var(--console-size-tile-md); height: var(--console-size-tile-md); }
   .console-empty-icon {
     flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
-    margin-bottom: var(--console-heading-gap);
-    color: hsl(var(--console-brand-text));
+    width: 1.5rem;
+    height: 1.5rem;
   }
-  .console-empty[data-compact] .console-empty-icon { width: 2rem; height: 2rem; margin-bottom: 0; }
+  .console-empty[data-compact] .console-empty-icon { width: 1.25rem; height: 1.25rem; }
   .console-empty-title {
     margin: 0;
-    font-size: var(--console-text-section);
-    font-weight: var(--console-weight-strong);
-    line-height: var(--console-leading-section);
+    font-size: var(--console-text-xl);
+    font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-xl);
   }
   .console-empty[data-compact] .console-empty-title {
-    font-size: var(--console-text-body);
-    font-weight: var(--console-weight-medium);
-    line-height: var(--console-leading-body);
+    font-size: var(--console-text-lg);
+    line-height: var(--console-leading-lg);
   }
   .console-empty-description {
     max-width: 24rem;
     margin: 0;
     color: hsl(var(--muted-foreground));
-    font-size: var(--console-text-body);
-    line-height: var(--console-leading-body);
+    font-size: var(--console-text-sm);
+    line-height: var(--console-leading-sm);
     text-wrap: pretty;
   }
   .console-empty-action {
     display: flex;
     justify-content: center;
-    margin-top: var(--console-heading-gap);
+  }
+  .console-empty-presets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--console-control-gap);
   }
 
   /*
@@ -747,17 +910,12 @@
     background: transparent;
   }
 
+  /* Skeleton (D41): the size of the real content, sunken, radius 10; breathes (shell.css). */
   .console-skeleton {
     position: relative;
     overflow: hidden;
-    background: hsl(var(--foreground) / 0.06);
-  }
-  .console-skeleton::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, hsl(var(--background) / 0.55), transparent);
+    border-radius: var(--console-skeleton-radius);
+    background: hsl(var(--console-sunken));
   }
 }
 @keyframes console-sheet-in-right {
@@ -772,6 +930,24 @@
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
-@keyframes console-skeleton-shimmer {
-  to { transform: translateX(100%); }
+@keyframes console-skeleton-pulse {
+  50% { opacity: 0.55; }
+}
+@keyframes console-pulse {
+  50% { box-shadow: var(--console-progress-halo-wide); }
+}
+@keyframes console-pop {
+  from { transform: scale(0.96); opacity: 0; }
+}
+@keyframes console-fade {
+  from { opacity: 0; }
+}
+@keyframes console-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes console-sheet-in-up {
+  from { transform: translateY(1.5rem); opacity: 0; }
+}
+@keyframes console-drawer-in {
+  from { transform: translateX(1.5rem); opacity: 0; }
 }

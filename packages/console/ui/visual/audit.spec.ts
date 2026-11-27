@@ -78,12 +78,39 @@ test('the audit reports what it checks (self-test)', async ({ page }) => {
     content.append(bad);
   });
   // The injected button sits after the whole gallery: tab far enough to reach it.
-  const run = await auditPage(page, { maxFocusSteps: 120 });
+  const run = await auditPage(page, { maxFocusSteps: 260 });
   const checks = new Set(run.violations.map((violation) => violation.check));
   for (const check of ['type-scale', 'spacing', 'radius', 'border', 'shadow', 'static-card', 'touch-target', 'overflow', 'shell-overlap', 'duplicate-text', 'contrast', 'focus-visible']) {
     expect(checks, `${check} is reported`).toContain(check);
   }
   expect(run.exemptions).toContainEqual(expect.objectContaining({ check: 'spacing', reason: 'self-test exemption' }));
+});
+
+test('consistency groups only known variants; rings only on their components; aria-current="false" is not selected (self-test)', async ({ page }) => {
+  await open(page, 'light', 1280);
+  await page.evaluate(() => {
+    const content = document.querySelector('[data-slot=page-content]')!;
+    const host = document.createElement('div');
+    host.innerHTML = `
+      <span data-slot="badge" class="console-badge console-badge-neutral">plain</span>
+      <span data-slot="badge" data-variant="fancy" class="console-badge console-badge-neutral" style="border-radius: 0">fancy</span>
+      <div data-slot="card" class="console-card" style="box-shadow: var(--console-hairline-ring)">ring on a card</div>
+      <div data-slot="audit-probe" style="box-shadow: var(--console-selected-bar)">bar elsewhere</div>
+      <div data-slot="audit-row" aria-current="false">plain row</div>
+      <div data-slot="audit-row">plain row</div>
+      <div data-slot="audit-row" aria-current="page" style="border-radius: 10px">current row</div>`;
+    content.append(host);
+  });
+  const run = await auditPage(page, { checks: ['consistency', 'shadow'] });
+  const messages = run.violations.map((violation) => `${violation.check}: ${violation.target} — ${violation.message}`);
+  // An unknown variant value is grouped with the badges that have none (and differs from them).
+  expect(messages.some((message) => /^consistency: .*2 different badge styles/u.test(message)), messages.join('\n')).toBe(true);
+  expect(messages.some((message) => message.includes('badge:fancy')), messages.join('\n')).toBe(false);
+  // Rings outside their components.
+  expect(messages.some((message) => message.startsWith('shadow: div[data-slot=card]') && message.includes('hairline-ring belongs to')), messages.join('\n')).toBe(true);
+  expect(messages.some((message) => message.startsWith('shadow: div[data-slot=audit-probe]') && message.includes('selected-bar belongs to')), messages.join('\n')).toBe(true);
+  // aria-current="false" is not selected: the two plain rows form one group, the current row its own.
+  expect(messages.some((message) => message.includes('audit-row')), messages.join('\n')).toBe(false);
 });
 
 test('auditPluginPages mounts a hand-written page and reports exemptions', async () => {

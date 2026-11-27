@@ -16,7 +16,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         data-slot="input"
         data-variant={variant === 'ghost' ? 'ghost' : undefined}
         className={cn(
-          "console-control flex h-control w-full rounded-control border px-3 py-1 text-body transition-colors file:border-0 file:bg-transparent file:text-body file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
+          "console-control flex h-control w-full file:border-0 file:bg-transparent file:text-body file:font-medium file:text-foreground",
           controlVariantClass(variant),
           className
         )}

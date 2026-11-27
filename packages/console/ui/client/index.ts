@@ -53,10 +53,12 @@ export * from './components/ui/select.js';
 export * from './components/ui/separator.js';
 export * from './components/ui/sheet.js';
 export * from './components/ui/skeleton.js';
+export * from './components/ui/soft.js';
 export * from './components/ui/switch.js';
 export * from './components/ui/table.js';
 export * from './components/ui/tabs.js';
 export * from './components/ui/textarea.js';
+export * from './components/ui/toast.js';
 export * from './components/ui/tooltip.js';
 
 export * from './components/PageShell.js';

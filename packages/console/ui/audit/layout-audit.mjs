@@ -3,16 +3,20 @@
  *
  * Reads the computed style of every element at 375 / 768 / 1280 / 1920 px in the light and dark
  * theme and checks:
- *   type-scale      ≤ 5 font sizes, ≤ 3 weights, all on the scale (D16)
- *   spacing         padding and gap on the space scale (or a resolved semantic spacing token)
- *   radius / border / shadow   border-radius, border-width, box-shadow on the scale
- *   consistency     one radius / border / shadow per component kind (`data-slot`) and width
+ *   type-scale      ≤ 8 font sizes, ≤ 3 weights, all on the scale (soft cards D35, was ≤ 5 in D16)
+ *   spacing         padding and gap on the 4px space scale (or a resolved semantic spacing token)
+ *   radius / border / shadow   border-radius (r-0 … r-7 / full), border-width (hairline / check /
+ *                   focus), box-shadow (e-0 … e-3 or one of the soft-card rings, each ring only on its
+ *                   own components — {@link AUDIT_RING_SLOTS}) on the scale
+ *   consistency     one radius / border / shadow per component kind (`data-slot`, the known variants of
+ *                   console-ui's own slots — {@link AUDIT_VARIANT_SLOTS} — selected or not) and width
  *   overflow        no page-level horizontal scroll, no element pushed out of the viewport
  *   touch-target    ≥ 44 × 44 px interactive targets at 375 (an `::after` hit area counts)
  *   edge-card       edge-to-edge cards have no radius at 375
- *   static-card     static cards have no shadow
+ *   static-card     static cards carry at most shadow-sm (e-1; soft cards D39) — never e-2 / e-3
  *   bottom-drawer   open menus, selects and dialogs are bottom drawers at 375
- *   content-width   data pages ≥ 85 % of a 1920 viewport, reading pages ≤ 60rem
+ *   content-width   data pages fill min(85 % of a 1920 viewport, the 80rem content width),
+ *                   reading pages ≤ 60rem
  *   duplicate-text  the same explanation at most once per page
  *   focus-visible   every focusable element shows a focus style (D19)
  *   contrast        text readable on its background, WCAG 4.5 / 3 (D19)
@@ -36,10 +40,47 @@ export const AUDIT_CHECKS = Object.freeze([
   'contrast', 'shell-overlap',
 ]);
 
-/** Default theme switch: the Console's `.dark` class on <html>. */
+/**
+ * Default theme switch (D38): the way the Console switches — `.dark` on <html> or nothing (light).
+ * `.light` and `data-theme` are removed, so a page that opts in to `data-theme="system"` is audited
+ * in the requested theme and the result never depends on the browser's `prefers-color-scheme`.
+ */
 export async function setConsoleTheme(page, theme) {
-  await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark');
+  await page.evaluate((dark) => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', dark);
+    root.classList.remove('light');
+    root.removeAttribute('data-theme');
+  }, theme === 'dark');
 }
+
+/**
+ * Consistency groups (check `consistency`): components of one kind (`data-slot`) must look the same.
+ * Only these console-ui slots have deliberate variants, read from one attribute and only for the
+ * listed values (a white button has shadow-sm, an outline badge its hairline ring); any other slot,
+ * attribute or value is grouped with the plain component.
+ */
+export const AUDIT_VARIANT_SLOTS = Object.freeze({
+  button: Object.freeze({ attribute: 'data-variant', values: Object.freeze(['primary', 'secondary', 'soft', 'white', 'outline', 'ghost', 'text', 'link', 'danger-text', 'destructive', 'destructive-outline', 'destructive-solid', 'danger']) }),
+  badge: Object.freeze({ attribute: 'data-variant', values: Object.freeze(['default', 'secondary', 'neutral', 'destructive', 'outline', 'success', 'warning', 'info', 'solid']) }),
+  'icon-button': Object.freeze({ attribute: 'data-variant', values: Object.freeze(['flat', 'soft']) }),
+  tile: Object.freeze({ attribute: 'data-size', values: Object.freeze(['sm', 'lg']) }),
+  hero: Object.freeze({ attribute: 'data-variant', values: Object.freeze(['hero', 'hero-2']) }),
+});
+
+/**
+ * Where each soft-card ring may appear (check `shadow`): the composite shadow token → the elements
+ * that draw it. `slots` are `data-slot` values of the element itself; `selector` also matches
+ * elements without a slot (table cells of a selected row, menu items). Other rings (the
+ * in-progress halo) are allowed anywhere.
+ */
+export const AUDIT_RING_SLOTS = Object.freeze({
+  'hairline-ring': Object.freeze({ slots: Object.freeze(['button', 'badge']) }),
+  'selected-bar': Object.freeze({ slots: Object.freeze(['list-row', 'stat-card']), selector: '[data-slot="table"] td' }),
+  'field-focus-ring': Object.freeze({ slots: Object.freeze(['input']) }),
+  'field-error-ring': Object.freeze({ slots: Object.freeze(['input']) }),
+  'focus-ring-inset': Object.freeze({ slots: Object.freeze([]), selector: '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"]' }),
+});
 
 /**
  * Audits the page as it is now (viewport, theme and open overlays are the caller's).
@@ -62,10 +103,13 @@ export async function auditPage(page, options = {}) {
       radius: Object.values(scale.radius),
       border: Object.values(scale.border),
       readingWidth: scale.contentWidth.reading,
+      dataWidth: scale.contentWidth.data,
       touchTarget: scale.touchTarget,
       breakpointSm: scale.breakpoints.sm,
     },
     checks: [...checks],
+    variantSlots: AUDIT_VARIANT_SLOTS,
+    ringSlots: AUDIT_RING_SLOTS,
     contentSelector: options.contentSelector ?? '[data-slot=page-content]',
     pageType: options.pageType ?? null,
   });
@@ -131,7 +175,10 @@ async function focusViolations(page, maxSteps) {
       const describe = element.tagName.toLowerCase() + (element.id ? `#${element.id}` : '')
         + (element.getAttribute('aria-label') ? `[aria-label="${element.getAttribute('aria-label')}"]` : '')
         + (element.textContent?.trim() ? ` "${element.textContent.trim().slice(0, 30)}"` : '');
-      return { key: describe + element.getBoundingClientRect().top, describe, visible: outline || ring, ignored };
+      // A stable identity per element: positions change while the page scrolls to the focus.
+      const ids = (window.__zhinAuditFocusIds ??= new WeakMap());
+      if (!ids.has(element)) ids.set(element, (window.__zhinAuditFocusNext = (window.__zhinAuditFocusNext ?? 0) + 1));
+      return { key: String(ids.get(element)), describe, visible: outline || ring, ignored };
     });
     if (!state) break;
     if (seen.has(state.key)) break;
@@ -148,7 +195,7 @@ async function focusViolations(page, maxSteps) {
 
 /* ───────────────────────── browser side (serialized by page.evaluate) ───────────────────────── */
 
-function collect({ scale, checks, contentSelector, pageType }) {
+function collect({ scale, checks, variantSlots, ringSlots, contentSelector, pageType }) {
   const enabled = new Set(checks);
   const violations = [];
   const exemptions = [];
@@ -173,9 +220,14 @@ function collect({ scale, checks, contentSelector, pageType }) {
     probe.style.setProperty(property, value);
     const computed = getComputedStyle(probe).getPropertyValue(property);
     probe.style.removeProperty(property);
-    return computed;
+    return property === 'box-shadow' ? normalizeShadow(computed) : computed;
   };
-  const shadows = new Set(['none', ...[1, 2, 3].map((level) => resolve('box-shadow', `var(--console-elevation-${level})`))]);
+  const elevations = [1, 2, 3].map((level) => resolve('box-shadow', `var(--console-elevation-${level})`));
+  // The soft-card rings (D39): outline badges, selected rows, the in-progress halo, field focus.
+  const ringNames = ['hairline-ring', 'selected-bar', 'progress-halo', 'progress-halo-wide', 'field-focus-ring', 'field-error-ring', 'focus-ring-inset'];
+  const ringByShadow = new Map(ringNames.map((name) => [resolve('box-shadow', `var(--console-${name})`), name]));
+  const shadows = new Set(['none', ...elevations, ...ringByShadow.keys()]);
+  const cardShadows = new Set(['none', elevations[0]]);
   probe.remove();
 
   const spacing = [0, 1, ...scale.space.map(px)];
@@ -307,34 +359,53 @@ function collect({ scale, checks, contentSelector, pageType }) {
     for (const corner of corners) {
       const value = px(corner.split(' ')[0]);
       if (value >= 1000 || value >= Math.min(rect.width, rect.height) / 2 && value >= radii[radii.length - 2]) continue;
-      if (!inSet(value, radii)) report('radius', element, `border-radius ${corner} is not r-0 … r-4 / full`);
+      if (!inSet(value, radii)) report('radius', element, `border-radius ${corner} is not r-0 … r-7 / full`);
     }
 
     // border widths
     const borderWidths = ['top', 'right', 'bottom', 'left'].map((side) => (style.getPropertyValue(`border-${side}-style`) === 'none' ? 0 : px(style.getPropertyValue(`border-${side}-width`))));
     for (const value of borderWidths) {
-      if (!inSet(value, borders)) report('border', element, `border-width ${value}px is not hairline / focus`);
+      if (!inSet(value, borders)) report('border', element, `border-width ${value}px is not hairline / check / focus`);
     }
 
     // shadow
-    if (!shadows.has(style.boxShadow)) report('shadow', element, `box-shadow "${style.boxShadow}" is not e-0 … e-3`);
+    const shadow = normalizeShadow(style.boxShadow);
+    const slot = element.getAttribute('data-slot');
+    if (!shadows.has(shadow)) report('shadow', element, `box-shadow "${shadow}" is not e-0 … e-3 or a soft-card ring`);
+    else {
+      const ring = ringByShadow.get(shadow);
+      const where = ring ? ringSlots[ring] : null;
+      if (where && !(slot && where.slots.includes(slot)) && !(where.selector && element.matches(where.selector))) {
+        report('shadow', element, `box-shadow ${ring} belongs to ${[...where.slots.map((name) => `[data-slot=${name}]`), where.selector].filter(Boolean).join(', ')} only`);
+      }
+    }
 
     // consistency
-    const slot = element.getAttribute('data-slot');
     if (slot) {
       let key = slot;
       if (element.parentElement?.closest(`[data-slot="${slot}"]`)) key += ':nested';
       if (element.hasAttribute('data-edge')) key += ':edge';
       if (element.hasAttribute('data-interactive')) key += ':interactive';
-      const signature = `radius ${corners.join(' / ')}; border ${borderWidths.join(' ')}; shadow ${style.boxShadow}`;
+      // Variants and selection are deliberate differences (a white button has shadow-sm, a selected
+      // row its bar) — but only the known variants of console-ui's own slots.
+      const variants = variantSlots[slot];
+      const variant = variants ? element.getAttribute(variants.attribute) : null;
+      if (variant && variants.values.includes(variant)) key += `:${variant}`;
+      const current = element.getAttribute('aria-current');
+      const selected = (element.hasAttribute('data-selected') && element.getAttribute('data-selected') !== 'false')
+        || element.getAttribute('aria-selected') === 'true'
+        || element.getAttribute('aria-pressed') === 'true'
+        || (current !== null && current !== 'false');
+      if (selected) key += ':selected';
+      const signature = `radius ${corners.join(' / ')}; border ${borderWidths.join(' ')}; shadow ${shadow}`;
       const group = groups.get(key) ?? new Map();
       if (!group.has(signature)) group.set(signature, element);
       groups.set(key, group);
     }
 
     // static cards
-    if ((slot === 'card' || slot === 'stat-card') && !element.hasAttribute('data-interactive') && style.boxShadow !== 'none') {
-      report('static-card', element, 'a static card has a shadow (D16: e-0, hairline)');
+    if ((slot === 'card' || slot === 'stat-card' || slot === 'list-group') && !element.hasAttribute('data-interactive') && !cardShadows.has(shadow)) {
+      report('static-card', element, 'a static card has more than shadow-sm (soft cards D39: e-1 at most)');
     }
 
     // edge cards at phone width
@@ -373,7 +444,7 @@ function collect({ scale, checks, contentSelector, pageType }) {
     }
   }
 
-  if (fontSizeSet.size > 5) report('type-scale', null, `${fontSizeSet.size} font sizes on the page (at most 5): ${[...fontSizeSet].sort((a, b) => a - b).join(', ')}px`);
+  if (fontSizeSet.size > fontSizes.length) report('type-scale', null, `${fontSizeSet.size} font sizes on the page (at most ${fontSizes.length}): ${[...fontSizeSet].sort((a, b) => a - b).join(', ')}px`);
   if (weightSet.size > 3) report('type-scale', null, `${weightSet.size} font weights on the page (at most 3): ${[...weightSet].join(', ')}`);
 
   for (const [key, group] of groups) {
@@ -390,15 +461,41 @@ function collect({ scale, checks, contentSelector, pageType }) {
   // content width
   if (content && enabled.has('content-width')) {
     const contentWidth = content.getBoundingClientRect().width;
-    if (type === 'data' && width >= 1920 && contentWidth < width * 0.85) {
-      report('content-width', content, `data page content is ${Math.round(contentWidth)}px, < 85% of ${width}px`);
+    const dataTarget = Math.min(width * 0.85, px(scale.dataWidth));
+    if (type === 'data' && width >= 1920 && contentWidth < dataTarget - 0.5) {
+      report('content-width', content, `data page content is ${Math.round(contentWidth)}px, < ${Math.round(dataTarget)}px (85% of ${width}px, at most the content width)`);
     }
     if (type === 'reading' && contentWidth > px(scale.readingWidth) + 0.5) {
       report('content-width', content, `reading page content is ${Math.round(contentWidth)}px, > 60rem`);
     }
   }
 
-  return { width, height, theme: root.classList.contains('dark') ? 'dark' : 'light', violations, exemptions };
+  const dark = root.classList.contains('dark') || root.dataset.theme === 'dark'
+    || (root.dataset.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  return { width, height, theme: dark ? 'dark' : 'light', violations, exemptions };
+
+  /**
+   * Drops the transparent, zero-size layers Tailwind composes into every shadow utility
+   * (`--tw-ring-shadow`, `--tw-inset-shadow`, …), so `shadow-e1` and `var(--console-elevation-1)`
+   * compare equal; `none` when nothing is left.
+   */
+  function normalizeShadow(value) {
+    if (!value || value === 'none') return 'none';
+    const layers = [];
+    let depth = 0;
+    let start = 0;
+    for (let index = 0; index <= value.length; index += 1) {
+      const char = value[index];
+      if (char === '(') depth += 1;
+      else if (char === ')') depth -= 1;
+      else if ((char === ',' && depth === 0) || index === value.length) {
+        layers.push(value.slice(start, index).trim());
+        start = index + 1;
+      }
+    }
+    const visible = layers.filter((layer) => !/^rgba\(0, 0, 0, 0\)\s+0px\s+0px(?:\s+0px)?(?:\s+0px)?(?:\s+inset)?$/u.test(layer));
+    return visible.length ? visible.join(', ') : 'none';
+  }
 
   function isInteractive(element) {
     if (element.closest('[inert]')) return false;

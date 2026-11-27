@@ -12,7 +12,7 @@ export const PREFIX = '--console-';
 
 /** Tier-1 short names → CSS variable names (`space-3` → `--console-space-3`). */
 export function tierOneVariable(name) {
-  if (/^space-[1-8]$/u.test(name)) return `${PREFIX}${name}`;
+  if (/^space-[1-8](?:-5)?$/u.test(name)) return `${PREFIX}${name}`;
   const radius = /^r-(\d|full)$/u.exec(name);
   if (radius) return `${PREFIX}radius-${radius[1]}`;
   const elevation = /^e-(\d)$/u.exec(name);
@@ -23,10 +23,43 @@ export function tierOneVariable(name) {
 
 /** Replaces tier-1 short names inside a semantic value by `var(--console-…)`. */
 export function resolveSemanticValue(value) {
-  return value.replace(/\b(?:space-[1-8]|r-(?:\d|full)|e-\d|hairline|focus)\b/gu, (name) => `var(${tierOneVariable(name)})`);
+  return value.replace(/\b(?:space-[1-8](?:-5)?|r-(?:\d|full)|e-\d|hairline|focus)\b/gu, (name) => `var(${tierOneVariable(name)})`);
 }
 
 const remOf = (key) => (key === '0' ? '0rem' : `${Number(key) * 0.25}rem`);
+
+/** `#RRGGBB` → HSL triplet (`'24 9% 10%'`); triplets pass through. */
+export function hslTriplet(value) {
+  const text = String(value).trim();
+  if (!text.startsWith('#')) return text;
+  const hex = text.length === 4 ? [...text.slice(1)].map((c) => c + c).join('') : text.slice(1, 7);
+  const [r, g, b] = [0, 2, 4].map((at) => Number.parseInt(hex.slice(at, at + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0;
+  let s = 0;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const round = (n) => Number(n.toFixed(2));
+  return `${round(h)} ${round(s * 100)}% ${round(l * 100)}%`;
+}
+
+/** Colour variables of one theme (palette, colour roles as triplets; paints as written). */
+export function themeColorVariables(theme) {
+  const out = {};
+  for (const [name, value] of Object.entries(tokens.palette[theme])) out[name] = hslTriplet(value);
+  for (const [name, value] of Object.entries(tokens.color[theme])) out[name] = hslTriplet(value);
+  Object.assign(out, tokens.paint[theme]);
+  return out;
+}
 
 /** Base-tier variables (name → value), light theme. */
 export function baseTierVariables() {
@@ -35,6 +68,10 @@ export function baseTierVariables() {
     out[`text-${name}`] = size;
     out[`leading-${name}`] = leading;
   }
+  for (const [name, target] of Object.entries(tokens.textAliases)) {
+    out[`text-${name}`] = tokens.text[target].size;
+    out[`leading-${name}`] = tokens.text[target].leading;
+  }
   for (const [name, value] of Object.entries(tokens.weight)) out[`weight-${name}`] = value;
   for (const [name, { value }] of Object.entries(tokens.space)) out[name] = value;
   for (const [name, value] of Object.entries(tokens.radius)) out[`radius-${name.slice(2)}`] = value;
@@ -42,8 +79,9 @@ export function baseTierVariables() {
   for (const [name, value] of Object.entries(tokens.elevation.light)) out[`elevation-${name.slice(2)}`] = value;
   for (const [name, value] of Object.entries(tokens.breakpoints)) out[`bp-${name}`] = value;
   for (const [name, value] of Object.entries(tokens.contentWidth)) out[`content-${name}`] = value;
+  for (const [name, value] of Object.entries(tokens.controlSize)) out[`size-${name}`] = value;
   out['touch-target'] = tokens.touchTarget;
-  Object.assign(out, tokens.misc, tokens.motion, tokens.color.light);
+  Object.assign(out, tokens.misc, tokens.motion, themeColorVariables('light'));
   return out;
 }
 
@@ -95,22 +133,25 @@ export function buildScale() {
     $comment: 'Generated from @zhin.js/console-ui tokens/tokens.mjs by tokens/generate.mjs (ADR 0063 D17). Do not edit.',
     breakpoints: tokens.breakpoints,
     text: Object.fromEntries(Object.entries(tokens.text).map(([name, { size }]) => [name, size])),
+    textAliases: tokens.textAliases,
     weight: tokens.weight,
     space: tokens.space,
     radius: tokens.radius,
     border: tokens.border,
     elevation: Object.keys(tokens.elevation.light),
     contentWidth: tokens.contentWidth,
+    controlSize: tokens.controlSize,
     touchTarget: tokens.touchTarget,
+    colors: Object.keys(themeColorVariables('light')),
     semantic: tokens.semantic,
     tailwind: {
       /** `p-*`, `m-*`, `gap-*`, `space-*`: only these keys (D17). */
       spacingKeys: ['0', 'px', ...Object.values(tokens.space).map((entry) => entry.tailwind)],
       /** `w-*`, `h-*`, `size-*`, `inset-*`, `min-*`, `max-*`, `translate-*`, `basis-*`. */
       sizingKeys: [...tokens.sizingKeys, ...Object.keys(tokens.semanticSizes)],
-      radiusKeys: ['none', '0', '1', '2', '3', '4', 'full', ...radiusSemantic.map((name) => name.replace(/-radius$/u, ''))],
-      shadowKeys: ['none', 'e1', 'e2', 'e3', ...elevationSemantic.map((name) => name.replace(/-elevation$/u, ''))],
-      textKeys: Object.keys(tokens.text),
+      radiusKeys: ['none', ...Object.keys(tokens.radius).map((name) => name.slice(2)), ...radiusSemantic.map((name) => name.replace(/-radius$/u, ''))],
+      shadowKeys: ['none', 'e1', 'e2', 'e3', ...elevationSemantic.map((name) => name.replace(/-elevation$/u, '')), 'hairline', 'selected', 'field-focus'],
+      textKeys: [...Object.keys(tokens.text), ...Object.keys(tokens.textAliases)],
       fontWeightKeys: Object.keys(tokens.weight),
       breakpointKeys: Object.keys(tokens.breakpoints),
       borderWidthKeys: ['0', 'px', 'hairline', 'focus'],

@@ -4,40 +4,51 @@ import * as Radix from "radix-ui"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from '../../cn.js'
 
-const SOFT = "border-primary-action-border bg-primary-action text-primary-action-foreground hover:border-primary hover:bg-primary-action/72"
+const SECONDARY = "bg-sunken text-ink"
+const TEXT = "bg-transparent text-ink"
 
 /**
- * Button variants (ADR 0063 「色板角色与信号色」, zhinjs/console#125):
- *   primary             solid brand, dark text — at most one per view (the next step: 登录, 保存, 发送, 筛选)
- *   soft                palette tint, the default variant (the `default` alias was removed in ADR 0063 P4)
- *   outline / secondary / ghost / link
- *   destructive         ghost: destructive text, no fill — every dangerous entry point on a page
- *   destructive-outline outline button with destructive text (ADR 0063 决策 5)
- *   destructive-solid   solid red — only the confirm button of a confirmation dialog
+ * Button variants (soft cards, ADR 0063 D39; the names of D25 stay):
+ *   primary             solid black / white (`primary` / `on-primary`) — at most one per screen
+ *   secondary           sunken fill, ink text — the everyday button
+ *   soft                the former default: now the same as `secondary` (still the default variant)
+ *   white               white surface with shadow-sm — on tinted, hero and sunken backgrounds
+ *   outline             surface with a hairline ring (kept; prefer `secondary` or `white`)
+ *   ghost / text        no fill, ink text with an underline (`ghost` keeps hover fill, no underline)
+ *   link                same as `text`
+ *   danger-text         no fill, danger text
+ *   destructive         kept: the same as `danger-text`
+ *   destructive-outline kept: surface + hairline ring + danger text
+ *   destructive / danger-solid  `destructive-solid` (and its alias `danger`): danger-solid with white
+ *                       text — only the confirm button of a dangerous action
+ * Sizes: `default` / `lg` 48, `sm` 36, `icon` 48 round (`icon-sm` 36). States: hover 4 % ink, press
+ * 8 % + scale 98 %, 2px focus ring with a 2px gap, disabled 40 %, `loading` (spinner, same width).
  */
 const buttonVariants = cva(
-  "console-control inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control border border-transparent text-body font-medium transition-[background-color,border-color,color,box-shadow] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "console-control console-button inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap border-0 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        // The light-theme brand (#76EEC6) is close to white, so the brand-text hairline gives the button its edge.
-        primary: "border-brand-text/70 bg-brand text-brand-foreground hover:bg-brand/85 dark:border-transparent",
-        soft: SOFT,
-        destructive: "text-destructive hover:bg-destructive/8",
-        outline: "border-[color:var(--console-border-strong)] bg-card text-foreground hover:bg-[var(--console-surface-hover)]",
-        // Page-level entry to a dangerous action (ADR 0063 决策 5): the outline button with destructive text.
-        "destructive-outline": "border-[color:var(--console-border-strong)] bg-card text-destructive hover:bg-[var(--console-surface-hover)]",
-        // Only for the confirm button inside a confirmation dialog (ConfirmDialog variant="destructive").
-        "destructive-solid": "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-accent",
-        ghost: "text-foreground hover:bg-[var(--console-surface-hover)]",
-        link: "text-brand-text underline-offset-4 hover:underline",
+        primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
+        secondary: SECONDARY,
+        soft: SECONDARY,
+        white: "bg-surface text-ink shadow-e1",
+        outline: "bg-surface text-ink shadow-hairline",
+        ghost: "bg-transparent text-ink",
+        text: TEXT,
+        link: TEXT,
+        "danger-text": "bg-transparent text-danger",
+        destructive: "bg-transparent text-danger",
+        "destructive-outline": "bg-surface text-destructive shadow-hairline",
+        "destructive-solid": "bg-danger-solid text-on-danger-solid",
+        danger: "bg-danger-solid text-on-danger-solid",
       },
       size: {
-        default: "h-control px-3",
-        sm: "h-control-compact px-3 text-label",
-        lg: "h-control px-4",
-        icon: "size-control shrink-0",
+        default: "h-control",
+        lg: "h-control",
+        sm: "h-control-compact",
+        icon: "size-control",
+        "icon-sm": "size-control-compact",
       },
     },
     defaultVariants: {
@@ -51,20 +62,43 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  /**
+   * Waiting state: the label is replaced by a spinner, the button keeps its width, is busy
+   * (`aria-busy`) and does not take clicks. The label stays the accessible name.
+   */
+  loading?: boolean
 }
 
 const Slot = Radix.Slot.Root
 
+function Spinner() {
+  return (
+    <svg className="console-button-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 9 9" />
+    </svg>
+  )
+}
+
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    const resolvedVariant = variant ?? "soft"
+    const resolvedSize = size ?? "default"
     return (
       <Comp
         data-slot="button"
+        data-variant={resolvedVariant}
+        data-size={resolvedSize === "icon-sm" ? "icon" : resolvedSize === "lg" ? "default" : resolvedSize}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={asChild ? undefined : disabled}
+        aria-disabled={asChild && disabled ? true : undefined}
+        aria-busy={loading ? true : undefined}
+        onClick={loading ? (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault() : onClick}
         {...props}
-      />
+      >
+        {asChild ? children : loading ? <><span className="inline-flex items-center gap-2">{children}</span><Spinner /></> : children}
+      </Comp>
     )
   }
 )

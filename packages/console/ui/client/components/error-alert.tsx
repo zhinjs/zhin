@@ -36,7 +36,7 @@ export function ErrorAlert({ error, onRetry, className, kind = 'other', technica
        <div className="flex items-center justify-between gap-2">
         <span>{error}</span>
         {onRetry && (
-          <Button variant="outline" size="sm" onClick={onRetry} className="shrink-0">
+          <Button variant="white" size="sm" onClick={onRetry} className="shrink-0">
             <RefreshCw strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" />
             {i18n.t("error.retry")}</Button>
         )}

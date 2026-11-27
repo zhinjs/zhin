@@ -2,7 +2,7 @@
  * Tailwind class checks of ADR 0063 D17 / D20, shared by the ESLint plugin
  * (`@zhin.js/console-ui/eslint`) and `zhin plugin check` (`@zhin.js/console-ui/tailwind-classes`).
  *
- *   classifyClass('p-5')            → { rule: 'off-scale', … }   spacing key not in 0, px, 1, 2, 3, 4, 6, 8, 12, 16
+ *   classifyClass('p-7')            → { rule: 'off-scale', … }   spacing key not in 0, px, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16
  *   classifyClass('p-[5px]')        → { rule: 'arbitrary', … }   arbitrary value of a scale utility
  *   classifyClass('shadow-md')      → { rule: 'off-scale', … }   Tailwind default shadow
  *   classifyClass('h-11')           → null                       sizing keys are not limited by the spacing scale
@@ -20,7 +20,9 @@ const SHADOW = new Set(scale.tailwind.shadowKeys);
 const TEXT = new Set(scale.tailwind.textKeys);
 const WEIGHT = new Set(scale.tailwind.fontWeightKeys);
 
-const TAILWIND_TEXT_SIZES = new Set(['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl', '8xl', '9xl']);
+// Tailwind's default sizes that are not on the console-ui scale (xs, sm, lg, xl and 2xl are: the
+// soft-card scale reuses those names with its own values, ADR 0063 D35).
+const TAILWIND_TEXT_SIZES = new Set(['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl', '8xl', '9xl'].filter((size) => !TEXT.has(size)));
 const TAILWIND_WEIGHTS = new Set(['thin', 'extralight', 'light', 'normal', 'semibold', 'bold', 'extrabold', 'black']);
 const GOVERNED_PROPERTIES = /^\[(?:padding|margin|gap|row-gap|column-gap|font-size|font-weight|border-radius|box-shadow|border(?:-[a-z]+)?-width)(?:-[a-z]+)?:/u;
 const COLOR_VALUE = /^\[(?:color:|hsl|rgb|oklch|oklab|lab|lch|hwb|#|transparent|currentcolor)/iu;
@@ -66,7 +68,7 @@ export function classifyClass(token) {
   match = /^(?:w|h|size|min-w|min-h|max-w|max-h|inset(?:-[xy])?|top|right|bottom|left|start|end|translate-[xy]|basis)-(.+)$/u.exec(utility);
   if (match) {
     const value = match[1];
-    if (/^\d+(?:\.\d+)?$/u.test(value) && !SIZING.has(value)) return offScale('size key', 'Tailwind numeric keys up to 96 and control, control-compact, touch, touch-min, badge');
+    if (/^\d+(?:\.\d+)?$/u.test(value) && !SIZING.has(value)) return offScale('size key', 'Tailwind numeric keys up to 96 and control, control-medium, control-compact, tile, tile-sm, tile-lg, icon-button, touch, touch-min, badge');
     return null;
   }
 

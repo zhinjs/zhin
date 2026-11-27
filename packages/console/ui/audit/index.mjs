@@ -6,12 +6,15 @@
  *   auditPluginPages(request)        mount plugin pages and audit them (used by `pnpm check:plugin-ui-audit`)
  *   formatAuditReport(report)        text summary
  *
- * Check ids: AUDIT_CHECKS (plus `mount` from auditPluginPages). Exemptions:
+ * Check ids: AUDIT_CHECKS (plus `mount` from auditPluginPages); consistency groups and ring placement:
+ * AUDIT_VARIANT_SLOTS, AUDIT_RING_SLOTS. Exemptions:
  * `data-zhin-ui-ignore="<check>[,<check>…]: <reason>"` on an element covers it and its subtree.
  */
 export {
   AUDIT_CHECKS,
+  AUDIT_RING_SLOTS,
   AUDIT_THEMES,
+  AUDIT_VARIANT_SLOTS,
   AUDIT_WIDTHS,
   auditPage,
   formatAuditReport,

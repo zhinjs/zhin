@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Activity, Inbox, Pencil, RefreshCw, Trash2, Users } from 'lucide-react'
+import { Activity, Check, ChevronRight, Clock, Home, Inbox, MessageSquare, MoreHorizontal, Pencil, Puzzle, RefreshCw, Search, Server, Trash2, Users } from 'lucide-react'
 import {
   Alert, AlertDescription, AlertTitle, Badge, BrandMark, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
   Checkbox, ConfirmDialog, ConsoleUiI18nProvider, DateField, DateTimeField, EMPTY_ILLUSTRATIONS, EmptyState, ErrorAlert, Grid,
@@ -13,14 +13,25 @@ import {
   PageChromeActions, PageChromeProvider, PageHeader, PageShell, RowActions, SearchableSelectField, Section,
   SelectField, StatCard, StatGrid, StatusBadge, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
   Tabs, TabsContent, TabsList, TabsTrigger, Textarea, createPageChromeStore, usePageChrome, type PageAction,
+  ActionBar, Aurora, Banner, Chip, HeroCard, IconButton, ListCaption, ListGroup, ListRow, NavIcon, NavPill, Segmented,
+  StatusDot, Stepper, TabBar, TabBarItem, Tile, Toast, Toaster, useToast,
 } from '../client/index.js'
 
 const params = new URLSearchParams(location.search)
-const theme = params.get('theme') === 'dark' ? 'dark' : 'light'
+const requested = params.get('theme')
+const theme = requested === 'dark' || requested === 'system' ? requested : 'light'
 const locale = params.get('locale') ?? 'zh-CN'
 const width = params.get('width') === 'reading' ? 'reading' : 'data'
+// The Console's switch: `.dark` or nothing (light). `?theme=system` opts in to the system preference (D38).
 document.documentElement.classList.toggle('dark', theme === 'dark')
+if (theme === 'system') document.documentElement.dataset.theme = 'system'
 document.documentElement.lang = locale
+
+/**
+ * A `dark:` utility for the theme tests (visual/console-ui.spec.ts): compiled into demo.css from this
+ * string, applied by the tests to probe elements only.
+ */
+export const DARK_VARIANT_PROBE = 'bg-sunken dark:bg-danger'
 
 /** Fixed clock so 「更新于 hh:mm:ss」 is stable in screenshots. */
 const UPDATED_AT = new Date(2026, 10, 15, 9, 30, 15)
@@ -96,6 +107,123 @@ function FeedTable({ onOpen }: { onOpen: (id: string) => void }) {
   )
 }
 
+/** Soft-card components (ADR 0063 D39–D41), as in the design files CButtons / CForms / CLists / CFeedback / CLayout. */
+function SoftCards() {
+  const { toast } = useToast()
+  const [range, setRange] = useState('7d')
+  const [filters, setFilters] = useState<Record<string, boolean>>({ all: true, enabled: false, attention: false })
+  const [limit, setLimit] = useState(20)
+  const [reply, setReply] = useState(true)
+  return (
+    <Section title="柔光卡片" description="大圆角、无描边卡片、胶囊按钮；黑白主色，浅色多彩只给内容。">
+      <div className="console-aurora-host grid gap-6">
+        <Aurora />
+        <nav aria-label="网页导航示例" className="console-nav">
+          <NavIcon href="#overview" label="概览" icon={<Home aria-hidden="true" strokeWidth={1.75} />} />
+          <NavPill href="#plugins" icon={<Puzzle aria-hidden="true" strokeWidth={1.75} />}>插件</NavPill>
+          <NavIcon href="#chat" label="会话" icon={<MessageSquare aria-hidden="true" strokeWidth={1.75} />} />
+          <NavIcon href="#ops" label="运维" icon={<Server aria-hidden="true" strokeWidth={1.75} />} />
+          <IconButton aria-label="搜索"><Search aria-hidden="true" strokeWidth={1.75} /></IconButton>
+        </nav>
+        <Grid min="18rem">
+          <HeroCard title="主卡 hero" description="这一页最重要的一件事">
+            {/* On a hero card the state word stays ink: progress (ink text, a coloured dot), not ok / warn / danger text. */}
+            <StatusDot tone="progress">运行中</StatusDot>
+            <div><Button variant="white" size="sm">重启</Button></div>
+          </HeroCard>
+          <HeroCard variant="hero-2" description="下次运行">
+            <strong className="console-stat-value">19:00</strong>
+          </HeroCard>
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-3">
+              <Tile tone={1}><Clock aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile tone={2} size="lg"><Puzzle aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile tone={3} size="sm" text>T</Tile>
+              <Tile tone={4}><MessageSquare aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile tone={5}><Clock aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile>z</Tile>
+            </CardContent>
+          </Card>
+        </Grid>
+      </div>
+      <Grid min="20rem">
+        <Card>
+          <CardHeader><CardTitle>按钮与选择</CardTitle></CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="primary">保存</Button>
+              <Button>次要</Button>
+              <Button variant="white">白色</Button>
+              <Button variant="text">还原默认</Button>
+              <Button variant="danger-text" size="sm">停止</Button>
+              <Button variant="danger" size="sm">再点停止</Button>
+              <Button loading>保存</Button>
+            </div>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="筛选插件">
+              <Chip pressed={filters.all} onPressedChange={(on) => setFilters({ ...filters, all: on })}>全部 25</Chip>
+              <Chip pressed={filters.enabled} onPressedChange={(on) => setFilters({ ...filters, enabled: on })}>已启用</Chip>
+              <Chip pressed={filters.attention} onPressedChange={(on) => setFilters({ ...filters, attention: on })}>需处理</Chip>
+              <Chip tone={2}>插件</Chip>
+            </div>
+            <Segmented aria-label="时间范围" value={range} onValueChange={setRange} options={[{ value: 'today', label: '今天' }, { value: '7d', label: '7 天' }, { value: '30d', label: '30 天' }]} />
+          </CardContent>
+        </Card>
+        <div className="grid gap-2">
+          <ListCaption>本群设置</ListCaption>
+          <ListGroup plain>
+            <ListRow plain title="群里被 @ 才回复" end={<Switch aria-label="群里被 @ 才回复" checked={reply} onCheckedChange={setReply} />} />
+            <ListRow plain changed title="每人每天上限" description="默认 0（不限）" end={<Stepper label="每人每天上限" value={limit} unit="次" min={0} max={99} onValueChange={setLimit} />} />
+          </ListGroup>
+          <ListCaption>账号</ListCaption>
+          <ListGroup>
+            <ListRow href="#telegram" selected icon={<Tile tone={1} text>T</Tile>} title="Telegram" description="当前选中" end={<StatusDot tone="ok">在线</StatusDot>} />
+            <ListRow href="#discord" icon={<Tile tone={4} text>D</Tile>} title="Discord" description="连接中" end={<StatusDot tone="progress">连接中</StatusDot>} />
+            <ListRow href="#qq" icon={<Tile tone={2} text>Q</Tile>} title="QQ 主号" description="进下一层" end={<ChevronRight aria-hidden="true" strokeWidth={1.75} />} />
+          </ListGroup>
+        </div>
+        <div className="grid gap-3">
+          <Banner tone="warn" action={<Button variant="white" size="sm">去登录</Button>}>QQ 主号待登录</Banner>
+          <Banner tone="danger" action={<Button variant="white" size="sm">去配置</Button>}>rss 加载失败</Banner>
+          <Banner action={<Button variant="white" size="sm">去更新</Button>}>有新版本 1.13</Banner>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusDot tone="ok">在线</StatusDot>
+            <StatusDot tone="progress">连接中</StatusDot>
+            <StatusDot tone="warn">待登录</StatusDot>
+            <StatusDot tone="danger">登录失败</StatusDot>
+            <StatusDot tone="neutral">离线</StatusDot>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="success">已启用</Badge>
+            <Badge variant="warning">可更新</Badge>
+            <Badge variant="destructive">加载失败</Badge>
+            <Badge variant="neutral">v1.4.2</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Toast icon={<Check aria-hidden="true" strokeWidth={1.75} />}>已保存</Toast>
+            <Toast onUndo={noop}>已停用 rss</Toast>
+            <Button size="sm" onClick={() => toast('已停用 rss', { onUndo: noop })}>停用</Button>
+          </div>
+        </div>
+      </Grid>
+      <Card>
+        <EmptyState
+          icon={Clock}
+          title="还没有定时任务"
+          action={{ label: '新建任务', onSelect: noop }}
+          presets={<><Chip>每日天气</Chip><Chip>签到提醒</Chip><Chip>周报汇总</Chip></>}
+        />
+      </Card>
+      <TabBar aria-label="手机导航示例">
+        <TabBarItem href="#t-overview" current icon={<Home aria-hidden="true" strokeWidth={1.75} />}>概览</TabBarItem>
+        <TabBarItem href="#t-chat" icon={<MessageSquare aria-hidden="true" strokeWidth={1.75} />}>会话</TabBarItem>
+        <TabBarItem href="#t-plugins" icon={<Puzzle aria-hidden="true" strokeWidth={1.75} />}>插件</TabBarItem>
+        <TabBarItem href="#t-more" icon={<MoreHorizontal aria-hidden="true" strokeWidth={1.75} />}>更多</TabBarItem>
+      </TabBar>
+      <ActionBar floating={false} start={<Button variant="text">取消</Button>} primary={<Button variant="primary">保存设置</Button>} />
+    </Section>
+  )
+}
+
 function Gallery() {
   const [chrome] = useState(createPageChromeStore)
   const [mode, setMode] = useState('all')
@@ -112,138 +240,141 @@ function Gallery() {
   ]
   return (
     <ConsoleUiI18nProvider locale={locale}>
-      <PageShell width={width}>
-        <PageHeader
-          title="组件示例"
-          description="@zhin.js/console-ui 的按钮、输入框、下拉框、表格、对话框与页面外壳。"
-          actions={<PageChromeActions store={chrome} />}
-          menuActions={headerActions}
-          moreActions={[{ label: '清空记录', tone: 'destructive', onSelect: () => setConfirmOpen(true) }]}
-        />
-        <StatGrid label="统计">
-          <StatCard icon={Activity} label="消息" value="1,284" sub="过去 24 小时" />
-          <StatCard icon={Users} label="会话" value="36" aside={<MiniRingGauge percent={72} />} />
-          <StatCard icon={Inbox} label="待处理" value="3" tone="warning" sub="需要处理" />
-          <StatCard icon={Activity} label="错误" value="1" tone="danger" onOpen={noop} />
-          <StatCard icon={Activity} label="失败" value="0" tone="danger" sub="稳态不着色" />
-        </StatGrid>
-        <Card>
-          <CardContent className="flex flex-wrap items-center gap-6">
-            <BrandMark size="sm" />
-            <BrandMark />
-            <BrandMark size="lg" />
-            <BrandMark withText />
-            <BrandMark size="lg" withText />
-          </CardContent>
-        </Card>
-        <Grid min="20rem">
+      <Toaster>
+        <PageShell width={width}>
+          <PageHeader
+            title="组件示例"
+            description="@zhin.js/console-ui 的按钮、输入框、下拉框、表格、对话框与页面外壳。"
+            actions={<PageChromeActions store={chrome} />}
+            menuActions={headerActions}
+            moreActions={[{ label: '清空记录', tone: 'destructive', onSelect: () => setConfirmOpen(true) }]}
+          />
+          <StatGrid label="统计">
+            <StatCard icon={Activity} label="消息" value="1,284" sub="过去 24 小时" />
+            <StatCard icon={Users} label="会话" value="36" aside={<MiniRingGauge percent={72} />} />
+            <StatCard icon={Inbox} label="待处理" value="3" tone="warning" sub="需要处理" />
+            <StatCard icon={Activity} label="错误" value="1" tone="danger" onOpen={noop} />
+            <StatCard icon={Activity} label="失败" value="0" tone="danger" sub="稳态不着色" />
+          </StatGrid>
           <Card>
-            <CardHeader>
-              <CardTitle>按钮</CardTitle>
-              <CardDescription>每个视图最多一个实心主按钮；页面上的危险操作用幽灵或描边样式，实心红色只在确认对话框里出现。</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-3">
-              <Button variant="primary">主要操作</Button>
-              <Button variant="soft">柔和</Button>
-              <Button variant="secondary">次要</Button>
-              <Button variant="outline">描边</Button>
-              <Button variant="ghost">幽灵</Button>
-              <Button variant="link">链接</Button>
-              <Button variant="destructive-outline" onClick={() => setConfirmOpen(true)}>删除数据</Button>
-              <Button variant="destructive">移除</Button>
-              <Button variant="destructive-solid">确认删除</Button>
-              <Button size="sm">小号</Button>
-              <Button disabled>禁用</Button>
+            <CardContent className="flex flex-wrap items-center gap-6">
+              <BrandMark size="sm" />
+              <BrandMark />
+              <BrandMark size="lg" />
+              <BrandMark withText />
+              <BrandMark size="lg" withText />
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>输入</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <Input aria-label="订阅地址" placeholder="订阅地址" defaultValue="https://example.com/feed.xml" />
-              <Input aria-label="未填写的字段" placeholder="未填写" aria-invalid="true" />
-              <SelectField
-                aria-label="筛选"
-                value={mode}
-                onValueChange={setMode}
-                options={[{ value: 'all', label: '全部' }, { value: 'active', label: '启用中' }, { value: 'paused', label: '已暂停' }]}
-              />
-              <Textarea aria-label="备注" placeholder="备注" rows={2} />
-              <Input variant="ghost" aria-label="备用地址" placeholder="备用地址（ghost，悬停或聚焦时才有边框）" />
-              <SelectField
-                variant="ghost"
-                aria-label="备用模型"
-                value={fallback}
-                onValueChange={setFallback}
-                options={[{ value: '', label: '未设置备用模型' }, { value: 'mini', label: 'gpt-5-mini' }]}
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DateField aria-label="日期" value={day} onValueChange={setDay} />
-                <DateTimeField aria-label="开始时间" value={since} onValueChange={setSince} />
-              </div>
-              <p className="console-text-body">
-                插件 <InlineCode>@zhin.js/plugin-rss</InlineCode> 的 RPC <InlineCode>rss.status</InlineCode>，
-                订阅 ID <InlineCode tone="plain">feed_01J9</InlineCode>
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center gap-2"><Checkbox defaultChecked /> 启用</label>
-                <label className="inline-flex items-center gap-2"><Switch defaultChecked /> 自动推送</label>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>默认</Badge>
-                <Badge variant="secondary">次要</Badge>
-                <StatusBadge status="ok">运行中</StatusBadge>
-                <StatusBadge status="info">同步中</StatusBadge>
-                <StatusBadge status="warning">待处理</StatusBadge>
-                <StatusBadge status="error">异常</StatusBadge>
-              </div>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Section title="订阅" description="窄于 40rem 的容器里，表格的每一行变成一张卡片；宽屏下详情在右侧。">
-          <Tabs defaultValue="feeds">
-            <TabsList>
-              <TabsTrigger value="feeds">订阅</TabsTrigger>
-              <TabsTrigger value="logs">日志</TabsTrigger>
-            </TabsList>
-            <TabsContent value="feeds">
-              <ListDetail
-                list={<Card><FeedTable onOpen={setSelected} /></Card>}
-                detail={selectedFeed ? <Card><CardContent>{selectedFeed.name} · {selectedFeed.items} 条</CardContent></Card> : null}
-                detailTitle={selectedFeed?.name}
-                onDetailClose={() => setSelected(null)}
-              />
-            </TabsContent>
-            <TabsContent value="logs"><EmptyState icon={Inbox} title="没有日志" compact /></TabsContent>
-          </Tabs>
-        </Section>
-        <Grid min="20rem">
-          <div className="grid gap-3">
-            <Alert>
-              <AlertTitle>提示</AlertTitle>
-              <AlertDescription>配置已保存，重启后生效。</AlertDescription>
-            </Alert>
-            <ErrorAlert error="读取订阅失败" onRetry={noop} technicalDetail="HTTP 502" />
-          </div>
-          <Card><EmptyState icon={Inbox} title="没有记录" /></Card>
-        </Grid>
-        <Section title="空状态" description="64px 线稿插画 + 一句说明 + 可选的一个操作；插画是 brand-text 单色、1.5px 描边。">
-          <Grid min="14rem">
-            {EMPTY_ILLUSTRATIONS.map(name => (
-              <Card key={name} data-illustration-card={name}>
-                <EmptyState
-                  illustration={name}
-                  action={name === 'tasks' ? { label: '新建定时任务', variant: 'primary', onSelect: noop } : name === 'not-found' ? { label: '返回首页', href: '#' } : undefined}
+          <Grid min="20rem">
+            <Card>
+              <CardHeader>
+                <CardTitle>按钮</CardTitle>
+                <CardDescription>每个视图最多一个实心主按钮；页面上的危险操作用幽灵或描边样式，实心红色只在确认对话框里出现。</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-3">
+                <Button variant="primary">主要操作</Button>
+                <Button variant="soft">柔和</Button>
+                <Button variant="secondary">次要</Button>
+                <Button variant="outline">描边</Button>
+                <Button variant="ghost">幽灵</Button>
+                <Button variant="link">链接</Button>
+                <Button variant="destructive-outline" onClick={() => setConfirmOpen(true)}>删除数据</Button>
+                <Button variant="destructive">移除</Button>
+                <Button variant="destructive-solid">确认删除</Button>
+                <Button size="sm">小号</Button>
+                <Button disabled>禁用</Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>输入</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <Input aria-label="订阅地址" placeholder="订阅地址" defaultValue="https://example.com/feed.xml" />
+                <Input aria-label="未填写的字段" placeholder="未填写" aria-invalid="true" />
+                <SelectField
+                  aria-label="筛选"
+                  value={mode}
+                  onValueChange={setMode}
+                  options={[{ value: 'all', label: '全部' }, { value: 'active', label: '启用中' }, { value: 'paused', label: '已暂停' }]}
                 />
-              </Card>
-            ))}
+                <Textarea aria-label="备注" placeholder="备注" rows={2} />
+                <Input variant="ghost" aria-label="备用地址" placeholder="备用地址（ghost，悬停或聚焦时才有边框）" />
+                <SelectField
+                  variant="ghost"
+                  aria-label="备用模型"
+                  value={fallback}
+                  onValueChange={setFallback}
+                  options={[{ value: '', label: '未设置备用模型' }, { value: 'mini', label: 'gpt-5-mini' }]}
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DateField aria-label="日期" value={day} onValueChange={setDay} />
+                  <DateTimeField aria-label="开始时间" value={since} onValueChange={setSince} />
+                </div>
+                <p className="console-text-body">
+                  插件 <InlineCode>@zhin.js/plugin-rss</InlineCode> 的 RPC <InlineCode>rss.status</InlineCode>，
+                  订阅 ID <InlineCode tone="plain">feed_01J9</InlineCode>
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex items-center gap-2"><Checkbox defaultChecked /> 启用</label>
+                  <label className="inline-flex items-center gap-2"><Switch defaultChecked /> 自动推送</label>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>默认</Badge>
+                  <Badge variant="secondary">次要</Badge>
+                  <StatusBadge status="ok">运行中</StatusBadge>
+                  <StatusBadge status="info">同步中</StatusBadge>
+                  <StatusBadge status="warning">待处理</StatusBadge>
+                  <StatusBadge status="error">异常</StatusBadge>
+                </div>
+              </CardContent>
+            </Card>
           </Grid>
-        </Section>
-        <PageChromeProvider store={chrome}>
-          <PluginContent />
-        </PageChromeProvider>
-      </PageShell>
+          <Section title="订阅" description="窄于 40rem 的容器里，表格的每一行变成一张卡片；宽屏下详情在右侧。">
+            <Tabs defaultValue="feeds">
+              <TabsList>
+                <TabsTrigger value="feeds">订阅</TabsTrigger>
+                <TabsTrigger value="logs">日志</TabsTrigger>
+              </TabsList>
+              <TabsContent value="feeds">
+                <ListDetail
+                  list={<Card><FeedTable onOpen={setSelected} /></Card>}
+                  detail={selectedFeed ? <Card><CardContent>{selectedFeed.name} · {selectedFeed.items} 条</CardContent></Card> : null}
+                  detailTitle={selectedFeed?.name}
+                  onDetailClose={() => setSelected(null)}
+                />
+              </TabsContent>
+              <TabsContent value="logs"><EmptyState icon={Inbox} title="没有日志" compact /></TabsContent>
+            </Tabs>
+          </Section>
+          <Grid min="20rem">
+            <div className="grid gap-3">
+              <Alert>
+                <AlertTitle>提示</AlertTitle>
+                <AlertDescription>配置已保存，重启后生效。</AlertDescription>
+              </Alert>
+              <ErrorAlert error="读取订阅失败" onRetry={noop} technicalDetail="HTTP 502" />
+            </div>
+            <Card><EmptyState icon={Inbox} title="没有记录" /></Card>
+          </Grid>
+          <Section title="空状态" description="64px 线稿插画 + 一句说明 + 可选的一个操作；插画是 brand-text 单色、1.5px 描边。">
+            <Grid min="14rem">
+              {EMPTY_ILLUSTRATIONS.map(name => (
+                <Card key={name} data-illustration-card={name}>
+                  <EmptyState
+                    illustration={name}
+                    action={name === 'tasks' ? { label: '新建定时任务', variant: 'primary', onSelect: noop } : name === 'not-found' ? { label: '返回首页', href: '#' } : undefined}
+                  />
+                </Card>
+              ))}
+            </Grid>
+          </Section>
+          <SoftCards />
+          <PageChromeProvider store={chrome}>
+            <PluginContent />
+          </PageChromeProvider>
+        </PageShell>
+      </Toaster>
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}

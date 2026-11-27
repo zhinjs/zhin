@@ -7,6 +7,7 @@ import { cn } from '../../cn.js'
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
 import { controlVariantClass, type ControlVariant } from './control-variant.js'
+import { useMenuInput } from './input-modality.js'
 
 const Select = SelectPrimitive.Root
 const SelectGroup = SelectPrimitive.Group
@@ -26,7 +27,7 @@ const SelectTrigger = forwardRef<
     data-slot="input"
     data-variant={variant === 'ghost' ? 'ghost' : undefined}
     className={cn(
-      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap rounded-control border px-3 text-body transition-colors placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 [&>span]:line-clamp-1",
+      "console-control flex h-control w-full items-center justify-between gap-2 whitespace-nowrap text-left [&>span]:line-clamp-1",
       controlVariantClass(variant),
       className
     )}
@@ -34,7 +35,7 @@ const SelectTrigger = forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4 shrink-0 opacity-50" />
+      <ChevronDown strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4 shrink-0 text-muted-foreground" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -71,12 +72,12 @@ SelectScrollDownButton.displayName = "SelectScrollDownButton"
 const SelectContent = forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position: positionProp, ...props }, ref) => {
+>(({ className, children, position: positionProp, onPointerMove, onKeyDown, ...props }, ref) => {
   const position = (positionProp ?? "popper") as "popper" | "item-aligned"
+  const input = useMenuInput<HTMLDivElement>(ref, { onPointerMove, onKeyDown })
   return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
-      ref={ref}
       data-slot="popover"
       className={cn(
         "console-popover relative flex max-h-[min(24rem,var(--radix-select-content-available-height,calc(100dvh-1rem)))] min-w-32 max-w-[calc(100vw-1rem)] flex-col p-0",
@@ -88,6 +89,7 @@ const SelectContent = forwardRef<
       collisionPadding={8}
       sideOffset={4}
       {...props}
+      {...input}
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
@@ -112,12 +114,12 @@ const SelectItem = forwardRef<
     ref={ref}
     value={value}
     className={cn(
-      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 text-body leading-normal outline-none focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-brand-tint data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "console-menu-item relative flex w-full min-w-0 cursor-default select-none items-center py-1 pl-3 pr-8 outline-none data-[state=checked]:font-medium data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
       className
     )}
     {...props}
   >
-    <span className="absolute right-2 flex size-4 items-center justify-center text-brand-text">
+    <span className="absolute right-3 flex size-4 items-center justify-center text-ink">
       <SelectPrimitive.ItemIndicator>
         <Check strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
       </SelectPrimitive.ItemIndicator>
@@ -133,7 +135,7 @@ const SelectSeparator = forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    className={cn("-mx-1 my-1 h-px bg-line", className)}
     {...props}
   />
 ))

@@ -86,13 +86,13 @@ describe('page UI rules 1–6', () => {
   });
 
   it('rule 5: arbitrary values, off-scale spacing keys and default shadows', () => {
-    for (const token of ['p-[13px]', 'rounded-[10px]', 'text-[15px]', 'md:gap-2.5', 'p-5', '-mt-10', 'shadow', 'shadow-lg', 'hover:shadow-md']) {
+    for (const token of ['p-[13px]', 'rounded-[10px]', 'text-[15px]', 'md:gap-2.5', 'p-7', '-mt-9', 'shadow', 'shadow-lg', 'hover:shadow-md']) {
       expect(classNameRule(token), token).toBe(5);
     }
-    for (const token of ['p-4', 'gap-3', 'px-0', 'm-auto', 'mx-px', '-mt-2', 'shadow-e1', 'shadow-none', 'p-(--console-card-padding)', 'p-[var(--console-card-padding)]', 'h-11', 'w-[120px]']) {
+    for (const token of ['p-4', 'p-5', 'gap-10', 'gap-3', 'px-0', 'm-auto', 'mx-px', '-mt-2', 'shadow-e1', 'shadow-none', 'p-(--console-card-padding)', 'p-[var(--console-card-padding)]', 'h-11', 'w-[120px]']) {
       expect(classNameRule(token), token).toBeUndefined();
     }
-    expect(rulesOf('export default () => <div className="flex gap-5 p-4" />;')).toEqual([5]);
+    expect(rulesOf('export default () => <div className="flex gap-7 p-4" />;')).toEqual([5]);
     expect(rulesOf('export default ({ on }) => <div className={`p-4 ${on ? "shadow-lg" : ""}`} />;')).toEqual([5]);
   });
 
@@ -131,10 +131,10 @@ describe('inline ignore comments', () => {
   it('waives only the named rules', () => {
     const result = check([
       '// zhin-ui-ignore 4: 画布坐标需要像素',
-      'export default () => <div className="p-5" style={{ padding: 3 }} />;',
+      'export default () => <div className="p-7" style={{ padding: 3 }} />;',
     ].join('\n'));
     expect(result.findings.map((finding) => finding.rule)).toEqual([5]);
-    expect(check('// zhin-ui-ignore 4,5: 画布\nexport default () => <div className="p-5" style={{ padding: 3 }} />;').findings).toEqual([]);
+    expect(check('// zhin-ui-ignore 4,5: 画布\nexport default () => <div className="p-7" style={{ padding: 3 }} />;').findings).toEqual([]);
   });
 
   it('works in stylesheets', () => {

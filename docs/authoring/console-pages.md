@@ -530,16 +530,16 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 
 Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063](../adr/0063-console-plugin-ui-unification.md) 的「增补：设计规则」）。对 Console 自带页面它是强制的；对第三方插件页面是**推荐**，外加一组很小的硬性底线；本仓库（zhinjs/zhin `plugins/**`）的官方插件自 ADR 0063 P2 起**完整遵守**这些规则，可以当作参考实现来看（见本节末尾）。
 
-**推荐：组合 Console 的组件，不自己写样式。** 用纯蓝图（`definePageBlueprint`）写的页面由 Console 渲染，插件不需要做什么：渲染器已经改用统一组件库（ADR 0063 P2），自动符合这些规则。手写 `.tsx` 页面推荐组合 Console 的组件、使用它的语义令牌，而不是自己写字号、圆角、阴影、内边距的数值或 Tailwind 任意值（`p-[…]` 这类），也不要用原生 `<button>`、`<select>`、`<table>` 代替组件。用 Tailwind 时，间距只用 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16` 这 8 个标准键（即 0.25–4rem 的 8 档间距），其余的键（例如 `p-5`、`gap-2.5`）不在尺度内。这样做的好处：
+**推荐：组合 Console 的组件，不自己写样式。** 用纯蓝图（`definePageBlueprint`）写的页面由 Console 渲染，插件不需要做什么：渲染器已经改用统一组件库（ADR 0063 P2），自动符合这些规则。手写 `.tsx` 页面推荐组合 Console 的组件、使用它的语义令牌，而不是自己写字号、圆角、阴影、内边距的数值或 Tailwind 任意值（`p-[…]` 这类），也不要用原生 `<button>`、`<select>`、`<table>` 代替组件。用 Tailwind 时，间距只用 4px 网格上的 `1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16` 这些键（4–64px），其余的键（例如 `p-7`、`gap-2.5`）不在尺度内。这样做的好处：
 
 - 和 Console 自带页面放在一起时看起来是同一个产品；
 - 类型尺度、间距、窄屏下的布局切换（例如表格变卡片）、触控尺寸、焦点样式和深浅色都由组件处理，Console 以后调整样式时页面也会跟着变。
 
 统一的组件库是 `@zhin.js/console-ui`（带编译好的 `styles.css`，见[它的 README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)）。声明式页面、适配器页和评论审批页的渲染器已经改用它（ADR 0063 P2），手写页面的写法见下面「[页面外壳与组件](#page-shell)」；`@zhin.js/client/ui` 已在 ADR 0063 P4 删除，见「[从 @zhin.js/client/ui 升级](#upgrade-client-ui)」。
 
-尺度的唯一来源是它的 `tokens/tokens.mjs`（ADR 0063 P1b）：间距 `space-1`…`space-8` 对应 Tailwind 键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`（`space-5` 是 `p-6`），字号 `label` / `body` / `section` / `title` / `display`，字重 `regular` / `medium` / `strong`，圆角 `r-0`…`r-4` / `full`，阴影 `e-1`…`e-3`；内容宽度分 `reading`（60rem，设置、表单）和 `data`（120rem，列表、表格，默认）。用 Tailwind 的手写页面可以引入它生成的 `@zhin.js/console-ui/theme.css`，尺度外的键就不存在；`@zhin.js/console-ui/audit` 是同一套布局审计，可以对自己的页面跑一遍。
+尺度的唯一来源是它的 `tokens/tokens.mjs`（ADR 0063 P1b，1.3.0 起按「柔光卡片」规范取值，D34–D41）：间距 `space-1`…`space-8` 加 `space-4-5`（20px）、`space-6-5`（40px），对应 Tailwind 键 `1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16`（`space-5` 是 `p-6`）；字号 8 档 `xs` 12 / `sm` 13 / `md` 14 / `lg` 15 / `xl` 17 / `2xl` 22 / `title` 26 / `display` 32（旧名 `label` / `body` / `section` 是 `sm` / `md` / `xl` 的别名）；字重 `regular` / `medium` / `strong`；圆角 `r-0`…`r-7` / `full`（网页卡片 28、手机卡片 24、输入框 14，按钮全是胶囊）；阴影 `e-1`…`e-3`（shadow-sm / md / lg）；内容宽度分 `reading`（60rem，设置、表单）和 `data`（80rem 即 1280px，列表、表格，默认）。用 Tailwind 的手写页面可以引入它生成的 `@zhin.js/console-ui/theme.css`，尺度外的键就不存在；`@zhin.js/console-ui/audit` 是同一套布局审计，可以对自己的页面跑一遍。
 
-颜色按角色使用（ADR 0063 D23–D25，zhinjs/console#125）：品牌色 `brand`（浅色 `#76EEC6`、深色 `#7FFFD4`，与配色无关）只用于每个视图唯一的实心主按钮 `Button variant="primary"`；当文字或细线用时（链接、选中态）用 `brand-text`。状态只用信号色 `signal-*-fill`（填充、图形）和 `signal-*-text`（文字），稳态（运行中、成功、失败数为 0）不着色；图表用 `chart-1`…`chart-8`。页面上的危险操作用 `variant="destructive"`（幽灵样式）或 `destructive-outline`，实心红 `destructive-solid` 只出现在确认对话框里。动效只用 `--console-motion-fast` / `-base` / `-slow` 与 `--console-ease-out`。
+颜色按角色使用（ADR 0063 D34，「柔光卡片」）：主色只有黑和白（`primary`，每屏唯一的实心主按钮 `Button variant="primary"`、选中、开关）；底色与文字是暖灰（`bg` → `surface` → `sunken` → `raised`，字只有 `ink` / `muted` / `faint`）；彩色只给内容、而且要浅（`tint-1`…`5` 浅彩底 + `accent-1`…`5` 图标色，图标色只画图形不写字）；状态用 `ok` / `warn` / `danger`（各有 `-bg`）和进行中的 `progress`；不用蓝紫色。品牌色 `brand` 只用于品牌标。Console 和插件已经在用的 `--background`、`--primary`、`--muted-foreground`、`--border`、`--destructive` 等名字都映射到了新颜色；插件页面只读这些名字、不写死颜色时不用改代码，但要等 Console 删掉自己对这些变量的覆盖（ADR 0063 第 37 条）才会在 Console 里显示新颜色。页面上的危险操作用 `variant="danger-text"` 或 `destructive-outline`，实心红 `destructive-solid`（别名 `danger`）只出现在确认对话框里。动效只用 `--console-motion-fast` / `-base` / `-slow` / `-exit` 与 `--console-ease-out` / `-fast` / `-exit`。规则全文和组件清单见下文「[柔光卡片：组件与写法](#soft-cards)」。
 
 **允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
 
@@ -565,7 +565,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 | 2 | 自定义页头：`<h1>`，或从 `@zhin.js/client/ui`（已删除，导入会直接构建失败）引入 `PageHeader` / `PluginPage` | 标题写在 `definePage({ title })`，页头操作用 `usePageChrome()`；页内小节从 `<h2>` 起 |
 | 3 | 固定内容宽度：`width` / `max-width` 不小于 640px 或 40rem（样式、CSS、`max-w-[…]` / `w-[…]`、`max-w-2xl` 及以上、`max-w-prose`、`max-w-screen-*`），或自己设置 `--console-content-max` | 删掉，交给外壳；需要占满宽度时用 `definePage({ fullWidth: true })` |
 | 4 | 原始样式数值：`style` 属性、名字以 `style` / `styles` 结尾的样式对象、CSS 字符串和样式文件里，字号、字重、圆角、阴影、内外边距、间隔写了字面值（`0`、`auto` / `none` 等关键字和 `var(--console-…)` 除外） | 组件，或 `var(--console-…)` 语义令牌 |
-| 5 | 尺度外的 Tailwind 类名：任意值（`p-[…]`、`rounded-[…]`、`text-[…]`；`p-(--console-…)` 这种引用 Console 令牌的除外）、尺度外的间距键（`p-5`、`gap-2.5`）、默认 `shadow` / `shadow-sm` … `shadow-2xl` | 间距键 `1`、`2`、`3`、`4`、`6`、`8`、`12`、`16`，圆角 `0`–`4` / `full`，阴影 `e1`–`e3`，或组件 |
+| 5 | 尺度外的 Tailwind 类名：任意值（`p-[…]`、`rounded-[…]`、`text-[…]`；`p-(--console-…)` 这种引用 Console 令牌的除外）、尺度外的间距键（`p-7`、`gap-2.5`）、默认 `shadow` / `shadow-sm` … `shadow-2xl` | 间距键 `1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16`，圆角 `0`–`7` / `full` / `pill`，阴影 `e1`–`e3`，或组件 |
 | 6 | 原生 `<button>`、`<input>`、`<textarea>`、`<table>`、`<dialog>` | `Button`、`Input`、`Textarea`、`Table`、`Dialog` |
 
 第 3 条是近似判断：静态检查认不出哪个元素是页面根容器，所以把「不小于 640px / 40rem 的固定宽度」当作在设置内容宽度。
@@ -615,18 +615,77 @@ export default function Feeds() {
 
 页面里自己写 `<h1>`、`PageHeader` 或 `PluginPage` 属于违规（`zhin plugin check` 会提示）。组件的完整清单见 [`@zhin.js/console-ui` README](https://github.com/zhinjs/zhin/blob/main/packages/console/ui/README.md)，布局组件与内容区块都按**所在容器**的宽度切换布局（容器查询，不看视口）：
 
-- **页面与分区**：`PageShell` 的 `width` 区分阅读 / 表单页（`reading`，60rem）、数据页（`data`，120rem，默认）与占满（`full`，即 `definePage({ fullWidth: true })`）；页内分区用 `Section`（`<h2>` 标题、一句说明、分区操作），卡片网格用 `Grid`（`auto-fit`，`min` 指定最窄列宽），统计卡片用 `StatGrid` + `StatCard`（窄容器里两列；`StatCard` 支持单位、徽标、底部进度），列表 + 详情用 `ListDetail`（90rem 以上并排，以下详情在侧边抽屉里）。
+- **页面与分区**：`PageShell` 的 `width` 区分阅读 / 表单页（`reading`，60rem）、数据页（`data`，80rem 即 1280px，默认）与占满（`full`，即 `definePage({ fullWidth: true })`）；页内分区用 `Section`（`<h2>` 标题、一句说明、分区操作），卡片网格用 `Grid`（`auto-fit`，`min` 指定最窄列宽），统计卡片用 `StatGrid` + `StatCard`（窄容器里两列；`StatCard` 支持单位、徽标、底部进度），列表 + 详情用 `ListDetail`（90rem 以上并排，以下详情在侧边抽屉里）。
 - **表格**：`Table` 在自身宽度小于 40rem 时把每行变成一张卡片，单元格自动带列名；`priority="secondary"` 的列在卡片里隐藏，不出现横向滚动。
 - **操作**：页头操作用 `usePageChrome({ menuActions, moreActions })` 或 `PageActions`（窄于 40rem 时收进「更多」），行操作用 `RowActions`（一个带文字的主操作，其余在 `MoreMenu`「更多」里）；所有操作都带可见文字，危险操作是描边按钮加确认对话框。
 - **浮层与触控**：下拉、弹出层与对话框在手机宽度下是底部抽屉；手机宽度下可点控件不小于 44px（复选框、单选、开关和行内链接用 `.console-touch` 扩大点击区）。
-- **状态**：`StatusBadge` 只给需要注意的状态上色，「正常」弱化显示。
-- **空状态**（ADR 0063 D28）：`EmptyState` 是一张 64px 线稿插画 + 一句说明 + 至多一个操作，例如 `illustration="tasks"` 配 `action`：`{ label: '新建定时任务', variant: 'primary', onSelect }`。插画有 `messages`、`tasks`、`logs`、`table`、`record`、`not-found`、`generic` 七张，不写说明时用插画自带的一句；不要单独写「暂无数据」。
+- **状态**：`StatusBadge`（别名 `StatusDot`）是「点 + 文字」，五种 `ok` / `warn` / `danger` / `neutral` / `progress`；`Badge` 是浅底胶囊（版本号、计数、已启用）。
+- **空状态**（ADR 0063 D28、D41）：`EmptyState` 是图标块（或 64px 线稿插画）+ 标题 + 至多一个操作，下面可放 `presets`（一键套用的胶囊），例如 `illustration="tasks"` 配 `action`：`{ label: '新建定时任务', variant: 'primary', onSelect }`。插画有 `messages`、`tasks`、`logs`、`table`、`record`、`not-found`、`generic` 七张，不写说明时用插画自带的一句；不要单独写「暂无数据」。
 - **表单**（D29）：次要字段（备用模型、未设置的槽位）用 `variant="ghost"`（`Input`、`Textarea`、`SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField`），悬停或聚焦时才出现边框。日期用 `DateField`（值 `YYYY-MM-DD`）和 `DateTimeField`（值 `YYYY-MM-DDTHH:mm`），不用浏览器原生的日期框；值是本地时间的 ISO 字符串，清空为空串，支持键盘操作。
 - **短标识与图标**（D30、D31）：包名、RPC 名、ID 用 `InlineCode`（等宽、极浅底色、无边框），不要做成带边框的小块。lucide 图标统一 `strokeWidth={CONSOLE_ICON_STROKE_WIDTH}`（1.75），控件里 16px、导航 18px；列表和工具栏的图标不放在浅色方块里。
 - **字体**（D33）：组件库只定义字体栈（Inter / JetBrains Mono 优先，回退系统字体），字体由 Console 加载，插件页面不要自己引入字体。
 - **内容区块**（P2）：`ContentStack`、`FormField`、`KeyValueList`（窄容器里一列）、`ProgressMeter`、`Sparkline`、`Timeline`、`Disclosure`（原始 ID、JSON 默认收起）、`CodeText`、`JsonBlock`、`MediaPreview`、`RecordCard`（`Card` + `KeyValueList`）、`LoadingBlock`。它们只补充上面的组件，不重复：分区、网格、统计卡片和表格卡片直接用 P1b 的组件。
 
 这些规则写在组件里，令牌与断点只在 `tokens/tokens.mjs` 定义一次；`@zhin.js/console-ui` 自己的样式由共享的 stylelint / ESLint 规则（`@zhin.js/console-ui/stylelint`、`@zhin.js/console-ui/eslint`）把关，插件也可以在自己的样式上启用。
+
+### 柔光卡片：组件与写法 {#soft-cards}
+
+`@zhin.js/console-ui` 1.3.0 起按「柔光卡片」规范绘制（[ADR 0063](../adr/0063-console-plugin-ui-unification.md) D34–D41）：大圆角、无描边的白卡、胶囊按钮、黑白主色、浅色多彩的内容。组件的 API 不变，已有页面不用改代码；但 Console 自己的 `theme-tokens.css` / `design-system.css` 在组件库之后加载、会覆盖同名的调色板和尺寸变量，**要等 Console 删掉这些覆盖（ADR 0063 第 37 条）之后，Console 和插件页面才会换上新外观**。新写的页面按下面的清单和规矩组合组件。
+
+**组件清单**
+
+| 想表达 | 用 |
+| --- | --- |
+| 卡片、子块 | `Card`（白卡、无描边、shadow-sm）；卡片里的 `Card` 自动是 sunken 子块 |
+| 这一页最重要的一件事 | `HeroCard`（`hero` / `hero-2` 渐变，每页最多一张） |
+| 类别图标 | `Tile`（40，`size="sm"` 32 / `"lg"` 48，`tone` 1–5 或不写为中性） |
+| 主操作、次操作 | `Button`：`primary`（每屏一个）、`secondary`（默认）、`white`（浅彩和主卡上）、`text`（取消、还原默认）、`danger-text`、`danger`（只在确认框）；`size="sm"` 36；等待时 `loading` |
+| 筛选、多选 | `Chip`（`pressed` 写 `aria-pressed`，可带 `tone` 浅彩） |
+| 2–4 个互斥选项 | `Segmented`（或带面板时用 `Tabs`，外观相同；`Tabs` 默认按文字宽度排列，`<Tabs fill>` 才占满等宽）；不切换面板的纯筛选可写 `role="radiogroup"` |
+| 数量 | `Stepper`（值带单位：`unit="次"`；到上下限时按钮 `aria-disabled`，焦点不丢） |
+| 开关、勾选、单选 | `Switch`、`Checkbox`、`RadioGroup` |
+| 输入 | `Input`、`Textarea`、`SelectField`、`SearchableSelectField`、`DateField`（高 48；出错写 `aria-invalid`） |
+| 列表 | `ListCaption`（组标题，卡片外）+ `ListGroup` + `ListRow`（`icon`、`title`、`description`、`end`；`selected`、`plain`、`changed`） |
+| 表格 | `Table`（窄容器里自动变卡片） |
+| 状态 | `StatusDot`（点 + 文字）、`Badge`（浅底胶囊） |
+| 需要处理的状态 | `Banner`（一句状态 + 一个白色小按钮） |
+| 操作结果 | `useToast().toast('已保存', { onUndo })`（页面外层要有 `Toaster`；Console 提供后可直接用。Console 还没提供时，调用不显示任何东西、返回 -1，开发模式下控制台告警一次；带「撤销」的至少停留 5 秒，指针停在上面或焦点在其中时暂停计时） |
+| 底部操作 | `ActionBar`（左边文字按钮、右边主按钮） |
+| 加载 | `Skeleton`（和真内容一样大），不写「正在加载」 |
+| 空 | `EmptyState`（图标 + 标题 + 按钮，`presets` 放一键套用的预设） |
+
+导航相关的 `NavPill`、`NavIcon`、`TabBar`、`Aurora` 是给 Console 外壳用的，插件页面一般用不到。
+
+**类别色怎么用**
+
+- 五组类别色是「浅彩底 + 图标色」：`Tile tone={n}`、`Badge tone={n}`、`Chip tone={n}`、Tailwind 的 `bg-tint-n` / `text-accent-n`。图标色只画图形（图标、图表、点），**不写字**；块里的字用 `ink`。
+- **插件页面固定用第 2 组**（`tint-2` / `accent-2`，粉 / 玫红）：Console 在插件列表和插件详情里用第 2 组表示「插件」，页面里代表插件自己的东西（插件图标、插件的条目）也用它，同一个东西在所有页面颜色一样。需要区分插件内部的几类东西时，可以再用其余几组，但每个类别固定一组，并且一行里最多出现一种图标色。
+- 不用彩色表示状态（状态用 `ok` / `warn` / `danger`），不用彩色字表示可点（文字按钮是 ink 加下划线），不用深色、高饱和的大色块，不用蓝紫色。
+- **主卡（`HeroCard`）上不要用彩色状态字**：渐变底上的字一律 ink。主卡里表示状态用 `StatusDot tone="progress"`（ink 字 + 彩色点）或不带颜色的文字，不要用 `ok` / `warn` / `danger` 的彩色字（它们只保证在 surface 和自己的 `-bg` 上的对比度）。
+- 图表按 `chart-1`…`chart-8` 的顺序取色（五个图标色与孔雀青、棕、赭交错，不含蓝紫）；「正常 / 失败」这类状态用 `ok` / `danger`，不要用图表色。
+
+**一屏只放一个主按钮**
+
+`Button variant="primary"`（黑 / 白实心）每屏只有一个，放这一屏「下一步」的动作；其余用 `secondary`、`white` 或 `text`。确认框里主按钮在最右；危险确认用 `danger`（实心红）。页头操作用 `usePageChrome({ menuActions })` 时只给一个动作写 `tone: 'primary'`。
+
+**让组件自己说清作用**：开关前的名字写清做什么，不在下面加「开启后会……」；数字框直接带单位（「60 秒内」「2 张」）；提示条写一句状态加一个动作（「通知未开启 · 去开启」）；只在改过默认值的设置前加 `changed` 小点，下面写「默认 0」。
+
+**文案长度**
+
+| 位置 | 上限 |
+| --- | --- |
+| 页面标题 | 6 字 |
+| 按钮 | 2～4 字，最多 6 字，动词开头 |
+| 列表说明 | 一行 18 字 |
+| 组标题 | 6 字 |
+| 提示条 | 一句状态 ≤ 8 字 + 一个按钮 |
+| 弹层、确认框标题 | 8 字；确认框用问句 |
+| Toast | 8 字 + 可选「撤销」 |
+| 出错原因 | 18 字 |
+
+不写「您」「请」，不用感叹号；同一个东西全插件只用一个叫法。
+
+**主题**：组件跟随 Console 的浅色 / 深色（`.dark` 或 `data-theme="dark"` 为深色，什么都不写为浅色；宿主在 `<html>` 写 `data-theme="system"` 时才跟随系统），尊重「减少动态效果」。插件样式只读令牌，不要写死颜色，也不要自己判断深浅色；Tailwind 的 `dark:` 在 `.light` 岛内不生效。
 
 ### 从 @zhin.js/client/ui 升级 {#upgrade-client-ui}
 

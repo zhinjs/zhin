@@ -13,6 +13,7 @@ const RadioGroup = forwardRef<
 ))
 RadioGroup.displayName = "RadioGroup"
 
+/** Radio (soft cards, CForms): 22px ring of 1.5px control; checked = primary ring with a 10px primary dot. */
 const RadioGroupItem = forwardRef<
   React.ComponentRef<typeof RadioGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
@@ -20,13 +21,13 @@ const RadioGroupItem = forwardRef<
   <RadioGroupPrimitive.Item
     ref={ref}
     className={cn(
-      "console-control console-touch aspect-square size-4 shrink-0 rounded-full border border-input bg-card text-brand-text transition-colors disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-brand-text",
+      "console-control console-touch console-radio aspect-square shrink-0 rounded-full disabled:cursor-not-allowed disabled:opacity-40",
       className
     )}
     {...props}
   >
     <RadioGroupPrimitive.Indicator className="flex items-center justify-center">
-      <span className="h-2 w-2 rounded-full bg-current" />
+      <span className="console-radio-dot block rounded-full" />
     </RadioGroupPrimitive.Indicator>
   </RadioGroupPrimitive.Item>
 ))

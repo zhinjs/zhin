@@ -3,18 +3,20 @@ import { forwardRef } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from '../../cn.js'
 
+/**
+ * Alert (soft cards, ADR 0063 D39): a banner — one short state, optionally one white button
+ * (`<Button variant="white" size="sm">`) — on the state's -bg fill, no border, radius 24. For new
+ * code prefer `Banner`; Alert keeps its title / description slots for longer messages.
+ */
 const alertVariants = cva(
-  "console-alert relative w-full rounded-card border px-4 py-3 text-body leading-relaxed [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg]:text-foreground [&>svg~*]:pl-6",
+  "console-alert relative flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-hero border-0 py-3 pl-4 pr-3 text-body [&>svg]:size-5 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-secondary text-foreground",
-        destructive:
-          "border-destructive/30 bg-destructive/5 text-destructive dark:border-destructive/40 [&>svg]:text-destructive",
-        success:
-          "console-badge-success [&>svg]:text-success",
-        warning:
-          "console-badge-warning [&>svg]:text-warning",
+        default: "bg-sunken text-ink",
+        destructive: "bg-danger-bg text-danger",
+        success: "bg-ok-bg text-ok",
+        warning: "bg-warn-bg text-warn",
       },
     },
     defaultVariants: {
@@ -42,7 +44,7 @@ const AlertTitle = forwardRef<
 >(({ className, ...props }, ref) => (
   <h5
     ref={ref}
-    className={cn("mb-1 font-strong leading-normal", className)}
+    className={cn("min-w-0 flex-1 font-medium", className)}
     {...props}
   />
 ))
@@ -54,7 +56,7 @@ const AlertDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("text-body [&_p]:leading-relaxed", className)}
+    className={cn("w-full text-label text-muted-foreground [&_p]:leading-relaxed", className)}
     {...props}
   />
 ))

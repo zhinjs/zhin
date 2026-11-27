@@ -1,0 +1,494 @@
+/*
+ * @zhin.js/console-ui — soft-card components (ADR 0063 D39–D41): the selection controls, tiles,
+ * chips, segments, steppers, banners, toasts, hero cards, list rows, web and phone navigation,
+ * the aurora and the action bar. Semantic tokens only (stylelint); layout follows the component's
+ * container. Animations live in shell.css (reduced motion).
+ */
+@layer components {
+  /* ── Switch 46 × 28: control track off, primary track on, the thumb slides (motion-base). ── */
+  .console-switch {
+    position: relative;
+    width: var(--console-size-switch-width);
+    height: var(--console-size-switch-height);
+    padding: 0;
+    border-radius: var(--console-pill-radius);
+    transition: background-color var(--console-motion-base) var(--console-ease-out);
+  }
+  .console-switch-thumb {
+    position: absolute;
+    top: 0.1875rem;
+    left: 0.1875rem;
+    width: 1.375rem;
+    height: 1.375rem;
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-surface));
+    box-shadow: var(--console-card-elevation);
+    transition: translate var(--console-motion-base) var(--console-ease-out), background-color var(--console-motion-base) var(--console-ease-out);
+  }
+  .console-switch[data-state="checked"] .console-switch-thumb {
+    translate: 1.125rem 0;
+    background: hsl(var(--console-on-primary));
+  }
+
+  /* ── Checkbox and radio (CForms): 22px, 1.5px control border; checked primary. ── */
+  .console-check,
+  .console-radio {
+    width: 1.375rem;
+    height: 1.375rem;
+    border: var(--console-check-border-width) solid hsl(var(--console-control));
+    background: hsl(var(--console-surface));
+    color: hsl(var(--console-on-primary));
+    transition: background-color var(--console-motion-fast) var(--console-ease-fast), border-color var(--console-motion-fast) var(--console-ease-fast);
+  }
+  .console-check { border-radius: var(--console-check-radius); }
+  .console-check[data-state="checked"],
+  .console-check[data-state="indeterminate"] {
+    border-color: hsl(var(--console-primary));
+    background: hsl(var(--console-primary));
+  }
+  .console-radio[data-state="checked"] { border-color: hsl(var(--console-primary)); }
+  .console-radio-dot {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-primary));
+  }
+
+  /* ── Segmented control (sc-seg): sunken pill, pill segments, the selected one primary. ── */
+  .console-segmented {
+    display: inline-flex;
+    gap: var(--console-heading-gap);
+    padding: var(--console-heading-gap);
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-muted));
+  }
+  .console-segment {
+    min-height: calc(var(--console-control-height-medium) - 0.125rem);
+    padding-inline: var(--console-chip-padding-inline);
+    border: 0;
+    border-radius: var(--console-segment-radius);
+    background: transparent;
+    color: inherit;
+    font-size: var(--console-text-md);
+    font-weight: var(--console-weight-medium);
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color var(--console-motion-base) var(--console-ease-out), color var(--console-motion-base) var(--console-ease-out);
+  }
+  .console-segment:hover { color: hsl(var(--console-ink)); }
+  .console-segment[aria-selected="true"],
+  .console-segment[aria-checked="true"] {
+    background: hsl(var(--console-primary));
+    color: hsl(var(--console-on-primary));
+  }
+  .console-segment:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Tile: a round icon block, 40 (32 / 48); tone 1–5 = tint fill + accent icon, neutral = sunken + ink. ── */
+  .console-tile {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: var(--console-size-tile-md);
+    height: var(--console-size-tile-md);
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-ink));
+    font-size: var(--console-text-md);
+    font-weight: var(--console-weight-strong);
+    line-height: 1;
+  }
+  .console-tile > svg { width: var(--console-size-icon); height: var(--console-size-icon); }
+  .console-tile[data-size="sm"] { width: var(--console-size-tile-sm); height: var(--console-size-tile-sm); font-size: var(--console-text-xs); }
+  .console-tile[data-size="sm"] > svg { width: 1rem; height: 1rem; }
+  .console-tile[data-size="lg"] { width: var(--console-size-tile-lg); height: var(--console-size-tile-lg); }
+  .console-tile[data-size="lg"] > svg { width: 1.375rem; height: 1.375rem; }
+  .console-tile[data-tone="1"] { background: hsl(var(--console-tint-1)); color: hsl(var(--console-accent-1)); }
+  .console-tile[data-tone="2"] { background: hsl(var(--console-tint-2)); color: hsl(var(--console-accent-2)); }
+  .console-tile[data-tone="3"] { background: hsl(var(--console-tint-3)); color: hsl(var(--console-accent-3)); }
+  .console-tile[data-tone="4"] { background: hsl(var(--console-tint-4)); color: hsl(var(--console-accent-4)); }
+  .console-tile[data-tone="5"] { background: hsl(var(--console-tint-5)); color: hsl(var(--console-accent-5)); }
+  .console-tile[data-tone="primary"] { background: hsl(var(--console-primary)); color: hsl(var(--console-on-primary)); }
+  .console-tile[data-tone="danger"] { background: hsl(var(--console-danger-bg)); color: hsl(var(--console-danger)); }
+  /* Text in a tile is ink: accent colours only draw shapes (D34). */
+  .console-tile[data-text] { color: hsl(var(--console-ink)); }
+
+  /* ── Chip (sc-chip): 36 pill; pressed / checked = primary; optional tint. ── */
+  .console-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--console-heading-gap);
+    min-height: var(--console-control-height-compact);
+    padding-inline: var(--console-chip-padding-inline);
+    border: 0;
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-ink));
+    font-size: var(--console-text-sm);
+    font-weight: var(--console-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--console-motion-fast) var(--console-ease-fast), color var(--console-motion-fast) var(--console-ease-fast);
+  }
+  .console-chip:hover { background-image: linear-gradient(hsl(var(--console-ink) / 0.04), hsl(var(--console-ink) / 0.04)); }
+  .console-chip:active { transform: scale(0.98); }
+  .console-chip[data-tone="1"] { background-color: hsl(var(--console-tint-1)); }
+  .console-chip[data-tone="2"] { background-color: hsl(var(--console-tint-2)); }
+  .console-chip[data-tone="3"] { background-color: hsl(var(--console-tint-3)); }
+  .console-chip[data-tone="4"] { background-color: hsl(var(--console-tint-4)); }
+  .console-chip[data-tone="5"] { background-color: hsl(var(--console-tint-5)); }
+  .console-chip[aria-pressed="true"],
+  .console-chip[aria-checked="true"],
+  .console-chip[aria-current="page"] {
+    background: hsl(var(--console-primary));
+    color: hsl(var(--console-on-primary));
+  }
+  .console-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+  .console-chip > svg { width: 1rem; height: 1rem; }
+
+  /* ── Stepper (sc-stepper): two round buttons and an output with its unit. ── */
+  .console-stepper {
+    display: inline-flex;
+    align-items: center;
+    height: var(--console-control-height-medium);
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-sunken));
+  }
+  .console-stepper-button {
+    display: grid;
+    place-items: center;
+    width: var(--console-control-height-medium);
+    height: var(--console-control-height-medium);
+    padding: 0;
+    border: 0;
+    border-radius: var(--console-pill-radius);
+    background: transparent;
+    color: hsl(var(--console-ink));
+    cursor: pointer;
+  }
+  .console-stepper-button:hover:not(:disabled, [aria-disabled="true"]) { background: hsl(var(--console-ink) / 0.04); }
+  /* At a limit the button stays focusable (aria-disabled), so the keyboard focus does not drop. */
+  .console-stepper-button:disabled,
+  .console-stepper-button[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+  .console-stepper-button > svg { width: 1rem; height: 1rem; }
+  .console-stepper-value {
+    min-width: 2.5rem;
+    padding-inline: var(--console-heading-gap);
+    font-size: var(--console-text-md);
+    font-weight: var(--console-weight-medium);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* ── Banner (sc-banner): one short state and one white button. ── */
+  .console-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--console-control-gap);
+    min-height: var(--console-control-height);
+    padding: var(--console-heading-gap) var(--console-heading-gap) var(--console-heading-gap) var(--console-chip-padding-inline);
+    border-radius: var(--console-hero-radius);
+    background: hsl(var(--console-sunken));
+    color: hsl(var(--console-ink));
+    font-size: var(--console-text-md);
+    line-height: var(--console-leading-md);
+  }
+  .console-banner[data-tone="warn"] { background: hsl(var(--console-warn-bg)); color: hsl(var(--console-warn)); }
+  .console-banner[data-tone="danger"] { background: hsl(var(--console-danger-bg)); color: hsl(var(--console-danger)); }
+  .console-banner-text { flex: 1; min-width: 0; font-weight: var(--console-weight-medium); }
+  .console-banner > svg { flex: none; width: 1.125rem; height: 1.125rem; }
+  .console-banner-detail { color: hsl(var(--console-muted)); font-weight: var(--console-weight-regular); }
+
+  /* ── Toast (sc-toast): inverse pill, one sentence + optional 「撤销」. ── */
+  .console-toaster {
+    position: fixed;
+    inset: auto 0 1.5rem 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--console-control-gap);
+    pointer-events: none;
+  }
+  .console-toast {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--console-control-gap);
+    min-height: var(--console-control-height);
+    padding-inline: var(--console-chip-padding-inline) var(--console-button-padding-inline);
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-inverse));
+    color: hsl(var(--console-on-inverse));
+    box-shadow: var(--console-float-elevation);
+    font-size: var(--console-text-md);
+    pointer-events: auto;
+  }
+  .console-toast > svg { width: 1.125rem; height: 1.125rem; }
+  .console-toast-action {
+    min-height: 1.75rem;
+    padding-inline: var(--console-text-button-padding-inline);
+    border: 0;
+    border-radius: var(--console-pill-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: var(--console-weight-medium);
+    text-decoration: underline;
+    text-underline-offset: 0.1875rem;
+    cursor: pointer;
+  }
+
+  /* ── Hero cards (sc-hero / sc-hero-2): light gradients, ink text, no shadow; one per page. ── */
+  .console-hero {
+    display: flex;
+    flex-direction: column;
+    gap: var(--console-stack-gap);
+    padding: var(--console-card-padding);
+    border-radius: var(--console-hero-radius);
+    background: var(--console-gradient-hero);
+    color: hsl(var(--console-ink));
+  }
+  .console-hero[data-variant="hero-2"] { background: var(--console-gradient-hero-2); }
+  .console-hero-title {
+    margin: 0;
+    font-size: var(--console-text-2xl);
+    font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-2xl);
+  }
+  .console-hero-description { margin: 0; color: hsl(var(--console-muted)); font-size: var(--console-text-sm); line-height: var(--console-leading-sm); }
+
+  /* ── Lists (sc-cap / sc-row): caption outside the card, rows 56 / 52, dividers from the text. ── */
+  .console-list-caption {
+    display: flex;
+    align-items: center;
+    gap: var(--console-heading-gap);
+    min-height: 1.5rem;
+    margin: 0;
+    padding: var(--console-heading-gap) var(--console-list-row-padding-inline) 0;
+    color: hsl(var(--console-muted));
+    font-size: var(--console-text-xs);
+    font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-xs);
+  }
+  .console-list-group {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: var(--console-heading-gap) 0;
+    border-radius: var(--console-card-radius);
+    background: hsl(var(--console-surface));
+    box-shadow: var(--console-card-elevation);
+    list-style: none;
+  }
+  .console-list-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--console-stack-gap);
+    width: 100%;
+    min-height: var(--console-list-row-height);
+    padding: var(--console-list-row-padding) var(--console-list-row-padding-inline);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+  }
+  /* Divider: from the text (68 after a 40 tile, 16 on plain rows), not under the tile. */
+  .console-list-row + .console-list-row::before,
+  .console-list-group > li + li > .console-list-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 4.25rem;
+    right: 1rem;
+    height: 1px;
+    background: hsl(var(--console-line));
+  }
+  .console-list-row[data-plain] + .console-list-row::before,
+  .console-list-group[data-plain] .console-list-row::before,
+  .console-list-group > li:has(> .console-list-row[data-plain]) + li > .console-list-row::before { left: 1rem; }
+  a.console-list-row[href],
+  button.console-list-row:enabled { cursor: pointer; }
+  a.console-list-row[href]:hover,
+  button.console-list-row:enabled:hover { background: hsl(var(--console-ink) / 0.04); }
+  .console-list-row[data-selected],
+  .console-list-row[aria-current]:not([aria-current="false"]) {
+    background: hsl(var(--console-primary-soft));
+    box-shadow: var(--console-selected-bar);
+  }
+  .console-list-row:disabled,
+  .console-list-row[aria-disabled="true"] { opacity: 0.4; }
+  .console-list-row-body { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+  .console-list-row-title {
+    display: flex;
+    align-items: center;
+    gap: var(--console-inline-gap);
+    min-width: 0;
+    font-size: var(--console-text-lg);
+    font-weight: var(--console-weight-medium);
+    line-height: var(--console-leading-lg);
+  }
+  .console-list-row-description {
+    overflow: hidden;
+    color: hsl(var(--console-muted));
+    font-size: var(--console-text-sm);
+    line-height: var(--console-leading-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .console-list-row-end { display: inline-flex; flex: none; align-items: center; gap: var(--console-inline-gap); color: hsl(var(--console-muted)); }
+  .console-list-row-end > svg { width: 1.125rem; height: 1.125rem; }
+  .console-changed {
+    flex: none;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-progress));
+  }
+
+  /* ── Web navigation (sc-nav-pill / sc-nav-icon): current page = black pill with its name. ── */
+  .console-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--console-inline-gap);
+  }
+  .console-nav-pill,
+  .console-nav-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--console-inline-gap);
+    height: var(--console-control-height);
+    border: 0;
+    border-radius: var(--console-pill-radius);
+    font-size: var(--console-text-lg);
+    font-weight: var(--console-weight-medium);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color var(--console-motion-fast) var(--console-ease-fast), color var(--console-motion-fast) var(--console-ease-fast);
+  }
+  .console-nav-pill {
+    padding-inline: var(--console-list-row-padding-inline) var(--console-button-padding-inline);
+    background: hsl(var(--console-primary));
+    color: hsl(var(--console-on-primary));
+  }
+  .console-nav-icon {
+    width: var(--console-control-height);
+    background: hsl(var(--console-surface));
+    color: hsl(var(--console-muted));
+    box-shadow: var(--console-card-elevation);
+  }
+  .console-nav-icon:hover { color: hsl(var(--console-ink)); }
+  .console-nav-pill > svg,
+  .console-nav-icon > svg { width: var(--console-size-icon); height: var(--console-size-icon); }
+
+  /* ── Round icon button (sc-icon-btn): 44 white with shadow-sm; flat = sunken, soft = primary-soft 40. ── */
+  .console-icon-button {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: var(--console-size-icon-button);
+    height: var(--console-size-icon-button);
+    padding: 0;
+    border: 0;
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-surface));
+    color: hsl(var(--console-ink));
+    box-shadow: var(--console-card-elevation);
+    cursor: pointer;
+  }
+  .console-icon-button[data-variant="flat"] { background: hsl(var(--console-sunken)); box-shadow: none; }
+  .console-icon-button[data-variant="soft"] { width: var(--console-control-height-medium); height: var(--console-control-height-medium); background: hsl(var(--console-primary-soft)); box-shadow: none; }
+  .console-icon-button:hover { background-image: linear-gradient(hsl(var(--console-ink) / 0.04), hsl(var(--console-ink) / 0.04)); }
+  .console-icon-button:active { transform: scale(0.98); }
+  .console-icon-button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .console-icon-button > svg { width: var(--console-size-icon); height: var(--console-size-icon); }
+
+  /* ── Phone tab bar (sc-tabbar): a floating pill, 4–5 items with icon and label. ── */
+  .console-tabbar {
+    display: flex;
+    align-items: center;
+    height: 4.25rem;
+    padding-inline: var(--console-heading-gap);
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-surface));
+    box-shadow: var(--console-float-elevation);
+  }
+  .console-tabbar[data-floating] {
+    position: fixed;
+    inset: auto 1rem max(0.875rem, env(safe-area-inset-bottom)) 1rem;
+    z-index: 40;
+  }
+  .console-tabbar-item {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--console-heading-gap);
+    height: 3.625rem;
+    min-width: 0;
+    border: 0;
+    border-radius: var(--console-pill-radius);
+    background: transparent;
+    color: hsl(var(--console-muted));
+    font-size: var(--console-text-xs);
+    font-weight: var(--console-weight-medium);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .console-tabbar-item > svg { width: 1.375rem; height: 1.375rem; }
+  .console-tabbar-item[aria-current="page"] {
+    background: hsl(var(--console-primary-soft));
+    color: hsl(var(--console-ink));
+  }
+
+  /* ── Aurora (sc-aurora): four faint radial blobs at the top of a first-level page. ── */
+  .console-aurora-host { position: relative; isolation: isolate; }
+  .console-aurora {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: -1;
+    height: 20rem;
+    opacity: var(--console-aurora-opacity);
+    pointer-events: none;
+    background:
+      radial-gradient(45% 70% at 6% 0%, var(--console-aurora-1) 0, transparent 70%),
+      radial-gradient(40% 60% at 40% 0%, var(--console-aurora-2) 0, transparent 70%),
+      radial-gradient(45% 70% at 72% 0%, var(--console-aurora-3) 0, transparent 70%),
+      radial-gradient(35% 60% at 100% 10%, var(--console-aurora-4) 0, transparent 70%);
+  }
+  @container console (width >= 40rem) {
+    .console-aurora { height: 26.25rem; }
+  }
+
+  /* ── Action bar: floats over the content; text button left, optional secondary, primary fills the rest. ── */
+  .console-action-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--console-control-gap);
+    padding: var(--console-control-gap);
+    border-radius: var(--console-hero-radius);
+    background: hsl(var(--console-surface));
+    box-shadow: var(--console-float-elevation);
+  }
+  .console-action-bar[data-floating] {
+    position: sticky;
+    bottom: 0.75rem;
+    z-index: 10;
+  }
+  .console-action-bar-primary { display: flex; flex: 1; justify-content: flex-end; }
+  .console-action-bar-primary > * { flex: 1; }
+  @container console (width >= 40rem) {
+    .console-action-bar-primary > * { flex: none; }
+  }
+}

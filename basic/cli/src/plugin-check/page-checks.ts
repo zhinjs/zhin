@@ -59,8 +59,8 @@ export const PAGE_UI_RULES: readonly PageUiRule[] = Object.freeze([
     id: 5,
     key: 'off-scale-tailwind',
     title: '尺度外的 Tailwind 类名',
-    meaning: '任意值（p-[…]、rounded-[…]、text-[…]）、尺度外的间距键（如 p-5、gap-2.5）或 Tailwind 默认的 shadow-* 不在 Console 的尺度内',
-    fix: '改用生成主题中的档位（间距键 1、2、3、4、6、8、12、16；圆角 0–4 / full；阴影 e1–e3），或改用组件',
+    meaning: '任意值（p-[…]、rounded-[…]、text-[…]）、尺度外的间距键（如 p-7、gap-2.5）或 Tailwind 默认的 shadow-* 不在 Console 的尺度内',
+    fix: '改用生成主题中的档位（间距键 1、2、3、4、5、6、8、10、12、16；圆角 0–7 / full / pill；阴影 e1–e3），或改用组件',
   },
   {
     id: 6,
@@ -236,7 +236,8 @@ const SPACING_CLASS = new RegExp(`^${VARIANTS}-?${SPACING_UTILITY}-(\\d+(?:\\.\\
 const DEFAULT_SHADOW_CLASS = new RegExp(`^${VARIANTS}shadow(?:-(?:2xs|xs|sm|md|lg|xl|2xl|inner))?!?$`, 'u');
 const WIDTH_ARBITRARY_CLASS = new RegExp(`^${VARIANTS}(?:max-)?w-\\[([^\\]]+)\\]!?$`, 'u');
 const WIDTH_NAMED_CLASS = new RegExp(`^${VARIANTS}max-w-(?:[2-7]xl|prose|screen-[a-z0-9]+)!?$`, 'u');
-const SPACING_KEYS = new Set(['0', '1', '2', '3', '4', '6', '8', '12', '16']);
+// The 4px grid of @zhin.js/console-ui (ADR 0063 D36): 5 (20px) and 10 (40px) joined in 1.3.
+const SPACING_KEYS = new Set(['0', '1', '2', '3', '4', '5', '6', '8', '10', '12', '16']);
 
 /** The rule a single class name breaks, if any. */
 export function classNameRule(token: string): PageUiRuleId | undefined {

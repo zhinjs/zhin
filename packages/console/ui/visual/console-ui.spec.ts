@@ -101,3 +101,125 @@ for (const theme of ['light', 'dark'] as const) {
     });
   });
 }
+
+/** Behaviour in a real browser (no screenshots): themes, focus at limits, toasts, menu focus. */
+test.describe('behaviour', () => {
+  const rgb = (page: import('@playwright/test').Page, selector: string) =>
+    page.evaluate((target) => getComputedStyle(document.querySelector(target)!).backgroundColor, selector);
+
+  test('no theme is light even when the system is dark; data-theme="system" opts in (D38)', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(`${gallery}?theme=light`);
+    await expect(page.getByRole('heading', { name: '组件示例' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBeNull();
+    expect(await rgb(page, 'body')).toBe('rgb(247, 245, 243)');
+    await page.goto(`${gallery}?theme=system`);
+    await expect(page.getByRole('heading', { name: '组件示例' })).toBeVisible();
+    expect(await rgb(page, 'body')).toBe('rgb(18, 16, 16)');
+    await page.emulateMedia({ colorScheme: 'light' });
+    expect(await rgb(page, 'body')).toBe('rgb(247, 245, 243)');
+  });
+
+  test('dark: utilities follow the nearest theme island', async ({ page }) => {
+    const probe = (theme: string, island: string) => page.evaluate(([themeClass, islandClass]) => {
+      document.documentElement.classList.toggle('dark', themeClass === 'dark');
+      const host = document.createElement('div');
+      if (islandClass) host.className = islandClass;
+      const span = document.createElement('span');
+      span.className = 'bg-sunken dark:bg-danger';
+      span.textContent = 'x';
+      host.append(span);
+      document.body.append(host);
+      const color = getComputedStyle(span).backgroundColor;
+      host.remove();
+      return color;
+    }, [theme, island]);
+    await page.goto(`${gallery}?theme=light`);
+    await expect(page.getByRole('heading', { name: '组件示例' })).toBeVisible();
+    expect(await probe('light', '')).toBe('rgb(243, 240, 237)'); // sunken (light)
+    expect(await probe('dark', '')).toBe('rgb(255, 122, 138)'); // danger (dark)
+    expect(await probe('dark', 'light')).toBe('rgb(243, 240, 237)'); // a .light island in a dark page
+    expect(await probe('light', 'dark')).toBe('rgb(255, 122, 138)'); // a .dark island in a light page
+  });
+
+  test('Stepper keeps the keyboard focus at its limit', async ({ page }) => {
+    await page.goto(`${gallery}?theme=light`);
+    const decrease = page.getByRole('group', { name: '每人每天上限' }).getByRole('button', { name: '减少' });
+    const value = page.getByRole('group', { name: '每人每天上限' }).locator('output');
+    await decrease.focus();
+    for (let step = 0; step < 21; step += 1) await page.keyboard.press('Enter');
+    await expect(value).toHaveText('0 次');
+    await expect(decrease).toBeFocused();
+    await expect(decrease).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Enter');
+    await expect(value).toHaveText('0 次');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('group', { name: '每人每天上限' }).getByRole('button', { name: '增加' })).toBeFocused();
+  });
+
+  test('Toaster: one live region; the time stops while the pointer is on a toast; 「撤销」 stays 5 s', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(`${gallery}?theme=light`);
+    const toaster = page.locator('[data-slot="toaster"]');
+    await page.getByRole('button', { name: '停用', exact: true }).click();
+    const toast = toaster.locator('[data-slot="toast"]');
+    await expect(toast).toHaveCount(1);
+    await expect(toaster).toHaveAttribute('aria-live', 'polite');
+    await expect(toast).not.toHaveAttribute('role', 'status');
+    await expect(toast).not.toHaveAttribute('aria-live');
+    // 「撤销」: still there after 2.5 s, gone after 5 s.
+    await page.clock.runFor(4000);
+    await expect(toast).toHaveCount(1);
+    await page.clock.runFor(1100);
+    await expect(toast).toHaveCount(0);
+    // Hovering stops the time; leaving continues it.
+    await page.getByRole('button', { name: '停用', exact: true }).click();
+    await expect(toast).toHaveCount(1);
+    await toast.hover();
+    await page.clock.runFor(20_000);
+    await expect(toast).toHaveCount(1);
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(5100);
+    await expect(toast).toHaveCount(0);
+    // Focus in the toast stops it too.
+    await page.getByRole('button', { name: '停用', exact: true }).click();
+    await toast.getByRole('button', { name: '撤销' }).focus();
+    await page.clock.runFor(20_000);
+    await expect(toast).toHaveCount(1);
+  });
+
+  test('menu items: keyboard focus shows the focus ring, the pointer only the fill', async ({ page }) => {
+    await page.goto(`${gallery}?theme=light`);
+    const more = page.locator('.console-page-header').getByRole('button', { name: '更多' });
+    // Pointer: the highlighted item is sunken, without a ring.
+    await more.click();
+    const item = page.getByRole('menuitem').first();
+    await item.hover();
+    await expect(item).toHaveAttribute('data-highlighted', '');
+    await expect(item).toHaveCSS('background-color', 'rgb(243, 240, 237)');
+    await expect(item).toHaveCSS('box-shadow', 'none');
+    await page.keyboard.press('Escape');
+    // Keyboard: the focused item gets the 2px focus ring (inset) on primary-soft.
+    await page.reload();
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await page.mouse.move(0, 0);
+    const focused = page.locator('[role="menuitem"]:focus-visible');
+    await expect(focused).toHaveCount(1);
+    await expect(focused).toHaveCSS('box-shadow', /0px 0px 0px 2px inset/u);
+    await expect(focused).toHaveCSS('background-color', 'rgb(239, 236, 233)');
+    await page.keyboard.press('Escape');
+    // Select lists follow the same rule: opened by the pointer, the selected option has no ring;
+    // opened from the keyboard, it has.
+    const select = page.getByRole('combobox', { name: '筛选' });
+    await select.click();
+    await expect(page.getByRole('option', { name: '全部' })).toBeFocused();
+    await expect(page.getByRole('option', { name: '全部' })).toHaveCSS('box-shadow', 'none');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('option', { name: '启用中' })).toHaveCSS('box-shadow', /0px 0px 0px 2px inset/u);
+    await page.keyboard.press('Escape');
+    await select.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('option', { name: '全部' })).toHaveCSS('box-shadow', /0px 0px 0px 2px inset/u);
+  });
+});

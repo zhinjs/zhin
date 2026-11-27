@@ -18,8 +18,19 @@ import {
   customMedia,
   resolveSemanticValue,
   sizingValues,
+  themeColorVariables,
   tokens,
 } from './scale.mjs';
+
+/**
+ * Theme selectors (ADR 0063 D38). Every token block is declared on all theme roots, so a themed
+ * subtree resolves its own values. Without any theme the page is light (as before 1.3.0); dark
+ * values follow `.dark` / `[data-theme="dark"]`; following the system is opt-in with
+ * `data-theme="system"` (dark when `prefers-color-scheme: dark`).
+ */
+export const THEME_ROOTS = ':root, .light, .dark, [data-theme="light"], [data-theme="dark"], [data-theme="system"]';
+export const DARK_ROOTS = '.dark, [data-theme="dark"]';
+export const SYSTEM_DARK_ROOT = '[data-theme="system"]';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
@@ -30,6 +41,9 @@ const HEADER = (what) => `/*
  * ${what}
  */
 `;
+
+/** Composite box-shadows offered as `shadow-*` keys (D39): outline rings and the selected-row bar. */
+export const SHADOW_COMPOSITES = { hairline: 'hairline-ring', selected: 'selected-bar', 'field-focus': 'field-focus-ring' };
 
 const decl = (name, value, indent = '    ') => `${indent}${name}: ${value};`;
 
@@ -43,17 +57,30 @@ function semanticDeclarations(size, filter, indent) {
   return lines;
 }
 
+/** Re-targets the hand-written colour mapping onto the theme selectors (and the opt-in system-dark query). */
+function colorMappingCss() {
+  // A Windows checkout may have CRLF line endings; the block patterns below match LF only.
+  const source = readFileSync(join(here, 'colors.css'), 'utf8').replace(/\r\n?/gu, '\n').trim();
+  const dark = /\n {2}\.dark \{\n([\s\S]*?)\n {2}\}\n/u.exec(source);
+  if (!dark) throw new Error('tokens/colors.css: missing the `.dark { … }` block');
+  const indented = dark[1].split('\n').map((line) => `  ${line}`).join('\n');
+  return source
+    .replace(/\n {2}:root \{\n/u, `\n  ${THEME_ROOTS} {\n`)
+    .replace(dark[0], `\n  ${DARK_ROOTS} {\n${dark[1]}\n  }\n  @media (prefers-color-scheme: dark) {\n    ${SYSTEM_DARK_ROOT} {\n${indented}\n    }\n  }\n`);
+}
+
 export function tokensCss() {
-  const colors = readFileSync(join(here, 'colors.css'), 'utf8').trim();
+  const colors = colorMappingCss();
   const base = baseTierVariables();
   const baseLines = [];
   for (const [name, value] of Object.entries(base)) {
     baseLines.push(decl(`${PREFIX}${name}`, value));
   }
   const darkLines = [
-    ...Object.entries(tokens.elevation.dark).map(([name, value]) => decl(`${PREFIX}elevation-${name.slice(2)}`, value)),
-    ...Object.entries(tokens.miscDark).map(([name, value]) => decl(`${PREFIX}${name}`, value)),
-    ...Object.entries(tokens.color.dark).map(([name, value]) => decl(`${PREFIX}${name}`, value)),
+    'color-scheme: dark;',
+    ...Object.entries(tokens.elevation.dark).map(([name, value]) => `${PREFIX}elevation-${name.slice(2)}: ${value};`),
+    ...Object.entries(tokens.miscDark).map(([name, value]) => `${PREFIX}${name}: ${value};`),
+    ...Object.entries(themeColorVariables('dark')).map(([name, value]) => `${PREFIX}${name}: ${value};`),
   ];
   const viewport = (spec) => spec.scope === 'viewport';
   const container = (spec) => spec.scope !== 'viewport';
@@ -62,17 +89,28 @@ export function tokensCss() {
   const { sm, lg } = tokens.breakpoints;
   const ranges = containerRanges();
   const inner = (lines) => lines.map((line) => `  ${line}`).join('\n');
+  void viewport;
 
-  return `${HEADER('Three tiers (D16): base scale, semantic tokens, and the semantic value per width.')}
+  return `${HEADER('Three tiers (D16): base scale, semantic tokens, and the semantic value per width. Themes: D38.')}
 ${colors}
 
-/* Tier 1 — base scale. Redeclared on .dark so a dark subtree resolves its own values. */
+/*
+ * Tier 1 — base scale and the soft-card colours (light values, also the default without any theme).
+ * Declared on every theme root so a themed subtree resolves its own values; dark values on .dark /
+ * [data-theme="dark"], and on [data-theme="system"] when the system prefers dark (opt-in, D38).
+ */
 @layer base {
-  :root, .dark {
+  ${THEME_ROOTS} {
+    color-scheme: light;
 ${baseLines.join('\n')}
   }
-  .dark {
-${darkLines.join('\n')}
+  ${DARK_ROOTS} {
+${darkLines.map((line) => `    ${line}`).join('\n')}
+  }
+  @media (prefers-color-scheme: dark) {
+    ${SYSTEM_DARK_ROOT} {
+${darkLines.map((line) => `      ${line}`).join('\n')}
+    }
   }
 }
 
@@ -84,17 +122,17 @@ ${darkLines.join('\n')}
  * still override a token for its own subtree.
  */
 @layer base {
-  :root, .dark {
+  ${THEME_ROOTS} {
 ${semanticDeclarations('base', all, '    ').join('\n')}
 ${compositeLines.join('\n')}
   }
   @media (min-width: ${sm}) {
-    :root, .dark {
+    ${THEME_ROOTS} {
 ${semanticDeclarations('sm', all, '      ').join('\n')}
     }
   }
   @media (min-width: ${lg}) {
-    :root, .dark {
+    ${THEME_ROOTS} {
 ${semanticDeclarations('lg', all, '      ').join('\n')}
     }
   }
@@ -147,6 +185,21 @@ function roleColorLines() {
   return Object.keys(tokens.color.light).map((name) => decl(`--color-${name}`, `hsl(var(${PREFIX}${name}))`, '  '));
 }
 
+/**
+ * Soft-card colours (D34): `bg-surface`, `bg-sunken`, `text-ink`, `bg-tint-2`, `text-accent-2`,
+ * `bg-ok-bg`, `text-danger`, `bg-primary-soft`, … Names the shadcn-style theme already uses keep
+ * their meaning and are skipped: `primary` (now black / white), `muted` (a surface; the muted text
+ * colour is `text-muted-foreground`) and `bg` (use `bg-background`).
+ */
+const PALETTE_SKIP = new Set(['bg', 'muted', 'primary']);
+function paletteColorLines() {
+  const lines = Object.keys(tokens.palette.light)
+    .filter((name) => !PALETTE_SKIP.has(name))
+    .map((name) => decl(`--color-${name}`, `hsl(var(${PREFIX}${name}))`, '  '));
+  lines.push(decl('--color-scrim', `var(${PREFIX}scrim)`, '  '));
+  return lines;
+}
+
 function colorLines() {
   const lines = [];
   for (const entry of THEME_COLORS) {
@@ -172,7 +225,7 @@ export function themeCss() {
   for (const namespace of ['width', 'height', 'size', 'min-width', 'max-width', 'inset', 'translate', 'flex-basis']) {
     for (const [key, value] of Object.entries(sizes)) add(`--${namespace}-${key.replace('.', '\\.')}`, value);
   }
-  for (const name of Object.keys(tokens.text)) {
+  for (const name of [...Object.keys(tokens.text), ...Object.keys(tokens.textAliases)]) {
     add(`--text-${name}`, `var(${PREFIX}text-${name})`);
     add(`--text-${name}--line-height`, `var(${PREFIX}leading-${name})`);
   }
@@ -185,24 +238,29 @@ export function themeCss() {
   for (const [name, spec] of Object.entries(tokens.semantic)) {
     if (spec.kind === 'elevation') add(`--shadow-${name.replace(/-elevation$/u, '')}`, `var(${PREFIX}${name})`);
   }
+  for (const [key, token] of Object.entries(SHADOW_COMPOSITES)) add(`--shadow-${key}`, `var(${PREFIX}${token})`);
   add('--font-sans', `var(${PREFIX}font-sans)`);
   add('--font-mono', `var(${PREFIX}font-mono)`);
-  lines.push(...colorLines(), ...roleColorLines());
+  lines.push(...colorLines(), ...roleColorLines(), ...paletteColorLines());
+  add('--background-image-hero', `var(${PREFIX}gradient-hero)`);
+  add('--background-image-hero-2', `var(${PREFIX}gradient-hero-2)`);
   // Every `transition-*` utility uses motion-fast and the one easing curve (zhinjs/console#125).
   add('--default-transition-duration', `var(${PREFIX}motion-fast)`);
   add('--default-transition-timing-function', `var(${PREFIX}ease-out)`);
+  add('--animate-spin', `console-spin calc(var(${PREFIX}motion-slow) * 3) linear infinite`);
   add('--animate-accordion-down', `accordion-down var(${PREFIX}motion-base) var(${PREFIX}ease-out)`);
   add('--animate-accordion-up', `accordion-up var(${PREFIX}motion-base) var(${PREFIX}ease-out)`);
 
   return `${HEADER('Tailwind 4 theme (D17): only on-scale keys. Import after `@import "tailwindcss"`.')}
 /*
  * Defaults are cleared, then only the scale is offered:
- *   p-* / m-* / gap-* / space-*   0, px, 1, 2, 3, 4, 6, 8, 12, 16 (= space-1 … space-8)
+ *   p-* / m-* / gap-* / space-*   0, px, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16 (4px grid)
  *   w / h / size / inset / min / max / translate / basis   Tailwind's numeric keys + control, control-compact, touch, badge
- *   text-*        ${Object.keys(tokens.text).join(', ')}
+ *   text-*        ${[...Object.keys(tokens.text), ...Object.keys(tokens.textAliases)].join(', ')}
  *   font-*        ${Object.keys(tokens.weight).join(', ')}
- *   rounded-*     0–4, full + semantic (control, card, badge, popover, dialog, …)
- *   shadow-*      e1–e3 + semantic (card, card-hover, popover, dialog)
+ *   rounded-*     0–7, full + semantic (control, pill, card, sub, hero, badge, popover, dialog, …)
+ *   shadow-*      e1–e3 + semantic (card, card-hover, popover, dialog, float)
+ *   colors        theme colours + soft-card colours (surface, sunken, ink, tint-1…5, accent-1…5, ok, warn, danger, …)
  *   breakpoints   ${Object.entries(tokens.breakpoints).map(([name, value]) => `${name} ${value}`).join(', ')}
  * Arbitrary values (p-[…]) are not blocked here; the ESLint rules of @zhin.js/console-ui/eslint are.
  */
@@ -232,9 +290,27 @@ ${lines.join('\n')}
     from { height: var(--radix-accordion-content-height); }
     to { height: 0; }
   }
+  @keyframes console-spin {
+    to { transform: rotate(360deg); }
+  }
 }
 
-@custom-variant dark (&:where(.dark, .dark *));
+/*
+ * Dark theme variant (D38): inside .dark / [data-theme="dark"], or inside [data-theme="system"] when the
+ * system prefers dark — but not inside a .light / [data-theme="light"] island (islands nest one level:
+ * a dark island inside a light island inside a dark page is not supported). Zero specificity, like
+ * Tailwind's own dark: variant.
+ */
+@custom-variant dark {
+  &:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {
+      @slot;
+    }
+  }
+}
 `;
 }
 

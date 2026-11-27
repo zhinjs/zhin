@@ -18,13 +18,17 @@ describe('cn() knows the console-ui Tailwind theme', () => {
     expect(cn('shadow-e1', 'shadow-e2')).toBe('shadow-e2');
   });
 
-  it('keeps the variant colour on small buttons', () => {
-    for (const variant of ['destructive', 'destructive-outline', 'link'] as const) {
+  it('keeps the variant colour on small buttons and next to a size class (soft cards: sizes live in .console-button)', () => {
+    for (const variant of ['destructive', 'destructive-outline', 'link', 'danger-text', 'primary'] as const) {
       const classes = buttonVariants({ variant, size: 'sm' }).split(/\s+/u);
-      expect(classes).toContain('text-label');
-      expect(classes.some(name => /^text-(?!label$)/u.test(name))).toBe(true);
+      expect(classes).toContain('h-control-compact');
+      expect(classes.some(name => /^text-(?!label$|body$)/u.test(name)), variant).toBe(true);
+      expect(cn(buttonVariants({ variant, size: 'sm' }), 'text-label').split(/\s+/u).filter(name => name.startsWith('text-'))).toHaveLength(2);
     }
-    expect(buttonVariants({ variant: 'destructive' }).split(/\s+/u)).toContain('text-body');
+    expect(cn('text-sm', 'text-danger')).toBe('text-sm text-danger');
+    expect(cn('text-xs', 'text-display')).toBe('text-display');
+    expect(cn('rounded-pill', 'rounded-card')).toBe('rounded-card');
+    expect(cn('shadow-e1', 'shadow-hairline')).toBe('shadow-hairline');
   });
 
   it('matches the generated scale', () => {

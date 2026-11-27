@@ -10,16 +10,18 @@ import { createConsoleStylelintConfig } from '../lint/stylelint-config.mjs';
 
 describe('Tailwind class classifier (D17, D20)', () => {
   it.each([
-    ['p-5', 'off-scale'], ['gap-2.5', 'off-scale'], ['md:px-3.5', 'off-scale'], ['-mx-5', 'off-scale'],
-    ['shadow-md', 'off-scale'], ['shadow', 'off-scale'], ['rounded-md', 'off-scale'], ['rounded', 'off-scale'],
-    ['text-sm', 'off-scale'], ['font-bold', 'off-scale'], ['border-2', 'off-scale'], ['h-13', 'off-scale'],
+    ['p-7', 'off-scale'], ['gap-2.5', 'off-scale'], ['md:px-3.5', 'off-scale'], ['-mx-7', 'off-scale'], ['p-9', 'off-scale'],
+    ['shadow-md', 'off-scale'], ['shadow', 'off-scale'], ['rounded-md', 'off-scale'], ['rounded', 'off-scale'], ['rounded-8', 'off-scale'],
+    ['text-base', 'off-scale'], ['text-3xl', 'off-scale'], ['font-bold', 'off-scale'], ['border-2', 'off-scale'], ['h-13', 'off-scale'],
     ['p-[5px]', 'arbitrary'], ['rounded-[var(--console-radius-md)]', 'arbitrary'], ['text-[13px]', 'arbitrary'],
     ['text-[length:var(--console-text-body)]', 'arbitrary'], ['shadow-[0_1px_2px_black]', 'arbitrary'], ['[padding:3px]', 'arbitrary'],
   ])('%s → %s', (token, rule) => {
     expect(classifyClass(token)?.rule).toBe(rule);
   });
 
-  it.each(['p-4', 'px-3', 'gap-2', 'space-y-6', 'mx-auto', 'p-px', 'h-11', 'size-control', 'w-[calc(100%-2rem)]', 'rounded-control', 'rounded-full',
+  it.each(['p-4', 'p-5', 'gap-10', 'px-3', 'gap-2', 'space-y-6', 'mx-auto', 'p-px', 'h-11', 'size-control', 'size-tile', 'h-control-medium', 'w-[calc(100%-2rem)]', 'rounded-control', 'rounded-full',
+    'rounded-pill', 'rounded-7', 'rounded-hero', 'shadow-hairline', 'shadow-float', 'text-xs', 'text-sm', 'text-md', 'text-lg', 'text-xl', 'text-2xl', 'text-title', 'text-display',
+    'bg-tint-2', 'text-accent-2', 'bg-sunken', 'text-ink',
     'shadow-e2', 'shadow-popover', 'text-body', 'text-muted-foreground', 'text-[hsl(var(--primary))]', 'font-strong', 'border', 'border-0',
     'bg-primary/72', 'data-[state=open]:bg-accent', 'rounded-[inherit]', 'hover:border-[hsl(var(--primary))]'])('%s is fine', (token) => {
     expect(classifyClass(token)).toBeNull();
@@ -36,13 +38,14 @@ describe('ESLint plugin', () => {
 
   it('reports arbitrary values, off-scale classes and native controls', () => {
     expect(lint('const a = <div className="p-[5px] gap-2.5" />')).toEqual(['console-ui/no-arbitrary-values', 'console-ui/no-off-scale-classes']);
+    expect(lint('const a = <div className="p-5 gap-10 text-sm rounded-pill" />')).toEqual([]);
     expect(lint('const a = cn("shadow-md", cond && "p-4")')).toEqual(['console-ui/no-off-scale-classes']);
-    expect(lint('const a = cva("rounded-lg", { variants: { size: { "p-5": "px-3" } } })')).toEqual(['console-ui/no-off-scale-classes']);
+    expect(lint('const a = cva("rounded-lg", { variants: { size: { "p-7": "px-3" } } })')).toEqual(['console-ui/no-off-scale-classes']);
     expect(lint('const a = <><button /><select /><table /></>')).toEqual(Array(3).fill('console-ui/no-native-controls'));
   });
 
   it('ignores strings that are not classes', () => {
-    expect(lint('const a = <div title="p-5" onClick={() => log("text-sm")} className="p-4 text-body" />')).toEqual([]);
+    expect(lint('const a = <div title="p-7" onClick={() => log("text-base")} className="p-4 text-body" />')).toEqual([]);
   });
 });
 
@@ -60,6 +63,8 @@ describe('stylelint config', () => {
     expect(await lint('.a { padding: 5px; font-weight: 700; box-shadow: 0 1px 2px hsl(0 0% 0% / .1); border-radius: 0.5rem; }'))
       .toEqual(['console/scale-values', 'console/scale-values', 'console/scale-values', 'console/scale-values']);
     expect(await lint('.a { padding: var(--console-space-3); }')).toEqual(['console/scale-values']);
+    expect(await lint('.a { padding: var(--console-space-4-5); border-radius: var(--console-radius-7); }')).toEqual(['console/scale-values', 'console/scale-values']);
+    expect(await lint('.a { padding: var(--console-card-padding); border-radius: var(--console-pill-radius); box-shadow: var(--console-hairline-ring); color: hsl(var(--console-ink)); background: hsl(var(--console-tint-2)); }')).toEqual([]);
     expect(await lint('.a { padding: var(--console-space-3); }', '/x/tokens.css', { allowTierOneIn: ['tokens\\.css$'] })).toEqual([]);
     expect(await lint('.a { color: var(--console-nope); }')).toEqual(['console/no-unknown-tokens']);
     expect(await lint('.a { border-radius: var(--console-radius-md); }')).toEqual(['console/no-deprecated-tokens']);
