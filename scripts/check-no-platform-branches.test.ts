@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs script
 import { allowlistCovers, collectAdapterPlatformNames, EXTRA_PLATFORM_NAMES, findPlatformBranches, LITERAL_ONLY_NAMES, PLATFORM_NAMES, run } from './check-no-platform-branches.mjs';
 
+/** A whole-repository scan, measured at a few seconds locally and slower under CI coverage. */
+const REPO_SCAN_TIMEOUT_MS = 60_000;
+
 /**
  * Snapshot of every scanned platform name and how it is matched (#1250 review L3).
  *
@@ -117,7 +120,8 @@ describe('check-no-platform-branches', () => {
     expect(findPlatformBranches("const u = 'a//'; if (p === 'icqq') {}").map((hit: { name: string }) => hit.name)).toEqual(['icqq']);
   });
 
+  // Whole-repo scan: sized for coverage-instrumented CI runners, not the 10s unit-test default.
   it('passes on the repository', () => {
     expect(run()).toBe(0);
-  });
+  }, REPO_SCAN_TIMEOUT_MS);
 });

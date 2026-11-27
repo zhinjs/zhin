@@ -5,6 +5,9 @@ import { allowlistCovers, isAdapterImplementationPath, run, SCAN_ROOTS } from '.
 import { findSendBypasses, SEND_BYPASS_PATTERNS, stripComments } from './lib/send-bypass-rules.mjs';
 import { checkSelfChangeFiles, SELF_CHANGE_SEND_BYPASS_PATTERNS, stripCommentsForRules } from '../packages/im/agent/src/self-change/trial.js';
 
+/** A whole-repository scan, measured at a few seconds locally and slower under CI coverage. */
+const REPO_SCAN_TIMEOUT_MS = 60_000;
+
 const BYPASSES = [
   'await bot.$sendMessage({ content })',
   'await this.$sendMessage(options)',
@@ -179,7 +182,8 @@ describe('send bypass rules', () => {
     for (const entry of entries.filter(item => item.rule)) expect(entry.text, JSON.stringify(entry)).toBeTruthy();
   });
 
+  // Whole-repo scan: sized for coverage-instrumented CI runners, not the 10s unit-test default.
   it('passes on the repository', () => {
     expect(run()).toBe(0);
-  });
+  }, REPO_SCAN_TIMEOUT_MS);
 });

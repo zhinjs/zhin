@@ -7,6 +7,7 @@ import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type O
 import type { WebClient } from '@slack/web-api';
 import { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';
 import { formatOutboundWire, keyboardToBlockKitBlocks, type SlackBlock } from './protocol.js';
+import { createMessages, type Locale } from 'zhin.js/i18n';
 
 export interface SlackOutboundResult {
   ts: string;
@@ -80,15 +81,39 @@ export async function editSlackContent(
   const wire = formatOutboundWire(content);
   const blocks = [...wire.blocks];
   const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
-  const payloadBlocks = blocks.slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE);
+  // #1250 b113: one message holds at most SLACK_MAX_BLOCKS_PER_MESSAGE blocks. A long card used to lose
+  // its buttons (the last blocks) here; the text is cut instead, a notice says so, and the buttons stay.
+  // Only this one message is edited: the later parts of a card sent as several messages
+  // (`splitBlocksIntoMessages`) are not touched, so an edit applies to the first part only.
+  const payloadBlocks = fitEditBlocks(blocks);
 
   const updateOpts: { channel: string; ts: string; text: string; blocks?: SlackBlock[] } = {
     channel,
     ts,
-    text: textDelivery.fallbackText || ' ',
+    text: textDelivery.fallbackText || notificationText(payloadBlocks),
   };
   if (payloadBlocks.length > 0) updateOpts.blocks = payloadBlocks;
   await createEndpointOperation({ signal }).run(() => client.chat.update(updateOpts));
+}
+
+const outboundMessages = createMessages({
+  truncated: { 'zh-CN': '[内容过长，已截断]', en: '[Content too long, truncated]' },
+});
+
+/**
+ * The blocks of one edited message (#1250 b113): all of them when they fit; otherwise the text is cut,
+ * a notice section marks the cut, and every button row stays last. More button rows than one message
+ * holds (Core's cards never produce this) keep the first SLACK_MAX_BLOCKS_PER_MESSAGE blocks.
+ */
+function fitEditBlocks(blocks: readonly SlackBlock[], locale?: Locale): SlackBlock[] {
+  const max = SLACK_MAX_BLOCKS_PER_MESSAGE;
+  if (blocks.length <= max) return [...blocks];
+  const actions = blocks.filter(isActionsBlock);
+  // Room for the notice and at least one block of text next to the buttons.
+  if (actions.length > max - 2) return blocks.slice(0, max);
+  const notice = { type: 'section', text: { type: 'mrkdwn', text: outboundMessages(locale, 'truncated') } } as SlackBlock;
+  const others = blocks.filter(block => !isActionsBlock(block)).slice(0, max - actions.length - 1);
+  return [...others, notice, ...actions];
 }
 
 function applyTextMrkdwnBlocks(
@@ -137,21 +162,72 @@ async function postSlackMessage(
     return { ts: requireMessageTimestamp(result) };
   }
 
-  for (let offset = 0; offset < blocks.length; offset += SLACK_MAX_BLOCKS_PER_MESSAGE) {
-    const chunk = blocks.slice(offset, offset + SLACK_MAX_BLOCKS_PER_MESSAGE);
+  // #1250 b113: a card with buttons (a confirmation / approval card) keeps every part where it was sent.
+  // Threading the later parts under the first one put the buttons into a new thread, and a click there
+  // arrives as a message of that thread (another conversation), so it never answered the waiting prompt.
+  const interactive = blocks.some(isActionsBlock);
+  const chunks = splitBlocksIntoMessages(blocks);
+  for (const [index, chunk] of chunks.entries()) {
     const result = await operation.run(() => client.chat.postMessage({
       channel,
-      text: offset === 0 ? (fallbackText || ' ') : ' ',
+      // Each part names its own text in the notification instead of a blank one.
+      text: index === 0 && fallbackText ? fallbackText : notificationText(chunk),
       blocks: chunk,
       ...(threadTs ? { thread_ts: threadTs } : {}),
-      ...(offset === 0 && attachments.length > 0 ? { attachments } : {}),
+      ...(index === 0 && attachments.length > 0 ? { attachments } : {}),
     }));
     const ts = requireMessageTimestamp(result);
     if (!firstTs) firstTs = ts;
-    if (!threadTs) threadTs = ts;
+    if (!threadTs && !interactive) threadTs = ts;
   }
 
   return { ts: firstTs };
+}
+
+function isActionsBlock(block: SlackBlock): boolean {
+  return (block as { type?: unknown }).type === 'actions';
+}
+
+/**
+ * Blocks per message (#1250 b113), each part at most SLACK_MAX_BLOCKS_PER_MESSAGE blocks.
+ * - Everything fits in one message: the blocks as they are, in their original order.
+ * - Otherwise the buttons (`actions` blocks) all go on the last message, together with at least the end
+ *   of the text before them, never on a message of their own and never split from each other: the last
+ *   message holds the text's last `max - actions` blocks, the text before it is cut into full messages.
+ * - More button rows than fit next to any text (`actions >= max`; Core's cards never produce this):
+ *   plain consecutive parts in the original order.
+ */
+export function splitBlocksIntoMessages(blocks: readonly SlackBlock[]): SlackBlock[][] {
+  const max = SLACK_MAX_BLOCKS_PER_MESSAGE;
+  const naive = (list: readonly SlackBlock[]) => {
+    const chunks: SlackBlock[][] = [];
+    for (let offset = 0; offset < list.length; offset += max) chunks.push(list.slice(offset, offset + max));
+    return chunks;
+  };
+  if (blocks.length <= max) return [[...blocks]];
+  const actions = blocks.filter(isActionsBlock);
+  if (!actions.length) return naive(blocks);
+  const room = max - actions.length;
+  if (room < 1) return naive(blocks);
+  const others = blocks.filter(block => !isActionsBlock(block));
+  const tail = others.slice(Math.max(0, others.length - room));
+  return [...naive(others.slice(0, others.length - tail.length)), [...tail, ...actions]];
+}
+
+/** Longest notification text of one part (Slack shows it in notifications and to screen readers). */
+const NOTIFICATION_TEXT_MAX = 300;
+
+/** The plain text of a part's `mrkdwn` sections, cut for the notification; a single space when it has none. */
+function notificationText(blocks: readonly SlackBlock[]): string {
+  const text = blocks
+    .map(block => (block as { type?: unknown; text?: { type?: unknown; text?: unknown } }))
+    .filter(block => block.type === 'section' && block.text?.type === 'mrkdwn' && typeof block.text.text === 'string')
+    .map(block => mrkdwnToPlainFallback(block.text!.text as string))
+    .join('\n')
+    .trim();
+  if (!text) return ' ';
+  const points = Array.from(text);
+  return points.length <= NOTIFICATION_TEXT_MAX ? text : `${points.slice(0, NOTIFICATION_TEXT_MAX).join('')}…`;
 }
 
 function requireMessageTimestamp(result: { ts?: string } | null | undefined): string {

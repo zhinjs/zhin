@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { sendSlackContent, editSlackContent } from '../src/slack-outbound.js';
+import { sendSlackContent, editSlackContent, splitBlocksIntoMessages } from '../src/slack-outbound.js';
 
 function mockWebClient() {
   return {
@@ -47,6 +47,45 @@ describe('sendSlackContent', () => {
     await expect(sendSlackContent(client, { content: 'x'.repeat(350_000), ...{ channel: 'C001' }, logger: mockLogger() }))
       .rejects.toThrow('delivery is unconfirmed');
     expect(client.chat.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a long confirmation card\'s buttons in the card\'s own conversation, each part with its text (#1250 b113)', async () => {
+    const client = mockWebClient();
+    let n = 0;
+    client.chat.postMessage.mockImplementation(async () => ({ ts: `1700000000.00000${n++}` }));
+    // 60 paragraphs of ~2.8k characters: more sections than one Slack message holds (48 blocks).
+    const description = Array.from({ length: 60 }, (_, index) => `第 ${index + 1} 段 ${'说明'.repeat(1400)}`).join('\n\n');
+    await sendSlackContent(client, { content: [
+      { type: 'markdown', data: { content: `### 操作确认\n\n${description}` } },
+      { type: 'keyboard', data: { rows: [[
+        { id: 'interaction-1', label: '拒绝', payload: 'no' },
+        { id: 'interaction-2', label: '允许一次', payload: 'yes' },
+      ]] } },
+    ], channel: 'C001', logger: mockLogger() });
+    const calls = client.chat.postMessage.mock.calls.map((call: unknown[]) => call[0] as {
+      text: string; blocks: { type: string }[]; thread_ts?: string;
+    });
+    expect(calls.length).toBeGreaterThan(1);
+    // Every part stays where the card was sent: a click inside an auto-created thread would arrive as a
+    // message of another conversation (the thread) and never answer the waiting prompt.
+    expect(calls.every(call => call.thread_ts === undefined)).toBe(true);
+    // The buttons are on one message, together with the end of the card's text.
+    const withButtons = calls.filter(call => call.blocks.some(block => block.type === 'actions'));
+    expect(withButtons).toHaveLength(1);
+    expect(withButtons[0]!.blocks.some(block => block.type === 'section')).toBe(true);
+    // No part is an empty notification.
+    expect(calls.every(call => call.text.trim().length > 0)).toBe(true);
+  });
+
+  it('still threads the parts of a long reply without buttons under its first message', async () => {
+    const client = mockWebClient();
+    let n = 0;
+    client.chat.postMessage.mockImplementation(async () => ({ ts: `1700000000.00000${n++}` }));
+    await sendSlackContent(client, { content: [{ type: 'markdown', data: { content: Array.from({ length: 60 }, () => 'x'.repeat(2800)).join('\n\n') } }, { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } }], channel: 'C001', logger: mockLogger() });
+    const calls = client.chat.postMessage.mock.calls.map((call: unknown[]) => call[0] as { thread_ts?: string });
+    expect(calls.length).toBeGreaterThan(1);
+    expect(calls[0]!.thread_ts).toBeUndefined();
+    expect(calls.slice(1).every(call => call.thread_ts === '1700000000.000000')).toBe(true);
   });
 
   it.each(['unsupported', 'rejected'])('does not report success after an %s file upload', async (failure) => {
@@ -308,5 +347,78 @@ describe('editSlackContent', () => {
         blocks: [{ type: 'section', text: { type: 'mrkdwn', text: 'updated text' } }],
       }),
     );
+  });
+
+  it('keeps the buttons when a long card is edited past one message\'s blocks (#1250 b113)', async () => {
+    const client = mockWebClient();
+    await editSlackContent(client, { channel: 'C001', ts: '1700000000.000000', content: [
+      { type: 'markdown', data: { content: Array.from({ length: 60 }, (_, index) => `${index} ${'y'.repeat(2800)}`).join('\n\n') } },
+      { type: 'keyboard', data: { rows: [[{ id: 'a', label: '拒绝', payload: 'no' }]] } },
+    ] });
+    const update = client.chat.update.mock.calls[0][0] as { text: string; blocks: { type: string }[] };
+    expect(update.blocks.length).toBeLessThanOrEqual(48);
+    expect(update.blocks.at(-1)?.type).toBe('actions');
+    expect(update.text.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('splitBlocksIntoMessages (#1250 b113)', () => {
+  const section = (index: number) => ({ type: 'section', text: { type: 'mrkdwn', text: `s${index}` } });
+  const actions = (index: number) => ({ type: 'actions', elements: [{ type: 'button', action_id: `a${index}` }] });
+  const sections = (count: number) => Array.from({ length: count }, (_, index) => section(index));
+  const actionRows = (count: number) => Array.from({ length: count }, (_, index) => actions(index));
+  const flat = (chunks: { type: string }[][]) => chunks.flat();
+
+  it('keeps the original order when everything fits in one message', () => {
+    const blocks = [section(0), actions(0), section(1)];
+    expect(splitBlocksIntoMessages(blocks)).toEqual([blocks]);
+  });
+
+  it.each([1, 25, 30, 40, 47])('with %s action rows and long text every part stays within 48 blocks, buttons together on the last', count => {
+    const blocks = [...sections(48), ...actionRows(count)];
+    const chunks = splitBlocksIntoMessages(blocks);
+    expect(chunks.every(chunk => chunk.length <= 48)).toBe(true);
+    expect(flat(chunks)).toHaveLength(blocks.length);
+    const last = chunks.at(-1)!;
+    expect(last.filter(block => block.type === 'actions')).toHaveLength(count);
+    expect(last.some(block => block.type === 'section')).toBe(true);
+    expect(chunks.slice(0, -1).every(chunk => chunk.every(block => block.type !== 'actions'))).toBe(true);
+    // The text keeps its order across parts.
+    expect(flat(chunks).filter(block => block.type === 'section')).toEqual(sections(48));
+  });
+
+  it('30 action rows after 48 sections: no part past the limit (was [18, 60])', () => {
+    expect(splitBlocksIntoMessages([...sections(48), ...actionRows(30)]).map(chunk => chunk.length)).toEqual([30, 48]);
+  });
+
+  it.each([48, 49, 60, 100])('with %s action rows (more than one message holds next to text) every part stays within 48 blocks in order', count => {
+    const blocks = [...sections(48), ...actionRows(count)];
+    const chunks = splitBlocksIntoMessages(blocks);
+    expect(chunks.every(chunk => chunk.length > 0 && chunk.length <= 48)).toBe(true);
+    expect(flat(chunks)).toEqual(blocks);
+  });
+});
+
+describe('editSlackContent truncation notice (#1250 b113)', () => {
+  it('adds a notice section when the text is cut, keeping the buttons last', async () => {
+    const client = mockWebClient();
+    await editSlackContent(client, { channel: 'C001', ts: '1700000000.000000', content: [
+      { type: 'markdown', data: { content: Array.from({ length: 60 }, (_, index) => `${index} ${'y'.repeat(2800)}`).join('\n\n') } },
+      { type: 'keyboard', data: { rows: [[{ id: 'a', label: '拒绝', payload: 'no' }]] } },
+    ] });
+    const update = client.chat.update.mock.calls[0][0] as { blocks: { type: string; text?: { text: string } }[] };
+    expect(update.blocks).toHaveLength(48);
+    expect(update.blocks.at(-1)?.type).toBe('actions');
+    expect(update.blocks.at(-2)?.text?.text).toBe('[内容过长，已截断]');
+  });
+
+  it('adds no notice when nothing is cut', async () => {
+    const client = mockWebClient();
+    await editSlackContent(client, { channel: 'C001', ts: '1700000000.000000', content: [
+      { type: 'markdown', data: { content: 'short' } },
+      { type: 'keyboard', data: { rows: [[{ id: 'a', label: '拒绝', payload: 'no' }]] } },
+    ] });
+    const update = client.chat.update.mock.calls[0][0] as { blocks: { type: string; text?: { text: string } }[] };
+    expect(JSON.stringify(update.blocks)).not.toContain('截断');
   });
 });

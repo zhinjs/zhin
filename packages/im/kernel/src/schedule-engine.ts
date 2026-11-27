@@ -123,6 +123,12 @@ export class ScheduleEngine {
 
     if (kind === 'every' && options?.everyMs && options.everyMs > 0) {
       const everyMs = options.everyMs;
+      // #1250 b113: the next run must stay a valid Date (at most 8.64e15 ms); callers bound the
+      // interval (365 days) before saving, this keeps a stray value from scheduling an Invalid Date.
+      if (!Number.isFinite(everyMs) || Date.now() + everyMs > MAX_DATE_MS) {
+        this.callbacks.delete(id);
+        throw new RangeError(`everyMs is too large: ${everyMs}`);
+      }
       const handle = scheduleLongTimeout(() => {
         fire({ jobId: id, kind: 'solar', scheduledAt: new Date(), solarText: '', lunarText: '' });
         const current = this.meta.get(id);
@@ -272,6 +278,8 @@ export class ScheduleEngine {
 
 /** Node 定时器上限（约 24.8 天）；超过会被截断为 1ms 并立即触发。 */
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+/** The largest time a `Date` can hold (ECMAScript: ±8.64e15 ms). */
+const MAX_DATE_MS = 8.64e15;
 
 /** 支持超过 MAX_TIMER_DELAY_MS 的 setTimeout / setInterval 语义（分段等待）。 */
 function scheduleLongTimeout(

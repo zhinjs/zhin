@@ -9,6 +9,7 @@ import type { ScheduleJobStore } from './job-store.js';
 import type { JobNotify, ScheduleJob } from './types.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
+import { scheduleEveryMsError } from './schedule-limits.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('assistant-profile');
@@ -214,6 +215,24 @@ export async function syncProfileHeartbeatToStore(
   }
 
   const job = buildHeartbeatJobFromRoutine(routine, profile.defaults?.notify);
+  // #1250 b113: an interval past 365 days (or not a number) is not saved (`validateAssistantProfile`
+  // reports it). A heartbeat synced from an earlier, valid profile is switched off like `enabled: false`,
+  // with the reason, so it does not keep running at the old interval.
+  const invalid = job.schedule.kind === 'every' ? scheduleEveryMsError(job.schedule.everyMs) : undefined;
+  if (invalid) {
+    const notice = '配置超限，已停用 heartbeat';
+    logger.warn(formatCompact({ op: 'profile_heartbeat_invalid', job: PROFILE_HEARTBEAT_JOB_ID, notice, error: invalid }));
+    const existing = await store.getJob(PROFILE_HEARTBEAT_JOB_ID);
+    if (existing?.source === 'profile' && existing.enabled) {
+      await store.upsertJob({
+        ...existing,
+        enabled: false,
+        updatedAt: Date.now(),
+        state: { ...existing.state, nextRunAtMs: undefined, lastStatus: 'error', lastError: `Profile heartbeat ${notice}：${invalid}` },
+      });
+    }
+    return false;
+  }
   await upsertProfileJob(store, job);
   return true;
 }
@@ -316,6 +335,11 @@ export function validateAssistantProfile(profile: AssistantProfile): string[] {
   }
   if (profile.routines?.heartbeat?.everyMs != null && profile.routines.heartbeat.everyMs <= 0) {
     errors.push('routines.heartbeat.everyMs must be positive');
+  } else if (profile.routines?.heartbeat?.everyMs != null) {
+    // #1250 b113: the same 365-day bound as every other `every` job; such a heartbeat is not synced
+    // (a stored one is switched off). The error names the actual cause (too long, or not a number).
+    const everyMsError = scheduleEveryMsError(profile.routines.heartbeat.everyMs);
+    if (everyMsError) errors.push(everyMsError);
   }
   for (const key of Object.keys(profile.routines ?? {})) {
     if (key === 'heartbeat') continue;

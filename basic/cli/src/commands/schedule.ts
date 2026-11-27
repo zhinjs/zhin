@@ -171,16 +171,24 @@ async function mutateJob(action: 'remove' | 'pause' | 'resume', id: string): Pro
   await requireOk(await hostPost(await requireHost(), `/assistant/jobs/${action}`, { id }), action === 'resume' ? { kind: 'resume', id } : undefined);
 }
 
-function parseEveryMs(s: string): number {
+/**
+ * Longest `--every` interval: 365 days (#1250 b113). Mirrors `MAX_SCHEDULE_EVERY_MS` in
+ * `packages/im/zhin/src/instance/console/assistant-job-routes.ts` (400 `invalid_argument` there) and
+ * the Agent scheduler's bound, with the same text; defined here because `@zhin.js/cli` must not import
+ * `zhin.js`. Keep them in step.
+ */
+export const MAX_SCHEDULE_EVERY_MS = 365 * 24 * 60 * 60_000;
+
+const EVERY_UNIT_MS: Readonly<Record<string, number>> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+
+/** `--every` (`30m`, `1h`, `1d`, `10s`) as milliseconds: at least 1 second, at most 365 days. Throws the error to print. */
+export function parseEveryMs(s: string): number {
   const m = s.trim().match(/^(\d+)(m|h|d|s)$/i);
   if (!m) throw new Error(`Invalid --every format: ${s}. Use e.g. 30m, 1h, 1d`);
-  const n = parseInt(m[1], 10);
-  const unit = m[2].toLowerCase();
-  if (unit === 's') return n * 1000;
-  if (unit === 'm') return n * 60 * 1000;
-  if (unit === 'h') return n * 60 * 60 * 1000;
-  if (unit === 'd') return n * 24 * 60 * 60 * 1000;
-  throw new Error(`Unknown unit: ${unit}`);
+  const everyMs = Number(m[1]) * EVERY_UNIT_MS[m[2].toLowerCase()];
+  if (everyMs < 1000) throw new Error('执行间隔（--every）至少 1 秒');
+  if (everyMs > MAX_SCHEDULE_EVERY_MS) throw new Error('执行间隔（--every）最多 365 天（与实例的上限相同）');
+  return everyMs;
 }
 
 function notifySummary(notify: ScheduleJobRecordCli['notify']): string {

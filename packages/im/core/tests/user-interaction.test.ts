@@ -126,6 +126,36 @@ describe('UserInteraction module', () => {
     expect(JSON.stringify(rendered)).toContain('2. 允许一次（y / 同意） — 仅执行当前操作');
   });
 
+  it('keeps the buttons when the description itself contains a numbered list that looks like the options (#1250 b113)', () => {
+    // A model-written description (or an approval question quoting arguments) with "1. 确认 / 2. 取消".
+    const confirm = projectUserInteraction({
+      type: 'confirm', title: '执行计划', description: '计划步骤：\n1. 确认库存\n2. 取消旧订单',
+    });
+    const rendered = renderUserInteraction(confirm) as { type: string; data: Record<string, unknown> }[];
+    expect(rendered.map(segment => segment.type)).toEqual(['markdown', 'keyboard']);
+    const select = projectUserInteraction({
+      type: 'select', title: '操作确认', description: '参数：`1. 拒绝 2. 允许一次`',
+      options: [{ label: '拒绝', value: 'reject' }, { label: '允许一次', value: 'approve-once' }],
+    });
+    expect((renderUserInteraction(select) as { type: string }[]).map(segment => segment.type)).toEqual(['markdown', 'keyboard']);
+  });
+
+  it('drops the buttons only when the numbered option list is really on the card (#1250 b113)', () => {
+    const view = projectUserInteraction({
+      type: 'select', title: '环境',
+      options: [{ label: '开发', value: 'dev', description: '允许调试' }, { label: '生产', value: 'prod' }],
+    });
+    expect(renderUserInteraction(view)).toHaveLength(1);
+    // With a progress wrapper the list is on the card too.
+    const step = projectUserInteraction({
+      type: 'select', title: '环境',
+      options: [{ label: '开发', value: 'dev', description: '允许调试' }, { label: '生产', value: 'prod' }],
+    }, { title: '向导', index: 1, total: 2 });
+    expect(renderUserInteraction(step)).toHaveLength(1);
+    // A reminder keeps the flag (the runtime spreads the view and changes only the tip).
+    expect(renderUserInteraction({ ...view, tip: '无效回答' })).toHaveLength(1);
+  });
+
   it('passes every select option to the endpoint and never promises buttons in the text (#1250)', () => {
     const options = Array.from({ length: 20 }, (_, index) => ({ label: `晴天 ${index + 1}`, value: index + 1 }));
     const view = projectUserInteraction({ type: 'select', title: '选择歌曲', options });

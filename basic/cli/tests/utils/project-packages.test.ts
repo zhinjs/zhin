@@ -31,6 +31,18 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe('listProjectPackages', () => {
+  it('puts @zhin.js/core with zhin.js in the framework, not the plugins, although both are zhin.type plugin (#1250 b113)', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    manifest.dependencies['@zhin.js/core'] = '^1.0.0';
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(manifest));
+    install('@zhin.js/core', { zhin: { type: 'plugin', features: [{ package: '@zhin.js/adapter', api: '^2.1.0' }] } });
+    const packages = listProjectPackages(root);
+    expect(packages.find(item => item.name === '@zhin.js/core')?.group).toBe('framework');
+    const lines = renderProjectPackages(packages, []);
+    expect(lines).toContain('插件（1）');
+    expect(lines).toContain('Zhin 框架与功能包（3）');
+  });
+
   it('groups by package.json#zhin: adapters, plugins, framework, other dependencies, missing', () => {
     const groups = Object.fromEntries(listProjectPackages(root).map(item => [item.name, item.group]));
     expect(groups).toEqual({

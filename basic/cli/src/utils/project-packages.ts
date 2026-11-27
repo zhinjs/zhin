@@ -5,8 +5,8 @@
  *
  * What a dependency is comes from its installed `package.json#zhin` (the same rule as the
  * gateway's `gateway.packages.list`): `type: "plugin"` is a plugin, an adapter when its
- * `metadata.category` is `adapter` (or a known adapter package); `type: "feature"` and `zhin.js`
- * are the framework; anything without a Zhin manifest is an ordinary dependency.
+ * `metadata.category` is `adapter` (or a known adapter package); `type: "feature"`, `zhin.js` and
+ * `@zhin.js/core` are the framework; anything without a Zhin manifest is an ordinary dependency.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,10 +40,20 @@ export const PROJECT_PACKAGE_GROUP_TITLES: Readonly<Record<ProjectPackageGroup, 
 
 const GROUP_ORDER: readonly ProjectPackageGroup[] = ['adapter', 'plugin', 'framework', 'dependency', 'missing'];
 
+/**
+ * The framework's own packages (#1250 b113). Both declare `package.json#zhin.type: "plugin"` (the
+ * gateway reports them as `kind: "plugin"`), but the Plugin Runtime treats them as the platform:
+ * `@zhin.js/core` is the feature carrier and `zhin.js` the install facade (`PLATFORM_FEATURE_CARRIER`
+ * / `PLATFORM_FEATURE_FACADE` in `packages/im/runtime/src/platform-features.ts`), never child plugins
+ * of the project, so the Console never lists them as plugins either. The CLI keeps its own copy: those
+ * constants are not part of `@zhin.js/runtime`'s public surface.
+ */
+const FRAMEWORK_PACKAGES: ReadonlySet<string> = new Set(['zhin.js', '@zhin.js/core']);
+
 function groupOf(name: string, manifest: Record<string, unknown>): ProjectPackageGroup {
   const zhin = manifest.zhin;
   const type = zhin && typeof zhin === 'object' && !Array.isArray(zhin) ? (zhin as { type?: unknown }).type : undefined;
-  if (name === 'zhin.js' || type === 'feature') return 'framework';
+  if (FRAMEWORK_PACKAGES.has(name) || type === 'feature') return 'framework';
   if (type === 'plugin') {
     const category = readPluginMarketplaceMetadata(zhin).category;
     return category === 'adapter' || classifyPackage({ name }).kind === 'adapter' ? 'adapter' : 'plugin';

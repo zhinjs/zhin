@@ -7,6 +7,8 @@ import type { ToolApprovalPolicy } from '@zhin.js/ai/tool-policy';
 import type { AgentStreamBus, AgentStreamPublishContext } from '../event/agent-stream-bus.js';
 import { isApprovalPortAvailable, type ApprovalPort } from '../session/approval-port.js';
 import type { ToolApprovalOnceStore } from './tool-approval-once-store.js';
+import { markdownLiteral, markdownLiteralLines } from './approval-presentation.js';
+import { redactApprovalDisplay, redactSecretText } from '../decision-events.js';
 
 export type ToolApprovalGatePolicy = ToolApprovalPolicy;
 
@@ -22,6 +24,29 @@ export async function resolveToolApprovalRequired(
     return !onceStore.has(input.sessionId, input.toolName);
   }
   return Boolean(await policy({ toolName: input.toolName, args: input.args }));
+}
+
+/**
+ * The legacy gate's card (#1250 b113). It is Markdown (Slack mrkdwn / Telegram HTML after the adapter
+ * converts it): the tool name (an MCP server names its own tools) and every model-chosen value are shown
+ * literally, one inline code span each, with secrets masked. The lines follow the main approval card
+ * (`formatApprovalQuestion` in `turn-tool-runtime.ts`): the command, working directory and target file
+ * when the arguments have them, and the masked arguments under `human` or whenever neither a command nor a
+ * path says what the call does, so no policy asks for a blind approval. The scope key keeps the raw values.
+ */
+function formatLegacyApprovalQuestion(toolName: string, args: Readonly<Record<string, unknown>>, humanOnly: boolean): string {
+  const command = typeof args.command === 'string' ? redactSecretText(args.command.trim()) : '';
+  const cwd = typeof args.cwd === 'string' ? args.cwd.trim() : '';
+  const path = ['file_path', 'path'].map(key => args[key]).find(value => typeof value === 'string') as string | undefined;
+  return [
+    `工具「${markdownLiteral(toolName)}」需要确认后执行。是否继续？`,
+    command ? `命令：${markdownLiteralLines(command)}` : undefined,
+    cwd ? `工作目录：${markdownLiteral(cwd)}` : undefined,
+    path ? `目标文件：${markdownLiteral(path)}` : undefined,
+    humanOnly || (!command && !path && Object.keys(args).length > 0)
+      ? `本次参数：${markdownLiteral(stableApprovalValue(redactApprovalDisplay(args)))}`
+      : undefined,
+  ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
 export interface ToolApprovalGateOptions {
@@ -75,8 +100,7 @@ export async function runToolApprovalGate(
     },
   }, publishCtx);
 
-  const question = `工具「${options.toolName}」需要确认后执行。是否继续？`
-    + (options.policy === 'human' ? `\n本次参数：${stableApprovalValue(options.args)}` : '');
+  const question = formatLegacyApprovalQuestion(options.toolName, options.args, options.policy === 'human');
   let approved = false;
   let failure: string | undefined;
   try {
