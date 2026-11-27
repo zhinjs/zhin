@@ -9,10 +9,12 @@ import {
   pluginRoots,
   REMOVED_BOOTSTRAP_NODE,
   REMOVED_NODE_ENTRY_IMPORT,
-  run,
   // @ts-expect-error plain .mjs script
 } from './check-no-removed-plugin-api.mjs';
 import { SELF_CHANGE_REMOVED_NODE_ENTRY_IMPORT } from '../packages/im/agent/src/self-change/trial.js';
+
+/** A whole-repository scan, measured at a few seconds locally and slower under CI coverage. */
+const REPO_SCAN_TIMEOUT_MS = 60_000;
 
 describe('check-no-removed-plugin-api', () => {
   it('scans every example, plugin and package source', () => {
@@ -74,8 +76,9 @@ describe('check-no-removed-plugin-api', () => {
     expect([...used]).toEqual(['a/detector.ts\0const RE = /bootstrapNode/u;']);
   });
 
+  // Scans every source file of the repository; under coverage instrumentation on CI runners one scan
+  // takes several seconds, so this test scans once and gets a timeout sized for a whole-repo scan.
   it('passes on the repository', () => {
     expect(findRemovedApiViolations()).toEqual([]);
-    expect(run()).toBe(0);
-  });
+  }, REPO_SCAN_TIMEOUT_MS);
 });
