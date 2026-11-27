@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createElement as h } from 'react';
@@ -186,5 +187,41 @@ describe('components (ADR 0063 D15, D18)', () => {
     expect(renderToStaticMarkup(h(Card, { edge: true }))).toContain('data-edge=""');
     expect(renderToStaticMarkup(h(Card, { interactive: true }))).toContain('data-interactive=""');
     expect(renderToStaticMarkup(h(Grid, { min: '20rem' }, 'x'))).toContain('--grid-min:20rem');
+  });
+});
+
+describe('themes (D38)', () => {
+  /** Compiles utilities the way a Tailwind consumer (the Console) does: on top of the generated theme. */
+  async function compileUtilities(candidates: string[]) {
+    const { compile } = await import('tailwindcss');
+    const require = createRequire(join(packageRoot, 'package.json'));
+    const input = '@import "tailwindcss/theme.css" layer(theme);\n@import "./client/styles/generated/theme.css";\n@import "tailwindcss/utilities.css" layer(utilities);\n';
+    const compiler = await compile(input, {
+      base: packageRoot,
+      async loadStylesheet(id: string, base: string) {
+        const path = id.startsWith('tailwindcss/') ? require.resolve(id) : join(base, id);
+        return { path, base: dirname(path), content: readFileSync(path, 'utf8') };
+      },
+    });
+    return compiler.build(candidates);
+  }
+
+  it('without any theme the page is light; dark is .dark / [data-theme="dark"]; the system preference only with data-theme="system"', () => {
+    const css = tokensCss();
+    // Light values on every theme root, :root included — nothing turns a bare root dark.
+    expect(css).toMatch(/:root, \.light, \.dark, \[data-theme="light"\], \[data-theme="dark"\], \[data-theme="system"\] \{\n {4}color-scheme: light;/u);
+    expect(css).toMatch(/\n {2}\.dark, \[data-theme="dark"\] \{\n {4}color-scheme: dark;/u);
+    expect(css).toMatch(/@media \(prefers-color-scheme: dark\) \{\n {4}\[data-theme="system"\] \{\n {6}color-scheme: dark;/u);
+    expect(css).not.toMatch(/:root:not\(/u);
+  });
+
+  it('dark: applies inside .dark, [data-theme="dark"] and (system dark) [data-theme="system"], never inside a .light island; zero specificity', async () => {
+    const theme = themeCss();
+    expect(theme).toContain('&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {');
+    expect(theme).toMatch(/@media \(prefers-color-scheme: dark\) \{\n {4}&:where\(\[data-theme="system"\], \[data-theme="system"\] \*\):not\(:where\(\.light, \.light \*, \[data-theme="light"\], \[data-theme="light"\] \*\)\) \{/u);
+    expect(theme).not.toContain(':root:not(');
+    const css = await compileUtilities(['dark:bg-danger']);
+    expect(css).toContain('.dark\\:bg-danger:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *))');
+    expect(css).toMatch(/@media \(prefers-color-scheme: dark\) \{\s*\.dark\\:bg-danger:where\(\[data-theme="system"\], \[data-theme="system"\] \*\):not\(:where\(\.light/u);
   });
 });

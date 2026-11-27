@@ -872,6 +872,7 @@
       "--console-focus-ring",
       "--console-field-focus-ring",
       "--console-field-error-ring",
+      "--console-focus-ring-inset",
       "--console-selected-bar",
       "--console-progress-halo",
       "--console-progress-halo-wide",

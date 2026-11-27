@@ -185,6 +185,20 @@ describe('chart colours', () => {
       }
     });
 
+    it(`${theme}: chart-2 is kept apart from the ok green, chart-7 is warm (ochre), not a deep plum`, () => {
+      const hueDistance = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+      const [chart2] = hueSaturation(c(theme, 'chart-2'));
+      const [ok] = hueSaturation(c(theme, 'ok'));
+      expect(hueDistance(chart2, ok), 'chart-2 / ok hue').toBeGreaterThanOrEqual(30);
+      expect(deltaE2000(c(theme, 'chart-2'), c(theme, 'ok')), 'chart-2 / ok').toBeGreaterThanOrEqual(20);
+      const [chart7] = hueSaturation(c(theme, 'chart-7'));
+      expect(chart7, 'chart-7 hue (warm: 15°–60°)').toBeGreaterThanOrEqual(15);
+      expect(chart7, 'chart-7 hue (warm: 15°–60°)').toBeLessThanOrEqual(60);
+      // Like the accents: the deeper icon colour in light, a lighter one in dark.
+      const lum = (rgb: Rgb) => contrast(rgb, [0, 0, 0]);
+      if (theme === 'light') expect(lum(c(theme, 'chart-7'))).toBeLessThan(lum(c('dark', 'chart-7')));
+    });
+
     it(`${theme}: every chart colour ≥ 3:1 on the card (marks, not text)`, () => {
       charts.forEach((chart, index) => expect(contrast(chart, c(theme, 'surface')), `chart-${index + 1}`).toBeGreaterThanOrEqual(3));
       expect(contrast(c(theme, 'chart-other'), c(theme, 'surface'))).toBeGreaterThanOrEqual(3);

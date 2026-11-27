@@ -1,10 +1,11 @@
 /**
  * Browser entry the plugin page audit bundles for each page (audit/plugin-pages.mjs). It renders the
  * page the way the Console shell does: `PageShell` + `PageHeader` from the page meta, the page body
- * inside a `PageChromeProvider`. Hand-written React pages are mounted directly; declarative
- * blueprints, adapter pages and comment review pages are rendered by the Console renderers
- * (`@zhin.js/client`), so they need a mount module (`mountModule` in the request) exporting
- * `mountPluginPage(context)`; without one they are reported as not mounted.
+ * inside a `PageChromeProvider`, and switches the theme the way the Console does (`.dark` on <html>
+ * or nothing; no `data-theme`, so the system preference never applies). Hand-written React pages
+ * are mounted directly; declarative blueprints, adapter pages and comment review pages are rendered
+ * by the Console renderers (`@zhin.js/client`), so they need a mount module (`mountModule` in the
+ * request) exporting `mountPluginPage(context)`; without one they are reported as not mounted.
  *
  * @typedef {object} MountPluginPageContext
  * @property {HTMLElement} element                    root element of the page
@@ -61,7 +62,8 @@ async function mountAuditPage(pageModule, pageName, custom) {
   const params = new URLSearchParams(location.search);
   const theme = params.get("theme") === "dark" ? "dark" : "light";
   document.documentElement.classList.toggle("dark", theme === "dark");
-  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.remove("light");
+  document.documentElement.removeAttribute("data-theme");
   window.addEventListener("error", (event) => publish({ status: "error", message: event.message }));
   const element = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"));
   const root = createRoot(element);

@@ -573,13 +573,18 @@
   }
 }
 
-/* Dark theme variant (D38): .dark / [data-theme="dark"] ancestors, or the system preference on a root without an explicit theme. */
+/*
+ * Dark theme variant (D38): inside .dark / [data-theme="dark"], or inside [data-theme="system"] when the
+ * system prefers dark — but not inside a .light / [data-theme="light"] island (islands nest one level:
+ * a dark island inside a light island inside a dark page is not supported). Zero specificity, like
+ * Tailwind's own dark: variant.
+ */
 @custom-variant dark {
-  &:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *) {
+  &:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:where(:root:not(.light, [data-theme="light"]) *) {
+    &:where([data-theme="system"], [data-theme="system"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {
       @slot;
     }
   }

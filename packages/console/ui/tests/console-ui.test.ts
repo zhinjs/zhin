@@ -324,9 +324,12 @@ describe('styles', () => {
   });
 
   it('maps the shadcn names onto the soft-card palette on every theme root; the deprecated aliases are gone (ADR 0063 P4)', () => {
-    expect(tokens).toContain(':root, .light, .dark, [data-theme="light"], [data-theme="dark"] {\n    --background: var(--console-bg);');
+    expect(tokens).toContain(':root, .light, .dark, [data-theme="light"], [data-theme="dark"], [data-theme="system"] {\n    --background: var(--console-bg);');
     expect(tokens).toMatch(/\.dark, \[data-theme="dark"\] \{\n {4}color-scheme: dark;[\s\S]*--console-surface: 15 7\.69% 10\.2%;/u);
-    expect(tokens).toMatch(/@media \(prefers-color-scheme: dark\) \{\n {4}:root:not\(\.light\):not\(\[data-theme="light"\]\) \{/u);
+    // Without any theme the page is light (as before 1.3.0); following the system is opt-in (D38).
+    expect(tokens).toMatch(/@media \(prefers-color-scheme: dark\) \{\n {4}\[data-theme="system"\] \{\n {6}color-scheme: dark;/u);
+    expect(tokens).not.toContain(':root:not(');
+    for (const block of tokens.matchAll(/@media \(prefers-color-scheme: dark\) \{\n {4}([^{]+) \{/gu)) expect(block[1]).toBe('[data-theme="system"]');
     expect(tokens).not.toContain('data-palette="');
     for (const alias of ['--console-radius-md', '--console-shadow-sm', '--console-shadow-ring', '--console-space-card', '--console-space-page-x', '--console-control-height-sm', '--console-duration-fast', '--radius']) {
       expect(defined.has(alias), alias).toBe(false);

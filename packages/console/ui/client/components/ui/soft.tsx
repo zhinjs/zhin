@@ -86,45 +86,65 @@ export interface SegmentedOption<T extends string = string> {
   readonly disabled?: boolean
 }
 
-export interface SegmentedProps<T extends string = string> extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange" | "defaultValue"> {
+export interface SegmentedProps<T extends string = string> extends Omit<React.HTMLAttributes<HTMLDivElement>, "onChange" | "defaultValue" | "role"> {
   options: readonly SegmentedOption<T>[]
   value: T
   onValueChange: (value: T) => void
-  /** Accessible name of the group (required: `role="tablist"` needs one). */
+  /** Accessible name of the group (required: a tablist or radiogroup needs one). */
   "aria-label": string
+  /**
+   * `tablist` (default, the soft-card spec: `tab` + `aria-selected`) or `radiogroup` (`radio` +
+   * `aria-checked`) for a plain filter that switches no panel. Keyboard and look are the same.
+   */
+  role?: "tablist" | "radiogroup"
 }
 
 /**
- * Segmented control (`sc-seg`, `role="tablist"`): 2–4 short options, the selected one primary.
- * Arrow keys, Home and End move the selection (roving tabindex). For tabbed panels use `Tabs`,
- * which renders the same look.
+ * Where the arrow keys, Home and End move in a segmented control: the index into `enabled`, or
+ * -1 for any other key. `current` is the index of the selected option (-1 when the value is not
+ * one of the enabled options: the first key then starts from the ends).
  */
-function Segmented<T extends string = string>({ options, value, onValueChange, className, ...props }: SegmentedProps<T>) {
+function segmentedKeyTarget(key: string, current: number, count: number): number {
+  if (count === 0) return -1
+  if (key === "ArrowRight" || key === "ArrowDown") return current < 0 ? 0 : (current + 1) % count
+  if (key === "ArrowLeft" || key === "ArrowUp") return current < 0 ? count - 1 : (current - 1 + count) % count
+  if (key === "Home") return 0
+  if (key === "End") return count - 1
+  return -1
+}
+
+/**
+ * Segmented control (`sc-seg`, `role="tablist"` or `radiogroup`): 2–4 short options, the selected
+ * one primary. Arrow keys, Home and End move the selection (roving tabindex; when `value` is none
+ * of the options, the first enabled one takes the focus). An `onKeyDown` of your own runs first and
+ * can `preventDefault()` to keep the key. For tabbed panels use `Tabs`, which renders the same look.
+ */
+function Segmented<T extends string = string>({ options, value, onValueChange, className, onKeyDown, role = "tablist", ...props }: SegmentedProps<T>) {
   const enabled = options.filter((option) => !option.disabled)
+  const itemRole = role === "radiogroup" ? "radio" : "tab"
+  const focusValue = enabled.some((option) => option.value === value) ? value : enabled[0]?.value
   const move = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const index = enabled.findIndex((option) => option.value === value)
-    let next = -1
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % enabled.length
-    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + enabled.length) % enabled.length
-    else if (event.key === "Home") next = 0
-    else if (event.key === "End") next = enabled.length - 1
+    onKeyDown?.(event)
+    if (event.defaultPrevented) return
+    const next = segmentedKeyTarget(event.key, enabled.findIndex((option) => option.value === value), enabled.length)
     if (next < 0 || !enabled[next]) return
     event.preventDefault()
     onValueChange(enabled[next].value)
-    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)')
+    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>(`[role="${itemRole}"]:not(:disabled)`)
     buttons[next]?.focus()
   }
   return (
-    <div role="tablist" data-slot="segmented" className={cn("console-segmented", className)} onKeyDown={move} {...props}>
+    <div role={role} data-slot="segmented" className={cn("console-segmented", className)} onKeyDown={move} {...props}>
       {options.map((option) => {
         const selected = option.value === value
         return (
           <button
             key={option.value}
             type="button"
-            role="tab"
-            aria-selected={selected}
-            tabIndex={selected ? 0 : -1}
+            role={itemRole}
+            aria-selected={itemRole === "tab" ? selected : undefined}
+            aria-checked={itemRole === "radio" ? selected : undefined}
+            tabIndex={option.value === focusValue && !option.disabled ? 0 : -1}
             disabled={option.disabled}
             className="console-control console-touch console-segment flex-1"
             onClick={() => onValueChange(option.value)}
@@ -154,19 +174,25 @@ export interface StepperProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   disabled?: boolean
 }
 
-/** Stepper (`sc-stepper`): − / + buttons and an `<output>` with the value and its unit. */
+/**
+ * Stepper (`sc-stepper`): − / + buttons and an `<output>` with the value and its unit. At a limit
+ * the button is `aria-disabled` and ignores presses but keeps the focus (a `disabled` button would
+ * drop it to the page); `disabled` turns the whole stepper off.
+ */
 function Stepper({ value, onValueChange, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, step = 1, unit, format, label, disabled, className, ...props }: StepperProps) {
   const i18n = useConsoleUiI18n()
   const id = useId()
   const set = (next: number) => onValueChange(Math.min(max, Math.max(min, next)))
   const shown = format ? format(value) : unit ? `${value} ${unit}` : String(value)
+  const atMin = value <= min
+  const atMax = value >= max
   return (
     <div data-slot="stepper" role="group" aria-label={label} className={cn("console-stepper", className)} {...props}>
-      <button type="button" className="console-control console-touch console-stepper-button" aria-label={i18n.t('stepper.decrease')} aria-controls={id} disabled={disabled || value <= min} onClick={() => set(value - step)}>
+      <button type="button" className="console-control console-touch console-stepper-button" aria-label={i18n.t('stepper.decrease')} aria-controls={id} disabled={disabled} aria-disabled={!disabled && atMin ? true : undefined} onClick={() => { if (!atMin) set(value - step) }}>
         <Minus aria-hidden="true" strokeWidth={CONSOLE_ICON_STROKE_WIDTH} />
       </button>
       <output id={id} className="console-stepper-value" aria-live="polite">{shown}</output>
-      <button type="button" className="console-control console-touch console-stepper-button" aria-label={i18n.t('stepper.increase')} aria-controls={id} disabled={disabled || value >= max} onClick={() => set(value + step)}>
+      <button type="button" className="console-control console-touch console-stepper-button" aria-label={i18n.t('stepper.increase')} aria-controls={id} disabled={disabled} aria-disabled={!disabled && atMax ? true : undefined} onClick={() => { if (!atMax) set(value + step) }}>
         <Plus aria-hidden="true" strokeWidth={CONSOLE_ICON_STROKE_WIDTH} />
       </button>
     </div>
@@ -265,13 +291,18 @@ export interface ListRowProps extends Omit<React.HTMLAttributes<HTMLElement>, "t
   end?: React.ReactNode
   /** Changed from its default: a progress-coloured dot before the title. */
   changed?: boolean
-  /** Selected: primary-soft fill and a 3px primary bar (`aria-current` when the row is a link). */
+  /**
+   * Selected: primary-soft fill and a 3px primary bar. A link row gets `aria-current="page"`, a
+   * button row `aria-pressed` (pass your own `aria-current`, e.g. `"true"` for the open item of a
+   * list + detail, to use that instead).
+   */
   selected?: boolean
   /** No tile: dividers start at the text (16). */
   plain?: boolean
   /** Render as a link (`href`), a button (`onClick` without `href`) or as given (`asChild`). */
   href?: string
   asChild?: boolean
+  /** Dimmed and inert: a button row is `disabled`; a link row loses its `href` (it no longer navigates) and is `aria-disabled`. */
   disabled?: boolean
 }
 
@@ -282,18 +313,21 @@ export interface ListRowProps extends Omit<React.HTMLAttributes<HTMLElement>, "t
 const ListRow = forwardRef<HTMLElement, ListRowProps>(({ icon, title, description, end, changed, selected, plain, href, asChild, disabled, className, onClick, children, ...props }, ref) => {
   const Comp = asChild ? Slot : href !== undefined ? "a" : onClick ? "button" : "div"
   const isButton = Comp === "button"
+  const isLink = Comp === "a"
+  const ownCurrent = props["aria-current"] !== undefined
   return (
     <Comp
       ref={ref as React.Ref<never>}
       data-slot="list-row"
       data-plain={plain ? "" : undefined}
       data-selected={selected ? "" : undefined}
-      aria-current={selected && Comp === "a" ? "page" : undefined}
+      aria-current={selected && isLink ? "page" : undefined}
+      aria-pressed={isButton && selected !== undefined && !ownCurrent ? selected : undefined}
       aria-disabled={disabled && !isButton ? true : undefined}
-      href={href}
+      href={isLink && disabled ? undefined : href}
       type={isButton ? "button" : undefined}
       disabled={isButton ? disabled : undefined}
-      onClick={onClick}
+      onClick={disabled && !isButton ? undefined : onClick}
       className={cn("console-list-row", className)}
       {...props}
     >

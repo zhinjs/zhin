@@ -267,14 +267,24 @@
     translate: -50% -50%;
   }
 
-  /* Menu items (D40): 46 tall, radius 14; hover / keyboard focus sunken; danger items last. */
+  /*
+   * Menu items (D40): 46 tall, radius 14; danger items last. The pointer highlight is a sunken fill
+   * only; keyboard focus is primary-soft with the 2px focus ring drawn inside the item. Radix focuses
+   * the item under the pointer by script and browsers may count that as :focus-visible, so the menu
+   * content says which input is in use (`data-input`, input-modality.ts); without it (a host's own
+   * Radix content), :focus-visible alone decides.
+   */
   .console-menu-item {
     min-height: var(--console-popover-item-height);
     border-radius: var(--console-popover-item-radius);
     font-size: var(--console-text-lg);
   }
-  .console-menu-item[data-highlighted],
-  .console-menu-item:focus-visible { background: hsl(var(--console-sunken)); outline: none; }
+  .console-menu-item[data-highlighted] { background: hsl(var(--console-sunken)); outline: none; }
+  .console-menu-item:focus-visible:not([data-input="pointer"] *) {
+    background: hsl(var(--console-primary-soft));
+    outline: none;
+    box-shadow: var(--console-focus-ring-inset);
+  }
   .console-menu-item[data-variant="danger"] { color: hsl(var(--console-danger)); }
 
   /* ── Card (D39): no border; white card with shadow-sm; radius 24 on phones, 28 on the web. ── */

@@ -37,7 +37,9 @@ import {
   Toast,
   Toaster,
   TOAST_DURATION_MS,
+  TOAST_UNDO_DURATION_MS,
   createToastStore,
+  toastDuration,
   statusTone,
   useToast,
 } from '../client/index.js';
@@ -83,11 +85,62 @@ describe('Segmented', () => {
     expect(html).toContain('disabled=""');
   });
 
+  it('a value outside the options leaves the first enabled option focusable', () => {
+    const html = render(h(Segmented, { 'aria-label': '范围', value: 'none', onValueChange: noop, options: [{ value: 'a', label: 'A', disabled: true }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }] }));
+    expect(html.match(/tabindex="0"/gu)).toHaveLength(1);
+    expect(html).toMatch(/tabindex="0"[^>]*>B</u);
+    expect(html).not.toContain('aria-selected="true"');
+  });
+
+  it('role="radiogroup" for a plain filter: radios with aria-checked, same keys and look', () => {
+    const html = render(h(Segmented, { 'aria-label': '筛选', role: 'radiogroup', value: 'b', onValueChange: noop, options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }));
+    expect(html).toMatch(/^<div role="radiogroup" data-slot="segmented"/u);
+    expect(html.match(/role="radio"/gu)).toHaveLength(2);
+    expect(html).toMatch(/aria-checked="true" tabindex="0"[^>]*>B/u);
+    expect(html).not.toContain('aria-selected');
+    expect(readFileSync(join(packageRoot, 'client/styles/soft.css'), 'utf8')).toContain('.console-segment[aria-checked="true"] {');
+  });
+
+  it("merges the caller's onKeyDown with the arrow-key handler (the caller runs first and can keep the key)", () => {
+    type Key = { key: string; defaultPrevented: boolean; preventDefault: () => void; currentTarget: { querySelectorAll: () => { focus: () => void }[] } };
+    const key = (name: string): Key => ({ key: name, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, currentTarget: { querySelectorAll: () => [] } });
+    const options = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }];
+    const changes: string[] = [];
+    const seen: string[] = [];
+    // Segmented has no hooks: calling it returns its element, whose props are the handlers.
+    const element = (Segmented as unknown as (props: object) => { props: { onKeyDown: (event: Key) => void } })({
+      'aria-label': 'x', value: 'a', options, onValueChange: (value: string) => changes.push(value),
+      onKeyDown: (event: Key) => { seen.push(event.key); if (event.key === 'End') event.preventDefault(); },
+    });
+    element.props.onKeyDown(key('ArrowRight'));
+    element.props.onKeyDown(key('End'));
+    expect(seen).toEqual(['ArrowRight', 'End']);
+    expect(changes).toEqual(['b']);
+    // Outside the options, ArrowLeft starts from the end and ArrowRight from the start.
+    const outside = (Segmented as unknown as (props: object) => { props: { onKeyDown: (event: Key) => void } })({ 'aria-label': 'x', value: 'none', options, onValueChange: (value: string) => changes.push(value) });
+    outside.props.onKeyDown(key('ArrowLeft'));
+    outside.props.onKeyDown(key('ArrowRight'));
+    expect(changes).toEqual(['b', 'c', 'a']);
+  });
+
   it('Tabs render the same segmented look (sunken pill, primary selection)', () => {
     const html = render(h(Tabs, { defaultValue: 'a' }, h(TabsList, null, h(TabsTrigger, { value: 'a' }, 'A'), h(TabsTrigger, { value: 'b' }, 'B'))));
     expect(html).toContain('console-segmented');
     expect(html).toContain('console-segment ');
     expect(html).toContain('data-[state=active]:bg-primary');
+  });
+
+  it('Tabs keep their natural width; only <Tabs fill> stretches the list and shares it equally', () => {
+    const plain = render(h(Tabs, { defaultValue: 'a' }, h(TabsList, null, h(TabsTrigger, { value: 'a' }, 'A'))));
+    expect(plain).not.toContain('flex-1');
+    expect(plain).not.toMatch(/(?<![\w-])w-full/u);
+    expect(plain).not.toContain('data-fill');
+    expect(plain).toContain('inline-flex max-w-full');
+    const fill = render(h(Tabs, { defaultValue: 'a', fill: true }, h(TabsList, null, h(TabsTrigger, { value: 'a' }, 'A'), h(TabsTrigger, { value: 'b' }, 'B'))));
+    expect(fill).toContain('data-fill=""');
+    expect(fill.match(/flex-1/gu)).toHaveLength(2);
+    expect(fill).toMatch(/role="tablist"[^>]*class="[^"]*(?<![\w-])flex w-full\b/u);
+    expect(fill).not.toMatch(/role="tablist"[^>]*class="[^"]*inline-flex/u);
   });
 });
 
@@ -98,7 +151,16 @@ describe('Stepper', () => {
     expect(html).toContain('aria-label="减少"');
     expect(html).toContain('aria-label="增加"');
     expect(html).toMatch(/<output id="[^"]+" class="console-stepper-value" aria-live="polite">20 次<\/output>/u);
-    expect(html).toMatch(/aria-label="增加" aria-controls="[^"]+" disabled=""/u);
+    // At the limit the button is aria-disabled, not disabled: it keeps the keyboard focus.
+    expect(html).toMatch(/aria-label="增加" aria-controls="[^"]+" aria-disabled="true">/u);
+    expect(html).not.toContain('disabled=""');
+    expect(html).toMatch(/aria-label="减少" aria-controls="[^"]+">/u);
+    // The whole stepper off: both buttons disabled (no aria-disabled on top).
+    const off = render(h(Stepper, { label: 'x', value: 20, max: 20, disabled: true, onValueChange: noop }));
+    expect(off.match(/ disabled=""/gu)).toHaveLength(2);
+    expect(off).not.toContain('aria-disabled');
+    const css = readFileSync(join(packageRoot, 'client/styles/soft.css'), 'utf8');
+    expect(css).toContain('.console-stepper-button[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }');
     expect(render(h(ConsoleUiI18nProvider, { locale: 'en' }, h(Stepper, { label: 'x', value: 1, onValueChange: noop })))).toContain('aria-label="Decrease"');
     expect(render(h(Stepper, { label: 'x', value: 60, format: (value: number) => `${value} 秒内`, onValueChange: noop }))).toContain('>60 秒内</output>');
   });
@@ -145,9 +207,9 @@ describe('Toast', () => {
     const seen: number[] = [];
     store.subscribe((entries) => seen.push(entries.length));
     const first = store.show('已保存');
-    const second = store.show('已停用 rss', { onUndo: noop, duration: 4000 });
+    const second = store.show('已停用 rss', { onUndo: noop, duration: 6000 });
     expect(TOAST_DURATION_MS).toBe(2500);
-    expect(timers.map((timer) => timer.ms)).toEqual([2500, 4000]);
+    expect(timers.map((timer) => timer.ms)).toEqual([2500, 6000]);
     expect(store.get().map((entry) => entry.message)).toEqual(['已保存', '已停用 rss']);
     timers[0].run();
     expect(store.get().map((entry) => entry.id)).toEqual([second]);
@@ -158,15 +220,70 @@ describe('Toast', () => {
     expect(seen).toEqual([1, 2, 1, 0]);
   });
 
-  it('Toaster hosts a polite live region; useToast outside one is a no-op', () => {
+  it('a toast with 「撤销」 stays at least 5 s', () => {
+    expect(TOAST_UNDO_DURATION_MS).toBe(5000);
+    expect(toastDuration()).toBe(2500);
+    expect(toastDuration({ duration: 1000 })).toBe(1000);
+    expect(toastDuration({ onUndo: noop })).toBe(5000);
+    expect(toastDuration({ onUndo: noop, duration: 2000 })).toBe(5000);
+    expect(toastDuration({ onUndo: noop, duration: 8000 })).toBe(8000);
+    const timers: number[] = [];
+    const store = createToastStore((_run, ms) => { timers.push(ms); return ms; }, noop);
+    store.show('已停用 rss', { onUndo: noop });
+    expect(timers).toEqual([5000]);
+  });
+
+  it('pause() stops every timer, resume() continues with the time left; toasts shown while paused wait', () => {
+    let clock = 0;
+    const timers: { run: () => void; ms: number; cancelled: boolean }[] = [];
+    const store = createToastStore((run, ms) => {
+      const timer = { run, ms, cancelled: false };
+      timers.push(timer);
+      return timer;
+    }, (handle) => { (handle as { cancelled: boolean }).cancelled = true; }, () => clock);
+    store.show('已保存');
+    clock = 1000;
+    store.pause();
+    expect(store.isPaused()).toBe(true);
+    expect(timers[0].cancelled).toBe(true);
+    store.show('已停用 rss', { onUndo: noop });
+    expect(timers).toHaveLength(1);
+    clock = 60_000;
+    expect(store.get()).toHaveLength(2);
+    store.resume();
+    expect(timers.slice(1).map((timer) => timer.ms)).toEqual([1500, 5000]);
+    // Pausing again keeps what is left of each.
+    clock = 60_500;
+    store.pause();
+    store.resume();
+    expect(timers.slice(3).map((timer) => timer.ms)).toEqual([1000, 4500]);
+    timers[3].run();
+    expect(store.get().map((entry) => entry.message)).toEqual(['已停用 rss']);
+    store.resume();
+    expect(timers).toHaveLength(5);
+  });
+
+  it('Toaster hosts the one polite live region; useToast outside one shows nothing and warns once', () => {
     expect(render(h(Toaster, null, 'app'))).toBe('app<div class="console-toaster" data-slot="toaster" aria-live="polite" aria-relevant="additions"></div>');
-    let id: number | undefined;
-    function Probe() {
-      id = useToast().toast('x');
-      return null;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(noop);
+    try {
+      const ids: number[] = [];
+      function Probe() {
+        const { toast } = useToast();
+        ids.push(toast('x'), toast('y'));
+        return null;
+      }
+      render(h(Probe));
+      expect(ids).toEqual([-1, -1]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain('outside a <Toaster>');
+    } finally {
+      warn.mockRestore();
     }
-    render(h(Probe));
-    expect(id).toBe(-1);
+    const source = readFileSync(join(packageRoot, 'client/components/ui/toast.tsx'), 'utf8');
+    // A toast inside the toaster has no role of its own (the toaster announces it).
+    expect(source).toContain('role={inToaster ? undefined : "status"}');
+    expect(source).toMatch(/onPointerEnter=\{[^}]*pointer = true; sync\(\) \}\}/u);
   });
 });
 
@@ -189,6 +306,19 @@ describe('lists', () => {
     expect(link).toContain('<span class="console-list-row-end">');
     const button = render(h(ListRow, { title: '更多', plain: true, onClick: noop }));
     expect(button).toMatch(/^<button data-slot="list-row" data-plain="" type="button" class="console-list-row">/u);
+    // A selectable button row says whether it is selected; a row given its own aria-current keeps only that.
+    expect(render(h(ListRow, { title: 'A', onClick: noop, selected: true }))).toMatch(/^<button data-slot="list-row" data-selected="" aria-pressed="true" type="button"/u);
+    expect(render(h(ListRow, { title: 'A', onClick: noop, selected: false }))).toContain('aria-pressed="false"');
+    const current = render(h(ListRow, { title: 'A', onClick: noop, selected: true, 'aria-current': 'true' }));
+    expect(current).toContain('aria-current="true"');
+    expect(current).not.toContain('aria-pressed');
+    // A disabled link row does not navigate: no href, aria-disabled, no click handler.
+    const disabled = render(h(ListRow, { href: '#t', title: 'Telegram', disabled: true, onClick: noop }));
+    expect(disabled).toMatch(/^<a data-slot="list-row" aria-disabled="true" class="console-list-row">/u);
+    expect(disabled).not.toContain('href');
+    const css = readFileSync(join(packageRoot, 'client/styles/soft.css'), 'utf8');
+    expect(css).toContain('a.console-list-row[href]:hover,');
+    expect(css).toContain('.console-list-row[aria-current]:not([aria-current="false"]) {');
     const changed = render(h(ListRow, { title: '每步限时', description: '默认 60 秒', changed: true }));
     expect(changed).toMatch(/^<div data-slot="list-row"/u);
     expect(changed).toContain('<span aria-hidden="true" data-slot="changed" class="console-changed"></span>每步限时');

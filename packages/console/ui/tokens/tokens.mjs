@@ -22,8 +22,8 @@
  * colour roles (`color`) are defined here; tokens/colors.css only maps the shadcn-style names the
  * Console and plugin pages already use (`--background`, `--primary`, …) onto them.
  *
- * Themes (D38): light on `:root` / `.light` / `[data-theme="light"]`; dark on `.dark` /
- * `[data-theme="dark"]`; with no explicit theme the root follows `prefers-color-scheme`.
+ * Themes (D38): light on `:root` / `.light` / `[data-theme="light"]` (and without any theme); dark on
+ * `.dark` / `[data-theme="dark"]`; `[data-theme="system"]` opts in to `prefers-color-scheme`.
  */
 
 /** Breakpoints (D16). Media queries are for the global shell only; components use containers. */
@@ -349,8 +349,11 @@ export const paint = {
  *   signal-*-fill / -text      ok / warn / danger of the palette (the dot and the label share one
  *                              colour). `info` is the in-progress state: progress dot, ink text.
  *   chart-1 … chart-8          the five accents (chart-1, -3, -4, -6, -8) interleaved with three more
- *                              category colours outside blue / purple (D34 原则 3); neighbours differ
- *                              by ΔE2000 ≥ 20, every pair by ≥ 12, each ≥ 3:1 on the card.
+ *                              category colours outside blue / purple (D34 原则 3): chart-2 peacock
+ *                              (hue ~186°, kept apart from the `ok` green), chart-5 brown, chart-7
+ *                              ochre (warm, replaces the deep plum); like the accents, a deeper icon
+ *                              colour in light and a lighter one in dark. Neighbours differ by
+ *                              ΔE2000 ≥ 20, every pair by ≥ 12, each ≥ 3:1 on the card.
  *                              `chart-other` is the control grey.
  */
 export const color = {
@@ -368,12 +371,12 @@ export const color = {
     'signal-info-fill': '#E0602F',
     'signal-info-text': '#1D1A18',
     'chart-1': '#E0602F',
-    'chart-2': '#0E813C',
+    'chart-2': '#23575C',
     'chart-3': '#D2497A',
     'chart-4': '#6E8C24',
     'chart-5': '#602E2E',
     'chart-6': '#1E9184',
-    'chart-7': '#761951',
+    'chart-7': '#93461F',
     'chart-8': '#B07A0A',
     'chart-other': '#8F877F',
   },
@@ -391,12 +394,12 @@ export const color = {
     'signal-info-fill': '#F2A487',
     'signal-info-text': '#F2EEEB',
     'chart-1': '#F2A487',
-    'chart-2': '#47EB89',
+    'chart-2': '#53A3AC',
     'chart-3': '#F29AB9',
     'chart-4': '#BFD98A',
     'chart-5': '#BD7575',
     'chart-6': '#86D9CB',
-    'chart-7': '#DB57A6',
+    'chart-7': '#C76523',
     'chart-8': '#EBCB7A',
     'chart-other': '#78706A',
   },
@@ -504,6 +507,9 @@ export const composite = {
   // Text fields (D39): ink border plus a 2px focus ring with a 2px surface gap; danger when invalid.
   'field-focus-ring': '0 0 0 var(--console-focus-ring-offset) hsl(var(--console-surface)), 0 0 0 calc(var(--console-focus-ring-offset) + var(--console-focus-ring-width)) hsl(var(--console-focus))',
   'field-error-ring': '0 0 0 var(--console-focus-ring-offset) hsl(var(--console-surface)), 0 0 0 calc(var(--console-focus-ring-offset) + var(--console-focus-ring-width)) hsl(var(--console-danger))',
+  // Keyboard focus inside a list (menu items, options): the 2px focus ring drawn inside the item,
+  // so the popover's clipping and the neighbouring items never hide it.
+  'focus-ring-inset': 'inset 0 0 0 var(--console-focus-ring-width) hsl(var(--console-focus))',
   // Selected rows (D34): primary-soft fill plus a 3px primary bar on the left.
   'selected-bar': 'inset 0.1875rem 0 0 hsl(var(--console-primary))',
   // In-progress dot: a halo that breathes between these two (D39).

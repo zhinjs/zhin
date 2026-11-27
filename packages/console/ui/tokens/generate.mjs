@@ -24,12 +24,13 @@ import {
 
 /**
  * Theme selectors (ADR 0063 D38). Every token block is declared on all theme roots, so a themed
- * subtree resolves its own values; dark values follow `.dark` / `[data-theme="dark"]`, and a root
- * without an explicit theme follows `prefers-color-scheme`.
+ * subtree resolves its own values. Without any theme the page is light (as before 1.3.0); dark
+ * values follow `.dark` / `[data-theme="dark"]`; following the system is opt-in with
+ * `data-theme="system"` (dark when `prefers-color-scheme: dark`).
  */
-export const THEME_ROOTS = ':root, .light, .dark, [data-theme="light"], [data-theme="dark"]';
+export const THEME_ROOTS = ':root, .light, .dark, [data-theme="light"], [data-theme="dark"], [data-theme="system"]';
 export const DARK_ROOTS = '.dark, [data-theme="dark"]';
-export const SYSTEM_DARK_ROOT = ':root:not(.light):not([data-theme="light"])';
+export const SYSTEM_DARK_ROOT = '[data-theme="system"]';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
@@ -56,7 +57,7 @@ function semanticDeclarations(size, filter, indent) {
   return lines;
 }
 
-/** Re-targets the hand-written colour mapping onto the theme selectors (and the system-dark query). */
+/** Re-targets the hand-written colour mapping onto the theme selectors (and the opt-in system-dark query). */
 function colorMappingCss() {
   // A Windows checkout may have CRLF line endings; the block patterns below match LF only.
   const source = readFileSync(join(here, 'colors.css'), 'utf8').replace(/\r\n?/gu, '\n').trim();
@@ -94,9 +95,9 @@ export function tokensCss() {
 ${colors}
 
 /*
- * Tier 1 — base scale and the soft-card colours (light values). Declared on every theme root so a
- * themed subtree resolves its own values; dark values on .dark / [data-theme="dark"], and on a root
- * without an explicit theme when the system prefers dark (D38).
+ * Tier 1 — base scale and the soft-card colours (light values, also the default without any theme).
+ * Declared on every theme root so a themed subtree resolves its own values; dark values on .dark /
+ * [data-theme="dark"], and on [data-theme="system"] when the system prefers dark (opt-in, D38).
  */
 @layer base {
   ${THEME_ROOTS} {
@@ -294,13 +295,18 @@ ${lines.join('\n')}
   }
 }
 
-/* Dark theme variant (D38): .dark / [data-theme="dark"] ancestors, or the system preference on a root without an explicit theme. */
+/*
+ * Dark theme variant (D38): inside .dark / [data-theme="dark"], or inside [data-theme="system"] when the
+ * system prefers dark — but not inside a .light / [data-theme="light"] island (islands nest one level:
+ * a dark island inside a light island inside a dark page is not supported). Zero specificity, like
+ * Tailwind's own dark: variant.
+ */
 @custom-variant dark {
-  &:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *) {
+  &:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:where(:root:not(.light, [data-theme="light"]) *) {
+    &:where([data-theme="system"], [data-theme="system"] *):not(:where(.light, .light *, [data-theme="light"], [data-theme="light"] *)) {
       @slot;
     }
   }

@@ -417,12 +417,12 @@ sidebar: false
 ### 27. 颜色（D34）
 
 1. 设计包 `tokens.json` 的颜色并进 `tokens/tokens.mjs`：`palette`（浅色、深色各一套：`bg`、`surface`、`sunken`、`raised`、`line`、`control`、`ink`、`muted`、`faint`、`primary`、`on-primary`、`primary-hover`、`primary-soft`、`primary-line`、`focus`、`tint-1`…`tint-5`、`accent-1`…`accent-5`、`ok`、`ok-bg`、`warn`、`warn-bg`、`danger`、`danger-bg`、`danger-solid`、`on-danger-solid`、`progress`、`inverse`、`on-inverse`）与 `paint`（`scrim`、`gradient-hero`、`gradient-hero-2`、`hero-overlay`、`aurora-1`…`4`、`aurora-opacity`）。源里写十六进制（和设计包逐字相同），生成器写成 HSL 三元组 `--console-<名>`，所以 `hsl(var(--console-ink) / 0.04)` 可以带透明度；Tailwind 主题提供 `bg-surface`、`bg-sunken`、`text-ink`、`bg-tint-2`、`text-accent-2`、`bg-ok-bg`、`bg-danger-solid`、`bg-primary-soft` 等类（`bg`、`muted`、`primary` 三个名字 shadcn 已经占用，见第 2 条）。
-2. **现有页面不改代码也换外观**：`tokens/colors.css` 只剩一张映射表，把 Console 和插件已在用的 shadcn 式名字指向新颜色——`--background`→`bg`、`--foreground`→`ink`、`--card`→`surface`、`--popover`→`raised`、`--primary`→`primary`（黑 / 白）、`--primary-foreground`→`on-primary`、`--secondary` / `--muted` / `--primary-action`→`sunken`、`--muted-foreground` / `--tab-inactive`→`muted`、`--accent` / `--selected`→`primary-soft`、`--border`→`line`、`--border-strong`→`primary-line`、`--input`→`control`、`--ring`→`focus`、`--destructive`→`danger`、`--success`→`ok`、`--warning`→`warn`、`--info`→`ink`、`--sidebar*` 与 `--im-*` 同理（完整表见 `colors.css`）。仍是 HSL 三元组。
+2. **已有名字映射到新颜色，但要等 Console 删掉自己的覆盖才生效**：`tokens/colors.css` 只剩一张映射表，把 Console 和插件已在用的 shadcn 式名字指向新颜色——`--background`→`bg`、`--foreground`→`ink`、`--card`→`surface`、`--popover`→`raised`、`--primary`→`primary`（黑 / 白）、`--primary-foreground`→`on-primary`、`--secondary` / `--muted` / `--primary-action`→`sunken`、`--muted-foreground` / `--tab-inactive`→`muted`、`--accent` / `--selected`→`primary-soft`、`--border`→`line`、`--border-strong`→`primary-line`、`--input`→`control`、`--ring`→`focus`、`--destructive`→`danger`、`--success`→`ok`、`--warning`→`warn`、`--info`→`ink`、`--sidebar*` 与 `--im-*` 同理（完整表见 `colors.css`）。仍是 HSL 三元组。**这不等于「Console 和插件页面不改代码就换外观」**：Console 自己的 `theme-tokens.css` 与 `design-system.css` 在 `@zhin.js/console-ui` 之后加载，同名变量（调色板、`--console-*` 尺寸令牌）以 Console 的为准。Console 按第 37 条删掉这些覆盖之后，Console 页面和只读这些名字、不自带颜色的插件页面才会换上新外观；在那之前，Console 里看到的仍是旧调色板，只有直接读 Console 没有覆盖的 `--console-<色板名>`（如 `console-tile` 的 `--console-tint-*` / `--console-accent-*`）的部分是新颜色。
 3. `data-palette`（D23 的 8 种配色）**不再改变任何颜色**：柔光卡片的配色是固定的暖灰 + 黑白，没有蓝紫。属性留着无害，Console 的配色选择器应当移除（第 37 条）。
 4. 品牌色 `brand` / `brand-foreground`（所有者 2026-11-16 定的 `#76EEC6` / `#7FFFD4`）只用于 `BrandMark`，**不再是主按钮的底色**；`brand-text`、`brand-tint` 保留取值供已有样式读取，组件不再使用。
 5. 信号色令牌保留名字，取值改为调色板的状态色：`signal-danger-*`→`danger`，`signal-warning-*`→`warn`，`signal-success-*`→`ok`（点和字同色，所以 fill 与 text 相同）；`signal-info-fill`→`progress`、`signal-info-text`→`ink`（「进行中」：字是 ink、点是 progress）。
 6. 类别色的用法：图标块 = 浅彩底 + 图标色；**图标色只画图形，不写字**（浅色主题下只有 3.1–4.2:1）；一行里最多一种图标色；同一个东西在所有页面颜色一样。插件页面固定用第 2 组（`tint-2` / `accent-2`，见 `docs/authoring/console-pages.md`）。
-7. 图表色 `chart-1`…`chart-8` 重排：五个图标色（`chart-1`、`-3`、`-4`、`-6`、`-8`）与三种补充色（绿、赭、玫红）交错，不含蓝紫；相邻 ΔE2000 ≥ 20（实测相邻最小：浅色 48.6、深色 46.5）、任意两色 ≥ 12（实测最小 15.2 / 15.7）、在卡片上 ≥ 3:1（实测最小 3.57 / 4.93）。`chart-other` 是 `control` 灰。
+7. 图表色 `chart-1`…`chart-8` 重排：五个图标色（`chart-1`、`-3`、`-4`、`-6`、`-8`）与三种补充色交错，不含蓝紫：`chart-2` 孔雀青（浅 `#23575C` / 深 `#53A3AC`，色相约 186°，与 `ok` 绿相差 ≥ 30°、ΔE2000 ≥ 20，不会和「正常」混淆）、`chart-5` 棕、`chart-7` 赭（浅 `#93461F` / 深 `#C76523`，暖色，取代原来深而高饱和的紫红 `#761951`）。和图标色一样，浅色主题取较深的图标色，深色主题取较浅的一档。相邻 ΔE2000 ≥ 20（实测相邻最小：浅色 23.2、深色 31.1）、任意两色 ≥ 12（实测最小 17.8 / 15.9）、在卡片（surface）上 ≥ 3:1（实测最小 3.57 / 4.42）。`chart-other` 是 `control` 灰。
 
 ### 28. 字号（D35，修订 D16「最多 5 种字号」）
 
@@ -444,7 +444,7 @@ D16 的旧名保留为别名：`label` = `sm`（13）、`body` = `md`（14）、
 1. **间距**：4 的倍数 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48。第一层的旧名保持原值（插件样式在读，例如 Sandbox）：`space-1`…`space-4` = 4–16，`space-5` = 24，`space-6` = 32，`space-7` = 48，`space-8` = 64（兼容保留）；新增 `space-4-5` = 20（Tailwind `p-5`）与 `space-6-5` = 40（`p-10`）。Tailwind 间距键因此是 `0`、`px`、`1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16`。
 2. **语义取值**（按尺寸）：页边距手机 16、网页 32；卡片之间手机 12、网页 20–24；卡片内边距手机 16、40rem 起 20、64rem 起 24；组标题到卡片 8；列表行高手机 56、网页 52；内容最宽 1280（`data` 由 120rem 改为 80rem；`reading` 仍是 60rem）。
 3. **圆角**：`r-2` 10（小色块、骨架）、`r-3` 14（输入框、菜单项）、`r-4` 18（子卡片）、新增 `r-5` 20（菜单）、`r-6` 24（手机卡片、主卡、操作栏、提示条）、`r-7` 28（网页卡片、对话框、抽屉、弹层），`r-full` 用于所有按钮、胶囊、分段、开关、头像、图标块、导航条；`r-1` 6 保留给复选框与已有样式。语义令牌：`card-radius` 24 / 28，`control-radius` 14，新增 `pill-radius`、`sub-radius`、`hero-radius`、`skeleton-radius`，`popover-radius` 20（手机为 28 的底部弹层），`dialog-radius` / `sheet-radius` 28。
-4. **阴影**：`e-1` = shadow-sm（白卡、圆形按钮），`e-2` = shadow-md（底部导航、操作栏、Toast），`e-3` = shadow-lg（弹层、菜单、对话框、抽屉）。浅色是带暖色的投影；深色看不见投影，改为 1px 白色 6%–8% 内描边加顶部高光（e-1）或内描边加黑色投影（e-2、e-3）。**卡片无描边**：`card-border` 为 0，静态白卡用 `e-1`（D16 原来是「描边、无阴影」）。另有几个复合阴影令牌：`hairline-ring`（描边徽标、描边按钮）、`selected-bar`（选中行左侧 3px 竖条）、`progress-halo`（进行中的点）、`field-focus-ring` / `field-error-ring`（输入框焦点）。
+4. **阴影**：`e-1` = shadow-sm（白卡、圆形按钮），`e-2` = shadow-md（底部导航、操作栏、Toast），`e-3` = shadow-lg（弹层、菜单、对话框、抽屉）。浅色是带暖色的投影；深色看不见投影，改为 1px 白色 6%–8% 内描边加顶部高光（e-1）或内描边加黑色投影（e-2、e-3）。**卡片无描边**：`card-border` 为 0，静态白卡用 `e-1`（D16 原来是「描边、无阴影」）。另有几个复合阴影令牌：`hairline-ring`（描边徽标、描边按钮）、`selected-bar`（选中行左侧 3px 竖条）、`progress-halo`（进行中的点）、`field-focus-ring` / `field-error-ring`（输入框焦点）、`focus-ring-inset`（菜单项、选项的键盘焦点：画在项内的 2px 焦点环）。
 5. **控件尺寸**（`controlSize`，生成 `--console-size-*`）：控件 36 / 40 / 48，圆形图标按钮 44，开关 46 × 28，图标块 32 / 40 / 48，图标 20。语义：`control-height` 48（输入框、按钮），`control-height-medium` 40（分段、步进器、筛选框），`control-height-compact` 36（小号按钮、胶囊；手机宽度下仍是 44），菜单项高 46（`popover-item-height`），复选框与单选的描边 1.5px（新增边框档 `check`）。
 
 ### 30. 动效（D37）
@@ -461,9 +461,9 @@ D16 的旧名保留为别名：`label` = `sm`（13）、`body` = `md`（14）、
 
 ### 31. 主题（D38）
 
-1. 浅色写在 `:root`、`.light`、`[data-theme="light"]`；深色写在 `.dark`、`[data-theme="dark"]`；`<html>` 上**既没有 `.dark` / `.light` 也没有 `data-theme`** 时跟随 `prefers-color-scheme`。所有令牌块都声明在每个主题根上（`:root, .light, .dark, [data-theme="light"], [data-theme="dark"]`），所以子树可以单独切换主题。
-2. 兼容：Console 现在用 `.dark` 切深色，这仍然有效。新的变化是「什么都不写」时会跟随系统——Console 在用户显式选了浅色时应当在 `<html>` 上写 `data-theme="light"`（或 `.light`），否则系统为深色时会变深（第 37 条）。Tailwind 的 `dark:` 变体同样认 `.dark`、`[data-theme="dark"]` 与系统偏好。
-3. 审计的 `setConsoleTheme()` 同时设置 `.dark` 与 `data-theme`，审计结果不受浏览器系统偏好影响。
+1. 浅色写在 `:root`、`.light`、`[data-theme="light"]`；深色写在 `.dark`、`[data-theme="dark"]`。**什么都不写就是浅色**（和 1.3.0 以前一样）。跟随系统是**可选启用**：在 `<html>`（或子树）上写 `data-theme="system"`，规则是 `@media (prefers-color-scheme: dark) { [data-theme="system"] { …深色… } }`。所有令牌块都声明在每个主题根上（`:root, .light, .dark, [data-theme="light"], [data-theme="dark"], [data-theme="system"]`），所以子树可以单独切换主题。
+2. 兼容：Console 现在用 `.dark` 切深色、不写就是浅色，这两条都不变，只切 `.dark` 的宿主不受影响。Tailwind 的 `dark:` 变体认 `.dark`、`[data-theme="dark"]`，以及系统为深色时的 `[data-theme="system"]`；在 `.light` / `[data-theme="light"]` 岛内不生效（`:not(:where(.light *, [data-theme="light"] *))`，不增加选择器权重）。岛只支持一层：浅色岛里再嵌深色岛时，里面的 `dark:` 不生效（令牌本身仍按最近的主题根取值）。
+3. 审计的 `setConsoleTheme()` 按 Console 的方式切换（深色加 `.dark`，浅色什么都不写），并去掉 `<html>` 上的 `.light` 与 `data-theme`，所以写了 `data-theme="system"` 的页面也按指定主题审计，结果不受浏览器系统偏好影响；`audit/mount-page.jsx` 与组件示例页同样如此（示例页另有 `?theme=system`）。
 
 ### 32. 组件（D39）
 
@@ -474,14 +474,14 @@ API 全部兼容，只改外观和增加变体：
 3. **Badge** 是浅底胶囊（12 号 500，无描边）：`default` / `secondary` / 新增 `neutral` 为 sunken + muted，`success` / `warning` / `destructive` 为对应 `-bg` 底与状态色，`info` sunken + ink，`outline` 描边，新增 `solid`（primary 底）；`tone` 1–5 给类别浅彩。**StatusBadge** 改为「点 + 文字」：五种 `ok` / `warn` / `danger` / `neutral` / `progress`，`progress` 的点带光晕并呼吸；旧状态名映射过去（`warning`→`warn`、`error`→`danger`、`info` / `pending`→`progress`），`isAttentionStatus()` 保留；新增同一组件的别名 `StatusDot` 与 `statusTone()`。
 4. **表单控件**（`Input`、`Textarea`、`SelectTrigger` / `SelectField`、`SearchableSelectField`、`DateField`、`DateTimeField`）：高 48、圆角 14、1px `control` 边框、surface 底；悬停 `muted` 边框；聚焦 ink 边框加 2px 外环（留 2px surface 间隔）；出错用 `aria-invalid="true"`（danger 边框）；禁用 40%；`variant="ghost"` 不变。外观集中在新的 `console-field` 类里。
 5. **Switch** 46 × 28，关闭 `control` 轨道、开启 `primary` 轨道；**Checkbox** 22px、圆角 6、1.5px `control` 描边，选中 primary 底 + on-primary 勾；**Radio** 22px 圆、选中 primary 描边 + 10px primary 圆点（设计稿 CForms）。
-6. **Tabs** 改为分段样式（`sc-seg`）：sunken 胶囊底，选中项 primary 实底；Radix 提供 `tablist` / `tab` / `aria-selected`。
+6. **Tabs** 改为分段样式（`sc-seg`）：sunken 胶囊底，选中项 primary 实底；Radix 提供 `tablist` / `tab` / `aria-selected`。默认每项按文字宽度排列（保持 Console 原来的密度）；`<Tabs fill>` 时列表占满宽度、各项等宽。
 7. **Table**（`sc-table`）：表头 12 号 muted，单元格 12 内边距，每行上方一条 `line`，选中行（`aria-selected` 或 `data-state="selected"`）primary-soft 底加左侧 3px 竖条；窄容器里每行变成 sunken 子卡片（D18 不变）。
 8. **Skeleton**：sunken、圆角 10、明暗呼吸，和真内容一样大；**Alert** 改为提示条（状态 -bg 底、圆角 24、一句状态加一个白色小按钮），标题 / 说明插槽保留。
 9. **PageHeader / PageShell / StatCard / layout**：页头是标题（26 号 500）加一个主按钮，竖直居中；页面最宽 1280、网页页边距 32；StatCard 无描边白卡，数值 32 号 600、单位 14 号 muted，`danger` 卡改为 danger-bg 底。
 
 ### 33. 浮层（D40）
 
-`Dialog` 圆角 28、shadow-lg、raised 底，进入时从 96% 放大；遮罩是 `scrim`（不再模糊）；关闭按钮是 40 的 sunken 圆形按钮；确认对话框标题行是 48 的图标块。`Sheet` 在网页端是右侧 480 宽、四角圆角 28、离边 12 的浮起抽屉，**手机宽度下（< 40rem）是底部弹层**（顶部圆角 28、拖动条、最高 90dvh）。`DropdownMenu` 圆角 20、每项高 46（圆角 14），悬停 / 键盘高亮为 sunken，新增 `variant="danger"` 的菜单项（放最后）。`Popover` 与 `Select` 的列表跟随菜单的外观；`Tooltip` 改为 inverse 底、圆角 14、shadow-md。手机宽度下菜单、下拉和对话框仍是底部抽屉（D18 不变）。
+`Dialog` 圆角 28、shadow-lg、raised 底，进入时从 96% 放大；遮罩是 `scrim`（不再模糊）；关闭按钮是 40 的 sunken 圆形按钮；确认对话框标题行是 48 的图标块。`Sheet` 在网页端是右侧 480 宽、四角圆角 28、离边 12 的浮起抽屉，**手机宽度下（< 40rem）是底部弹层**（顶部圆角 28、拖动条、最高 90dvh）。`DropdownMenu` 圆角 20、每项高 46（圆角 14）；指针悬停只用 sunken 填充，键盘焦点是 primary-soft 底加画在项内的 2px 焦点环（`focus-ring-inset`，D32 的焦点必须可见）——Radix 会用脚本把焦点移到指针下的项，浏览器可能把它算作 `:focus-visible`，所以菜单与下拉列表的内容元素记录当前输入方式（`data-input="pointer" | "keyboard"`，打开时取打开它的输入，之后跟随指针移动和按键），只有键盘时才画焦点环；新增 `variant="danger"` 的菜单项（放最后）。`Popover` 与 `Select` 的列表跟随菜单的外观；`Tooltip` 改为 inverse 底、圆角 14、shadow-md。手机宽度下菜单、下拉和对话框仍是底部抽屉（D18 不变）。
 
 ### 34. 新组件（D41）
 
@@ -491,13 +491,13 @@ API 全部兼容，只改外观和增加变体：
 | --- | --- |
 | `Tile` | 圆形图标块 40（`sm` 32、`lg` 48）；`tone` 1–5 = 浅彩底 + 图标色，`neutral` = sunken + ink；块里写字时用 `text`（字是 ink）；默认 `aria-hidden` |
 | `Chip` | 36 高胶囊（手机 44）；`pressed` 写 `aria-pressed`，选中 primary；可选 `tone` 浅彩 |
-| `Segmented` | `role="tablist"`，子按钮 `role="tab"` + `aria-selected`，方向键 / Home / End 移动（roving tabindex） |
-| `Stepper` | 两个带名字的按钮 + `<output>`，值带单位（「20 次」）；到上下限时按钮禁用 |
+| `Segmented` | `role="tablist"`，子按钮 `role="tab"` + `aria-selected`，方向键 / Home / End 移动（roving tabindex；`value` 不在选项里时第一个可用项可聚焦）；使用方的 `onKeyDown` 先执行、可 `preventDefault()` 保留按键；纯筛选（不切换面板）可写 `role="radiogroup"`（子按钮 `radio` + `aria-checked`），外观和按键相同 |
+| `Stepper` | 两个带名字的按钮 + `<output>`，值带单位（「20 次」）；到上下限时按钮 `aria-disabled` 并忽略点击（不用 `disabled`，键盘焦点不会掉到页面上）；`disabled` 关闭整个步进器 |
 | `StatusDot` | 即 `StatusBadge`（点 + 文字） |
 | `Banner` | `warn` / `danger` / `neutral`；一句状态 + 一个动作（白色小按钮）；danger 为 `role="alert"`，其余 `role="status"` |
-| `Toast`、`Toaster`、`useToast`、`createToastStore` | inverse 胶囊，一句话 + 可选「撤销」，2.5 秒消失（`TOAST_DURATION_MS`），`role="status"`，`Toaster` 是 polite 的 live region |
-| `HeroCard` | `hero`（杏 → 粉）/ `hero-2`（薄荷 → 奶黄）渐变，ink 字，无阴影；每个一级页面最多一张 |
-| `ListGroup`、`ListRow`、`ListCaption`、`ChangedDot` | 行：图标块 → 标题 + 一行说明 → 右边只放一样；`selected`（primary-soft + 竖条，链接时 `aria-current`）、`plain`（无图标块，分隔线从 16 开始，否则从 68 开始）、`changed`（progress 色小点）；组标题 12 号 muted、缩进 16 |
+| `Toast`、`Toaster`、`useToast`、`createToastStore` | inverse 胶囊，一句话 + 可选「撤销」，2.5 秒消失（`TOAST_DURATION_MS`），带「撤销」时至少 5 秒（`TOAST_UNDO_DURATION_MS`）；指针停在 Toast 上或焦点在其中时暂停计时（`createToastStore().pause()` / `resume()`）。live region 只有一个：`Toaster` 是 polite 的 live region，其中的 Toast 不再带 `role="status"`；单独使用的 `Toast` 仍是 `role="status"`。没有 `Toaster` 时 `useToast().toast()` 不显示、返回 -1，开发模式下告警一次 |
+| `HeroCard` | `hero`（杏 → 粉）/ `hero-2`（薄荷 → 奶黄）渐变，ink 字，无阴影；每个一级页面最多一张；主卡上不用彩色状态字（`ok` / `warn` / `danger` 字只保证在 surface 与自己的 `-bg` 上的对比度），状态用 `StatusDot tone="progress"`（ink 字 + 彩色点） |
+| `ListGroup`、`ListRow`、`ListCaption`、`ChangedDot` | 行：图标块 → 标题 + 一行说明 → 右边只放一样；`selected`（primary-soft + 竖条；链接行 `aria-current="page"`，按钮行 `aria-pressed`，也可自己传 `aria-current`）、`disabled`（变淡；链接行去掉 `href`、不再跳转）、`plain`（无图标块，分隔线从 16 开始，否则从 68 开始）、`changed`（progress 色小点）；组标题 12 号 muted、缩进 16 |
 | `NavPill`、`NavIcon`、`IconButton` | 网页导航：当前页黑色胶囊带名字（`aria-current="page"`），其他是白色圆形图标（必须有名字）；圆形图标按钮 44（`flat`、`soft`） |
 | `TabBar`、`TabBarItem` | 手机底部导航：悬浮胶囊 68 高，4–5 项都有图标和文字，当前项 primary-soft |
 | `Aurora` | 极光背景（手机 320、网页 420 高，四团径向渐变），只放一级页面顶部，`aria-hidden` |
@@ -509,7 +509,7 @@ API 全部兼容，只改外观和增加变体：
 
 1. **stylelint**：第一层令牌的识别扩到 `space-4-5` / `space-6-5`、`radius-5…7`、`border-check`；新增的语义令牌都在 `scale.json` 的 `semanticTokens` 里；复合阴影只能经令牌使用（字面阴影仍报错）。
 2. **ESLint / Tailwind 类名白名单**（`classifyClass`）：间距键加 `5`、`10`；`text-xs` / `sm` / `md` / `lg` / `xl` / `2xl` / `title` / `display` 在尺度内（Tailwind 的 `text-base`、`text-3xl` 等仍是尺度外）；圆角键 `0`–`7`、`full` 与语义键（`pill`、`sub`、`hero`…）；阴影键加 `float`、`hairline`、`selected`、`field-focus`；尺寸键加 `control-medium`、`tile`、`tile-sm`、`tile-lg`、`icon-button`。`zhin plugin check` 第 5 条的间距键同步。
-3. **布局审计**（`audit/layout-audit.mjs`）：字号上限随尺度（8）；圆角 `r-0…r-7 / full`；边框 hairline / check / focus；阴影 e-0…e-3 或上面的复合阴影（比较前去掉 Tailwind 叠加的透明零阴影层）；静态卡片（含 `list-group`）最多 shadow-sm；一致性按 `data-slot` + `data-variant` + 是否选中分组；数据页在 1920 下至少占 min(85% 视口, 80rem)；主题切换同时设 `data-theme`；焦点遍历按元素身份去重（滚动后位置变化不再误判为重复）。
+3. **布局审计**（`audit/layout-audit.mjs`）：字号上限随尺度（8）；圆角 `r-0…r-7 / full`；边框 hairline / check / focus；阴影 e-0…e-3 或上面的复合阴影（比较前去掉 Tailwind 叠加的透明零阴影层），其中 `hairline-ring` 只能出现在 `button` / `badge` 上，`selected-bar` 只能在 `list-row` / `stat-card` 与表格单元格上，`field-focus-ring` / `field-error-ring` 只能在 `input` 上，`focus-ring-inset` 只能在菜单项和选项上（`AUDIT_RING_SLOTS`）；静态卡片（含 `list-group`）最多 shadow-sm；一致性按 `data-slot` 分组，只有组件库自己的 `button`、`badge`、`icon-button`、`tile`（按 `data-size`）、`hero` 再按**已知的**变体值细分（`AUDIT_VARIANT_SLOTS`，其它 slot、属性或未知值都和普通组件同组），「选中」只认 `data-selected`、`aria-selected="true"`、`aria-pressed="true"` 与不为 `"false"` 的 `aria-current`；数据页在 1920 下至少占 min(85% 视口, 80rem)；主题切换按 Console 的方式（第 31 条第 3 款）；焦点遍历按元素身份去重（滚动后位置变化不再误判为重复）。
 4. **对比度**（`tests/contrast.test.ts`，即设计包第十节的核对表）：浅色、深色下 `ink` / `muted` 在 surface、bg、sunken、raised、primary-soft、五种浅彩、两种主卡渐变与极光上 ≥ 4.5；`faint` 在 surface / bg 上 ≥ 4.5；`on-primary` / `primary`、`on-inverse` / `inverse`、白字 / `danger-solid` ≥ 4.5；`ok` / `warn` / `danger` 在表面和自己的 `-bg` 上 ≥ 4.5；图标色在对应浅彩和 surface 上 ≥ 3；`control`、`focus` 在 surface / bg 上 ≥ 3；不得出现色相 200°–300° 的颜色（品牌标除外）。令牌取值与设计包相同，表中数值全部通过，未作调整。
 
 ### 36. 对前文的修订
@@ -517,17 +517,24 @@ API 全部兼容，只改外观和增加变体：
 - **D16**：「最多 5 种字号」改为第 28 条的 8 档；「卡片描边、静态无阴影」改为「无描边、静态 shadow-sm」；内容宽度 `data` 改为 80rem；第三层取值表由第 29 条替换（`tokens.mjs` 的 `semantic`）。
 - **D18 第 2 条**（组间距 ≤ 卡片内边距 ≤ 分区间距）：手机宽度下卡片之间 12 小于内边距 16（设计包规定），这一档放宽为「组间距 ≤ 内边距，组间距 ≤ 分区间距」；40rem 起仍是原规则。
 - **D20 审计**：见第 35 条第 3 款。
+- **D15 第 1 条**（正常状态用弱化样式、不用彩色徽标）：`Badge variant="success"` 与 `StatusBadge` / `StatusDot` 的 `ok` 由「不着色的弱化文字」改为绿色（`ok` 色字，`Badge` 带 `ok-bg` 浅底）——设计包规定「在线 / 已启用」用 ok 绿。D15 第 1 条「只在有话可说时才显示、彩色只用于异常」的其余部分不变：正常状态仍应尽量不显示或少显示；`StatCard` 数值为 0 时仍忽略 `tone`（D24 第 3 条）。
 - **D23–D25**：主按钮改为黑 / 白，品牌色只用于品牌标；`data-palette` 不再生效；信号色改为调色板状态色；焦点环由 `brand-text` 改为 `focus`（ink）；链接与文字按钮是 ink 加下划线，不用彩色字表示可点。
 - **D28**：空状态图标放进 48 的 sunken 图标块，插画改为 muted 色。
 - **D26**：动效令牌见第 30 条。
 
 ### 37. Console 需要配合的地方（zhinjs/console）
 
-1. 主题：用户显式选浅色时在 `<html>` 写 `data-theme="light"`（深色可继续用 `.dark`，或写 `data-theme="dark"`）；「跟随系统」可以什么都不写。
-2. 移除配色（`data-palette`）选择器，或改为只切主题。
-3. 顶栏改用 `NavPill` / `NavIcon`，手机底部导航改用 `TabBar`；一级页面顶部可放 `Aurora` 与一张 `HeroCard`。
-4. 自己写死的 90rem / 120rem 内容宽度、`brand` 主按钮、`--console-signal-info-*` 蓝色、`backdrop-filter` 遮罩等自定义样式按本节对齐；Console 自己的 toast 可改用 `Toaster` / `useToast`。
-5. 升级 `@zhin.js/console-ui` 到 1.3.0 并更新视觉回归基线；插件页面不需要改代码。
+1. **删除 Console 自己的调色板和尺寸覆盖**——这是新外观在 Console 里生效的前提（第 27 条第 2 款）。Console 的 `theme-tokens.css` 与 `design-system.css` 在 `@zhin.js/console-ui` 的 `styles.css` 之后加载，同名变量以它们为准。要删的是：
+   - `theme-tokens.css` 中 `:root` 上的调色板（`--background`、`--foreground`、`--card`、`--popover`、`--primary`、`--primary-foreground`、`--primary-action*`、`--secondary*`、`--muted*`、`--accent*`、`--selected*`、`--tab-inactive`、`--border`、`--border-strong`、`--input`、`--ring`、`--destructive*`、`--success*`、`--warning*`、`--info*`、`--status-*`、`--chart-*`、`--sidebar*`、`--im-*` 等，即 `tokens/colors.css` 映射表里出现的所有名字）；
+   - `theme-tokens.css` 中所有 `[data-palette="…"]` 块（配色选择器的 8 套颜色）；
+   - `theme-tokens.css` 中 `.dark { … }` 里的颜色（同上这些名字的深色值）；
+   - `design-system.css` 中与 `@zhin.js/console-ui` 同名的 `--console-*` 变量（尺寸、圆角、阴影、动效、内容宽度、调色板等；以 `dist/scale.json` 的 `semanticTokens` / 第一层令牌与 `tokens.css` 里声明的名字为准），只保留 Console 业务页面自己的、组件库没有的变量。
+   删完以后 Console 页面与不自带颜色的插件页面才换上柔光卡片外观；删之前它们看到的仍是 Console 的旧值。
+2. 主题：保持现在的做法即可——深色在 `<html>` 加 `.dark`，浅色什么都不写（显式写 `.light` / `data-theme="light"` 也可以）。要提供「跟随系统」时在 `<html>` 写 `data-theme="system"`（组件库只在这种情况下读 `prefers-color-scheme`）。
+3. 移除配色（`data-palette`）选择器，或改为只切主题。
+4. 顶栏改用 `NavPill` / `NavIcon`，手机底部导航改用 `TabBar`；一级页面顶部可放 `Aurora` 与一张 `HeroCard`。
+5. 自己写死的 90rem / 120rem 内容宽度、`brand` 主按钮、`--console-signal-info-*` 蓝色、`backdrop-filter` 遮罩等自定义样式按本节对齐；在外壳外层放一个 `Toaster`，插件页面的 `useToast()` 才会显示（之前调用不显示任何东西，开发模式下控制台告警一次），Console 自己的 toast 也可改用它。
+6. 升级 `@zhin.js/console-ui` 到 1.3.0，完成第 1 条后更新视觉回归基线；插件页面不需要改代码（前提是第 1 条已完成）。
 
 ## 备选方案
 

@@ -539,7 +539,7 @@ Console 有一套信息密度、排版、间距和响应式的规则（[ADR 0063
 
 尺度的唯一来源是它的 `tokens/tokens.mjs`（ADR 0063 P1b，1.3.0 起按「柔光卡片」规范取值，D34–D41）：间距 `space-1`…`space-8` 加 `space-4-5`（20px）、`space-6-5`（40px），对应 Tailwind 键 `1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16`（`space-5` 是 `p-6`）；字号 8 档 `xs` 12 / `sm` 13 / `md` 14 / `lg` 15 / `xl` 17 / `2xl` 22 / `title` 26 / `display` 32（旧名 `label` / `body` / `section` 是 `sm` / `md` / `xl` 的别名）；字重 `regular` / `medium` / `strong`；圆角 `r-0`…`r-7` / `full`（网页卡片 28、手机卡片 24、输入框 14，按钮全是胶囊）；阴影 `e-1`…`e-3`（shadow-sm / md / lg）；内容宽度分 `reading`（60rem，设置、表单）和 `data`（80rem 即 1280px，列表、表格，默认）。用 Tailwind 的手写页面可以引入它生成的 `@zhin.js/console-ui/theme.css`，尺度外的键就不存在；`@zhin.js/console-ui/audit` 是同一套布局审计，可以对自己的页面跑一遍。
 
-颜色按角色使用（ADR 0063 D34，「柔光卡片」）：主色只有黑和白（`primary`，每屏唯一的实心主按钮 `Button variant="primary"`、选中、开关）；底色与文字是暖灰（`bg` → `surface` → `sunken` → `raised`，字只有 `ink` / `muted` / `faint`）；彩色只给内容、而且要浅（`tint-1`…`5` 浅彩底 + `accent-1`…`5` 图标色，图标色只画图形不写字）；状态用 `ok` / `warn` / `danger`（各有 `-bg`）和进行中的 `progress`；不用蓝紫色。品牌色 `brand` 只用于品牌标。Console 和插件已经在用的 `--background`、`--primary`、`--muted-foreground`、`--border`、`--destructive` 等名字都映射到了新颜色，不用改代码。页面上的危险操作用 `variant="danger-text"` 或 `destructive-outline`，实心红 `destructive-solid`（别名 `danger`）只出现在确认对话框里。动效只用 `--console-motion-fast` / `-base` / `-slow` / `-exit` 与 `--console-ease-out` / `-fast` / `-exit`。规则全文和组件清单见下文「[柔光卡片：组件与写法](#soft-cards)」。
+颜色按角色使用（ADR 0063 D34，「柔光卡片」）：主色只有黑和白（`primary`，每屏唯一的实心主按钮 `Button variant="primary"`、选中、开关）；底色与文字是暖灰（`bg` → `surface` → `sunken` → `raised`，字只有 `ink` / `muted` / `faint`）；彩色只给内容、而且要浅（`tint-1`…`5` 浅彩底 + `accent-1`…`5` 图标色，图标色只画图形不写字）；状态用 `ok` / `warn` / `danger`（各有 `-bg`）和进行中的 `progress`；不用蓝紫色。品牌色 `brand` 只用于品牌标。Console 和插件已经在用的 `--background`、`--primary`、`--muted-foreground`、`--border`、`--destructive` 等名字都映射到了新颜色；插件页面只读这些名字、不写死颜色时不用改代码，但要等 Console 删掉自己对这些变量的覆盖（ADR 0063 第 37 条）才会在 Console 里显示新颜色。页面上的危险操作用 `variant="danger-text"` 或 `destructive-outline`，实心红 `destructive-solid`（别名 `danger`）只出现在确认对话框里。动效只用 `--console-motion-fast` / `-base` / `-slow` / `-exit` 与 `--console-ease-out` / `-fast` / `-exit`。规则全文和组件清单见下文「[柔光卡片：组件与写法](#soft-cards)」。
 
 **允许自定义。** 组件库满足不了的界面（图表、画布、游戏、工作区）可以自己设计，但请尽量遵守同样的规则。
 
@@ -630,7 +630,7 @@ export default function Feeds() {
 
 ### 柔光卡片：组件与写法 {#soft-cards}
 
-`@zhin.js/console-ui` 1.3.0 起按「柔光卡片」规范绘制（[ADR 0063](../adr/0063-console-plugin-ui-unification.md) D34–D41）：大圆角、无描边的白卡、胶囊按钮、黑白主色、浅色多彩的内容。已有页面不用改代码就会换上新外观；新写的页面按下面的清单和规矩组合组件。
+`@zhin.js/console-ui` 1.3.0 起按「柔光卡片」规范绘制（[ADR 0063](../adr/0063-console-plugin-ui-unification.md) D34–D41）：大圆角、无描边的白卡、胶囊按钮、黑白主色、浅色多彩的内容。组件的 API 不变，已有页面不用改代码；但 Console 自己的 `theme-tokens.css` / `design-system.css` 在组件库之后加载、会覆盖同名的调色板和尺寸变量，**要等 Console 删掉这些覆盖（ADR 0063 第 37 条）之后，Console 和插件页面才会换上新外观**。新写的页面按下面的清单和规矩组合组件。
 
 **组件清单**
 
@@ -641,15 +641,15 @@ export default function Feeds() {
 | 类别图标 | `Tile`（40，`size="sm"` 32 / `"lg"` 48，`tone` 1–5 或不写为中性） |
 | 主操作、次操作 | `Button`：`primary`（每屏一个）、`secondary`（默认）、`white`（浅彩和主卡上）、`text`（取消、还原默认）、`danger-text`、`danger`（只在确认框）；`size="sm"` 36；等待时 `loading` |
 | 筛选、多选 | `Chip`（`pressed` 写 `aria-pressed`，可带 `tone` 浅彩） |
-| 2–4 个互斥选项 | `Segmented`（或带面板时用 `Tabs`，外观相同） |
-| 数量 | `Stepper`（值带单位：`unit="次"`） |
+| 2–4 个互斥选项 | `Segmented`（或带面板时用 `Tabs`，外观相同；`Tabs` 默认按文字宽度排列，`<Tabs fill>` 才占满等宽）；不切换面板的纯筛选可写 `role="radiogroup"` |
+| 数量 | `Stepper`（值带单位：`unit="次"`；到上下限时按钮 `aria-disabled`，焦点不丢） |
 | 开关、勾选、单选 | `Switch`、`Checkbox`、`RadioGroup` |
 | 输入 | `Input`、`Textarea`、`SelectField`、`SearchableSelectField`、`DateField`（高 48；出错写 `aria-invalid`） |
 | 列表 | `ListCaption`（组标题，卡片外）+ `ListGroup` + `ListRow`（`icon`、`title`、`description`、`end`；`selected`、`plain`、`changed`） |
 | 表格 | `Table`（窄容器里自动变卡片） |
 | 状态 | `StatusDot`（点 + 文字）、`Badge`（浅底胶囊） |
 | 需要处理的状态 | `Banner`（一句状态 + 一个白色小按钮） |
-| 操作结果 | `useToast().toast('已保存', { onUndo })`（页面外层要有 `Toaster`；Console 提供后可直接用） |
+| 操作结果 | `useToast().toast('已保存', { onUndo })`（页面外层要有 `Toaster`；Console 提供后可直接用。Console 还没提供时，调用不显示任何东西、返回 -1，开发模式下控制台告警一次；带「撤销」的至少停留 5 秒，指针停在上面或焦点在其中时暂停计时） |
 | 底部操作 | `ActionBar`（左边文字按钮、右边主按钮） |
 | 加载 | `Skeleton`（和真内容一样大），不写「正在加载」 |
 | 空 | `EmptyState`（图标 + 标题 + 按钮，`presets` 放一键套用的预设） |
@@ -661,6 +661,8 @@ export default function Feeds() {
 - 五组类别色是「浅彩底 + 图标色」：`Tile tone={n}`、`Badge tone={n}`、`Chip tone={n}`、Tailwind 的 `bg-tint-n` / `text-accent-n`。图标色只画图形（图标、图表、点），**不写字**；块里的字用 `ink`。
 - **插件页面固定用第 2 组**（`tint-2` / `accent-2`，粉 / 玫红）：Console 在插件列表和插件详情里用第 2 组表示「插件」，页面里代表插件自己的东西（插件图标、插件的条目）也用它，同一个东西在所有页面颜色一样。需要区分插件内部的几类东西时，可以再用其余几组，但每个类别固定一组，并且一行里最多出现一种图标色。
 - 不用彩色表示状态（状态用 `ok` / `warn` / `danger`），不用彩色字表示可点（文字按钮是 ink 加下划线），不用深色、高饱和的大色块，不用蓝紫色。
+- **主卡（`HeroCard`）上不要用彩色状态字**：渐变底上的字一律 ink。主卡里表示状态用 `StatusDot tone="progress"`（ink 字 + 彩色点）或不带颜色的文字，不要用 `ok` / `warn` / `danger` 的彩色字（它们只保证在 surface 和自己的 `-bg` 上的对比度）。
+- 图表按 `chart-1`…`chart-8` 的顺序取色（五个图标色与孔雀青、棕、赭交错，不含蓝紫）；「正常 / 失败」这类状态用 `ok` / `danger`，不要用图表色。
 
 **一屏只放一个主按钮**
 
@@ -683,7 +685,7 @@ export default function Feeds() {
 
 不写「您」「请」，不用感叹号；同一个东西全插件只用一个叫法。
 
-**主题**：组件跟随 Console 的浅色 / 深色（`.dark` 或 `data-theme="dark"`，没写时跟随系统），尊重「减少动态效果」。插件样式只读令牌，不要写死颜色，也不要自己判断深浅色。
+**主题**：组件跟随 Console 的浅色 / 深色（`.dark` 或 `data-theme="dark"` 为深色，什么都不写为浅色；宿主在 `<html>` 写 `data-theme="system"` 时才跟随系统），尊重「减少动态效果」。插件样式只读令牌，不要写死颜色，也不要自己判断深浅色；Tailwind 的 `dark:` 在 `.light` 岛内不生效。
 
 ### 从 @zhin.js/client/ui 升级 {#upgrade-client-ui}
 

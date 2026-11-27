@@ -2,7 +2,7 @@
 
 Zhin Console 与插件页面共用的组件库（[ADR 0063](../../../docs/adr/0063-console-plugin-ui-unification.md)）：基于 Radix 的 React 组件、页面外壳、刷新控件，以及一份设计令牌。样式随包发布、已经编译好，使用方不需要 Tailwind。
 
-**1.3.0 起按「柔光卡片」规范绘制**（ADR 0063 D34–D41）：黑白主色 + 浅色多彩内容，大圆角、无描边卡片、胶囊按钮，浅色和深色两套。已有组件的 API 不变；新增 `Tile`、`Chip`、`Segmented`、`Stepper`、`StatusDot`、`Banner`、`Toast` / `Toaster` / `useToast`、`HeroCard`、`ListGroup` / `ListRow` / `ListCaption` / `ChangedDot`、`NavPill` / `NavIcon` / `IconButton`、`TabBar` / `TabBarItem`、`Aurora`、`ActionBar`。见下文「柔光卡片」。
+**1.3.0 起按「柔光卡片」规范绘制**（ADR 0063 D34–D41）：黑白主色 + 浅色多彩内容，大圆角、无描边卡片、胶囊按钮，浅色和深色两套。已有组件的 API 不变。`--background`、`--primary` 等原有名字都映射到新颜色，但宿主自己在本包之后定义的同名变量会覆盖它们：Console 删掉自己 `theme-tokens.css` 的调色板（`:root`、`[data-palette]`、`.dark` 颜色块）与 `design-system.css` 中同名的 `--console-*` 之后（ADR 0063 第 37 条），Console 和插件页面才会换上新外观。新增 `Tile`、`Chip`、`Segmented`、`Stepper`、`StatusDot`、`Banner`、`Toast` / `Toaster` / `useToast`、`HeroCard`、`ListGroup` / `ListRow` / `ListCaption` / `ChangedDot`、`NavPill` / `NavIcon` / `IconButton`、`TabBar` / `TabBarItem`、`Aurora`、`ActionBar`。见下文「柔光卡片」。
 
 > 状态：P1b（三层令牌、单一事实来源、组件规则、lint 与布局审计；外观有意改变，见 ADR 0063 D15–D22）；P2 起 `@zhin.js/client` 的三个声明式渲染器改用本包，并新增「内容区块」（见下文）；色板角色、信号色、`primary` 按钮、`BrandMark` 与动效令牌见 ADR 0063 D23–D27（zhinjs/console#125）；空状态插画、ghost 控件、日期选择、图标、代码标识、焦点环与字体见 D28–D33（#125 第三阶段）。P4 删除了旧令牌别名与 `Button` 的 `default` 变体（见下文「令牌」）；`@zhin.js/client/ui` 已删除，升级对照见 [Console 页面与布局](../../../docs/authoring/console-pages.md#upgrade-client-ui)。
 
@@ -16,7 +16,7 @@ import { Button, PageShell, PageHeader, RefreshControl } from '@zhin.js/console-
 ```
 
 - `@zhin.js/console-ui/styles.css`：完整样式，自带 preflight、主题、组件用到的 Tailwind 工具类、令牌和 `console-*` 组件类。和自己的 Tailwind 一起用时，先引入它，再引入自己的样式，同一层（`@layer base` 等）里后者优先。
-- `@zhin.js/console-ui/tokens.css`：只有令牌（颜色与三层尺寸令牌）。深色由祖先上的 `.dark` 或 `data-theme="dark"` 切换，`.light` / `data-theme="light"` 固定浅色，`<html>` 上都没写时跟随系统（D38）。`data-palette` 不再改变颜色。
+- `@zhin.js/console-ui/tokens.css`：只有令牌（颜色与三层尺寸令牌）。深色由祖先上的 `.dark` 或 `data-theme="dark"` 切换，`.light` / `data-theme="light"` 固定浅色，**什么都不写就是浅色**；跟随系统要显式启用：`<html data-theme="system">`（D38）。`data-palette` 不再改变颜色。
 - `@zhin.js/console-ui/theme.css`：生成的 Tailwind 4 主题，只暴露尺度内的键（见下文「令牌」）。自己用 Tailwind 的使用方（Console）在 `@import "tailwindcss"` 之后引入它。
 - `@zhin.js/console-ui/custom-media.css`：外壳用的 `@custom-media --console-sm` 等（需要 postcss-custom-media）。
 - `@zhin.js/console-ui/scale.json`、`@zhin.js/console-ui/scale`：允许值清单（JSON / ESM），供 lint、`zhin plugin check` 与审计使用。
@@ -72,10 +72,11 @@ import { Banner, Button, HeroCard, ListCaption, ListGroup, ListRow, Segmented, S
   <ListRow plain changed title="每人每天上限" description="默认 0" end={<Stepper label="每人每天上限" value={20} unit="次" onValueChange={set} />} />
 </ListGroup>
 // 外层放一次 <Toaster>，之后 useToast().toast('已保存', { onUndo })
+// 没有 <Toaster> 时不显示、返回 -1（开发模式告警一次）；带「撤销」的至少 5 秒，悬停或聚焦时暂停计时
 ```
 
 - 五条原则：主色只有黑和白；彩色只给内容而且要浅（`Tile` / `Badge` / `Chip` 的 `tone` 1–5，图标色只画图形不写字）；不用蓝紫色；组件自己说清作用（名字、单位、状态词，不加解释小字）；文案要短。插件页面的类别色固定用第 2 组。
-- 无障碍：`Chip` 用 `aria-pressed`，`Segmented` 是 `role="tablist"`（方向键切换），`Stepper` 是两个带名字的按钮加 `<output>`，`Toast` 是 `role="status"`（`Toaster` 是 polite live region），`Banner` 的 danger 是 `role="alert"`，`NavIcon` / `IconButton` 必须有名字，`Tile` / `Aurora` 是装饰（`aria-hidden`）。所有动画在 `prefers-reduced-motion: reduce` 下只保留淡入。
+- 无障碍：`Chip` 用 `aria-pressed`，`Segmented` 是 `role="tablist"`（方向键切换；纯筛选可写 `role="radiogroup"`），`Stepper` 是两个带名字的按钮加 `<output>`（到上下限时 `aria-disabled`，焦点不丢），单独的 `Toast` 是 `role="status"`（放在 `Toaster` 里时由 `Toaster` 这一个 polite live region 播报），`ListRow` 选中时链接行 `aria-current`、按钮行 `aria-pressed`，`disabled` 的链接行不再跳转，菜单项与下拉选项的键盘焦点有 2px 焦点环（指针悬停只有填充），`Banner` 的 danger 是 `role="alert"`，`NavIcon` / `IconButton` 必须有名字，`Tile` / `Aurora` 是装饰（`aria-hidden`）。所有动画在 `prefers-reduced-motion: reduce` 下只保留淡入。
 
 ## 空状态、ghost 控件、日期选择与代码标识（ADR 0063 D28–D31）
 
@@ -151,7 +152,7 @@ import { DateTimeField, EmptyState, InlineCode, SelectField } from '@zhin.js/con
 
 `Button` 的 `variant="default"`（1.1 改名为 `soft` 后保留的弃用别名）同样在 P4 删除，改写 `variant="soft"`，或不写 `variant`（默认就是 `soft`）。
 
-Tailwind 主题（`theme.css`）：`p-*` / `m-*` / `gap-*` / `space-*` 只有 `0`、`px`、`1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16`（4px 网格；`space-5` 对应 `p-6`）；尺寸类（`w` / `h` / `size` / `inset` / `min-*` / `max-*` / `translate` / `basis`）保留 Tailwind 的数字键，另有 `control`、`control-medium`、`control-compact`、`tile`、`tile-sm`、`tile-lg`、`icon-button`、`touch`、`touch-min`、`badge`；`text-*` 有 8 个字号和 3 个别名，`font-*` 只有三个字重，`rounded-*` 为 `0`–`7`、`full` 和语义键（`control`、`pill`、`card`、`sub`、`hero`、`badge`、`popover`、`dialog` 等），`shadow-*` 为 `e1`–`e3`、语义键（`card`、`popover`、`dialog`、`float`）和 `hairline`、`selected`、`field-focus`，断点 `sm` / `md` / `lg` / `xl`，颜色只有主题色和柔光卡片颜色。`dark:` 变体认 `.dark`、`[data-theme="dark"]` 与系统偏好。
+Tailwind 主题（`theme.css`）：`p-*` / `m-*` / `gap-*` / `space-*` 只有 `0`、`px`、`1`、`2`、`3`、`4`、`5`、`6`、`8`、`10`、`12`、`16`（4px 网格；`space-5` 对应 `p-6`）；尺寸类（`w` / `h` / `size` / `inset` / `min-*` / `max-*` / `translate` / `basis`）保留 Tailwind 的数字键，另有 `control`、`control-medium`、`control-compact`、`tile`、`tile-sm`、`tile-lg`、`icon-button`、`touch`、`touch-min`、`badge`；`text-*` 有 8 个字号和 3 个别名，`font-*` 只有三个字重，`rounded-*` 为 `0`–`7`、`full` 和语义键（`control`、`pill`、`card`、`sub`、`hero`、`badge`、`popover`、`dialog` 等），`shadow-*` 为 `e1`–`e3`、语义键（`card`、`popover`、`dialog`、`float`）和 `hairline`、`selected`、`field-focus`，断点 `sm` / `md` / `lg` / `xl`，颜色只有主题色和柔光卡片颜色。`dark:` 变体认 `.dark`、`[data-theme="dark"]`，以及系统为深色时的 `[data-theme="system"]`，在 `.light` / `[data-theme="light"]` 岛内不生效。`Tabs` 默认按文字宽度排列，`<Tabs fill>` 才占满等宽。
 
 ## 约束工具（ADR 0063 D20，可在 zhinjs/console 复用）
 
@@ -179,7 +180,7 @@ export default [{ files: ['**/*.tsx'], ...consoleUi.configs.recommended }];
 - `auditPluginPages({ repoRoot, widths, themes, plugins })`：把插件的 `pages/<名>/index.tsx` 和本包的外壳（`PageShell` + `PageHeader`）一起打包，用 Chromium 打开并审计（`pnpm check:plugin-ui-audit` 使用它）。手写 React 页面直接挂载；声明式蓝图、适配器页和评论审批页由 Console 渲染器渲染，需要在请求里传 `mountModule`（导出 `mountPluginPage(context)` 的模块，见 `audit/mount-page.jsx`），否则返回 `mounted: false` 与 `skipped` 原因、不出违规。
 - `formatAuditReport(report)`：文字摘要。
 
-检查项 id：`type-scale`、`spacing`、`radius`、`border`、`shadow`、`consistency`（按 `data-slot` 分组，同一宽度只有一种圆角 / 边框 / 阴影）、`overflow`、`touch-target`、`edge-card`、`static-card`、`bottom-drawer`、`content-width`、`duplicate-text`、`focus-visible`、`contrast`、`shell-overlap`，以及 `auditPluginPages` 的 `mount`（页面构建或渲染失败）。豁免：在元素上写 `data-zhin-ui-ignore="<检查项>[,<检查项>…]: <理由>"`，对该元素及子元素生效，结果的 `exemptions` 列出每一条。
+检查项 id：`type-scale`、`spacing`、`radius`、`border`、`shadow`（柔光卡片的复合阴影只能用在各自的组件上，见 `AUDIT_RING_SLOTS`）、`consistency`（按 `data-slot` 分组，同一宽度只有一种圆角 / 边框 / 阴影；只有本包的 `button`、`badge`、`icon-button`、`tile`、`hero` 再按已知变体细分，见 `AUDIT_VARIANT_SLOTS`；「选中」只认 `aria-current` 不为 `"false"` 等真正选中的状态）、`overflow`、`touch-target`、`edge-card`、`static-card`、`bottom-drawer`、`content-width`、`duplicate-text`、`focus-visible`、`contrast`、`shell-overlap`，以及 `auditPluginPages` 的 `mount`（页面构建或渲染失败）。豁免：在元素上写 `data-zhin-ui-ignore="<检查项>[,<检查项>…]: <理由>"`，对该元素及子元素生效，结果的 `exemptions` 列出每一条。
 
 本包的组件示例页是门禁：`pnpm --filter @zhin.js/console-ui test:audit`（根命令 `pnpm check:console-ui-audit`，在 Full validation 中运行），四个宽度 × 两种主题全项通过，并在 375px 打开下拉、「更多」菜单和对话框检查底部抽屉；Console 和插件页面先只出报告。
 

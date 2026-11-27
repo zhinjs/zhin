@@ -7,6 +7,7 @@ import { cn } from '../../cn.js'
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
 import { controlVariantClass, type ControlVariant } from './control-variant.js'
+import { useMenuInput } from './input-modality.js'
 
 const Select = SelectPrimitive.Root
 const SelectGroup = SelectPrimitive.Group
@@ -71,12 +72,12 @@ SelectScrollDownButton.displayName = "SelectScrollDownButton"
 const SelectContent = forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position: positionProp, ...props }, ref) => {
+>(({ className, children, position: positionProp, onPointerMove, onKeyDown, ...props }, ref) => {
   const position = (positionProp ?? "popper") as "popper" | "item-aligned"
+  const input = useMenuInput<HTMLDivElement>(ref, { onPointerMove, onKeyDown })
   return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
-      ref={ref}
       data-slot="popover"
       className={cn(
         "console-popover relative flex max-h-[min(24rem,var(--radix-select-content-available-height,calc(100dvh-1rem)))] min-w-32 max-w-[calc(100vw-1rem)] flex-col p-0",
@@ -88,6 +89,7 @@ const SelectContent = forwardRef<
       collisionPadding={8}
       sideOffset={4}
       {...props}
+      {...input}
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport

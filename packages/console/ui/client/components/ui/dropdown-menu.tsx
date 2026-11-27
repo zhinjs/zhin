@@ -6,6 +6,7 @@ const DropdownMenuPrimitive = Radix.DropdownMenu
 import { cn } from '../../cn.js'
 import { Check, Circle } from "lucide-react"
 import { CONSOLE_ICON_STROKE_WIDTH } from '../icon.js'
+import { useMenuInput } from './input-modality.js'
 
 const DropdownMenu = DropdownMenuPrimitive.Root
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
@@ -17,20 +18,23 @@ const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 const DropdownMenuContent = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <DropdownMenuPrimitive.Portal>
-    <DropdownMenuPrimitive.Content
-      ref={ref}
-      data-slot="popover"
-      sideOffset={sideOffset}
-      className={cn(
-        "console-popover min-w-56",
-        className
-      )}
-      {...props}
-    />
-  </DropdownMenuPrimitive.Portal>
-))
+>(({ className, sideOffset = 4, onPointerMove, onKeyDown, ...props }, ref) => {
+  const input = useMenuInput<HTMLDivElement>(ref, { onPointerMove, onKeyDown })
+  return (
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.Content
+        data-slot="popover"
+        sideOffset={sideOffset}
+        className={cn(
+          "console-popover min-w-56",
+          className
+        )}
+        {...props}
+        {...input}
+      />
+    </DropdownMenuPrimitive.Portal>
+  )
+})
 DropdownMenuContent.displayName = "DropdownMenuContent"
 
 const DropdownMenuItem = forwardRef<

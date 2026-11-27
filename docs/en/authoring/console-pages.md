@@ -539,7 +539,7 @@ The unified component library is `@zhin.js/console-ui` (with a precompiled `styl
 
 Its `tokens/tokens.mjs` is the single source of the scale (ADR 0063 P1b; from 1.3.0 with the "soft cards" values, D34–D41): spacing `space-1`…`space-8` plus `space-4-5` (20px) and `space-6-5` (40px) are the Tailwind keys `1`, `2`, `3`, `4`, `5`, `6`, `8`, `10`, `12`, `16` (`space-5` is `p-6`); eight font sizes `xs` 12 / `sm` 13 / `md` 14 / `lg` 15 / `xl` 17 / `2xl` 22 / `title` 26 / `display` 32 (the old names `label` / `body` / `section` are aliases of `sm` / `md` / `xl`); weights `regular` / `medium` / `strong`; radii `r-0`…`r-7` / `full` (web cards 28, phone cards 24, inputs 14, every button a pill); shadows `e-1`…`e-3` (shadow-sm / md / lg); content width is `reading` (60rem, settings and forms) or `data` (80rem = 1280px, lists and tables, the default). Hand-written pages that use Tailwind can import the generated `@zhin.js/console-ui/theme.css`, so off-scale keys simply do not exist; `@zhin.js/console-ui/audit` is the same layout audit and can be run against your own pages.
 
-Use colors by role (ADR 0063 D34, "soft cards"): the primary color is black or white only (`primary`: the one solid primary button per screen, `Button variant="primary"`, selection, switches); surfaces and text are warm greys (`bg` → `surface` → `sunken` → `raised`; text is only `ink` / `muted` / `faint`); color is for content only, and light (`tint-1`…`5` fills with `accent-1`…`5` icon colors — icon colors draw shapes, never text); states use `ok` / `warn` / `danger` (each with a `-bg`) and `progress` for work in progress; no blue or purple. The brand color `brand` is only for the brand mark. The names the Console and plugins already use (`--background`, `--primary`, `--muted-foreground`, `--border`, `--destructive`, …) map onto the new colors, so no code changes are needed. Dangerous actions on a page use `variant="danger-text"` or `destructive-outline`; the solid red `destructive-solid` (alias `danger`) appears only in confirmation dialogs. Motion uses only `--console-motion-fast` / `-base` / `-slow` / `-exit` and `--console-ease-out` / `-fast` / `-exit`. The full rules and the component list are in "[Soft cards: components and usage](#soft-cards)" below.
+Use colors by role (ADR 0063 D34, "soft cards"): the primary color is black or white only (`primary`: the one solid primary button per screen, `Button variant="primary"`, selection, switches); surfaces and text are warm greys (`bg` → `surface` → `sunken` → `raised`; text is only `ink` / `muted` / `faint`); color is for content only, and light (`tint-1`…`5` fills with `accent-1`…`5` icon colors — icon colors draw shapes, never text); states use `ok` / `warn` / `danger` (each with a `-bg`) and `progress` for work in progress; no blue or purple. The brand color `brand` is only for the brand mark. The names the Console and plugins already use (`--background`, `--primary`, `--muted-foreground`, `--border`, `--destructive`, …) map onto the new colors: a plugin page that reads only these names and hard-codes no colors needs no code changes, but the new colors show in the Console only once the Console removes its own overrides of these variables (ADR 0063 item 37). Dangerous actions on a page use `variant="danger-text"` or `destructive-outline`; the solid red `destructive-solid` (alias `danger`) appears only in confirmation dialogs. Motion uses only `--console-motion-fast` / `-base` / `-slow` / `-exit` and `--console-ease-out` / `-fast` / `-exit`. The full rules and the component list are in "[Soft cards: components and usage](#soft-cards)" below.
 
 **Custom UI is allowed.** Interfaces the components cannot cover (charts, canvases, games, workspaces) may be designed your own way, but please follow the same rules as far as you can.
 
@@ -630,7 +630,7 @@ The rules live in the components, and tokens and breakpoints are defined once in
 
 ### Soft cards: components and usage {#soft-cards}
 
-From 1.3.0 `@zhin.js/console-ui` draws the "soft cards" design ([ADR 0063](../../adr/0063-console-plugin-ui-unification.md) D34–D41): large radii, borderless white cards, pill buttons, a black / white primary color and light, colorful content. Existing pages take the new look without code changes; new pages combine the components below.
+From 1.3.0 `@zhin.js/console-ui` draws the "soft cards" design ([ADR 0063](../../adr/0063-console-plugin-ui-unification.md) D34–D41): large radii, borderless white cards, pill buttons, a black / white primary color and light, colorful content. The component APIs are unchanged and existing pages need no code changes; but the Console's own `theme-tokens.css` / `design-system.css` load after the library and override the palette and size variables of the same names, so **the Console and plugin pages take the new look only once the Console removes those overrides (ADR 0063 item 37)**. New pages combine the components below.
 
 **Components**
 
@@ -641,15 +641,15 @@ From 1.3.0 `@zhin.js/console-ui` draws the "soft cards" design ([ADR 0063](../..
 | Category icons | `Tile` (40; `size="sm"` 32 / `"lg"` 48; `tone` 1–5, or neutral) |
 | Primary and other actions | `Button`: `primary` (one per screen), `secondary` (default), `white` (on tints and hero cards), `text` (cancel, reset), `danger-text`, `danger` (confirm dialogs only); `size="sm"` 36; `loading` while waiting |
 | Filters, multi-select | `Chip` (`pressed` → `aria-pressed`, optional `tone` tint) |
-| 2–4 exclusive options | `Segmented` (or `Tabs` with panels — same look) |
-| Quantities | `Stepper` (the value carries its unit: `unit="times"`) |
+| 2–4 exclusive options | `Segmented` (or `Tabs` with panels — same look; `Tabs` size to their labels, `<Tabs fill>` stretches them to equal widths); a plain filter that switches no panel can use `role="radiogroup"` |
+| Quantities | `Stepper` (the value carries its unit: `unit="times"`; at a limit the button is `aria-disabled` and keeps the focus) |
 | Switches, checkboxes, radios | `Switch`, `Checkbox`, `RadioGroup` |
 | Inputs | `Input`, `Textarea`, `SelectField`, `SearchableSelectField`, `DateField` (48 tall; `aria-invalid` for errors) |
 | Lists | `ListCaption` (group caption, outside the card) + `ListGroup` + `ListRow` (`icon`, `title`, `description`, `end`; `selected`, `plain`, `changed`) |
 | Tables | `Table` (turns into cards in narrow containers) |
 | States | `StatusDot` (dot + word), `Badge` (light pill) |
 | A state that needs action | `Banner` (one short state + one small white button) |
-| The result of an action | `useToast().toast('Saved', { onUndo })` (needs a `Toaster` around the page; the Console provides it) |
+| The result of an action | `useToast().toast('Saved', { onUndo })` (needs a `Toaster` around the page; once the Console provides one, it works as is. Until the Console provides it, the call shows nothing and returns -1, and in development it logs one warning; a toast with "Undo" stays at least 5 s, and the time stops while the pointer is on it or focus is in it) |
 | Bottom actions | `ActionBar` (text button left, primary right) |
 | Loading | `Skeleton` (the size of the real content), never "Loading…" |
 | Empty | `EmptyState` (icon + title + button; `presets` for one-tap presets) |
@@ -661,6 +661,8 @@ From 1.3.0 `@zhin.js/console-ui` draws the "soft cards" design ([ADR 0063](../..
 - The five category colors are "light tint fill + icon color": `Tile tone={n}`, `Badge tone={n}`, `Chip tone={n}`, Tailwind `bg-tint-n` / `text-accent-n`. Icon colors draw shapes (icons, charts, dots) and **never text**; text in a tile is `ink`.
 - **Plugin pages always use group 2** (`tint-2` / `accent-2`, pink / rose): the Console marks "plugins" with group 2 in the plugin list and plugin details, so the things that stand for the plugin on its own page (its icon, its items) use it too — the same thing has the same color everywhere. To tell several kinds of things inside a plugin apart you may use the other groups, one fixed group per kind, and at most one icon color per row.
 - Never use color for state (states are `ok` / `warn` / `danger`), never colored text to mark something clickable (text buttons are ink with an underline), no large dark or saturated blocks, no blue or purple.
+- **No colored state text on a hero card** (`HeroCard`): text on the gradient is always ink. Show a state there with `StatusDot tone="progress"` (ink text + a colored dot) or plain text, not the colored `ok` / `warn` / `danger` text (its contrast is only guaranteed on surfaces and its own `-bg`).
+- Charts take `chart-1`…`chart-8` in order (the five icon colors interleaved with peacock, brown and ochre; no blue or purple); states such as "ok / failed" use `ok` / `danger`, not chart colors.
 
 **One primary button per screen**
 
@@ -683,7 +685,7 @@ From 1.3.0 `@zhin.js/console-ui` draws the "soft cards" design ([ADR 0063](../..
 
 No "please", no exclamation marks; one name per thing across the plugin.
 
-**Theme**: components follow the Console's light / dark theme (`.dark` or `data-theme="dark"`; with neither, the system preference) and respect reduced motion. Plugin styles read tokens only — no hard-coded colors and no theme detection of your own.
+**Theme**: components follow the Console's light / dark theme (`.dark` or `data-theme="dark"` is dark, nothing is light; the system preference applies only when the host writes `data-theme="system"` on `<html>`) and respect reduced motion. Plugin styles read tokens only — no hard-coded colors and no theme detection of your own; Tailwind's `dark:` does not apply inside a `.light` island.
 
 ### Upgrading from @zhin.js/client/ui {#upgrade-client-ui}
 

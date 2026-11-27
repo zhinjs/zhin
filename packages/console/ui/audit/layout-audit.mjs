@@ -6,9 +6,10 @@
  *   type-scale      ≤ 8 font sizes, ≤ 3 weights, all on the scale (soft cards D35, was ≤ 5 in D16)
  *   spacing         padding and gap on the 4px space scale (or a resolved semantic spacing token)
  *   radius / border / shadow   border-radius (r-0 … r-7 / full), border-width (hairline / check /
- *                   focus), box-shadow (e-0 … e-3 or one of the soft-card rings) on the scale
- *   consistency     one radius / border / shadow per component kind (`data-slot`, `data-variant`,
- *                   selected or not) and width
+ *                   focus), box-shadow (e-0 … e-3 or one of the soft-card rings, each ring only on its
+ *                   own components — {@link AUDIT_RING_SLOTS}) on the scale
+ *   consistency     one radius / border / shadow per component kind (`data-slot`, the known variants of
+ *                   console-ui's own slots — {@link AUDIT_VARIANT_SLOTS} — selected or not) and width
  *   overflow        no page-level horizontal scroll, no element pushed out of the viewport
  *   touch-target    ≥ 44 × 44 px interactive targets at 375 (an `::after` hit area counts)
  *   edge-card       edge-to-edge cards have no radius at 375
@@ -40,15 +41,46 @@ export const AUDIT_CHECKS = Object.freeze([
 ]);
 
 /**
- * Default theme switch (D38): the Console's `.dark` class and `data-theme` on <html>, so the
- * result never depends on the browser's `prefers-color-scheme`.
+ * Default theme switch (D38): the way the Console switches — `.dark` on <html> or nothing (light).
+ * `.light` and `data-theme` are removed, so a page that opts in to `data-theme="system"` is audited
+ * in the requested theme and the result never depends on the browser's `prefers-color-scheme`.
  */
 export async function setConsoleTheme(page, theme) {
   await page.evaluate((dark) => {
-    document.documentElement.classList.toggle('dark', dark);
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    const root = document.documentElement;
+    root.classList.toggle('dark', dark);
+    root.classList.remove('light');
+    root.removeAttribute('data-theme');
   }, theme === 'dark');
 }
+
+/**
+ * Consistency groups (check `consistency`): components of one kind (`data-slot`) must look the same.
+ * Only these console-ui slots have deliberate variants, read from one attribute and only for the
+ * listed values (a white button has shadow-sm, an outline badge its hairline ring); any other slot,
+ * attribute or value is grouped with the plain component.
+ */
+export const AUDIT_VARIANT_SLOTS = Object.freeze({
+  button: Object.freeze({ attribute: 'data-variant', values: Object.freeze(['primary', 'secondary', 'soft', 'white', 'outline', 'ghost', 'text', 'link', 'danger-text', 'destructive', 'destructive-outline', 'destructive-solid', 'danger']) }),
+  badge: Object.freeze({ attribute: 'data-variant', values: Object.freeze(['default', 'secondary', 'neutral', 'destructive', 'outline', 'success', 'warning', 'info', 'solid']) }),
+  'icon-button': Object.freeze({ attribute: 'data-variant', values: Object.freeze(['flat', 'soft']) }),
+  tile: Object.freeze({ attribute: 'data-size', values: Object.freeze(['sm', 'lg']) }),
+  hero: Object.freeze({ attribute: 'data-variant', values: Object.freeze(['hero', 'hero-2']) }),
+});
+
+/**
+ * Where each soft-card ring may appear (check `shadow`): the composite shadow token → the elements
+ * that draw it. `slots` are `data-slot` values of the element itself; `selector` also matches
+ * elements without a slot (table cells of a selected row, menu items). Other rings (the
+ * in-progress halo) are allowed anywhere.
+ */
+export const AUDIT_RING_SLOTS = Object.freeze({
+  'hairline-ring': Object.freeze({ slots: Object.freeze(['button', 'badge']) }),
+  'selected-bar': Object.freeze({ slots: Object.freeze(['list-row', 'stat-card']), selector: '[data-slot="table"] td' }),
+  'field-focus-ring': Object.freeze({ slots: Object.freeze(['input']) }),
+  'field-error-ring': Object.freeze({ slots: Object.freeze(['input']) }),
+  'focus-ring-inset': Object.freeze({ slots: Object.freeze([]), selector: '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"]' }),
+});
 
 /**
  * Audits the page as it is now (viewport, theme and open overlays are the caller's).
@@ -76,6 +108,8 @@ export async function auditPage(page, options = {}) {
       breakpointSm: scale.breakpoints.sm,
     },
     checks: [...checks],
+    variantSlots: AUDIT_VARIANT_SLOTS,
+    ringSlots: AUDIT_RING_SLOTS,
     contentSelector: options.contentSelector ?? '[data-slot=page-content]',
     pageType: options.pageType ?? null,
   });
@@ -161,7 +195,7 @@ async function focusViolations(page, maxSteps) {
 
 /* ───────────────────────── browser side (serialized by page.evaluate) ───────────────────────── */
 
-function collect({ scale, checks, contentSelector, pageType }) {
+function collect({ scale, checks, variantSlots, ringSlots, contentSelector, pageType }) {
   const enabled = new Set(checks);
   const violations = [];
   const exemptions = [];
@@ -190,8 +224,9 @@ function collect({ scale, checks, contentSelector, pageType }) {
   };
   const elevations = [1, 2, 3].map((level) => resolve('box-shadow', `var(--console-elevation-${level})`));
   // The soft-card rings (D39): outline badges, selected rows, the in-progress halo, field focus.
-  const rings = ['hairline-ring', 'selected-bar', 'progress-halo', 'progress-halo-wide', 'field-focus-ring', 'field-error-ring'].map((name) => resolve('box-shadow', `var(--console-${name})`));
-  const shadows = new Set(['none', ...elevations, ...rings]);
+  const ringNames = ['hairline-ring', 'selected-bar', 'progress-halo', 'progress-halo-wide', 'field-focus-ring', 'field-error-ring', 'focus-ring-inset'];
+  const ringByShadow = new Map(ringNames.map((name) => [resolve('box-shadow', `var(--console-${name})`), name]));
+  const shadows = new Set(['none', ...elevations, ...ringByShadow.keys()]);
   const cardShadows = new Set(['none', elevations[0]]);
   probe.remove();
 
@@ -335,19 +370,33 @@ function collect({ scale, checks, contentSelector, pageType }) {
 
     // shadow
     const shadow = normalizeShadow(style.boxShadow);
+    const slot = element.getAttribute('data-slot');
     if (!shadows.has(shadow)) report('shadow', element, `box-shadow "${shadow}" is not e-0 … e-3 or a soft-card ring`);
+    else {
+      const ring = ringByShadow.get(shadow);
+      const where = ring ? ringSlots[ring] : null;
+      if (where && !(slot && where.slots.includes(slot)) && !(where.selector && element.matches(where.selector))) {
+        report('shadow', element, `box-shadow ${ring} belongs to ${[...where.slots.map((name) => `[data-slot=${name}]`), where.selector].filter(Boolean).join(', ')} only`);
+      }
+    }
 
     // consistency
-    const slot = element.getAttribute('data-slot');
     if (slot) {
       let key = slot;
       if (element.parentElement?.closest(`[data-slot="${slot}"]`)) key += ':nested';
       if (element.hasAttribute('data-edge')) key += ':edge';
       if (element.hasAttribute('data-interactive')) key += ':interactive';
-      // Variants and selection are deliberate differences (a white button has shadow-sm, a selected row its bar).
-      const variant = element.getAttribute('data-variant');
-      if (variant) key += `:${variant}`;
-      if (element.hasAttribute('data-selected') || element.getAttribute('aria-selected') === 'true' || element.hasAttribute('aria-current')) key += ':selected';
+      // Variants and selection are deliberate differences (a white button has shadow-sm, a selected
+      // row its bar) — but only the known variants of console-ui's own slots.
+      const variants = variantSlots[slot];
+      const variant = variants ? element.getAttribute(variants.attribute) : null;
+      if (variant && variants.values.includes(variant)) key += `:${variant}`;
+      const current = element.getAttribute('aria-current');
+      const selected = (element.hasAttribute('data-selected') && element.getAttribute('data-selected') !== 'false')
+        || element.getAttribute('aria-selected') === 'true'
+        || element.getAttribute('aria-pressed') === 'true'
+        || (current !== null && current !== 'false');
+      if (selected) key += ':selected';
       const signature = `radius ${corners.join(' / ')}; border ${borderWidths.join(' ')}; shadow ${shadow}`;
       const group = groups.get(key) ?? new Map();
       if (!group.has(signature)) group.set(signature, element);
@@ -422,7 +471,7 @@ function collect({ scale, checks, contentSelector, pageType }) {
   }
 
   const dark = root.classList.contains('dark') || root.dataset.theme === 'dark'
-    || (root.dataset.theme !== 'light' && !root.classList.contains('light') && matchMedia('(prefers-color-scheme: dark)').matches);
+    || (root.dataset.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   return { width, height, theme: dark ? 'dark' : 'light', violations, exemptions };
 
   /**

@@ -77,7 +77,8 @@
     transition: background-color var(--console-motion-base) var(--console-ease-out), color var(--console-motion-base) var(--console-ease-out);
   }
   .console-segment:hover { color: hsl(var(--console-ink)); }
-  .console-segment[aria-selected="true"] {
+  .console-segment[aria-selected="true"],
+  .console-segment[aria-checked="true"] {
     background: hsl(var(--console-primary));
     color: hsl(var(--console-on-primary));
   }
@@ -167,8 +168,10 @@
     color: hsl(var(--console-ink));
     cursor: pointer;
   }
-  .console-stepper-button:hover:not(:disabled) { background: hsl(var(--console-ink) / 0.04); }
-  .console-stepper-button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .console-stepper-button:hover:not(:disabled, [aria-disabled="true"]) { background: hsl(var(--console-ink) / 0.04); }
+  /* At a limit the button stays focusable (aria-disabled), so the keyboard focus does not drop. */
+  .console-stepper-button:disabled,
+  .console-stepper-button[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
   .console-stepper-button > svg { width: 1rem; height: 1rem; }
   .console-stepper-value {
     min-width: 2.5rem;
@@ -309,13 +312,12 @@
   .console-list-row[data-plain] + .console-list-row::before,
   .console-list-group[data-plain] .console-list-row::before,
   .console-list-group > li:has(> .console-list-row[data-plain]) + li > .console-list-row::before { left: 1rem; }
-  a.console-list-row,
-  button.console-list-row { cursor: pointer; }
-  a.console-list-row:hover,
-  button.console-list-row:hover { background: hsl(var(--console-ink) / 0.04); }
+  a.console-list-row[href],
+  button.console-list-row:enabled { cursor: pointer; }
+  a.console-list-row[href]:hover,
+  button.console-list-row:enabled:hover { background: hsl(var(--console-ink) / 0.04); }
   .console-list-row[data-selected],
-  .console-list-row[aria-current="page"],
-  .console-list-row[aria-current="true"] {
+  .console-list-row[aria-current]:not([aria-current="false"]) {
     background: hsl(var(--console-primary-soft));
     box-shadow: var(--console-selected-bar);
   }
