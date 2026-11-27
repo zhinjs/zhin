@@ -61,6 +61,34 @@ describe('read-only credential identity verification', () => {
     expect(line).not.toContain('stack');
     warn.mockRestore();
   });
+  it('#1250 b111: masks credentials typed in plain text in the previous or the new configuration', async () => {
+    const warn = vi.spyOn(getLogger('adapter'), 'warn');
+    const options = { ...input(), previous: { ...previous, config: { token: 'old-plain-token-1', appId: 'cli_app' } },
+      next: { config: { token: 'NEW-plain-token-2', clientSecret: 'console-typed-secret', nested: { key: 'nested-key-value' } } } };
+    options.identify.mockResolvedValueOnce('platform:123')
+      .mockRejectedValueOnce(new Error('401 NEW-plain-token-2 / console-typed-secret / nested-key-value / old-plain-token-1 rejected'));
+    await expect(sameConfigurationIdentity(options)).rejects.toMatchObject({ code: 'unavailable' });
+    const line = warn.mock.calls.map(call => String(call[0])).find(text => text.includes('endpoint_identity_verification_failed'))!;
+    for (const secret of ['NEW-plain-token-2', 'console-typed-secret', 'nested-key-value', 'old-plain-token-1']) expect(line).not.toContain(secret);
+    expect(line).toContain('401 *** / *** / *** / *** rejected');
+    warn.mockRestore();
+  });
+  it.each([
+    ['bad token=XYZabc123 here', 'XYZabc123'],
+    ['body {"secret":"s3cr3t-value"}', 's3cr3t-value'],
+    ['refused access_token=abcd1234efgh', 'abcd1234efgh'],
+    ['Authorization: token ghp_abcdefghijklmnop1234', 'ghp_abcdefghijklmnop1234'],
+    ['key -----BEGIN RSA PRIVATE KEY----- MIIEabcdef== -----END RSA PRIVATE KEY-----', 'MIIEabcdef'],
+    ['-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkq\n-----END PRIVATE KEY-----', 'MIIEvQIBADANBgkq'],
+  ])('#1250 b111: masks secret-shaped text %j', (text, secret) => {
+    expect(identityFailureReason(new Error(text))).not.toContain(secret);
+  });
+  it('#1250 b111: masks before it cuts, so a secret across the boundary is not half kept', () => {
+    const secret = 'boundary-secret-0123456789';
+    const reason = identityFailureReason(new Error(`${'x'.repeat(190)} ${secret}`), [secret]);
+    expect(reason).not.toMatch(/boundary|0123456789/u);
+    expect(identityFailureReason(new Error(`${'x'.repeat(190)} token=abcdefghijklmnopqrstuvwxyz`))).not.toMatch(/abcdefgh|klmnop/u);
+  });
   it('bounds and masks identity failure reasons', () => {
     expect(identityFailureReason(new Error('Bearer abcdef denied'))).toBe('Bearer *** denied');
     expect(identityFailureReason('x'.repeat(300))).toHaveLength(201);

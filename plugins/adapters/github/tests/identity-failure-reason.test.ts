@@ -28,3 +28,16 @@ describe('GitHub identity verification failure reason', () => {
     expect(redactGithubSecrets('-----BEGIN PRIVATE KEY-----\nabc', [])).toBe('***');
   });
 });
+
+describe('GitHub failure reason masking (#1250 b111)', () => {
+  it('masks before it cuts, so a secret across the boundary is not half kept', () => {
+    const client = new GhClient({ token: 'plain-boundary-secret-0123456789' } as never);
+    const reason = client.safeReason(`App Token 验证失败 (401): ${githubErrorMessage(`{"message":"${'x'.repeat(290)} plain-boundary-secret-0123456789"}`)}`);
+    expect(reason).not.toMatch(/plain-|boundary|0123456789/u);
+    expect(reason).toContain('***');
+  });
+  it('does not mask ordinary words after "token"', () => {
+    expect(redactGithubSecrets('token expiration reached; token authentication required', [])).toBe('token expiration reached; token authentication required');
+    expect(redactGithubSecrets('token abcdef12345678 rejected', [])).toBe('token *** rejected');
+  });
+});

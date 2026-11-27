@@ -327,7 +327,7 @@ describe('schedule_update input checks (#1250 b90 review)', () => {
       .toEqual({ error: expect.stringContaining('不能与 cron 或 schedule_kind 同时提供') });
     for (const delay of [0, -5, 'abc']) {
       expect(parseScheduleUpdateFromToolArgs({ delay_minutes: delay }, solar))
-        .toEqual({ error: expect.stringContaining('delay_minutes 必须是大于 0 的整数分钟数') });
+        .toEqual({ error: expect.stringContaining('delay_minutes 必须是大于 0 的分钟数') });
     }
     expect(parseScheduleUpdateFromToolArgs({ schedule_kind: 'at' }, solar)).toEqual({ error: expect.stringContaining('delay_minutes') });
     expect(parseScheduleUpdateFromToolArgs({ delay_minutes: 5, schedule_kind: 'AT' }, solar))

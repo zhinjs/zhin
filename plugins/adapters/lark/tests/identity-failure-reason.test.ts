@@ -9,3 +9,11 @@ describe('Lark identity verification failure reason', () => {
     expect(larkFailureReason({ code: 99991663 }, [])).toBe('unknown (code 99991663)');
   });
 });
+
+describe('Lark failure reason masking order (#1250 b111)', () => {
+  it('masks before it cuts, so a secret across the boundary is not half kept', () => {
+    const secret = 'boundary-secret-0123456789';
+    const reason = larkFailureReason({ code: 1, msg: `${'x'.repeat(290)} ${secret}` }, [secret]);
+    expect(reason).not.toMatch(/boundary|0123456789/u);
+  });
+});

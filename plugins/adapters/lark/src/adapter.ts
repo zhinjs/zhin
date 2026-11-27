@@ -3,6 +3,9 @@ import { Adapter, type AdapterContext, type EndpointCreationContext } from 'zhin
 import { LarkEndpoint } from './endpoint.js';
 import { resolveLarkConfig, type LarkEndpointConfig } from './protocol.js';
 import { httpHostToken } from '@zhin.js/host-http';
+import { larkFailureReason } from './failure-reason.js';
+
+export { larkFailureReason };
 
 export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkClientEventMap> {
   readonly #context: AdapterContext<LarkEndpointConfig>;
@@ -29,13 +32,4 @@ export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkC
 
 declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { readonly 'lark': LarkAdapter; }
-}
-
-/** Lark's `code` and `msg`, bounded, with the account's secrets masked. */
-export function larkFailureReason(response: Readonly<{ code?: unknown; msg?: unknown }>, secrets: readonly (string | undefined)[]): string {
-  let text = typeof response.msg === 'string' ? response.msg.replace(/\s+/g, ' ').trim() : '';
-  if (!text) text = 'unknown';
-  if (text.length > 300) text = `${text.slice(0, 300)}…`;
-  for (const secret of secrets) if (secret && secret.length >= 4) text = text.split(secret).join('***');
-  return `${text} (code ${String(response.code)})`;
 }

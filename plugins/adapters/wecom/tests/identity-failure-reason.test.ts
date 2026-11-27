@@ -29,11 +29,21 @@ describe('WeCom identity verification failure reason', () => {
   it('masks the secret in a refused token request', async () => {
     const fetch = vi.fn(async () => ok({ errcode: 40001, errmsg: 'invalid credential, corpsecret agent-secret-value' }));
     const client = new WecomClient({ id, config, fetch });
-    await expect(client.getApplicationInfo()).rejects.toThrow('Failed to get access token: invalid credential, corpsecret *** (40001)');
+    await expect(client.getApplicationInfo()).rejects.toThrow('Failed to get access token (errcode 40001): invalid credential, corpsecret ***');
   });
 
   it('masks plain and URL-encoded values', () => {
     expect(redactValues('a se=cret+1 b se%3Dcret%2B1', ['se=cret+1'])).toBe('a *** b ***');
     expect(redactValues('short ab', ['ab', undefined])).toBe('short ab');
+  });
+});
+
+describe('WeCom failure reason masking order (#1250 b111)', () => {
+  it('masks the secret before it cuts, so a secret across the boundary is not half kept', async () => {
+    const fetch = vi.fn(async () => ok({ errcode: 40001, errmsg: `${'x'.repeat(290)} agent-secret-value` }));
+    const client = new WecomClient({ id, config, fetch });
+    const error = await client.getApplicationInfo().catch((cause: unknown) => cause as Error);
+    expect(error.message).toContain('Failed to get access token');
+    expect(error.message).not.toMatch(/agent-s|secret-value/u);
   });
 });

@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { redactSecretText } from '@zhin.js/logger';
 import { buildWsConnectOptions, type OneBot11WsConfig } from './protocol.js';
 import { createOneBot11Rpc } from './ws-transport.js';
 import { resolveOnebot11SelfId } from './self-id.js';
@@ -29,12 +30,15 @@ export async function probeOnebot11Identity(config: OneBot11WsConfig, signal: Ab
   }
 }
 
-/** #1250 b111: the implementation's retcode and message, bounded, without the access token. */
-function onebot11FailureReason(response: Readonly<{ retcode?: unknown; message?: unknown; wording?: unknown }>, accessToken: string | undefined): string {
-  const raw = typeof response.message === 'string' && response.message.trim() ? response.message
+/**
+ * #1250 b111: the implementation's retcode and message, bounded, without the access token or
+ * secret-shaped text. Masked first, then cut, so a token across the cut is not half kept.
+ */
+export function onebot11FailureReason(response: Readonly<{ retcode?: unknown; message?: unknown; wording?: unknown }>, accessToken: string | undefined): string {
+  let text = typeof response.message === 'string' && response.message.trim() ? response.message
     : typeof response.wording === 'string' ? response.wording : '';
-  let text = raw.replace(/\s+/g, ' ').trim() || 'unknown';
-  if (text.length > 300) text = `${text.slice(0, 300)}…`;
   if (accessToken && accessToken.length >= 4) text = text.split(accessToken).join('***');
+  text = redactSecretText(text).replace(/\s+/g, ' ').trim() || 'unknown';
+  if (text.length > 300) text = `${text.slice(0, 300)}…`;
   return `${text} (retcode ${String(response.retcode)})`;
 }

@@ -10,7 +10,7 @@ import {
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger, redactSecretText } from '@zhin.js/logger';
 import { isOutboundMediaRefused, outboundMediaNotice, type OutboundMediaFetcher } from '@zhin.js/core';
 import type { CapabilityId } from 'zhin.js';
 import {
@@ -411,7 +411,7 @@ export class WecomClient extends EventEmitter {
     const url = `${apiBaseUrl}/cgi-bin/gettoken?${query.toString()}`;
     // The refresh promise is shared by every sender, so it must never hang.
     const response = await this.#fetch(url, { signal: requestSignal() });
-    if (!response.ok) throw new Error(`Failed to get access token: HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to get access token (HTTP ${response.status})`);
     const data = await response.json() as WecomApiResponse;
     if (data.errcode === 0 && data.access_token) {
       this.#accessToken = {
@@ -422,21 +422,30 @@ export class WecomClient extends EventEmitter {
       this.#logger.debug('Access token refreshed successfully');
       return;
     }
-    throw new Error(this.#safeReason(`Failed to get access token: ${platformMessage(data.errmsg)} (${data.errcode})`));
+    // `token (…)`, not `token: …`: secret-text masking reads `token: <word>` as a credential (#1250 b111).
+    throw new Error(this.#safeReason(`Failed to get access token (errcode ${data.errcode}): ${platformMessage(data.errmsg)}`));
   }
 
-  /** An error text without this account's credentials (secret, callback token / key, access token). */
+  /**
+   * An error text without this account's credentials (secret, callback token / key, access token)
+   * or secret-shaped text, as one bounded line. Masked first, then cut (#1250 b111): a secret across
+   * the cut is not half kept.
+   */
   #safeReason(text: string): string {
     const { agentSecret, token, encodingAESKey } = this.#options.config;
-    return redactValues(text, [agentSecret, token, encodingAESKey, this.#accessToken.access_token]);
+    const masked = redactSecretText(redactValues(text, [agentSecret, token, encodingAESKey, this.#accessToken.access_token]))
+      .replace(/\s+/g, ' ').trim();
+    return masked.length > MAX_REASON_CHARS ? `${masked.slice(0, MAX_REASON_CHARS)}…` : masked;
   }
 }
 
-/** A platform-supplied message as one bounded line. */
+/** Longest error text {@link WecomClient} builds from a platform message (#1250 b111). */
+const MAX_REASON_CHARS = 400;
+
+/** A platform-supplied message as one line; bounded by `#safeReason` once it is masked. */
 function platformMessage(value: unknown): string {
   const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
-  if (!text) return 'unknown';
-  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+  return text || 'unknown';
 }
 
 /** Replaces every occurrence of each (non-trivial) secret value, also URL-encoded, with `***`. */

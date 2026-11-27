@@ -22,6 +22,16 @@ describe('redaction (moved from @zhin.js/agent, ADR 0061 P1)', () => {
       .toBe('POST https://api.telegram.org/bot123456:[redacted]/sendMessage failed');
   });
 
+  it('masks PEM blocks, on one line or many, and a private key cut before its END (#1250 b111)', () => {
+    const multi = 'failed: -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\nabcdEFGH1234\n-----END PRIVATE KEY-----\nafter';
+    expect(redactSecretText(multi)).toBe('failed: -----BEGIN PRIVATE KEY----- [redacted] -----END PRIVATE KEY-----\nafter');
+    const single = 'key -----BEGIN RSA PRIVATE KEY----- MIIEabcdef== -----END RSA PRIVATE KEY----- end';
+    expect(redactSecretText(single)).toBe('key -----BEGIN RSA PRIVATE KEY----- [redacted] -----END RSA PRIVATE KEY----- end');
+    expect(redactSecretText('-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgI\n-----END CERTIFICATE-----')).not.toContain('MIIBszCCAVmgAwIBAgI');
+    expect(redactSecretText('pem: -----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIOab')).toBe('pem: [redacted]');
+    expect(redactDecisionPayload({ note: single }).note).not.toContain('MIIEabcdef');
+  });
+
   it('leaves numbers and ordinary prose alone', () => {
     expect(redactSecretText('max_tokens: 100, tokens: 32000')).toBe('max_tokens: 100, tokens: 32000');
     expect(redactSecretText('{"tokens": 4096}')).toBe('{"tokens": 4096}');

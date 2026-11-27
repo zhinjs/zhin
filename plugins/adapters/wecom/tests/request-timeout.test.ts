@@ -42,7 +42,7 @@ describe('WeCom API request lifetime', () => {
     const json = vi.fn(async () => { throw new SyntaxError('Unexpected token <'); });
     const fetch = vi.fn(async () => ({ ok: false, status: 502, text: async () => '<html>', json }));
     const client = new WecomClient({ id, config, fetch });
-    await expect(client.getApplicationInfo()).rejects.toThrow('Failed to get access token: HTTP 502');
+    await expect(client.getApplicationInfo()).rejects.toThrow('Failed to get access token (HTTP 502)');
     expect(json).not.toHaveBeenCalled();
   });
 

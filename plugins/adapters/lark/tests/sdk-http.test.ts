@@ -47,3 +47,23 @@ it('isolates actual SDK token caches for old and candidate credentials of the sa
     expect(requests).toEqual(['old', 'new']);
   } finally { await previous[Symbol.asyncDispose](); await candidate[Symbol.asyncDispose](); }
 });
+
+describe('non-2xx responses (#1250 b111)', () => {
+  const failing = (status: number, body: string): LarkFetch => async () => ({ ok: false, status, json: async () => JSON.parse(body), text: async () => body });
+  it('carries Lark\'s code and msg from the body, with the account secrets masked', async () => {
+    const sdk = createLarkSdkHttpInstance(failing(400, JSON.stringify({ code: 10014, msg: 'app secret invalid: app-secret-value token=abcdefgh1234' })), ['app-secret-value']);
+    const error = await sdk.get('https://fake.invalid/open-apis/bot/v3/info').catch((cause: unknown) => cause) as Error & { code?: string };
+    expect(error.message).toMatch(/^Lark HTTP 400: app secret invalid: \*\*\* token=\[redacted\] \(code 10014\)$/u);
+    expect(error.message).not.toContain('app-secret-value');
+    expect(error.message).not.toContain('abcdefgh1234');
+    expect(error.code).toBe('http_error');
+  });
+  it('keeps the status alone when the body is not Lark JSON', async () => {
+    for (const body of ['<html>bad gateway</html>', '', '{}', 'null']) {
+      const error = await createLarkSdkHttpInstance(failing(502, body)).get('https://fake.invalid/x').catch((cause: unknown) => cause) as Error;
+      expect(error.message).toBe('Lark HTTP 502');
+    }
+    const noReader = createLarkSdkHttpInstance(async () => ({ ok: false, status: 403 }) as never);
+    await expect(noReader.get('https://fake.invalid/x')).rejects.toThrow(/^Lark HTTP 403$/u);
+  });
+});

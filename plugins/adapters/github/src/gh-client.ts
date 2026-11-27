@@ -487,9 +487,14 @@ export class GhClient {
 
   // ── GitHub App JWT + Installation Token ──────────────────────────
 
-  /** #1250 b111: a failure reason without this client's credentials (private key, JWT, tokens). */
+  /**
+   * #1250 b111: a failure reason without this client's credentials (private key, JWT, tokens), as
+   * one bounded line. Masked first, then cut: a secret across the cut is not half kept.
+   */
   safeReason(text: string): string {
-    return redactGithubSecrets(text, [this._appAuth?.privateKey, this._resolvedKey ?? undefined, this.token]);
+    const masked = redactGithubSecrets(text, [this._appAuth?.privateKey, this._resolvedKey ?? undefined, this.token])
+      .replace(/\s+/g, ' ').trim();
+    return masked.length > MAX_REASON_CHARS ? `${masked.slice(0, MAX_REASON_CHARS)}…` : masked;
   }
 
   /** 解析私钥：PEM字符串 或 文件路径 */
@@ -795,16 +800,20 @@ function abortableDelay(ms: number, signal?: AbortSignal): Promise<boolean> {
   });
 }
 
-/** GitHub API error bodies are JSON `{ message }`; anything else is kept as one bounded line. */
+/** Longest failure reason {@link GhClient.safeReason} returns (#1250 b111). */
+const MAX_REASON_CHARS = 400;
+
+/**
+ * GitHub API error bodies are JSON `{ message }`; anything else is kept as one line. Not cut here:
+ * `safeReason` bounds it once it is masked (#1250 b111).
+ */
 export function githubErrorMessage(body: string): string {
   let text = body;
   try {
     const parsed = JSON.parse(body) as { message?: unknown };
     if (parsed && typeof parsed.message === 'string') text = parsed.message;
   } catch { /* not JSON */ }
-  text = text.replace(/\s+/g, ' ').trim();
-  if (!text) return 'unknown';
-  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+  return text.replace(/\s+/g, ' ').trim() || 'unknown';
 }
 
 /** Masks the given secret values and anything token-shaped (PEM blocks, JWTs, GitHub tokens, Bearer). */
@@ -817,5 +826,8 @@ export function redactGithubSecrets(text: string, secrets: readonly (string | un
     .replace(/-----BEGIN [^-]+-----[\s\S]*?(?:-----END [^-]+-----|$)/g, '***')
     .replace(/\beyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}/g, '***')
     .replace(/\b(?:ghp|gho|ghs|ghu|ghr|github_pat)_[A-Za-z0-9_]{8,}/g, '***')
-    .replace(/\b(bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***');
+    .replace(/\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***')
+    // A credential after `token` holds a digit (JWTs and GitHub tokens are masked above):
+    // `token expiration`, `token authentication` are words, not credentials (#1250 b111).
+    .replace(/\b(token)\s+(?=[A-Za-z._~+/=-]{0,256}\d)[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***');
 }

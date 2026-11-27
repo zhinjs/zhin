@@ -1619,6 +1619,9 @@ importers:
 
   packages/im/kernel:
     dependencies:
+      '@zhin.js/logger':
+        specifier: workspace:*
+        version: link:../../../basic/logger
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../../../basic/schedule

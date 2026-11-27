@@ -75,16 +75,28 @@ const MAX_SCHEDULE_DELAY_MS = MAX_SCHEDULE_DELAY_MINUTES * 60_000;
 /** Node's timer limit: a longer run budget would fire at once (#1250 b111). */
 export const MAX_SCHEDULE_BUDGET_TIMEOUT_MS = 2_147_483_647;
 
-/** `delay_minutes` as a whole number of minutes in 1…{@link MAX_SCHEDULE_DELAY_MINUTES}. */
-export function parseScheduleDelayMinutes(value: unknown): number | { error: string } {
+/** Shortest delay of a one-shot job: one second (`delay_minutes` ≥ 1/60), so "30 秒后" stays possible. */
+const MIN_SCHEDULE_DELAY_MS = 1_000;
+
+/**
+ * `delay_minutes` as whole milliseconds (#1250 b111): a positive finite number of minutes (a numeric
+ * string too; fractions allowed, `0.5` is 30 seconds) from 1 second to {@link MAX_SCHEDULE_DELAY_MINUTES}
+ * (365 days), rounded to the millisecond. `outcome` ends the error text: `任务未保存` for an add,
+ * `任务未修改` for an update.
+ */
+export function parseScheduleDelayMs(value: unknown, outcome = '任务未保存'): number | { error: string } {
   const delay = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN;
-  if (!Number.isSafeInteger(delay) || delay <= 0) {
-    return { error: `delay_minutes 必须是大于 0 的整数分钟数，收到: ${String(value)}；任务未保存` };
+  if (!Number.isFinite(delay) || delay <= 0) {
+    return { error: `delay_minutes 必须是大于 0 的分钟数（可为小数，最少 1 秒即 1/60），收到: ${String(value)}；${outcome}` };
   }
   if (delay > MAX_SCHEDULE_DELAY_MINUTES) {
-    return { error: `delay_minutes 最多 ${MAX_SCHEDULE_DELAY_MINUTES}（365 天），收到: ${delay}；任务未保存` };
+    return { error: `delay_minutes 最多 ${MAX_SCHEDULE_DELAY_MINUTES}（365 天），收到: ${delay}；${outcome}` };
   }
-  return delay;
+  const delayMs = Math.round(delay * 60_000);
+  if (delayMs < MIN_SCHEDULE_DELAY_MS) {
+    return { error: `delay_minutes 最少 1 秒（1/60 分钟），收到: ${String(value)}；${outcome}` };
+  }
+  return delayMs;
 }
 
 /** `at_ms` as a future time at most 365 days ahead (#1250 b111). */
@@ -105,16 +117,20 @@ function buildScheduleFromRecord(record: Record<string, unknown>): JobSchedule |
   const delayMin = record.delay_minutes ?? record.delayMinutes;
   const atMsRaw = record.at_ms ?? record.atMs;
 
-  // #1250 b111: any given delay is checked (a negative, fractional or too large one used to be
-  // ignored or stored and fail later), before anything is saved.
-  // A `0` next to a cron stays "no delay", as before.
+  // #1250 b111: any given delay is checked (a negative, too small or too large one used to be ignored
+  // or stored and fail later), before anything is saved. A `0` next to a cron stays "no delay", as
+  // before; any other delay next to a cron is refused like `schedule_update` refuses it, instead of
+  // silently turning the recurring job into a one-shot one.
   const delayGiven = given(delayMin) && !(given(cron) && Number(delayMin) === 0);
   if (String(kind || '').toLowerCase() === 'at' || delayGiven) {
     const now = Date.now();
     if (delayGiven) {
-      const delay = parseScheduleDelayMinutes(delayMin);
-      if (typeof delay !== 'number') return delay;
-      return { kind: 'at', atMs: now + delay * 60_000, deleteAfterRun: true };
+      const delayMs = parseScheduleDelayMs(delayMin);
+      if (typeof delayMs !== 'number') return delayMs;
+      if (given(cron)) {
+        return { error: 'delay_minutes（一次性任务）不能与 cron 同时提供，请只给其中一种；任务未保存' };
+      }
+      return { kind: 'at', atMs: now + delayMs, deleteAfterRun: true };
     }
     if (!given(atMsRaw)) return { error: '请提供 delay_minutes 或 at_ms' };
     const atMs = parseScheduleAtMs(atMsRaw, now);
@@ -288,9 +304,9 @@ function buildScheduleUpdate(args: Record<string, unknown>, current: JobSchedule
     if (given(args.cron) || (kindArg !== undefined && kindArg !== 'at')) {
       return { error: 'delay_minutes（改为一次性任务）不能与 cron 或 schedule_kind 同时提供，请只给其中一种' };
     }
-    const delay = parseScheduleDelayMinutes(args.delay_minutes);
-    if (typeof delay !== 'number') return delay;
-    return { kind: 'at', atMs: Date.now() + delay * 60_000, deleteAfterRun: true };
+    const delayMs = parseScheduleDelayMs(args.delay_minutes, '任务未修改');
+    if (typeof delayMs !== 'number') return delayMs;
+    return { kind: 'at', atMs: Date.now() + delayMs, deleteAfterRun: true };
   }
   if (kindArg === 'at') return { error: '改为一次性任务请提供 delay_minutes（从现在起延迟的分钟数）' };
   const built = buildCronJobSchedule({ kind: kindArg, cron: given(args.cron) ? String(args.cron) : undefined }, current);

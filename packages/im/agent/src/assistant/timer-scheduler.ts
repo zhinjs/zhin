@@ -57,18 +57,23 @@ function pendingModelRetryNote(retryInMs: number, attempt: number): string {
 }
 const PENDING_MODEL_RETRY_NOTE = /；\d+ 分钟后自动重试（第 \d+\/\d+ 次）$/;
 
-/** `lastError` note of a run whose failure notice could not be delivered (#1250 b111). */
-const UNDELIVERED_NOTICE_NOTE = '；失败通知未送达';
+/**
+ * `lastError` notes of a run whose failure notice did not certainly reach its target (#1250 b111):
+ * it was not delivered, or the platform may have taken it but did not confirm it.
+ */
+const FAILURE_NOTICE_NOTES = { undelivered: '失败通知未送达', unconfirmed: '失败通知送达未确认' } as const;
 
 /**
- * `lastError` with the undelivered-notice note, placed before a pending-retry note so that note stays
- * last (`withoutPendingModelRetry` looks for it at the end).
+ * `lastError` with the failure-notice note, placed before a pending-retry note so that note stays
+ * last (`withoutPendingModelRetry` looks for it at the end). A run without an error text (a degraded
+ * run) gets the note alone.
  */
-function withUndeliveredNoticeNote(lastError: string | undefined, reason: string): string {
-  const note = `${UNDELIVERED_NOTICE_NOTE}（${reason}）`;
-  const base = lastError ?? 'unknown error';
+function withFailureNoticeNote(lastError: string | undefined, kind: keyof typeof FAILURE_NOTICE_NOTES, reason: string): string {
+  const note = `${FAILURE_NOTICE_NOTES[kind]}（${reason}）`;
+  const base = lastError ?? '';
   const pending = PENDING_MODEL_RETRY_NOTE.exec(base);
-  return pending ? `${base.slice(0, pending.index)}${note}${pending[0]}` : `${base}${note}`;
+  const head = pending ? base.slice(0, pending.index) : base;
+  return `${head ? `${head}；` : ''}${note}${pending ? pending[0] : ''}`;
 }
 
 /** A log-safe description of a notice target: routing kind and masked conversation id, no content. */
@@ -79,19 +84,30 @@ export function describeNotifyTarget(notify: ScheduleJob['notify']): string {
   return `im:${scene.platform || '-'}/${scene.endpointKey || '-'}/${scene.kind || '-'}:${id}`;
 }
 
-/** Why a notice was not delivered, redacted and bounded; `undefined` when it was delivered. */
-export function undeliveredNoticeReason(outcome: Readonly<{ result?: DeliverResult; error?: unknown }>): string | undefined {
+/** How a failure notice ended when it was not plainly sent (#1250 b111). */
+export type FailureNoticeOutcome = Readonly<{
+  /** `suppressed`: an outbound middleware held it back on purpose; `unconfirmed`: delivery unknown. */
+  kind: 'undelivered' | 'unconfirmed' | 'suppressed';
+  /** Why, redacted first and then bounded (a secret across the cut is not half kept). */
+  reason: string;
+}>;
+
+/** How a failure notice ended, or `undefined` when it was delivered. */
+export function failureNoticeOutcome(outcome: Readonly<{ result?: DeliverResult; error?: unknown }>): FailureNoticeOutcome | undefined {
   let reason: string;
+  let kind: FailureNoticeOutcome['kind'] = 'undelivered';
   if (outcome.error !== undefined) {
     reason = outcome.error instanceof Error ? outcome.error.message || outcome.error.name : String(outcome.error);
   } else if (outcome.result && !outcome.result.delivered) {
     const receipt = outcome.result.receipt;
+    if (receipt?.failure?.deliveryUnknown) kind = 'unconfirmed';
+    else if (receipt?.status === 'suppressed') kind = 'suppressed';
     reason = receipt?.failure
       ? `${receipt.failure.code}: ${receipt.failure.message}`
       : receipt ? `status ${receipt.status}` : `not delivered (${outcome.result.channel})`;
   } else return undefined;
   const text = redactSecretText(reason.replace(/\s+/g, ' ').trim()) || 'unknown';
-  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+  return { kind, reason: text.length > 200 ? `${text.slice(0, 200)}…` : text };
 }
 
 /**
@@ -546,8 +562,9 @@ export class TimerScheduler {
   }
 
   /**
-   * #1250 b111: a failure notice that cannot be delivered (thrown, or `delivered: false`) is logged
-   * with the job, its target and why (redacted), and marked on the run's `lastError`.
+   * #1250 b111: a failure notice that cannot be delivered (thrown, or `delivered: false`), or whose
+   * delivery is unconfirmed, is logged with the job, its target and why (redacted), and marked on
+   * the run's `lastError`. One an outbound middleware suppressed on purpose is only logged at info.
    */
   async #deliverFailureNotice(job: ScheduleJob, notify: ScheduleJob['notify'], content: string, ranAt: number): Promise<void> {
     let outcome: { result?: DeliverResult; error?: unknown };
@@ -556,16 +573,23 @@ export class TimerScheduler {
     } catch (error) {
       outcome = { error };
     }
-    const reason = undeliveredNoticeReason(outcome);
-    if (reason === undefined) return;
-    logger.warn(formatCompact({ op: 'schedule_failure_notice_undelivered', job: job.id,
-      target: describeNotifyTarget(notify), reason }));
+    const ended = failureNoticeOutcome(outcome);
+    if (ended === undefined) return;
+    const fields = { job: job.id, target: describeNotifyTarget(notify), reason: ended.reason };
+    if (ended.kind === 'suppressed') {
+      // Held back on purpose by an outbound middleware: not a delivery failure, the run is not marked.
+      logger.info(formatCompact({ op: 'schedule_failure_notice_suppressed', ...fields }));
+      return;
+    }
+    logger.warn(formatCompact({ op: `schedule_failure_notice_${ended.kind}`, ...fields }));
+    const kind = ended.kind;
     try {
       await this.#withJobLock(job.id, async () => {
         const current = await this.store.getJob(job.id);
-        // Only the run that failed is marked: not a later run, nor a job removed meanwhile.
+        // Only the run that failed is marked: not a later run, nor a job removed meanwhile (a
+        // one-shot job removed after its degraded run keeps only the log line).
         if (!current || current.state.lastExecutedAt !== ranAt) return;
-        await this.store.updateJobState(job.id, { lastError: withUndeliveredNoticeNote(current.state.lastError, reason) });
+        await this.store.updateJobState(job.id, { lastError: withFailureNoticeNote(current.state.lastError, kind, ended.reason) });
       });
     } catch (error) {
       logger.warn(`undelivered failure notice not recorded for ${job.id}: ${error instanceof Error ? error.message : String(error)}`);
