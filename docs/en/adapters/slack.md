@@ -122,6 +122,13 @@ In HTTP mode, the Runtime Host (`http`) must already be listening; the Slack App
 
 Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Block Kit `section`.
 
+### Long messages and split cards
+
+- One Slack message holds at most 48 blocks. A longer one is split, in order, into several messages, each with its own notification text; when it fits, the blocks keep their order.
+- A long reply without buttons: the later parts are posted in the thread of the first message.
+- A card with buttons (confirmation / choice / approval): all buttons go on the last message, together with the end of the text; a long text is cut into messages of 48 blocks before it, and the last message holds only as much text as fits next to the buttons. The parts of such a card are **not posted in a thread**: they all stay in the card's own conversation (a click inside an auto-created thread would arrive as a message of another conversation, and the waiting prompt would never get its answer). When there are too many button rows to fit any text (Core's cards never produce this), the blocks are split in their original order, still at most 48 per message.
+- Editing a message (a streamed reply, a card's status update) changes **only the first message**: the later parts of a card sent as several messages stay as they are. An edit of more than 48 blocks cuts the text, adds a "[内容过长，已截断]" ("content too long, truncated") section where it was cut, and keeps the buttons last.
+
 ### Inbound (mrkdwn -> Markdown)
 
 | Slack mrkdwn | Common Markdown |

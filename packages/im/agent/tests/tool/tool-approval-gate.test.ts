@@ -110,6 +110,56 @@ describe('tool-approval-gate', () => {
     expect(markdownToPlainText(question)).toContain('### 已批准');
   });
 
+  it.each(['always', 'on-risk', 'once'] as const)('shows the masked arguments under policy %s too, as the main approval card does (#1250 b113)', async policy => {
+    const requestApproval = vi.fn(async () => false);
+    await runToolApprovalGate({
+      toolName: 'send_mail', args: { to: 'a@example.com', subject: '`hi` <b>x</b>', api_key: 'sk-secret-value-1234567890' },
+      sessionId: 's', commMessage: mockCommMessage(), policy,
+      port: { requestApproval }, signal: new AbortController().signal,
+    });
+    const question = (requestApproval.mock.calls[0] as unknown as [{ question: string }])[0].question;
+    const lines = question.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toMatch(/^本次参数：`+[^`].*`+$/u);
+    expect(question).toContain('a@example.com');
+    expect(question).not.toContain('sk-secret-value-1234567890');
+    expect(question).not.toMatch(/<[A-Za-z@]/u);
+  });
+
+  it('shows the command and target file instead of the whole arguments outside human mode (#1250 b113)', async () => {
+    const requestApproval = vi.fn(async () => false);
+    await runToolApprovalGate({
+      toolName: 'bash', args: { command: 'FOO_TOKEN=abc123secretvalue ls', cwd: '/srv', timeout: 5 },
+      sessionId: 's', commMessage: mockCommMessage(), policy: 'always',
+      port: { requestApproval }, signal: new AbortController().signal,
+    });
+    const question = (requestApproval.mock.calls[0] as unknown as [{ question: string }])[0].question;
+    expect(question).toContain('命令：');
+    expect(question).toContain('工作目录：`/srv`');
+    expect(question).not.toContain('本次参数');
+    expect(question).not.toContain('abc123secretvalue');
+
+    requestApproval.mockClear();
+    await runToolApprovalGate({
+      toolName: 'write_file', args: { path: 'notes/a.md', content: 'x' },
+      sessionId: 's', commMessage: mockCommMessage(), policy: 'always',
+      port: { requestApproval }, signal: new AbortController().signal,
+    });
+    const fileQuestion = (requestApproval.mock.calls[0] as unknown as [{ question: string }])[0].question;
+    expect(fileQuestion).toContain('目标文件：`notes/a.md`');
+    expect(fileQuestion).not.toContain('本次参数');
+  });
+
+  it('shows no argument line for a tool called without arguments outside human mode', async () => {
+    const requestApproval = vi.fn(async () => false);
+    await runToolApprovalGate({
+      toolName: 'ping', args: {}, sessionId: 's', commMessage: mockCommMessage(), policy: 'always',
+      port: { requestApproval }, signal: new AbortController().signal,
+    });
+    const question = (requestApproval.mock.calls[0] as unknown as [{ question: string }])[0].question;
+    expect(question.split('\n')).toHaveLength(1);
+  });
+
   it('records approved request and result in the ordered turn journal', async () => {
     const journal = new AgentRunJournal({ sessionId: 'sess-1', turnId: 'turn-1' });
     const events: unknown[] = [];

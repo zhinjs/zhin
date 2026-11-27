@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, isChatIdentityBindText, isSecretLikeKey, matchChatOwnerClaimText, redactChatIdentityBindText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactDecisionPayload, redactSecretText } from '../src/index.js';
+import { containsChatOwnerClaimCode, createChatOwnerClaimCodeScanner, isChatIdentityBindText, isSecretLikeKey, matchChatOwnerClaimText, redactChatIdentityBindText, redactChatOwnerClaimText, registerChatOwnerClaimCode, redactApprovalDisplay, redactDecisionPayload, redactSecretText } from '../src/index.js';
 
 describe('redaction (moved from @zhin.js/agent, ADR 0061 P1)', () => {
   it('masks secret keys, omits prompts and hides token-shaped text', () => {
@@ -203,5 +203,21 @@ describe('chat-identity bind text (ADR 0060 §2.4, #1250 sandbox-transcript-shar
       expect(redactChatIdentityBindText(text)).toBe(text);
       expect(isChatIdentityBindText(text)).toBe(false);
     }
+  });
+});
+
+describe('redactApprovalDisplay depth bound (#1250 b113)', () => {
+  it('shows [max depth] past 8 levels instead of the raw value, like redactDecisionPayload', () => {
+    let nested: Record<string, unknown> = { api_key: 'sk-deep-secret-0123456789', note: 'Bearer abcdefgh12345678' };
+    for (let index = 0; index < 12; index++) nested = { child: nested };
+    const shown = JSON.stringify(redactApprovalDisplay({ outer: nested }));
+    expect(shown).toContain('[max depth]');
+    expect(shown).not.toContain('sk-deep-secret-0123456789');
+    expect(shown).not.toContain('abcdefgh12345678');
+    // Within the bound the structure is kept and secrets are masked.
+    const shallow = redactApprovalDisplay({ a: { b: { password: 'hunter2', n: 1 } } });
+    expect(shallow).toEqual({ a: { b: { password: '[redacted]', n: 1 } } });
+    // Primitives at any depth are unchanged values, not the marker.
+    expect(redactApprovalDisplay(5, 20)).toBe(5);
   });
 });

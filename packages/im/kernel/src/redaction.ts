@@ -293,11 +293,15 @@ export function isChatIdentityBindText(text: string, prefix = ''): boolean {
 
 /**
  * Display-only masking for approval prompts (#1250: they may be shown in a chat): secret-named keys and
- * token-shaped text are hidden. Execution, fingerprints and approval scope keys still use the exact arguments.
+ * token-shaped text are hidden; an object or array nested deeper than 8 levels shows as `[max depth]`.
+ * Execution, fingerprints and approval scope keys still use the exact arguments.
  */
 export function redactApprovalDisplay(value: unknown, depth = 0): unknown {
   if (typeof value === 'string') return redactSecretText(value);
-  if (depth > 8 || value === null || typeof value !== 'object') return value;
+  if (value === null || typeof value !== 'object') return value;
+  // #1250 b113: deeper than 8 levels is not shown (as in `redactDecisionPayload`), never the raw value,
+  // which could hold an unmasked secret.
+  if (depth > 8) return '[max depth]';
   if (Array.isArray(value)) return value.map(item => redactApprovalDisplay(item, depth + 1));
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
     key,

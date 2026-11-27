@@ -7,6 +7,7 @@ import { fetchOutboundMedia, isOutboundMediaRefused, outboundMediaNotice, type O
 import type { WebClient } from '@slack/web-api';
 import { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';
 import { formatOutboundWire, keyboardToBlockKitBlocks, type SlackBlock } from './protocol.js';
+import { createMessages, type Locale } from 'zhin.js/i18n';
 
 export interface SlackOutboundResult {
   ts: string;
@@ -81,12 +82,10 @@ export async function editSlackContent(
   const blocks = [...wire.blocks];
   const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
   // #1250 b113: one message holds at most SLACK_MAX_BLOCKS_PER_MESSAGE blocks. A long card used to lose
-  // its buttons (the last blocks) here; the text is cut instead and the buttons stay.
-  const actions = blocks.filter(isActionsBlock);
-  const payloadBlocks = blocks.length <= SLACK_MAX_BLOCKS_PER_MESSAGE
-    ? blocks
-    : actions.length >= SLACK_MAX_BLOCKS_PER_MESSAGE ? blocks.slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE)
-    : [...blocks.filter(block => !isActionsBlock(block)).slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE - actions.length), ...actions];
+  // its buttons (the last blocks) here; the text is cut instead, a notice says so, and the buttons stay.
+  // Only this one message is edited: the later parts of a card sent as several messages
+  // (`splitBlocksIntoMessages`) are not touched, so an edit applies to the first part only.
+  const payloadBlocks = fitEditBlocks(blocks);
 
   const updateOpts: { channel: string; ts: string; text: string; blocks?: SlackBlock[] } = {
     channel,
@@ -95,6 +94,26 @@ export async function editSlackContent(
   };
   if (payloadBlocks.length > 0) updateOpts.blocks = payloadBlocks;
   await createEndpointOperation({ signal }).run(() => client.chat.update(updateOpts));
+}
+
+const outboundMessages = createMessages({
+  truncated: { 'zh-CN': '[内容过长，已截断]', en: '[Content too long, truncated]' },
+});
+
+/**
+ * The blocks of one edited message (#1250 b113): all of them when they fit; otherwise the text is cut,
+ * a notice section marks the cut, and every button row stays last. More button rows than one message
+ * holds (Core's cards never produce this) keep the first SLACK_MAX_BLOCKS_PER_MESSAGE blocks.
+ */
+function fitEditBlocks(blocks: readonly SlackBlock[], locale?: Locale): SlackBlock[] {
+  const max = SLACK_MAX_BLOCKS_PER_MESSAGE;
+  if (blocks.length <= max) return [...blocks];
+  const actions = blocks.filter(isActionsBlock);
+  // Room for the notice and at least one block of text next to the buttons.
+  if (actions.length > max - 2) return blocks.slice(0, max);
+  const notice = { type: 'section', text: { type: 'mrkdwn', text: outboundMessages(locale, 'truncated') } } as SlackBlock;
+  const others = blocks.filter(block => !isActionsBlock(block)).slice(0, max - actions.length - 1);
+  return [...others, notice, ...actions];
 }
 
 function applyTextMrkdwnBlocks(
@@ -170,29 +189,29 @@ function isActionsBlock(block: SlackBlock): boolean {
 }
 
 /**
- * Blocks per message, in order (#1250 b113). The buttons (`actions` blocks) all go on the last message,
- * together with at least the end of the text before them, never on a message of their own and never
- * split from each other.
+ * Blocks per message (#1250 b113), each part at most SLACK_MAX_BLOCKS_PER_MESSAGE blocks.
+ * - Everything fits in one message: the blocks as they are, in their original order.
+ * - Otherwise the buttons (`actions` blocks) all go on the last message, together with at least the end
+ *   of the text before them, never on a message of their own and never split from each other: the last
+ *   message holds the text's last `max - actions` blocks, the text before it is cut into full messages.
+ * - More button rows than fit next to any text (`actions >= max`; Core's cards never produce this):
+ *   plain consecutive parts in the original order.
  */
-function splitBlocksIntoMessages(blocks: readonly SlackBlock[]): SlackBlock[][] {
+export function splitBlocksIntoMessages(blocks: readonly SlackBlock[]): SlackBlock[][] {
   const max = SLACK_MAX_BLOCKS_PER_MESSAGE;
   const naive = (list: readonly SlackBlock[]) => {
     const chunks: SlackBlock[][] = [];
     for (let offset = 0; offset < list.length; offset += max) chunks.push(list.slice(offset, offset + max));
     return chunks;
   };
+  if (blocks.length <= max) return [[...blocks]];
   const actions = blocks.filter(isActionsBlock);
-  // More button rows than one message holds (not produced by Core's cards): keep the order.
-  if (actions.length >= max) return naive(blocks);
-  const others = actions.length ? blocks.filter(block => !isActionsBlock(block)) : [...blocks];
-  if (others.length + actions.length <= max) return [[...others, ...actions]];
-  const chunks = naive(others);
-  if (actions.length) {
-    const last = chunks[chunks.length - 1]!;
-    if (last.length + actions.length > max) chunks.push(last.splice(max - actions.length));
-    chunks[chunks.length - 1]!.push(...actions);
-  }
-  return chunks;
+  if (!actions.length) return naive(blocks);
+  const room = max - actions.length;
+  if (room < 1) return naive(blocks);
+  const others = blocks.filter(block => !isActionsBlock(block));
+  const tail = others.slice(Math.max(0, others.length - room));
+  return [...naive(others.slice(0, others.length - tail.length)), [...tail, ...actions]];
 }
 
 /** Longest notification text of one part (Slack shows it in notifications and to screen readers). */

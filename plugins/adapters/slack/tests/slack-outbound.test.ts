@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { sendSlackContent, editSlackContent } from '../src/slack-outbound.js';
+import { sendSlackContent, editSlackContent, splitBlocksIntoMessages } from '../src/slack-outbound.js';
 
 function mockWebClient() {
   return {
@@ -359,5 +359,66 @@ describe('editSlackContent', () => {
     expect(update.blocks.length).toBeLessThanOrEqual(48);
     expect(update.blocks.at(-1)?.type).toBe('actions');
     expect(update.text.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('splitBlocksIntoMessages (#1250 b113)', () => {
+  const section = (index: number) => ({ type: 'section', text: { type: 'mrkdwn', text: `s${index}` } });
+  const actions = (index: number) => ({ type: 'actions', elements: [{ type: 'button', action_id: `a${index}` }] });
+  const sections = (count: number) => Array.from({ length: count }, (_, index) => section(index));
+  const actionRows = (count: number) => Array.from({ length: count }, (_, index) => actions(index));
+  const flat = (chunks: { type: string }[][]) => chunks.flat();
+
+  it('keeps the original order when everything fits in one message', () => {
+    const blocks = [section(0), actions(0), section(1)];
+    expect(splitBlocksIntoMessages(blocks)).toEqual([blocks]);
+  });
+
+  it.each([1, 25, 30, 40, 47])('with %s action rows and long text every part stays within 48 blocks, buttons together on the last', count => {
+    const blocks = [...sections(48), ...actionRows(count)];
+    const chunks = splitBlocksIntoMessages(blocks);
+    expect(chunks.every(chunk => chunk.length <= 48)).toBe(true);
+    expect(flat(chunks)).toHaveLength(blocks.length);
+    const last = chunks.at(-1)!;
+    expect(last.filter(block => block.type === 'actions')).toHaveLength(count);
+    expect(last.some(block => block.type === 'section')).toBe(true);
+    expect(chunks.slice(0, -1).every(chunk => chunk.every(block => block.type !== 'actions'))).toBe(true);
+    // The text keeps its order across parts.
+    expect(flat(chunks).filter(block => block.type === 'section')).toEqual(sections(48));
+  });
+
+  it('30 action rows after 48 sections: no part past the limit (was [18, 60])', () => {
+    expect(splitBlocksIntoMessages([...sections(48), ...actionRows(30)]).map(chunk => chunk.length)).toEqual([30, 48]);
+  });
+
+  it.each([48, 49, 60, 100])('with %s action rows (more than one message holds next to text) every part stays within 48 blocks in order', count => {
+    const blocks = [...sections(48), ...actionRows(count)];
+    const chunks = splitBlocksIntoMessages(blocks);
+    expect(chunks.every(chunk => chunk.length > 0 && chunk.length <= 48)).toBe(true);
+    expect(flat(chunks)).toEqual(blocks);
+  });
+});
+
+describe('editSlackContent truncation notice (#1250 b113)', () => {
+  it('adds a notice section when the text is cut, keeping the buttons last', async () => {
+    const client = mockWebClient();
+    await editSlackContent(client, { channel: 'C001', ts: '1700000000.000000', content: [
+      { type: 'markdown', data: { content: Array.from({ length: 60 }, (_, index) => `${index} ${'y'.repeat(2800)}`).join('\n\n') } },
+      { type: 'keyboard', data: { rows: [[{ id: 'a', label: '拒绝', payload: 'no' }]] } },
+    ] });
+    const update = client.chat.update.mock.calls[0][0] as { blocks: { type: string; text?: { text: string } }[] };
+    expect(update.blocks).toHaveLength(48);
+    expect(update.blocks.at(-1)?.type).toBe('actions');
+    expect(update.blocks.at(-2)?.text?.text).toBe('[内容过长，已截断]');
+  });
+
+  it('adds no notice when nothing is cut', async () => {
+    const client = mockWebClient();
+    await editSlackContent(client, { channel: 'C001', ts: '1700000000.000000', content: [
+      { type: 'markdown', data: { content: 'short' } },
+      { type: 'keyboard', data: { rows: [[{ id: 'a', label: '拒绝', payload: 'no' }]] } },
+    ] });
+    const update = client.chat.update.mock.calls[0][0] as { blocks: { type: string; text?: { text: string } }[] };
+    expect(JSON.stringify(update.blocks)).not.toContain('截断');
   });
 });

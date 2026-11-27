@@ -45,6 +45,20 @@ describe('every interval bound (#1250 b113)', () => {
     expect(scheduleEveryMsError(MAX_SCHEDULE_EVERY_MS + 1)).toBe(`执行间隔（everyMs）最多 365 天，收到: ${MAX_SCHEDULE_EVERY_MS + 1}`);
   });
 
+  it('is only the upper bound: a zero, negative or fractional interval is left to the callers', () => {
+    // Zero / negative stay "not schedulable" (`isRuntimeSchedulable`); the Console route, `zhin schedule`
+    // and `validateAssistantProfile` check positive / whole values themselves.
+    for (const everyMs of [0, -1, 1.5]) expect(scheduleEveryMsError(everyMs)).toBeUndefined();
+    expect(scheduleEveryMsError('1000')).toBe('执行间隔（everyMs）必须是毫秒数，收到: 1000');
+    expect(scheduleEveryMsError(Number.NaN)).toBe('执行间隔（everyMs）必须是毫秒数，收到: NaN');
+    expect(scheduleEveryMsError(Number.NEGATIVE_INFINITY)).toBe('执行间隔（everyMs）必须是毫秒数，收到: -Infinity');
+  });
+
+  it('a Profile heartbeat that is not a number is reported as such, not as past 365 days', () => {
+    const errors = validateAssistantProfile({ version: 1, routines: { heartbeat: { everyMs: '60000' } } } as never);
+    expect(errors).toEqual(['执行间隔（everyMs）必须是毫秒数，收到: 60000']);
+  });
+
   it.each(TOO_LONG)('addJob refuses everyMs %s and saves nothing', async everyMs => {
     await expect(engine.addJob(job(everyMs))).rejects.toMatchObject({ code: 'schedule_invalid', message: expect.stringContaining('最多 365 天') });
     expect(await store.getJob('tick')).toBeFalsy();
@@ -64,7 +78,7 @@ describe('every interval bound (#1250 b113)', () => {
 
   it('a Profile heartbeat past 365 days is reported and not synced', async () => {
     const profile = { version: 1, routines: { heartbeat: { enabled: true, everyMs: MAX_SCHEDULE_EVERY_MS + 1 } } } as never;
-    expect(validateAssistantProfile(profile)).toContain(`routines.heartbeat.everyMs must be at most ${MAX_SCHEDULE_EVERY_MS} (365 days)`);
+    expect(validateAssistantProfile(profile)).toContain(scheduleEveryMsError(MAX_SCHEDULE_EVERY_MS + 1));
     expect(await syncProfileHeartbeatToStore(store, profile)).toBe(false);
     expect(await store.listJobs()).toEqual([]);
   });

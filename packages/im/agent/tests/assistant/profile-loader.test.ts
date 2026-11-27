@@ -258,6 +258,36 @@ agents: |
     }
   });
 
+  it('disables a stored heartbeat when the profile interval goes past 365 days, with a warning (#1250 b113)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-heartbeat-too-long-'));
+    try {
+      const store = new ScheduleJobStore({ dataDir: dir });
+      await syncProfileHeartbeatToStore(store, { version: 1, routines: { heartbeat: { everyMs: 60_000 } } });
+      await store.updateJobState(PROFILE_HEARTBEAT_JOB_ID, { nextRunAtMs: 1, lastExecutedAt: 2 });
+      warn.mockClear();
+
+      const tooLong = 365 * 24 * 60 * 60_000 + 1;
+      expect(await syncProfileHeartbeatToStore(store, { version: 1, routines: { heartbeat: { everyMs: tooLong } } })).toBe(false);
+      const stale = await store.getJob(PROFILE_HEARTBEAT_JOB_ID);
+      // The old interval does not keep running: the job is off, its timing unchanged, the reason recorded.
+      expect(stale?.enabled).toBe(false);
+      expect(stale?.schedule).toEqual({ kind: 'every', everyMs: 60_000 });
+      expect(stale?.state.nextRunAtMs).toBeUndefined();
+      expect(stale?.state.lastExecutedAt).toBe(2);
+      expect(stale?.state.lastError).toContain('配置超限，已停用 heartbeat');
+      expect(warn).toHaveBeenCalledOnce();
+      expect(JSON.parse(warn.mock.calls[0]![0] as string)).toMatchObject({
+        op: 'profile_heartbeat_invalid', job: PROFILE_HEARTBEAT_JOB_ID, notice: '配置超限，已停用 heartbeat',
+      });
+
+      // A valid interval again re-enables the same job with it.
+      expect(await syncProfileHeartbeatToStore(store, { version: 1, routines: { heartbeat: { everyMs: 120_000 } } })).toBe(true);
+      expect(await store.getJob(PROFILE_HEARTBEAT_JOB_ID)).toMatchObject({ enabled: true, schedule: { kind: 'every', everyMs: 120_000 } });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('validateAssistantProfile 拒绝非法 everyMs', () => {
     const errors = validateAssistantProfile({
       version: 1,
