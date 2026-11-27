@@ -220,7 +220,11 @@ function readSandboxWirePayload(raw: string): SandboxWirePayload & { op?: unknow
 }
 
 export type SandboxWsFrame =
-  | { readonly kind: 'subscribe'; readonly conversation: SandboxConversation }
+  /**
+   * `retain`: keep receiving the scenes this socket explicitly subscribed to before (a page with several
+   * sessions, #1250 b114). A subscribe without it turns retention off; a reconnect starts with none.
+   */
+  | { readonly kind: 'subscribe'; readonly conversation: SandboxConversation; readonly retain?: true }
   | { readonly kind: 'message'; readonly message: SandboxParsedMessage }
   | { readonly kind: 'invalid' };
 
@@ -277,7 +281,8 @@ export function parseSandboxWsFrame(raw: string, self?: SandboxSelfMention): San
     if (payload.op !== 'subscribe' || !conversation || typeof conversation !== 'object'
       || (conversation.type !== 'private' && conversation.type !== 'group' && conversation.type !== 'channel')
       || typeof conversation.id !== 'string' || !conversation.id.trim()) return { kind: 'invalid' };
-    return { kind: 'subscribe', conversation: { type: conversation.type, id: conversation.id } };
+    return { kind: 'subscribe', conversation: { type: conversation.type, id: conversation.id },
+      ...((payload as { retain?: unknown }).retain === true ? { retain: true as const } : {}) };
   }
   const message = normalizeSandboxWsPayload(payload, raw, self);
   if (!['private', 'direct', 'group', 'channel', 'guild'].includes(message.type)

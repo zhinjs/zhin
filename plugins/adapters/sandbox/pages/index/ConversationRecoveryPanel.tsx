@@ -4,7 +4,7 @@ import { Button } from '@zhin.js/console-ui';
 import { sandboxText } from './messages.js';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
 import { prependResultPage, readConversationResults, readPendingInteractions, resultDeliveryStatus,
-  type PendingInteraction, type RecoveredResultPage } from './conversationRecovery.js';
+  type PendingInteraction, type PendingInteractionAnswerer, type RecoveredResultPage } from './conversationRecovery.js';
 
 export interface ConversationRecoveryProps {
   readonly connectionId: string;
@@ -15,7 +15,9 @@ export interface ConversationRecoveryProps {
   /** Existing transport activity invalidates this read; it is not an approval acknowledgement. */
   readonly pendingRefreshEpoch?: number;
   readonly onRetiredInteractions?: (interactions: readonly PendingInteraction[]) => void;
-  readonly renderInteraction: (segments: MessageSegment[], id: string, submitted: boolean, onSubmitted: () => void) => React.ReactNode;
+  /** `answerAs`: the speaker the Host says this prompt was asked of; the click answers as that speaker. */
+  readonly renderInteraction: (segments: MessageSegment[], id: string, submitted: boolean, onSubmitted: () => void,
+    answerAs?: PendingInteractionAnswerer) => React.ReactNode;
 }
 
 /** Mounted under an exact connection and scene key; its requests never outlive that owner. */
@@ -114,10 +116,11 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
     {pending.length ? <Button type="button" size="sm" variant="outline" onClick={() => void reloadPending(true)}>{sandboxText(locale, '重新读取')}</Button> : null}
     {pending.map(interaction => <section key={`${interaction.generation}:${interaction.id}`}>
       <h3>{sandboxText(locale, '待处理操作')}</h3>
+      {interaction.answerAs?.kind === 'other' ? <p>{sandboxText(locale, '这条提示等待其他成员作答，此处只读。')}</p> : null}
       {props.renderInteraction(interaction.segments, interaction.id, submitted.has(interaction.id), () => {
         setSubmitted(previous => new Set([...previous, interaction.id]));
         void reloadPending();
-      })}
+      }, interaction.answerAs)}
     </section>)}
     {resultError ? <p role="alert">{resultError} <Button type="button" size="sm" variant="outline" onClick={() => void reloadResults()}>{sandboxText(locale, '重试')}</Button></p> : null}
     {page?.hasMore ? <Button type="button" size="sm" variant="outline" disabled={loadingEarlier} onClick={() => void earlier()}>{sandboxText(locale, '加载更早结果')}</Button> : null}

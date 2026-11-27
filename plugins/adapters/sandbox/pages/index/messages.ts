@@ -203,6 +203,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "打开当前文件": "Open current file",
   "待处理操作": "Pending interaction",
   "加载更早结果": "Load earlier results",
+  "这条提示等待其他成员作答，此处只读。": "This prompt is waiting for another member's answer; it is read-only here.",
   "加载更早记录": "Load earlier messages",
   "已完成，未投递": "Completed, not delivered",
   "已完成，部分内容未投递": "Completed, partly delivered",

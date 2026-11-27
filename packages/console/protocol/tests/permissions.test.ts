@@ -225,6 +225,9 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleHttpPermission('POST', '/agent/inference/apply')?.permission).toBe('agent.configure');
     expect(resolveConsoleHttpPermission('GET', '/plugins/%40zhin.js%2Fx')?.permission).toBe('feature.view');
     expect(resolveConsoleHttpPermission('POST', '/plugins')).toBeNull();
+    // #1250 b114: the Sandbox pending-prompt read stays a read-only, endpoint-scoped GET.
+    expect(resolveConsoleHttpPermission('GET', '/interactions/pending')?.permission).toBe('endpoint.view');
+    expect(resolveConsoleHttpPermission('POST', '/interactions/pending')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/config')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/introspectionx')).toBeNull();
     // #1250: recent Agent turns need agent.view, ahead of the /introspection status.view prefix.

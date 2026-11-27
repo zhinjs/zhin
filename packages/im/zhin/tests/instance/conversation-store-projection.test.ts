@@ -217,3 +217,44 @@ it('seeks past each completed backfill batch and starts fresh on repeated migrat
   expect(batches).toEqual([[before[0]!.id], []]);
   expect(await f.events.select('id', 'event_json').orderBy('id')).toEqual(before);
 });
+
+it('#1250 b114: a stored interaction answer survives a restart on the database store and never becomes a message', async () => {
+  const { ConversationRuntime } = await import('../../../core/src/plugin-runtime/im/conversation-runtime.js');
+  const f = await fixture();
+  const now = Date.now();
+  const inbound = (id: string, text: string): ConversationEvent => ({ type: 'message.created', eventId: `create:${id}`, conversation: scene,
+    timestamp: now, message: { ref: { conversation: scene, id }, actor: { id: 'user-1' }, timestamp: now, segments: [{ type: 'text', data: { text } }] } });
+  await f.store.append(inbound('answer', 'y'));
+  await new ConversationRuntime(f.store).markInteractionAnswer({ conversation: scene, id: 'answer' });
+  await f.store.append(inbound('later', 'README'));
+  const current = await f.store.append(inbound('current', 'hi'));
+  // Message projections ignore the bookkeeping row; the indexed lookup finds it by message key.
+  expect(await f.store.getMessage({ conversation: scene, id: 'answer' })).toMatchObject({ segments: [{ type: 'text', data: { text: 'y' } }] });
+  expect((await f.store.listMessages(scene, undefined, 10)).map(row => row.message.ref.id)).toEqual(['answer', 'later', 'current']);
+  expect([...await f.store.listInteractionAnswered([{ conversation: scene, id: 'answer' }, { conversation: scene, id: 'later' }])])
+    .toEqual([messageRefKey({ conversation: scene, id: 'answer' })]);
+  const restarted = new DatabaseConversationEventStore(f.events, f.host.models.get('conversation_event_cursors')!);
+  const context = await new ConversationRuntime(restarted).readContext(scene, 'agent', current.sequence, 50, 'current');
+  expect(context.blocks.map(block => block.message?.id)).toEqual(['later']);
+});
+
+it('#1250 b114: an older reader that does not know message.interaction_answered skips the row with its warning', async () => {
+  const f = await fixture();
+  const { isConversationEvent } = await import('@zhin.js/im-contract');
+  const answered = { type: 'message.interaction_answered', eventId: 'answered:a', conversation: scene, timestamp: 1, message: { conversation: scene, id: 'a' } };
+  expect(isConversationEvent(answered)).toBe(true);
+  expect(isConversationEvent({ ...answered, message: { id: 'a' } })).toBe(false);
+  await f.store.append(created('a'));
+  await f.store.append(answered as ConversationEvent);
+  // Simulate an older binary: its reader rejects the unknown type like any damaged row.
+  const reports: unknown[] = [];
+  const older = new DatabaseConversationEventStore(f.events, f.host.models.get('conversation_event_cursors')!, { onInvalidRow: row => reports.push(row) });
+  const original = JSON.parse;
+  vi.spyOn(JSON, 'parse').mockImplementation((text, reviver) => {
+    const value = original(text, reviver);
+    return value && typeof value === 'object' && value.type === 'message.interaction_answered' ? { ...value, type: 'message.unknown_future' } : value;
+  });
+  const events = await older.listBetween(scene, 0, 10, 10);
+  expect(events.map(entry => entry.event.type)).toEqual(['message.created']);
+  expect(reports).toMatchObject([{ table: 'conversation_events', reason: 'invalid_event' }]);
+});

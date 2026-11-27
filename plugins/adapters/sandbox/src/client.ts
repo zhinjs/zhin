@@ -6,6 +6,20 @@ export interface SandboxClientConnection {
   readonly owner: string;
   readonly socket: SandboxWsSocket;
   readonly placeholder?: boolean;
+  /**
+   * #1250 b114 L1: who opened the socket — `user:<userId>` (session or API token), `bootstrap`, or
+   * null with no principal (`--standalone`). The Console's connection-scoped routes compare it with
+   * the request's own principal. Undefined only on clients that do not report it.
+   */
+  readonly principalOwner?: string | null;
+}
+
+/** The {@link SandboxClientConnection.principalOwner} of a Console principal. */
+export function sandboxPrincipalOwner(principal: { readonly kind: string; readonly userId?: string } | undefined): string | null {
+  if (!principal) return null;
+  if (principal.kind === 'bootstrap') return 'bootstrap';
+  return (principal.kind === 'user' || principal.kind === 'api-token') && typeof principal.userId === 'string' && principal.userId
+    ? `user:${principal.userId}` : `unknown:${principal.kind}`;
 }
 
 /** Direct view of the live Sandbox protocol clients owned by one Endpoint. */
@@ -22,6 +36,7 @@ export class SandboxClient<TConnection extends SandboxClientConnection = Sandbox
     return Object.freeze([...this.connectionRecords.values()].map(connection => Object.freeze({
       connectionId: connection.connectionId, target: connection.target, owner: connection.owner,
       socket: connection.socket, placeholder: connection.placeholder === true,
+      ...(connection.principalOwner !== undefined ? { principalOwner: connection.principalOwner } : {}),
     })));
   }
 

@@ -93,7 +93,7 @@ async function fixture(reader: ChatRoleReader = roles(), extra: Readonly<{ conso
     const echo = client.frames.filter(frame => frame.direction === 'inbound').at(-1)!;
     return { sender: (receive.mock.calls.at(-1)![0] as { sender: { id: string; name?: string } }).sender, echo };
   };
-  return { connect, sent, receive };
+  return { connect, sent, receive, endpoint };
 }
 
 /** A Console user; `self.chat-identity` (speaking as / creating one's own identity) unless `selfChatIdentity` is false. */
@@ -102,6 +102,25 @@ const user = (userId: string, displayName = 'Owner', globalIam = false, selfChat
   roles: [] } as Principal);
 
 describe('Sandbox speaker identity (ADR 0060 §5.4)', () => {
+  it('#1250 b114 L1/L2: a connection reports who opened it and the chat identity it would speak as', async () => {
+    const { connect, endpoint } = await fixture();
+    const sandbox = endpoint.endpoint as unknown as SandboxWsEndpoint;
+    const conversation = { endpoint: { adapter: 'sandbox', id: 'x' }, kind: 'private' as const, id: 'room' };
+    const idOf = (client: Awaited<ReturnType<typeof connect>>) => String(client.frames.find(frame => frame.type === 'ready')!.connectionId);
+    const owner = await connect(user('u-owner', 'Owner', true));
+    expect(sandbox.connectionById(idOf(owner))).toMatchObject({ principalOwner: 'user:u-owner' });
+    expect(sandbox.chatIdentityOf(idOf(owner), conversation)).toBe('console-u-owner');
+    // The same rule as speaking: a person with a global grant needs global iam.manage.
+    const limited = await connect(user('u-owner', 'Owner', false));
+    expect(sandbox.chatIdentityOf(idOf(limited), conversation)).toBeUndefined();
+    const bootstrap = await connect({ kind: 'bootstrap', open: true } as Principal);
+    expect(sandbox.connectionById(idOf(bootstrap))).toMatchObject({ principalOwner: 'bootstrap' });
+    expect(sandbox.chatIdentityOf(idOf(bootstrap), conversation)).toBeUndefined();
+    expect(sandbox.chatIdentityOf('no-such-connection', conversation)).toBeUndefined();
+    // The Console user record itself is never part of the public connection view.
+    expect(sandbox.connectionById(idOf(owner))).not.toHaveProperty('consoleUser');
+  });
+
   it('a typed owner id is simulated: reserved id, no zhin role, lowest trust (negative)', async () => {
     const { connect, sent } = await fixture();
     const client = await connect(user('u-plain', 'Operator'));

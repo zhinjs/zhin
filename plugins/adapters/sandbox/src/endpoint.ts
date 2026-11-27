@@ -23,7 +23,7 @@ import {
   type SandboxWsSocket,
   type SandboxConversation,
 } from './protocol.js';
-import { SandboxClient } from './client.js';
+import { SandboxClient, sandboxPrincipalOwner } from './client.js';
 import { redactSandboxBindCode } from './bind-redaction.js';
 import { join } from 'node:path';
 import { SandboxMediaStore } from './media-store.js';
@@ -81,6 +81,35 @@ function claimSandboxWsPath(
   };
 }
 
+/** Background scenes one retaining socket keeps (a page's session list is far shorter). */
+const MAX_RETAINED_SCENES = 32;
+
+function sandboxSceneKey(scene: { readonly type: string; readonly id: string }): string {
+  return `${scene.type}\0${scene.id}`;
+}
+
+/**
+ * Makes `scene` the socket's current one. A retaining socket keeps its previous scene in the
+ * background only when the client explicitly subscribed to it (#1250 b114 M1): the implicit initial
+ * scene (`private:<owner>`, shared by every page of the account) and a scene reached only by sending
+ * into it are never retained, so a page never receives replies of a session it did not open.
+ * `subscribed`: `scene` comes from an explicit `subscribe` frame.
+ */
+function focusSandboxScene(connection: SandboxConnection, scene: SandboxConversation, subscribed: boolean): void {
+  const retained = connection.retained;
+  const previous = connection.conversation;
+  const same = sandboxSceneKey(previous) === sandboxSceneKey(scene);
+  if (retained && !same && connection.subscribed) {
+    retained.delete(sandboxSceneKey(previous));
+    retained.set(sandboxSceneKey(previous), previous);
+    while (retained.size > MAX_RETAINED_SCENES) retained.delete(retained.keys().next().value!);
+  }
+  retained?.delete(sandboxSceneKey(scene));
+  // Sending into the scene the socket subscribed to keeps it subscribed; any other scene is implicit.
+  connection.subscribed = subscribed || (same && connection.subscribed);
+  connection.conversation = scene;
+}
+
 interface SandboxConnection {
   readonly connectionId: string;
   readonly target: string;
@@ -90,8 +119,21 @@ interface SandboxConnection {
   readonly canExecute: boolean;
   conversation: SandboxConversation;
   scoped: boolean;
+  /** `conversation` was set by an explicit `subscribe` frame (not the implicit initial scene). */
+  subscribed: boolean;
+  /**
+   * #1250 b114: scenes this socket explicitly subscribed to before its current one, most recent last,
+   * kept while its subscriptions carry `retain: true` (a `subscribe` without it clears them). A reply
+   * still running in a scene the page switched away from reaches the page (which files it under that
+   * scene) instead of failing as undelivered. Lives with the socket: a reconnect starts empty.
+   */
+  retained?: Map<string, SandboxConversation>;
   /** true = 占位连接（尚无真实 WS 客户端），send 命中时按 miss 处理。 */
   readonly placeholder?: boolean;
+  /** {@link sandboxPrincipalOwner} of the socket's principal (#1250 b114 L1). */
+  readonly principalOwner?: string | null;
+  /** The signed-in Console user behind the socket, if any (never exposed by {@link SandboxClient.connections}). */
+  readonly consoleUser?: SandboxConsoleUser;
 }
 
 type ShellIsolationStatus = Readonly<{
@@ -480,7 +522,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   #subscribers(scene: { readonly type: string; readonly id: string }, echo = false): SandboxConnection[] {
     return [...this.connectionRecords.values()].filter(connection => !connection.placeholder && connection.canExecute
       && (!echo || connection.scoped)
-      && connection.conversation.type === scene.type && connection.conversation.id === scene.id
+      && (connection.conversation.type === scene.type && connection.conversation.id === scene.id
+        || connection.retained?.has(sandboxSceneKey(scene)) === true)
       && (connection.socket.readyState === undefined || connection.socket.readyState === 1));
   }
 
@@ -514,7 +557,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     const socket = sandboxSocketOf(connection);
     const connectionId = randomUUID();
     const subscription: SandboxConnection = {
-      connectionId, target, owner, socket, canExecute, scoped: false,
+      connectionId, target, owner, socket, canExecute, scoped: false, subscribed: false,
+      principalOwner: sandboxPrincipalOwner(connection.principal), ...(consoleUser ? { consoleUser } : {}),
       conversation: { type: 'private', id: owner },
       release: () => release(),
     };
@@ -572,7 +616,10 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             return;
           }
           if (frame.kind === 'subscribe') {
-            subscription.conversation = frame.conversation;
+            // `retain` holds only while every subscription asks for it: one without it closes it.
+            if (frame.retain) subscription.retained ??= new Map();
+            else subscription.retained = undefined;
+            focusSandboxScene(subscription, frame.conversation, true);
             subscription.scoped = true;
             socket.send(JSON.stringify({
               type: 'subscribed', id: frame.conversation.id, conversation: frame.conversation,
@@ -621,7 +668,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             text: parsed.text.slice(0, 80),
           }));
           const scene: SandboxConversation = { type: conversation.kind as SandboxConversation['type'], id: sceneId };
-          subscription.conversation = scene;
+          focusSandboxScene(subscription, scene, false);
           const messageId = parsed.messageId ?? randomUUID();
           this.#broadcast(this.#subscribers(scene, true), JSON.stringify({
             ...scene, conversation: scene, direction: 'inbound', senderId,
@@ -772,6 +819,20 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   }
 
   /**
+   * #1250 b114 L2: the chat identity (platform user id) live connection `connectionId` speaks as with
+   * 「以我的聊天身份发言」 in `conversation` — the same rule {@link #speaker} applies, without creating
+   * one. Undefined for no such connection, no Console user, or no usable identity.
+   */
+  chatIdentityOf(connectionId: string, conversation: Parameters<ChatRoleReader['factsOf']>[0]): string | undefined {
+    const connection = this.connectionRecords.get(connectionId);
+    const user = connection && !connection.placeholder ? connection.consoleUser : undefined;
+    if (!user?.canUseChatIdentity) return undefined;
+    try {
+      return this.#options.chatRoles?.consoleSpeaker?.(conversation, user.userId, { canManageGlobal: user.canManageGlobal })?.userId;
+    } catch { return undefined; }
+  }
+
+  /**
    * ADR 0060 §5.4: the identity a message speaks as. Only on request, only for a signed-in Console
    * user holding `self.chat-identity` (the threshold of `chat-identities.simulated.ensure`;
    * otherwise `needs-self-chat-identity`), and only an identity of the person linked to that user on
@@ -858,6 +919,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       connectionId: name,
       canExecute: false,
       scoped: false,
+      subscribed: false,
       conversation: { type: 'private', id: owner },
       target: name,
       owner,

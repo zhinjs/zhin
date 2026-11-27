@@ -1,12 +1,55 @@
 import type { MessageSegment, ConsoleLocale } from '@zhin.js/client';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
 
+/** `SANDBOX_SIMULATED_PREFIX` of `src/protocol.ts` (a Node module the page cannot import); a test keeps them equal. */
+export const SANDBOX_PAGE_SIMULATED_PREFIX = '~sim:';
+
+/**
+ * Who the Host says may answer a recovered prompt, seen from this page's connection (#1250 b114):
+ * anyone; this person's own chat identity (`self`); a simulated sender (`~sim:<id>`, any page may
+ * speak as it); or someone else (`other`: shown read-only, the Host never sends that id).
+ */
+export type PendingInteractionAnswerer =
+  | Readonly<{ kind: 'anyone' }>
+  | Readonly<{ kind: 'self' }>
+  | Readonly<{ kind: 'simulated'; senderId: string }>
+  | Readonly<{ kind: 'other' }>;
+
 export interface PendingInteraction {
   readonly id: string;
   readonly generation: number;
-  readonly subjectId: string;
   readonly expiresAt: number;
   readonly segments: MessageSegment[];
+  /** Absent on an older Host (owner-only read): the click then uses the page's current speaker. */
+  readonly answerAs?: PendingInteractionAnswerer;
+}
+
+/** The Host's answerer field, or undefined when it is missing or malformed (never a guessed sender). */
+export function readPendingAnswerer(value: unknown): PendingInteractionAnswerer | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const item = value as Record<string, unknown>;
+  if (item.kind === 'anyone' || item.kind === 'self' || item.kind === 'other') return { kind: item.kind };
+  return item.kind === 'simulated' && typeof item.senderId === 'string' && item.senderId.startsWith(SANDBOX_PAGE_SIMULATED_PREFIX)
+    && item.senderId.length > SANDBOX_PAGE_SIMULATED_PREFIX.length
+    ? { kind: 'simulated', senderId: item.senderId.slice(0, 256) } : undefined;
+}
+
+/**
+ * The speaker fields a click on a recovered prompt carries. A prompt asked of a simulated speaker
+ * (`~sim:<id>`) is answered as that speaker — the Host keeps a `~sim:` id as is — whatever the page's
+ * sender box says now; one asked of this person's own chat identity is answered with
+ * 「以我的聊天身份发言」. `anyone` uses the current speaker; `other` is never clicked (read-only card).
+ * The Host still decides whether this socket's speaker may answer; nothing here grants it.
+ */
+export function recoveredAnswerSpeaker(answerAs: PendingInteractionAnswerer | undefined):
+  Readonly<{ senderId: string; asMe: false }> | Readonly<{ asMe: true }> | undefined {
+  if (answerAs?.kind === 'simulated') return { senderId: answerAs.senderId, asMe: false };
+  return answerAs?.kind === 'self' ? { asMe: true } : undefined;
+}
+
+/** Whether this page may click a recovered prompt at all (`other`: someone else answers it). */
+export function recoveredPromptAnswerable(answerAs: PendingInteractionAnswerer | undefined): boolean {
+  return answerAs?.kind !== 'other';
 }
 
 export interface RecoveredDelivery {
@@ -45,8 +88,13 @@ async function readRecovery<T>(path: string, connectionId: string, sessionKey: s
   return body.data;
 }
 
-export function readPendingInteractions(connectionId: string, sessionKey: string, signal?: AbortSignal, context?: SandboxRequestContext) {
-  return readRecovery<{ generation: number; pending: readonly PendingInteraction[] }>('/api/interactions/pending', connectionId, sessionKey, signal, undefined, context);
+export async function readPendingInteractions(connectionId: string, sessionKey: string, signal?: AbortSignal, context?: SandboxRequestContext) {
+  const data = await readRecovery<{ generation: number; pending: readonly PendingInteraction[] }>('/api/interactions/pending', connectionId, sessionKey, signal, undefined, context);
+  if (!data || !Array.isArray(data.pending)) return data;
+  return { ...data, pending: data.pending.map(({ answerAs, ...interaction }) => {
+    const answerer = readPendingAnswerer(answerAs);
+    return answerer ? { ...interaction, answerAs: answerer } : interaction;
+  }) };
 }
 
 export function readConversationResults(connectionId: string, sessionKey: string, signal?: AbortSignal, cursor?: string, context?: SandboxRequestContext) {

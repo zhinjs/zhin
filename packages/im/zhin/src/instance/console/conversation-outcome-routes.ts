@@ -11,7 +11,7 @@ import { invalidLocaleResponse, jsonResponse, type HttpHost } from '@zhin.js/hos
 import { formatMessageOutcome, type MessageOutcomeReader, type MessageOutcomeRecord } from '@zhin.js/core/runtime';
 import { queryLocale, type Locale, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { ConsoleConversationOutcome } from '@zhin.js/console-protocol';
-import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { parseBoundSandboxSession, SandboxWorkspaceBindingError, sandboxScopeForbiddenResponse, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
 
 const MAX_MESSAGE_ID = 2048;
@@ -51,7 +51,7 @@ export function registerConversationOutcomeRoutes(options: Readonly<{
   outcomes?: MessageOutcomeReader;
   snapshots?: SnapshotReader;
 }>): void {
-  options.http.route('GET', `${options.base}/conversations/outcomes`, noStore(async (_request, { url }) => {
+  options.http.route('GET', `${options.base}/conversations/outcomes`, noStore(async (_request, { url, principal }) => {
     const sessionKey = url.searchParams.get('sessionKey') ?? '';
     const connectionId = url.searchParams.get('connectionId') ?? '';
     const messageId = url.searchParams.get('messageId');
@@ -65,7 +65,7 @@ export function registerConversationOutcomeRoutes(options: Readonly<{
     }
     const outcomes = options.outcomes;
     try {
-      return await withSandboxWorkspaceScope(options.snapshots, connectionId, async scope => {
+      return await withSandboxWorkspaceScope(options.snapshots, { connectionId, principal }, async scope => {
         const session = parseBoundSandboxSession(scope, sessionKey);
         if (session.status === 'scope_mismatch') {
           return jsonResponse(403, { success: false, code: 'outcome_scope_mismatch', error: '会话不属于当前 Sandbox 账号' });
@@ -85,6 +85,8 @@ export function registerConversationOutcomeRoutes(options: Readonly<{
         } });
       });
     } catch (error) {
+      const forbidden = sandboxScopeForbiddenResponse(error);
+      if (forbidden) return forbidden;
       if (!(error instanceof SandboxWorkspaceBindingError)) throw error;
       return jsonResponse(503, { success: false, code: error.code, error: error.message });
     }

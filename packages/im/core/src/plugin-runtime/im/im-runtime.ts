@@ -462,6 +462,11 @@ export class ImRuntime implements OutboundMessageService {
     return this.#interactions.readPendingInteraction(conversation, subjectId, generation);
   }
 
+  /** Every current prompt of one conversation, whatever its subject; read-only, like {@link readPendingInteraction}. */
+  listPendingInteractions(conversation: ConversationRef, generation: number): PendingUserInteraction[] {
+    return this.#interactions.listPendingInteractions(conversation, generation);
+  }
+
   async send(request: SendRequest): Promise<DeliveryReceipt> {
     const lease = this.#acquire();
     try {

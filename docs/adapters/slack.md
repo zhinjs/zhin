@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=45c39ca425edc4dd -->
+<!-- sync-adapter-docs:sha256=3d6deec315f21e90 -->
 
 # @zhin.js/adapter-slack
 

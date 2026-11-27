@@ -16,6 +16,7 @@ import {
   type SequencedConversationEvent,
   type Segment,
 } from '@zhin.js/im-contract';
+import { getLogger } from '@zhin.js/logger';
 import { redactChatIdentityBindText, redactChatOwnerClaimText } from '@zhin.js/kernel';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
@@ -32,6 +33,7 @@ import { flattenContent } from './message-events.js';
 export const CONVERSATION_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const MAX_TRACKED_INTERACTION_ANSWERS = 1_000;
+const logger = getLogger('im.conversation');
 
 /**
  * Recorded text with one-time codes hidden: an open claim code becomes `***`, and a chat-identity
@@ -120,7 +122,9 @@ export class ConversationRuntime {
     const relevant: SequencedConversationEvent[] = [];
     // The bot's own messages it later recalled (an activity indicator) never were part of the chat.
     const excluded = new Set<string>(excludeMessageId ? [excludeMessageId] : []);
+    const answered = await this.#answeredMessages(events);
     for (const entry of events) {
+      if (entry.event.type === 'message.interaction_answered') continue;
       // Only message timestamps are runtime-assigned; notice clocks are adapter-defined.
       if ((entry.event.type === 'message.created' || entry.event.type === 'message.updated') && entry.event.timestamp < notBefore) continue;
       if (await this.#isOwnRecall(entry.event)) {
@@ -128,13 +132,41 @@ export class ConversationRuntime {
         continue;
       }
       if ((entry.event.type === 'message.created' || entry.event.type === 'message.updated')
-        && this.#interactionAnswers.has(messageRefKey(entry.event.message.ref))) continue;
+        && answered.has(messageRefKey(entry.event.message.ref))) continue;
       relevant.push(entry);
     }
     return Object.freeze({
       blocks: aggregateConversationContext(relevant, excluded, this.#evidence),
       cursor: Math.max(cursor, throughSequence),
     });
+  }
+
+  /**
+   * #1250 b114: the window's messages that answered (or were) an interaction prompt — the in-memory
+   * marks, the durable `message.interaction_answered` events inside the window, and one lookup by
+   * message key for those whose event landed after it. The durable events survive a restart and the
+   * bounded memory set, so an approval `y` never comes back as a background message.
+   */
+  async #answeredMessages(events: readonly SequencedConversationEvent[]): Promise<ReadonlySet<string>> {
+    const answered = new Set<string>();
+    const candidates = new Map<string, MessageRef>();
+    for (const { event } of events) {
+      if (event.type === 'message.interaction_answered') answered.add(messageRefKey(event.message));
+      else if (event.type === 'message.created' || event.type === 'message.updated') {
+        const key = messageRefKey(event.message.ref);
+        if (this.#interactionAnswers.has(key)) answered.add(key);
+        else candidates.set(key, event.message.ref);
+      }
+    }
+    for (const key of answered) candidates.delete(key);
+    if (candidates.size && this.#events.listInteractionAnswered) {
+      try {
+        for (const key of await this.#events.listInteractionAnswered([...candidates.values()])) answered.add(key);
+      } catch {
+        // A failed lookup keeps the window's own facts; it never fails the Agent turn.
+      }
+    }
+    return answered;
   }
 
   /**
@@ -151,15 +183,29 @@ export class ConversationRuntime {
   /**
    * An answer to an interaction prompt (an approval `y`, a menu choice) was
    * already handled by that prompt; replaying it as background would invite
-   * the model to answer it again. Kept in memory and bounded: the context age
-   * window makes older answers irrelevant anyway.
+   * the model to answer it again. Marked in a bounded in-memory set (immediate)
+   * and, #1250 b114, as an append-only `message.interaction_answered` event in the
+   * conversation store, so the mark survives a restart and the memory bound.
+   * The returned promise settles once the event is stored; it never rejects.
    */
-  markInteractionAnswer(message: MessageRef): void {
-    this.#interactionAnswers.add(messageRefKey(message));
+  markInteractionAnswer(message: MessageRef): Promise<void> {
+    const key = messageRefKey(message);
+    this.#interactionAnswers.add(key);
     if (this.#interactionAnswers.size > MAX_TRACKED_INTERACTION_ANSWERS) {
       const oldest = this.#interactionAnswers.values().next().value;
       if (oldest !== undefined) this.#interactionAnswers.delete(oldest);
     }
+    const store = this.#events;
+    return store.append(Object.freeze({
+      eventId: `interaction-answered:${key}`,
+      conversation: message.conversation,
+      timestamp: Date.now(),
+      type: 'message.interaction_answered' as const,
+      message: Object.freeze({ conversation: message.conversation, id: message.id }),
+    })).then(() => undefined, (error: unknown) => {
+      // The in-memory mark still holds for this process; only a restart can bring the message back.
+      logger.warn(`interaction answer not stored | reason: ${error instanceof Error ? error.message : String(error)}`);
+    });
   }
 
   commitContext(conversation: ConversationRef, consumer: string, cursor: number): Promise<void> {
@@ -423,7 +469,7 @@ function aggregateConversationContext(
   }
   for (const { sequence, event } of events) {
     // #996: these reach the model only through the short ephemeral `[Scene events]` block.
-    if (SCENE_ONLY_EVENT_TYPES.has(event.type)) continue;
+    if (SCENE_ONLY_EVENT_TYPES.has(event.type) || event.type === 'message.interaction_answered') continue;
     if (event.type === 'message.created' || event.type === 'message.updated') {
       if (latestMessages.get(messageRefKey(event.message.ref))?.sequence !== sequence) continue;
       if (excluded.has(event.message.ref.id)) continue;
@@ -494,6 +540,7 @@ function describeConversationEvent(event: ConversationEvent): string {
       return `${event.member.displayName ?? event.member.id} (${event.member.id}) role ${event.role} was ${event.enabled ? 'enabled' : 'disabled'}${actor ? ` by ${actor}` : ''}.`;
     case 'message.created':
     case 'message.updated':
+    case 'message.interaction_answered':
     case 'scene.join_requested':
     case 'scene.notice_updated':
     case 'member.card_changed':
