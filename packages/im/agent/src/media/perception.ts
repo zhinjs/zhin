@@ -37,12 +37,38 @@ export {
 export interface MediaPerception {
   /** Description text, already trimmed to `maxChars`. */
   readonly text: string;
+  /**
+   * The provider that described it, under the same id its request is reported with
+   * ({@link MediaPerceptionCall.provider}, the service id when the port knows it): trace provenance and
+   * `model_calls` name one id (#1250).
+   */
   readonly provider: string;
   readonly model: string;
   /** The description came from the per-port cache (same bytes seen before). */
   readonly cached: boolean;
-  /** Tokens the perception call spent. Absent for cache hits or when the provider reported none. */
+  /**
+   * Tokens the perception requests spent in all (every candidate tried). Absent for cache hits. A request
+   * whose provider reported no usage counts with an estimate (see {@link MediaPerceptionCall.usageReported}).
+   */
   readonly usage?: Usage;
+  /** One entry per request that reached a provider, in order (#1250: each is a model call of the turn). */
+  readonly calls?: readonly MediaPerceptionCall[];
+}
+
+/** One perception request to one candidate (#1250 perception-candidates-one-call). */
+export interface MediaPerceptionCall {
+  /** The service id of the candidate's Profile when the port knows it ({@link LlmMediaPerceptionOptions.callProvider}). */
+  readonly provider: string;
+  readonly model: string;
+  /**
+   * `completed`: the provider answered (possibly with empty text); `failed`: the request errored after it
+   * was sent; `cancelled`: the turn was cancelled while the request was in flight.
+   */
+  readonly status: 'completed' | 'failed' | 'cancelled';
+  readonly usage: Usage;
+  /** False when `usage` is an estimate: the request failed, or the provider reported no usage. */
+  readonly usageReported: boolean;
+  readonly durationMs: number;
 }
 
 /** Host-owned boundary that describes media the turn's model cannot take. */
@@ -52,8 +78,12 @@ export interface MediaPerceptionPort {
   readonly maxItemsPerTurn: number;
   /** Whether this payload is in scope (kind listed and, for files, a PDF). */
   accepts(payload: MediaBinaryPayload): boolean;
-  /** Describe one payload. Throws (or returns undefined) on failure; callers fall back to the placeholder. */
-  describe(payload: MediaBinaryPayload, signal?: AbortSignal): Promise<MediaPerception | undefined>;
+  /**
+   * Describe one payload. Throws (or returns undefined) on failure; callers fall back to the placeholder.
+   * `observe` sees every request that reached a provider as it ends (completed, failed or cancelled), also
+   * when `describe` then throws: each is one model call of the turn (#1250).
+   */
+  describe(payload: MediaBinaryPayload, signal?: AbortSignal, observe?: (call: MediaPerceptionCall) => void): Promise<MediaPerception | undefined>;
 }
 
 const PERCEPTION_INSTRUCTIONS: Readonly<Record<PerceptionMediaKind, string>> = Object.freeze({
@@ -82,6 +112,12 @@ export interface LlmMediaPerceptionOptions {
   readonly resilience?: ProviderResilienceConfig;
   readonly timers?: ProviderTimers;
   readonly onEvent?: (event: ProviderResilienceEvent) => void;
+  /**
+   * The provider id a request and its description are reported under ({@link MediaPerceptionCall.provider},
+   * {@link MediaPerception.provider}) for a candidate's Profile id: the service id, as chat calls report
+   * theirs (#1250). Absent or unknown = the Profile id.
+   */
+  readonly callProvider?: (profileId: string) => string | undefined;
 }
 
 /** sha256 over kind + mime + bytes; identical stickers and memes share one description. */
@@ -113,14 +149,17 @@ const FAILED_PERCEPTION_MEDIA_TOKENS: Readonly<Record<string, number>> = Object.
   file: 2_000,
 });
 
-/** A perception call that failed after reaching the provider; `usage` is a conservative estimate. */
+/** Perception requests that reached a provider but gave no description; `usage` sums them (estimates included). */
 export class MediaPerceptionFailedError extends Error {
   readonly usage: Usage;
+  /** Every request sent, one per candidate tried (#1250: each failed request is still a model call of the turn). */
+  readonly calls: readonly MediaPerceptionCall[];
 
-  constructor(cause: unknown, usage: Usage) {
+  constructor(cause: unknown, usage: Usage, calls: readonly MediaPerceptionCall[] = []) {
     super(cause instanceof Error ? cause.message : String(cause), { cause });
     this.name = 'MediaPerceptionFailedError';
     this.usage = usage;
+    this.calls = Object.freeze([...calls]);
   }
 }
 
@@ -159,7 +198,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
       if (!config.kinds.includes(payload.kind)) return false;
       return payload.kind !== 'file' || isPdf(payload);
     },
-    async describe(payload: MediaBinaryPayload, signal?: AbortSignal): Promise<MediaPerception | undefined> {
+    async describe(payload: MediaBinaryPayload, signal?: AbortSignal, observe?: (call: MediaPerceptionCall) => void): Promise<MediaPerception | undefined> {
       signal?.throwIfAborted();
       if (payload.kind === 'audio' || !config.kinds.includes(payload.kind) || (payload.kind === 'file' && !isPdf(payload))) return undefined;
       const contentKey = perceptionCacheKey(payload);
@@ -187,17 +226,26 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         timestamp: Date.now(),
       };
       const total: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-      const addUsage = (usage?: Usage) => {
-        if (!usage) return;
-        total.prompt_tokens += usage.prompt_tokens;
-        total.completion_tokens += usage.completion_tokens;
-        total.total_tokens += usage.total_tokens;
+      const calls: MediaPerceptionCall[] = [];
+      const promptEstimate = estimatePromptTokens(`${PERCEPTION_SYSTEM_PROMPT}\n${PERCEPTION_INSTRUCTIONS[payload.kind]}`)
+        + (FAILED_PERCEPTION_MEDIA_TOKENS[payload.kind] ?? 1_000);
+      const record = (call: MediaPerceptionCall) => {
+        const frozen = Object.freeze(call);
+        calls.push(frozen);
+        total.prompt_tokens += call.usage.prompt_tokens;
+        total.completion_tokens += call.usage.completion_tokens;
+        total.total_tokens += call.usage.total_tokens;
+        try { observe?.(frozen); } catch { /* Accounting must not change the perception result. */ }
       };
+      const totals = () => total.total_tokens || calls.length
+        ? { usage: { ...total }, calls: Object.freeze([...calls]) }
+        : {};
       let lastError: unknown;
       let empty: MediaPerception | undefined;
       for (const candidate of [config, ...(config.fallbacks ?? [])]) {
         signal?.throwIfAborted();
-        let sent = false;
+        let sentAt: number | undefined;
+        const provider = options.callProvider?.(candidate.provider) ?? candidate.provider;
         try {
           const model = await runtime.model(candidate.provider, candidate.model);
           if (!(model.input ?? ['text']).includes(payload.kind)) {
@@ -211,31 +259,39 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
           const port = createResilientCompletionPort(runtime, {
             config: resilience, timers: options.timers, onEvent: options.onEvent,
           });
-          sent = true;
+          sentAt = Date.now();
           const reply = await port.complete(model, { systemPrompt: PERCEPTION_SYSTEM_PROMPT, messages: [user] }, { signal });
-          addUsage(perceptionUsageOf(reply.usage));
-          const text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
-          const result = { text, provider: candidate.provider, model: candidate.model };
+          const answer = assistantAnswerText(reply);
+          const reported = perceptionUsageOf(reply.usage);
+          // #1250: a provider that reports no usage still served a request; it counts with an estimate.
+          const estimated = reported ? undefined : (() => {
+            const completion = estimatePromptTokens(answer);
+            return { prompt_tokens: promptEstimate, completion_tokens: completion, total_tokens: promptEstimate + completion };
+          })();
+          record({ provider, model: candidate.model, status: 'completed',
+            usage: reported ?? estimated!, usageReported: Boolean(reported), durationMs: Date.now() - sentAt });
+          const text = truncatePerceptionText(answer, config.maxChars);
+          const result = { text, provider, model: candidate.model };
           // 空回答同样计费，但不写缓存；继续尝试下一个候选。
           if (!text) {
             empty = { ...result, cached: false };
             continue;
           }
           remember(key, result);
-          return { ...result, cached: false, ...(total.total_tokens ? { usage: total } : {}) };
+          return { ...result, cached: false, ...totals() };
         } catch (error) {
-          // 取消属于当前回合，不能借备用模型启动新的请求。
-          if (signal?.aborted) throw error;
-          if (sent) {
-            const prompt = estimatePromptTokens(`${PERCEPTION_SYSTEM_PROMPT}\n${PERCEPTION_INSTRUCTIONS[payload.kind]}`)
-              + (FAILED_PERCEPTION_MEDIA_TOKENS[payload.kind] ?? 1_000);
-            addUsage({ prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt });
+          // 取消属于当前回合，不能借备用模型启动新的请求；已发出的请求仍记一次调用。
+          if (sentAt !== undefined) {
+            record({ provider, model: candidate.model, status: signal?.aborted ? 'cancelled' : 'failed',
+              usage: { prompt_tokens: promptEstimate, completion_tokens: 0, total_tokens: promptEstimate },
+              usageReported: false, durationMs: Date.now() - sentAt });
           }
+          if (signal?.aborted) throw error;
           lastError = error;
         }
       }
-      if (empty) return { ...empty, ...(total.total_tokens ? { usage: total } : {}) };
-      if (total.total_tokens) throw new MediaPerceptionFailedError(lastError, total);
+      if (empty) return { ...empty, ...totals() };
+      if (calls.length) throw new MediaPerceptionFailedError(lastError, { ...total }, calls);
       throw lastError;
     },
   });

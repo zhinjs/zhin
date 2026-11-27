@@ -82,4 +82,20 @@ describe('readable usage logs', () => {
     expect(tracker.drainEvents()).toEqual([]);
     expect(JSON.stringify(events)).not.toContain('PRIVATE');
   });
+
+  it('records an inspect_image perception request as a media_perception call, estimates marked as not reported (#1250)', () => {
+    const tracker = trackTurnCompletionUsage({ complete: async () => { throw new Error('unused'); }, completeSimple: async () => { throw new Error('unused'); } });
+    tracker.recordMediaCall({ provider: 'svc-a', model: 'primary', status: 'cancelled', usageReported: false, durationMs: 5,
+      usage: { prompt_tokens: 900, completion_tokens: 0, total_tokens: 900 } });
+    tracker.recordMediaCall({ provider: 'svc-b', model: 'backup', status: 'completed', usageReported: true, durationMs: 7,
+      usage: { prompt_tokens: 300, completion_tokens: 12, total_tokens: 312 } });
+    const events = tracker.drainEvents();
+    expect(events).toEqual([
+      expect.objectContaining({ purpose: 'media_perception', provider: 'svc-a', model: 'primary', stopReason: 'aborted', durationMs: 5,
+        usage: expect.objectContaining({ totalTokens: 900, reported: { input: false, output: false, totalTokens: false } }) }),
+      expect.objectContaining({ purpose: 'media_perception', provider: 'svc-b', stopReason: 'stop',
+        usage: expect.not.objectContaining({ reported: expect.anything() }) }),
+    ]);
+    expect(tracker.usage.totalTokens).toBe(1_212);
+  });
 });

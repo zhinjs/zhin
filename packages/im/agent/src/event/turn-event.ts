@@ -101,6 +101,11 @@ export interface MediaResolutionEvent {
     model: string;
     cached: boolean;
   };
+  /**
+   * #1250 trace-media-perception-provenance-clipped: the perception description injected for this item
+   * (untrusted, derived from user media). The trace keeps it bounded and marks truncation.
+   */
+  description?: string;
 }
 
 export interface ToolCallEvent {
@@ -168,6 +173,11 @@ export interface UsageEvent {
    * whether adjacent requests could have hit a prompt cache (#1250).
    */
   prefixHash?: string;
+  /**
+   * What the call was for when it is not the turn's own chat request (#1250): `media_perception` is the
+   * perception pre-pass that described inbound media the turn's model cannot take.
+   */
+  purpose?: 'media_perception';
   usage: TurnUsage;
 }
 

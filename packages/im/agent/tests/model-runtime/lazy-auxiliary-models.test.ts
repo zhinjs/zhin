@@ -57,7 +57,7 @@ describe('auxiliary models are acquired only at their consuming boundary', () =>
     try {
       const port = createScopedMediaPerceptionPort({ scope, resilience: { maxRetries: 0 } })!;
       expect(await port.describe({ kind: 'image', mimeType: 'image/png', base64: Buffer.from('synthetic').toString('base64') }))
-        .toMatchObject({ text: 'done', provider: 'backup' });
+        .toMatchObject({ text: 'done', provider: 'service' }); // The backup Profile's service id, as its request is reported (#1250).
       expect(f.checked.indexOf('vision')).toBeLessThan(f.checked.indexOf('backup'));
     } finally { await scope.release(); }
   });

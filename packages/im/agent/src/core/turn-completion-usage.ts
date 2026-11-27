@@ -5,6 +5,7 @@ import type { UsageEvent } from '../event/turn-event.js';
 import { turnUsageEvent } from './turn-event-mapper.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import type { InteractiveRun } from './interactive-run.js';
+import type { MediaPerceptionCall } from '../media/perception.js';
 
 /**
  * Counts completed provider responses before reply validation, including rejected replies.
@@ -32,7 +33,11 @@ export function trackTurnCompletionUsage(
   readonly usage: TokenUsage;
   drainEvents(): UsageEvent[];
   hasReported(message: object): boolean;
-  recordMediaUsage(usage: Usage, provider?: string, model?: string): void;
+  /**
+   * One perception request of an `inspect_image` projection (#1250): failed and cancelled requests too,
+   * estimates marked as not reported, as the inbound perception pre-pass reports them.
+   */
+  recordMediaCall(call: MediaPerceptionCall): void;
 } {
   const total: TokenUsage = { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } };
   const pending: UsageEvent[] = [];
@@ -111,14 +116,18 @@ export function trackTurnCompletionUsage(
     get usage() { return { ...total, cost: { ...total.cost } }; },
     drainEvents: () => pending.splice(0),
     hasReported: assistant => reported.has(assistant),
-    recordMediaUsage: (usage, provider, model) => {
+    recordMediaCall: (call) => {
+      const usage = call.usage;
       run?.recordUsage(usage.total_tokens);
       const tokens: TokenUsage = { input: usage.prompt_tokens, output: usage.completion_tokens,
-        totalTokens: usage.total_tokens, cacheRead: 0, cacheWrite: 0, cost: { ...EMPTY_TOKEN_USAGE.cost } };
+        totalTokens: usage.total_tokens, cacheRead: 0, cacheWrite: 0, cost: { ...EMPTY_TOKEN_USAGE.cost },
+        ...(call.usageReported ? {} : { reported: { input: false, output: false, totalTokens: false } }) };
       total.input += tokens.input;
       total.output += tokens.output;
       total.totalTokens += tokens.totalTokens;
-      pending.push(turnUsageEvent(tokens, { provider: provider ?? 'media-perception', model: model ?? 'unknown', stopReason: 'stop' }));
+      pending.push({ ...turnUsageEvent(tokens, { provider: call.provider || 'media-perception', model: call.model || 'unknown',
+        stopReason: call.status === 'completed' ? 'stop' : call.status === 'cancelled' ? 'aborted' : 'error',
+        durationMs: call.durationMs }), purpose: 'media_perception' });
     },
   };
 }

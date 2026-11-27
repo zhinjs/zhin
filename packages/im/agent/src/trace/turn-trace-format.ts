@@ -1,6 +1,6 @@
 /** Human-readable terminal rendering of a TurnTrace for `zhin trace`. */
 import { formatDateTime } from '@zhin.js/plugin-runtime';
-import { turnTraceTotalUsage, type TurnTrace, type TurnTraceToolCall, type TurnTraceTrigger } from './turn-trace.js';
+import { stripControlCharacters, turnTraceTotalUsage, type TurnTrace, type TurnTraceToolCall, type TurnTraceTrigger } from './turn-trace.js';
 import { CONTEXT_BUDGET_SEGMENTS, type ContextBudgetReport, type ContextBudgetSegment } from './context-budget.js';
 
 const STATUS_LABEL: Record<TurnTrace['termination']['status'], string> = {
@@ -28,6 +28,11 @@ export interface FormatTurnTraceOptions {
    * label people configured, #1250). Unknown ids fall back to the model name alone.
    */
   readonly providerLabel?: (provider: string) => string | undefined;
+}
+
+function hasEstimatedCall(trace: TurnTrace): boolean {
+  return trace.model_calls.some(call => call.reported?.input === false || call.reported?.output === false
+    || call.reported?.totalTokens === false) || (trace.subagents ?? []).some(hasEstimatedCall);
 }
 
 export function formatTurnTrace(trace: TurnTrace, options: FormatTurnTraceOptions = {}): string {
@@ -105,13 +110,17 @@ function renderTrace(
     lines.push(`${indent}  首个失败步骤: ${failingTool.tool_name} ${failingTool.status}${failingTool.error ? ` — ${failingTool.error}` : ''}`);
   }
 
+  // #1250: a call whose provider reported no usage (failed / cancelled perception, no usage in the reply) holds
+  // an estimate: its tokens print as `?`, as `[ai.usage]` does, and the totals say they include estimates.
+  const estimated = hasEstimatedCall(trace);
+  const estimateNote = estimated ? '（含估算）' : '';
   const sub = trace.subagent_usage;
   if (sub && sub.model_calls > 0) {
     // #1250: the parent total includes its sub-agents; say how much is whose.
     const total = turnTraceTotalUsage(trace);
-    lines.push(`${indent}  模型调用 ${total.model_calls} 次（自身 ${trace.model_calls.length}，子 agent ${sub.model_calls}），tokens 输入 ${total.prompt_tokens} / 输出 ${total.completion_tokens} / 合计 ${total.total_tokens}（自身 ${trace.usage.total_tokens}，子 agent ${sub.total_tokens}）`);
+    lines.push(`${indent}  模型调用 ${total.model_calls} 次（自身 ${trace.model_calls.length}，子 agent ${sub.model_calls}），tokens 输入 ${total.prompt_tokens} / 输出 ${total.completion_tokens} / 合计 ${total.total_tokens}（自身 ${trace.usage.total_tokens}，子 agent ${sub.total_tokens}）${estimateNote}`);
   } else {
-    lines.push(`${indent}  模型调用 ${trace.model_calls.length} 次，tokens 输入 ${trace.usage.prompt_tokens} / 输出 ${trace.usage.completion_tokens} / 合计 ${trace.usage.total_tokens}`);
+    lines.push(`${indent}  模型调用 ${trace.model_calls.length} 次，tokens 输入 ${trace.usage.prompt_tokens} / 输出 ${trace.usage.completion_tokens} / 合计 ${trace.usage.total_tokens}${estimateNote}`);
   }
   const cached = trace.model_calls.reduce((sum, call) => sum + (call.cache_read_tokens ?? 0), 0);
   if (cached > 0 && trace.usage.prompt_tokens > 0) {
@@ -122,7 +131,25 @@ function renderTrace(
     const reasoning = call.reasoning_tokens ? ` reasoning=${call.reasoning_tokens}` : '';
     const cacheWrite = call.cache_write_tokens !== undefined ? ` cache_write=${call.cache_write_tokens}` : '';
     const model = call.model ? ` model=${modelDisplay(call.provider, call.model, providerLabel)}` : '';
-    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}${cacheWrite}${model}`);
+    const purpose = call.purpose === 'media_perception' ? ' （识图）' : '';
+    const input = call.reported?.input === false ? '?' : call.prompt_tokens;
+    const output = call.reported?.output === false ? '?' : call.completion_tokens;
+    lines.push(`${indent}    #${call.index} in=${input} out=${output}${cache}${reasoning}${cacheWrite}${model}${purpose}`);
+  }
+  if (trace.media?.length) {
+    // #1250 trace-media-perception-provenance-clipped: which perception model described each item, and what it said.
+    lines.push(`${indent}  入站媒体 ${trace.media.length} 项`);
+    for (const media of trace.media) {
+      const source = media.provenance
+        ? ` · 识图 ${modelDisplay(media.provenance.provider, media.provenance.model, providerLabel)} · ${media.provenance.cached ? '缓存命中' : '新调用'}`
+        : '';
+      lines.push(`${indent}    ${stripControlCharacters(`#${media.index} ${media.kind} ${media.status} ${media.code}${source}`)}`);
+      if (media.description !== undefined) {
+        const cut = media.description_truncated ? `（已截断，共 ${media.description_chars} 字符）` : '';
+        // Also for traces stored before control characters were stripped at record time.
+        lines.push(`${indent}      描述${cut}: ${stripControlCharacters(media.description).replace(/\s+/gu, ' ')}`);
+      }
+    }
   }
 
   if (trace.context_budget) lines.push(...renderContextBudget(trace.context_budget, indent));

@@ -8,7 +8,7 @@
  * tools are offered, its trust narrows the policy, and the mail's budget grant
  * caps and is charged for the model calls the turn makes.
  */
-import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage } from '@zhin.js/ai';
+import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage, type AgentMessage, type MediaContentBlock, type ModelInputModality } from '@zhin.js/ai';
 import {
   agentOf,
   canCall,
@@ -54,8 +54,10 @@ import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../tur
 import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
 import { authorizeActorAttachments, collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
 import type { OutboundMediaAuthority } from '../media/media-normalize.js';
+import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
+import { recordDelegatedMediaSkips, type DelegatedMediaSkipReason } from './delegated-media-notice.js';
 import type { FileRole } from '../security/file-role-policy.js';
-import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
+import { createTurnIngress, type TurnIngress, type TurnMedia, type TurnPolicyContext } from '../turn/turn-ingress.js';
 import type {
   ActorModelSelection,
   ActorModelSource,
@@ -384,7 +386,11 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
     const { mediaPerception: _rootPerception, ...current } = getAgentTurnConfiguration() ?? {};
     return runWithAgentTurnConfiguration({ ...current, models }, work);
   };
+  let rootMedia: DelegatedMediaGrant | undefined;
   try {
+    const grant = await delegatedRootMedia(options, run, (models?.chat.model ?? host.getTurnExecution().model).input, turnSignal);
+    rootMedia = grant;
+    recordDelegatedMediaSkips(harness, batch.map(item => item.id), grant.skipped);
     const result = await withModels(() => collectAgentLoopTurnRun(options.core.runText({
       host,
       sessionId: sessionKey,
@@ -407,7 +413,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
       personaEnhanced: persona,
       modelId: model.modelId,
       modelCandidates: [...model.modelCandidates],
-      initialMessages: [createUserMessage(text)],
+      initialMessages: withRootMedia(createUserMessage(text), grant.blocks),
       signal: turnSignal,
       deferredStats: plan.deferredStats,
       deferredController: plan.controller,
@@ -446,6 +452,8 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
       ? { status: 'cancelled', content: abortReason(turnSignal) }
       : { status: 'failed', content: error instanceof Error ? error.message : String(error) };
   }
+  // #1250: a failed or cancelled turn did not use the attached media; a retry to this agent attaches it again.
+  if (outcome.status === 'failed' || outcome.status === 'cancelled') rootMedia?.release();
 
   // Producers that do not stream usage events still report iterations and totals.
   const calls = modelRequests > 0 ? modelRequests : reportedIterations;
@@ -482,6 +490,187 @@ const TRUST_FILE_ROLE: Readonly<Record<InitiatorTrustLevel, FileRole>> = Object.
   trusted_member: 'admin',
   group_member: 'user',
 });
+
+/** Framework line next to the human's media handed to a delegated agent (#1250 vision-ask-after-perception). */
+export const DELEGATED_MEDIA_NOTE = '[The human\'s original image / media from this conversation is attached to this message; look at it directly.]';
+
+/**
+ * Bounds on the root turn's media handed to delegated agents (#1250), per root turn and separate from the
+ * root turn's image inspection budget (a delegation never uses up the root model's `inspect_image`):
+ * at most {@link DELEGATED_MEDIA_MAX_ITEMS} attachments and {@link DELEGATED_MEDIA_MAX_BYTES} decoded bytes
+ * in all, every kind (image, video, file) counted; each agent gets the media at most once.
+ */
+export const DELEGATED_MEDIA_MAX_ITEMS = 8;
+export const DELEGATED_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+
+interface DelegatedMediaState {
+  /** Agents that hold a reservation for (or received) the root turn's media. */
+  readonly attachedTo: Set<string>;
+  items: number;
+  bytes: number;
+  /**
+   * Resolutions shared between delegations of one root turn: an item in flight, or one that was handed to an
+   * agent. A block nobody received (it did not fit, or its delegation was cancelled) is not kept.
+   */
+  readonly resolved: Map<number, Promise<MediaContentBlock | undefined>>;
+  /** Root media items some agent received. */
+  readonly handed: Set<number>;
+}
+
+const delegatedMediaByRootTurn = new WeakMap<object, DelegatedMediaState>();
+
+function delegatedMediaState(rootTurn: object): DelegatedMediaState {
+  let state = delegatedMediaByRootTurn.get(rootTurn);
+  if (!state) {
+    state = { attachedTo: new Set(), items: 0, bytes: 0, resolved: new Map(), handed: new Set() };
+    delegatedMediaByRootTurn.set(rootTurn, state);
+  }
+  return state;
+}
+
+function base64Bytes(value: string): number {
+  return Math.floor(value.replace(/\s+/gu, '').length * 3 / 4);
+}
+
+function blockBytes(block: MediaContentBlock): number {
+  const media = (block.data as { media?: { kind?: string; value?: string } } | undefined)?.media;
+  if (media?.kind !== 'base64' || typeof media.value !== 'string') return 0;
+  return base64Bytes(media.value);
+}
+
+/** Decoded size known before resolving (inline base64); `undefined` for URLs, paths and platform refs. */
+function knownBytes(item: TurnMedia): number | undefined {
+  return item.source.kind === 'base64' ? base64Bytes(item.source.value) : undefined;
+}
+
+/** Waits for `promise` but gives up when `signal` aborts; the shared promise itself is left running. */
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason ?? new Error('aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new Error('aborted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
+}
+
+function sharedResolution(state: DelegatedMediaState, rootTurn: TurnIngress, item: TurnMedia, index: number): Promise<MediaContentBlock | undefined> {
+  const cached = state.resolved.get(index);
+  if (cached) return cached;
+  const pending = resolveTurnMediaInjection([item], {
+    ...(rootTurn.ports.references ? { references: rootTurn.ports.references } : {}),
+    signal: rootTurn.signal,
+    providerInput: [item.kind],
+    ...(rootTurn.input.inboundMediaRoots ? { inboundMediaRoots: rootTurn.input.inboundMediaRoots } : {}),
+    ...(rootTurn.input.inboundMediaOrigins ? { inboundMediaOrigins: rootTurn.input.inboundMediaOrigins } : {}),
+    // The rejection log line names the root turn's scene and message, as the root resolution does.
+    ...(rootTurn.origin.kind === 'im' ? {
+      scene: `${rootTurn.origin.platform}/${rootTurn.origin.scope}/${rootTurn.origin.sceneId}`,
+      ...(rootTurn.origin.messageId ? { messageId: rootTurn.origin.messageId } : {}),
+    } : { scene: rootTurn.origin.kind }),
+  }).then(injection => injection.blocks[0], () => undefined);
+  state.resolved.set(index, pending);
+  // Settled before any waiting delegation goes on: dropped unless an agent receives it (that one sets it back).
+  void pending.then(() => {
+    if (!state.handed.has(index) && state.resolved.get(index) === pending) state.resolved.delete(index);
+  });
+  return pending;
+}
+
+/** The root media handed to one actor turn, and the reservation it holds. */
+interface DelegatedMediaGrant {
+  readonly blocks: MediaContentBlock[];
+  /** Why requested media was not (all) attached; told to the asking model. */
+  readonly skipped: readonly DelegatedMediaSkipReason[];
+  /** Gives the reservation back (agent, items, bytes): a failed or cancelled turn did not use the media. */
+  release(): void;
+}
+
+const noGrant = (...skipped: DelegatedMediaSkipReason[]): DelegatedMediaGrant =>
+  ({ blocks: [], skipped, release: () => undefined });
+
+/**
+ * #1250 vision-ask-after-perception: the human's own media of the root turn goes with an ask / delegate
+ * only when the sending agent asked for it (`attach_media: true`) and this agent's model can take that kind,
+ * so it looks at the original instead of a second-hand description or link. Never to the entry agent;
+ * never audio; once per agent and root turn; bounded by {@link DELEGATED_MEDIA_MAX_ITEMS} /
+ * {@link DELEGATED_MEDIA_MAX_BYTES}. The media is read with the root turn's own authority (references,
+ * inbound roots and origins), and the actor turn persists no conversation.
+ *
+ * The reservation is taken before the first await (a parallel delegation to the same agent attaches nothing)
+ * and given back when nothing is handed over (cancelled while resolving, nothing readable or fitting) or when
+ * the actor turn then fails or is cancelled ({@link DelegatedMediaGrant.release}), so a retry still attaches.
+ * An item whose size is known is skipped before it is downloaded when it cannot fit; an item is resolved once
+ * across the delegations of a root turn that receive it (the root turn's own resolution is separate).
+ */
+async function delegatedRootMedia(
+  options: ActorTurnRunnerOptions,
+  run: ActorTurnRun,
+  modelInput: readonly ModelInputModality[] | undefined,
+  signal: AbortSignal,
+): Promise<DelegatedMediaGrant> {
+  const { rootTurn, directory } = options;
+  const requested = run.batch.some(mail => mail.from.kind === 'actor'
+    && (mail.body.kind === 'ask' || mail.body.kind === 'delegate') && mail.body.attachMedia === true);
+  if (!requested) return noGrant();
+  const media = rootTurn.input.media?.filter(item => item.kind !== 'audio');
+  if (!media?.length) return noGrant('no_media');
+  if (run.agent.name === directory.entry.name) return noGrant('entry_agent');
+  const state = delegatedMediaState(rootTurn);
+  if (state.attachedTo.has(run.agent.name)) return noGrant('already_attached');
+  const input = new Set<ModelInputModality>(modelInput ?? ['text']);
+  const wanted = (rootTurn.input.media ?? []).flatMap((item, index) =>
+    item.kind !== 'audio' && input.has(item.kind) ? [{ item, index }] : []);
+  if (!wanted.length) return noGrant('model_input');
+  const skipped = new Set<DelegatedMediaSkipReason>(wanted.length < media.length ? ['model_input'] : []);
+  const agentName = run.agent.name;
+  state.attachedTo.add(agentName);
+  const blocks: MediaContentBlock[] = [];
+  let items = 0;
+  let bytes = 0;
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    state.attachedTo.delete(agentName);
+    state.items -= items;
+    state.bytes -= bytes;
+  };
+  try {
+    for (const { item, index } of wanted) {
+      if (state.items >= DELEGATED_MEDIA_MAX_ITEMS) { skipped.add('limit'); break; }
+      const known = knownBytes(item);
+      if (known !== undefined && state.bytes + known > DELEGATED_MEDIA_MAX_BYTES) { skipped.add('limit'); continue; }
+      const block = await untilAborted(sharedResolution(state, rootTurn, item, index), signal);
+      signal.throwIfAborted();
+      if (!block) { skipped.add('unavailable'); continue; }
+      const size = blockBytes(block);
+      if (state.items >= DELEGATED_MEDIA_MAX_ITEMS || state.bytes + size > DELEGATED_MEDIA_MAX_BYTES) {
+        skipped.add('limit');
+        continue;
+      }
+      state.items += 1;
+      state.bytes += size;
+      items += 1;
+      bytes += size;
+      if (!state.handed.has(index)) {
+        state.handed.add(index);
+        state.resolved.set(index, Promise.resolve(block));
+      }
+      blocks.push(block);
+    }
+  } finally {
+    if (!blocks.length) release();
+  }
+  return { blocks, skipped: [...skipped], release: blocks.length ? release : () => undefined };
+}
+
+function withRootMedia(message: AgentMessage, blocks: readonly MediaContentBlock[]): AgentMessage[] {
+  if (!blocks.length) return [message];
+  return applyInboundMediaInjection([message], { blocks: [...blocks], textAppends: [DELEGATED_MEDIA_NOTE], outcomes: [] });
+}
 
 /** The actor's own media authority: its narrowed filesystem / network policy and its trust's file role. */
 function actorMediaAuthority(policy: Readonly<TurnPolicyContext>, trust: InitiatorTrustLevel): OutboundMediaAuthority {

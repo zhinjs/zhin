@@ -90,8 +90,68 @@ describe('resolveTurnMediaInjection', () => {
       { kind: 'image', source: { kind: 'path', value: file } },
     ], { inboundMediaRoots: [root] });
     expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[Media rejected:media_validation_failed: image]']);
-    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'rejected', code: 'media_validation_failed' }]);
+    // #1250 inbound-media-reject-reason-opaque: the bytes are a PDF, not the declared image.
+    expect(injection.textAppends).toEqual(['[Media rejected:mime_mismatch: image]']);
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'rejected', code: 'mime_mismatch' }]);
+  });
+
+  describe('拒绝原因码与日志（#1250 inbound-media-reject-reason-opaque）', () => {
+    async function rejected(media: Parameters<typeof resolveTurnMediaInjection>[0], transport: NetworkTransport = mediaTransport) {
+      const { getLogger } = await import('@zhin.js/logger');
+      const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
+      try {
+        const injection = await resolveTurnMediaInjection(media, { mediaTransport: transport, scene: 'qq/group/42', messageId: 'm-9' });
+        return { injection, lines: warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('inbound_media_rejected')) };
+      } finally { warn.mockRestore(); }
+    }
+    const url = (value: string) => [{ kind: 'image' as const, source: { kind: 'url' as const, value } }];
+
+    it.each([
+      ['http://cdn.example/a.png?token=SECRET', 'scheme_unsupported', 'http', 'cdn.example'],
+      ['ftp://cdn.example/a.png', 'scheme_unsupported', 'ftp', 'cdn.example'],
+      ['https://127.0.0.1/a.png?sig=SECRET', 'host_not_allowed', 'https', '127.0.0.1'],
+      ['https://cdn.example:8443/a.png', 'host_not_allowed', 'https', 'cdn.example'],
+    ])('%s → %s', async (value, code, scheme, host) => {
+      const { injection, lines } = await rejected(url(value));
+      expect(injection.outcomes).toEqual([{ kind: 'image', status: 'rejected', code }]);
+      expect(injection.textAppends).toEqual([`[Media rejected:${code}: image]`]);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain(`reason: ${code}`);
+      expect(lines[0]).toContain('scene: qq/group/42');
+      expect(lines[0]).toContain('message: m-9');
+      expect(lines[0]).toContain(`scheme: ${scheme}`);
+      expect(lines[0]).toContain(`host: ${host}`);
+      expect(lines[0]).not.toMatch(/SECRET|a\.png/u);
+    });
+
+    it('download failures name the reason: HTTP status, oversized body, wrong type, transport error', async () => {
+      const transport = (response: () => Promise<{ status: number; body: Buffer }>): NetworkTransport => ({
+        request: async () => { throw new Error('unexpected'); },
+        requestBytes: async () => ({ statusText: '', headers: {}, ...(await response()) }),
+      });
+      const notFound = await rejected(url('https://cdn.example/a.png'), transport(async () => ({ status: 404, body: Buffer.alloc(0) })));
+      expect(notFound.injection.outcomes[0]!.code).toBe('fetch_failed');
+      expect(notFound.lines[0]).toContain('status: 404');
+      const big = await rejected(url('https://cdn.example/a.png'), transport(async () => { throw new Error('response exceeds 10 bytes'); }));
+      expect(big.injection.outcomes[0]!.code).toBe('too_large');
+      const pdf = await rejected(url('https://cdn.example/a.png'), transport(async () => ({ status: 200, body: Buffer.from('%PDF-1.7\n') })));
+      expect(pdf.injection.outcomes[0]!.code).toBe('mime_mismatch');
+      const reset = await rejected(url('https://cdn.example/a.png'), transport(async () => { throw new Error('ECONNRESET'); }));
+      expect(reset.injection.outcomes[0]!.code).toBe('fetch_failed');
+    });
+
+    it('inline data: wrong type, undecodable, declared oversize — without logging the data', async () => {
+      const inline = (value: string) => [{ kind: 'image' as const, source: { kind: 'base64' as const, value } }];
+      const pdf = await rejected(inline(Buffer.from('%PDF-1.7\n').toString('base64')));
+      expect(pdf.injection.outcomes[0]!.code).toBe('mime_mismatch');
+      expect(pdf.lines[0]).toContain('scheme: base64');
+      expect(pdf.lines[0]).not.toContain(Buffer.from('%PDF-1.7\n').toString('base64'));
+      const broken = await rejected(inline('not*base64!'));
+      expect(broken.injection.outcomes[0]!.code).toBe('invalid_data');
+      const { DEFAULT_MULTIMODAL_CONFIG } = await import('../../src/media/media-types.js');
+      const huge = await rejected(inline(Buffer.alloc(DEFAULT_MULTIMODAL_CONFIG.maxFileBytes + 3, 1).toString('base64')));
+      expect(huge.injection.outcomes[0]!.code).toBe('too_large');
+    });
   });
 
   describe('入站 path 归属（#1250）', () => {
@@ -253,15 +313,64 @@ describe('resolveTurnMediaInjection', () => {
     ]);
   });
 
-  it('platform_ref 未物化时明确 unsupported', async () => {
-    const injection = await resolveMedia([
-      { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-image-id' } },
-    ]);
-    expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[Media unsupported:unresolved_platform_reference: image]']);
-    expect(injection.outcomes).toEqual([
-      { kind: 'image', status: 'unsupported', code: 'unresolved_platform_reference' },
-    ]);
+  it('platform_ref 无 key / 无 resolver：走统一拒绝路径（unmaterialized_platform_reference + 日志）', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
+    try {
+      const injection = await resolveMedia([
+        { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-image-id' } },
+      ], { scene: 'qq/group/42', messageId: 'm-9' });
+      expect(injection.blocks).toEqual([]);
+      expect(injection.textAppends).toEqual(['[Media rejected:unmaterialized_platform_reference: image]']);
+      expect(injection.outcomes).toEqual([
+        { kind: 'image', status: 'rejected', code: 'unmaterialized_platform_reference' },
+      ]);
+      const lines = warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('inbound_media_rejected'));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('reason: unmaterialized_platform_reference');
+      expect(lines[0]).toContain('scene: qq/group/42');
+      expect(lines[0]).toContain('scheme: platform');
+      expect(lines[0]).not.toContain('opaque-image-id');
+    } finally { warn.mockRestore(); }
+  });
+
+  it('平台引用解析失败：日志 reason 统一为 unmaterialized_platform_reference，结局与占位保留解析器的具体码', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
+    try {
+      const injection = await resolveMedia([
+        { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-1' }, referenceKey: 'ref-1' },
+        { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-2' }, referenceKey: 'ref-2' },
+      ], { scene: 'qq/group/42', references: {
+        resolve: async key => key === 'ref-1'
+          ? { status: 'expired', code: 'reference_expired' }
+          : { status: 'forbidden', code: 'reference_forbidden' },
+      }, signal: new AbortController().signal, providerInput: ['text', 'image'] });
+      expect(injection.outcomes).toEqual([
+        { kind: 'image', status: 'failed', code: 'reference_expired' },
+        { kind: 'image', status: 'rejected', code: 'reference_forbidden' },
+      ]);
+      expect(injection.textAppends).toEqual(['[Media failed:reference_expired: image]', '[Media failed:reference_forbidden: image]']);
+      const lines = warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('inbound_media_rejected'));
+      expect(lines).toHaveLength(2);
+      for (const line of lines) expect(line).toContain('reason: unmaterialized_platform_reference');
+      expect(lines[0]).toContain('detail: reference_expired');
+      expect(lines[1]).toContain('detail: reference_forbidden');
+    } finally { warn.mockRestore(); }
+  });
+
+  it('path 超过 maxFileBytes 且未声明大小 → too_large（不是 file_unreadable）', async () => {
+    const { DEFAULT_MULTIMODAL_CONFIG } = await import('../../src/media/media-types.js');
+    const file = path.join(root, 'huge.png');
+    fs.writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    fs.truncateSync(file, DEFAULT_MULTIMODAL_CONFIG.maxFileBytes + 1);
+    const injection = await resolveMedia([{ kind: 'image', source: { kind: 'path', value: file } }],
+      { providerInput: ['text', 'image'], inboundMediaRoots: [root] });
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'rejected', code: 'too_large' }]);
+    const missing = await resolveMedia([{ kind: 'image', source: { kind: 'path', value: path.join(root, 'gone.png') } }],
+      { providerInput: ['text', 'image'], inboundMediaRoots: [root] });
+    expect(missing.outcomes[0]!.status).toBe('rejected');
+    expect(missing.outcomes[0]!.code).not.toBe('too_large');
   });
 
   it('Provider 省略输入能力声明时按 text-only 处理并产生 unsupported 终态', async () => {
@@ -332,7 +441,69 @@ describe('resolveTurnMediaInjection — perception pre-pass', () => {
     expect(injection.outcomes).toEqual([{
       kind: 'image', status: 'derived', code: 'media_perception',
       provenance: { source: 'media_perception', provider: 'g', model: 'flash-lite', cached: false },
+      description: '白底红色圆形',
     }]);
+    // #1250: a fresh description is a provider call even when the port reported no usage; it counts with
+    // zero tokens marked as not reported (usage rows store unknown). Earlier this was no call at all.
+    expect(injection.perceptionCalls).toEqual([expect.objectContaining({ provider: 'g', model: 'flash-lite', status: 'completed',
+      usageReported: false, usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } })]);
+  });
+
+  it('notes after a perception description that the media needs no second look by another agent (#1250 vision-ask-after-perception)', async () => {
+    const { perceptionDelegationNote, PERCEPTION_DELEGATION_NOTE } = await import('../../src/turn/inbound-media.js');
+    const perception = fakePerception(async () => ({ text: 'Octocat', provider: 'g', model: 'm', cached: true }));
+    const described = await resolveMedia([pngTurn()], { providerInput: ['text'], perception });
+    expect(perceptionDelegationNote(described.outcomes)).toBe(PERCEPTION_DELEGATION_NOTE);
+    expect(PERCEPTION_DELEGATION_NOTE).toMatch(/do not ask or delegate another agent/u);
+    const accepted = await resolveMedia([pngTurn()], { providerInput: ['text', 'image'] });
+    expect(perceptionDelegationNote(accepted.outcomes)).toBeUndefined();
+  });
+
+  it('lists each perception request that reached a provider, including failed ones (#1250)', async () => {
+    const usage = { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 };
+    let call = 0;
+    const perception = fakePerception(async () => {
+      call += 1;
+      if (call === 2) {
+        const failed = { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 };
+        throw new MediaPerceptionFailedError(new Error('boom'), failed,
+          [{ provider: 'b', model: 'backup', status: 'failed', usage: failed, usageReported: false, durationMs: 1 }]);
+      }
+      return { text: '图', provider: 'g', model: 'm', cached: false, usage };
+    });
+    const injection = await resolveMedia([pngTurn(), pngTurn()], { providerInput: ['text'], perception });
+    expect(injection.perceptionCalls).toEqual([
+      expect.objectContaining({ kind: 'image', provider: 'g', model: 'm', usage, status: 'completed' }),
+      expect.objectContaining({ kind: 'image', provider: 'b', model: 'backup', status: 'failed', usage: { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 } }),
+    ]);
+  });
+
+  it('reports every request the port made, one per candidate, and still reports them when the turn is cancelled (#1250)', async () => {
+    const reported = { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 };
+    const estimate = { prompt_tokens: 1_050, completion_tokens: 0, total_tokens: 1_050 };
+    const fallback = fakePerception(async (_payload, _signal, observe) => {
+      observe?.({ provider: 'svc-a', model: 'primary', status: 'failed', usage: estimate, usageReported: false, durationMs: 5 });
+      observe?.({ provider: 'svc-b', model: 'backup', status: 'completed', usage: reported, usageReported: true, durationMs: 7 });
+      return { text: '图', provider: 'b', model: 'backup', cached: false, usage: { prompt_tokens: 1_060, completion_tokens: 2, total_tokens: 1_062 } };
+    });
+    const seen: unknown[] = [];
+    const injection = await resolveMedia([pngTurn()], { providerInput: ['text'], perception: fallback, onPerceptionCall: call => seen.push(call) });
+    expect(injection.perceptionCalls).toEqual([
+      expect.objectContaining({ provider: 'svc-a', model: 'primary', status: 'failed', usage: estimate, usageReported: false }),
+      expect.objectContaining({ provider: 'svc-b', model: 'backup', status: 'completed', usage: reported, usageReported: true }),
+    ]);
+    expect(seen).toEqual(injection.perceptionCalls);
+
+    const controller = new AbortController();
+    const cancelled = fakePerception(async (_payload, _signal, observe) => {
+      controller.abort(new Error('stopped'));
+      observe?.({ provider: 'svc-a', model: 'primary', status: 'cancelled', usage: estimate, usageReported: false, durationMs: 3 });
+      throw new Error('aborted');
+    });
+    const during: unknown[] = [];
+    await expect(resolveMedia([pngTurn()], { providerInput: ['text'], perception: cancelled, signal: controller.signal,
+      onPerceptionCall: call => during.push(call) })).rejects.toThrow();
+    expect(during).toEqual([expect.objectContaining({ status: 'cancelled', provider: 'svc-a' })]);
   });
 
   it('sums perception usage across items (including empty descriptions) into perceptionUsage', async () => {

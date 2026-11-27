@@ -326,7 +326,7 @@ export function createTurnCompletionRuntime<TLlmTools extends ReturnType<typeof 
     { ...input.turnContext, sessionKey: input.turnContext.session.key },
     input.imageInspectionBudget ?? { remaining: host.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn },
     host.mediaPerception,
-    completionUsage.recordMediaUsage,
+    completionUsage.recordMediaCall,
   ) : undefined;
   if (localInspection) completionUsage.transport = localInspection.wrap(completionUsage.transport);
 

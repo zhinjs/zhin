@@ -75,8 +75,11 @@ export function createScopedMediaPerceptionPort(options: ScopedMediaPerceptionOp
     timeoutMs: options.settings?.timeoutMs,
     maxItemsPerTurn: options.settings?.maxItemsPerTurn,
   })!;
+  // #1250: usage rows, `ai.usage` and trace model calls name a request's provider by its service id, like chat calls.
+  const services = new Map([primary, ...fallbacks].map(bundle => [bundle.binding.profile.id, bundle.binding.service.id] as const));
   return createLlmMediaPerceptionPort({
     cache: options.cache, cacheNamespace: options.cacheNamespace,
+    callProvider: profileId => services.get(profileId),
     runtime: new ScopedPerceptionRuntime([primary, ...fallbacks]), config,
     resilience: options.resilience, timers: options.timers, onEvent: options.onEvent,
   });

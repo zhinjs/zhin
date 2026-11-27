@@ -12,6 +12,7 @@ import {
   renderPerceptionCaption,
   resolvePerceptionConfig,
   truncatePerceptionText,
+  type MediaPerceptionCall,
   type ResolvedPerceptionConfig,
 } from '../../src/media/perception.js';
 import type { MediaBinaryPayload } from '../../src/media/media-types.js';
@@ -218,8 +219,9 @@ describe('AIService ai.multimodal.perception', () => {
 
 describe('perception fallback chain', () => {
   async function setup(
-    first: 'success' | 'error' | 'empty' | 'hang' | 'text-only' = 'error',
+    first: 'success' | 'no-usage' | 'error' | 'empty' | 'hang' | 'text-only' = 'error',
     backupReply = geminiGenerate.reply({ text: '一只猫的表情包', usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10, totalTokenCount: 110 } }),
+    callProvider?: (profileId: string) => string | undefined,
   ) {
     const primary = createProviderHarness({ sdk: 'google', alias: 'primary' });
     const backup = createProviderHarness({ sdk: 'google', alias: 'backup' });
@@ -233,12 +235,13 @@ describe('perception fallback chain', () => {
       runtime.model = (provider, model) => ({ ...original(provider, model), ...(provider === 'primary' ? { input: ['text'] as const } : {}) });
     } else {
       primary.reply(first === 'success' ? geminiGenerate.reply({ text: '一张截图' })
+        : first === 'no-usage' ? geminiGenerate.reply({ text: '一张截图', usageMetadata: {} })
         : first === 'hang' ? { hang: 'before-headers' } : first === 'empty'
         ? geminiGenerate.reply({ text: '', usageMetadata: { promptTokenCount: 250, candidatesTokenCount: 0, totalTokenCount: 250 } })
         : geminiGenerate.error(400, { message: 'location unsupported', status: 'FAILED_PRECONDITION' }));
     }
     backup.reply(backupReply);
-    const port = createLlmMediaPerceptionPort({ runtime, resilience: NO_RETRY, config: config({
+    const port = createLlmMediaPerceptionPort({ runtime, resilience: NO_RETRY, ...(callProvider ? { callProvider } : {}), config: config({
       provider: 'primary', timeoutMs: 30,
       fallbacks: [{ provider: 'backup', model: backup.modelId }],
     }) });
@@ -285,6 +288,51 @@ describe('perception fallback chain', () => {
     controller.abort(new Error('turn cancelled'));
     await expect(promise).rejects.toThrow();
     expect(backup.requests).toHaveLength(0);
+  });
+
+  it('reports one call per candidate request, under the service id, and none for a cache hit (#1250)', async () => {
+    const { port } = await setup('error', undefined, profile => ({ primary: 'svc-primary', backup: 'svc-backup' })[profile]);
+    const calls: MediaPerceptionCall[] = [];
+    const result = await port.describe(image(), undefined, call => calls.push(call));
+    expect(calls).toEqual([
+      expect.objectContaining({ provider: 'svc-primary', model: 'gemini-3.8-flash', status: 'failed', usageReported: false }),
+      expect.objectContaining({ provider: 'svc-backup', status: 'completed', usageReported: true,
+        usage: { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 } }),
+    ]);
+    expect(calls[0]!.usage.total_tokens).toBeGreaterThan(1_000);
+    expect(result?.usage?.total_tokens).toBe(calls[0]!.usage.total_tokens + 110);
+    // The description names the same id as its request.
+    expect(result?.provider).toBe('svc-backup');
+    const again: MediaPerceptionCall[] = [];
+    await port.describe(image(), undefined, call => again.push(call));
+    expect(again).toEqual([]);
+  });
+
+  it('a success without reported usage is still one call, with an estimate marked as not reported (#1250)', async () => {
+    const { port } = await setup('no-usage');
+    const calls: MediaPerceptionCall[] = [];
+    const result = await port.describe(image(), undefined, call => calls.push(call));
+    expect(calls).toEqual([expect.objectContaining({ provider: 'primary', status: 'completed', usageReported: false })]);
+    expect(calls[0]!.usage.prompt_tokens).toBeGreaterThan(1_000);
+    expect(calls[0]!.usage.completion_tokens).toBeGreaterThan(0);
+    expect(result?.usage).toEqual(calls[0]!.usage);
+  });
+
+  it('lists every failed request on the error when all candidates fail', async () => {
+    const { port } = await setup('error', geminiGenerate.error(400, { message: 'backup unavailable' }));
+    const error = await port.describe(image()).catch((reason: unknown) => reason) as MediaPerceptionFailedError;
+    expect(error.calls.map(call => [call.provider, call.status])).toEqual([['primary', 'failed'], ['backup', 'failed']]);
+  });
+
+  it('records a request in flight when the turn is cancelled, as cancelled', async () => {
+    const { port } = await setup('hang');
+    const controller = new AbortController();
+    const calls: MediaPerceptionCall[] = [];
+    const promise = port.describe(image(), controller.signal, call => calls.push(call));
+    await new Promise(resolve => setTimeout(resolve, 5));
+    controller.abort(new Error('turn cancelled'));
+    await expect(promise).rejects.toThrow();
+    expect(calls).toEqual([expect.objectContaining({ provider: 'primary', status: 'cancelled', usageReported: false })]);
   });
 
   it('validates aliases and deduplicates the configured chain', () => {

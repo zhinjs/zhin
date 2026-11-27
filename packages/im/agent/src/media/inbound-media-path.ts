@@ -96,16 +96,31 @@ export async function readInboundMediaFile(
   decision: Readonly<{ path: string; root: string }>,
   maxBytes: number,
 ): Promise<Buffer | undefined> {
+  const result = await readInboundMediaFileDetailed(decision, maxBytes);
+  return result.ok ? result.bytes : undefined;
+}
+
+/**
+ * {@link readInboundMediaFile} that says why nothing was read (#1250 inbound-media-reject-reason-opaque):
+ * `too_large` (the file is over `maxBytes`, also when no size was declared), `path_not_allowed` (the opened
+ * file is not the authorized one: outside the root, sensitive, or swapped since the check) and
+ * `file_unreadable` (missing, not a regular file, or an I/O error).
+ */
+export async function readInboundMediaFileDetailed(
+  decision: Readonly<{ path: string; root: string }>,
+  maxBytes: number,
+): Promise<Readonly<{ ok: true; bytes: Buffer }> | Readonly<{ ok: false; reason: 'too_large' | 'path_not_allowed' | 'file_unreadable' }>> {
   const noFollow = fsConstants.O_NOFOLLOW ?? 0;
   let handle: fs.FileHandle | undefined;
   try {
     handle = await fs.open(decision.path, fsConstants.O_RDONLY | noFollow);
     const stat = await handle.stat();
-    if (!stat.isFile() || stat.size > maxBytes) return undefined;
+    if (!stat.isFile()) return { ok: false, reason: 'file_unreadable' };
+    if (stat.size > maxBytes) return { ok: false, reason: 'too_large' };
     const location = await openedLocation(handle, decision.path);
-    if (!location || !isInside(decision.root, location) || isSensitive(location)) return undefined;
+    if (!location || !isInside(decision.root, location) || isSensitive(location)) return { ok: false, reason: 'path_not_allowed' };
     const named = await fs.stat(location).catch(() => undefined);
-    if (!named || named.dev !== stat.dev || named.ino !== stat.ino) return undefined;
+    if (!named || named.dev !== stat.dev || named.ino !== stat.ino) return { ok: false, reason: 'path_not_allowed' };
     const buffer = Buffer.alloc(Math.min(stat.size, maxBytes) + 1);
     let length = 0;
     while (length < buffer.length) {
@@ -113,10 +128,11 @@ export async function readInboundMediaFile(
       if (bytesRead === 0) break;
       length += bytesRead;
     }
-    if (length > maxBytes) return undefined;
-    return buffer.subarray(0, length);
+    // The file grew past the limit after stat.
+    if (length > maxBytes) return { ok: false, reason: 'too_large' };
+    return { ok: true, bytes: buffer.subarray(0, length) };
   } catch {
-    return undefined;
+    return { ok: false, reason: 'file_unreadable' };
   } finally {
     await handle?.close().catch(() => undefined);
   }

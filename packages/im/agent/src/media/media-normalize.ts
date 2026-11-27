@@ -127,15 +127,22 @@ function sniffMedia(buffer: Buffer): Readonly<{ kind: MediaKind; mimeType: strin
 }
 
 export function decodeBase64(value: string, maxBytes: number): Buffer | null {
+  const decoded = decodeBase64Detailed(value, maxBytes);
+  return decoded.ok ? decoded.bytes : null;
+}
+
+/** {@link decodeBase64} that says why decoding failed: undecodable data or more than `maxBytes`. */
+function decodeBase64Detailed(value: string, maxBytes: number):
+  Readonly<{ ok: true; bytes: Buffer }> | Readonly<{ ok: false; reason: 'invalid_data' | 'too_large' }> {
   const normalized = value.replace(/^base64:\/\//, '').replace(/\s+/g, '');
-  if (!normalized || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return null;
+  if (!normalized || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return { ok: false, reason: 'invalid_data' };
   const estimatedBytes = Math.floor(normalized.length * 3 / 4);
-  if (estimatedBytes > maxBytes + 2) return null;
+  if (estimatedBytes > maxBytes + 2) return { ok: false, reason: 'too_large' };
   try {
     const buffer = Buffer.from(normalized, 'base64');
-    return buffer.length <= maxBytes ? buffer : null;
+    return buffer.length <= maxBytes ? { ok: true, bytes: buffer } : { ok: false, reason: 'too_large' };
   } catch {
-    return null;
+    return { ok: false, reason: 'invalid_data' };
   }
 }
 
@@ -147,6 +154,37 @@ export function inspectMediaBytes(
   if (!detected) return null;
   if (expectedKind && expectedKind !== 'file' && detected.kind !== expectedKind) return null;
   return detected;
+}
+
+/**
+ * Why a media ref yielded no payload (#1250 inbound-media-reject-reason-opaque, ADR 0061 `media_rejected`):
+ * `too_large` (declared size, inline data or body over the limit), `mime_mismatch` (the bytes are not the
+ * declared kind or no known media type), `invalid_data` (undecodable inline data), `scheme_unsupported`
+ * (not an HTTPS URL), `host_not_allowed` (private / loopback address, non-default port, domain not allowed,
+ * refused redirect hop, or no network authority), `path_not_allowed` (no file authority over the path),
+ * `file_unreadable`, `fetch_failed` (non-2xx status, timeout, connection or TLS error) and
+ * `unmaterialized_platform_reference` (an opaque platform token, no bytes to read).
+ */
+export type MediaRefRejection =
+  | 'too_large' | 'mime_mismatch' | 'invalid_data' | 'scheme_unsupported' | 'host_not_allowed'
+  | 'path_not_allowed' | 'file_unreadable' | 'fetch_failed' | 'unmaterialized_platform_reference';
+
+/**
+ * Per-item result of {@link normalizeMediaRefs}. A refusal names where the media came from for logs:
+ * `scheme` (`https`, `http`, `base64`, `path`, `platform`) and, for URLs, `host`. Never the path, query
+ * string or inline data.
+ */
+export type MediaRefResult =
+  | Readonly<{ ok: true; payload: MediaBinaryPayload }>
+  | Readonly<{ ok: false; reason: MediaRefRejection; scheme: string; host?: string; status?: number }>;
+
+function urlScheme(url: string): Readonly<{ scheme: string; host?: string }> {
+  try {
+    const parsed = new URL(url.trim());
+    return { scheme: parsed.protocol.replace(/:$/u, ''), ...(parsed.hostname ? { host: parsed.hostname } : {}) };
+  } catch {
+    return { scheme: 'invalid' };
+  }
 }
 
 function parseDataUri(dataUri: string): { mime: string; base64: string } | null {
@@ -161,20 +199,38 @@ export async function readLocalFileAsBase64(
   maxBytes: number,
   expectedKind?: MediaKind,
 ): Promise<MediaBinaryPayload | null> {
+  const result = await readLocalMedia(filePath, maxBytes, expectedKind);
+  return result.ok ? result.payload : null;
+}
+
+/**
+ * {@link readLocalFileAsBase64} with the reason (#1250): `too_large` (over `maxBytes`), `mime_mismatch`
+ * (not the expected kind or no known media type), `file_unreadable` (missing, not a regular file, I/O error).
+ */
+async function readLocalMedia(
+  filePath: string,
+  maxBytes: number,
+  expectedKind?: MediaKind,
+): Promise<Readonly<{ ok: true; payload: MediaBinaryPayload }> | Readonly<{ ok: false; reason: 'too_large' | 'mime_mismatch' | 'file_unreadable' }>> {
   try {
     const stat = await fs.stat(filePath);
-    if (!stat.isFile() || stat.size > maxBytes) return null;
+    if (!stat.isFile()) return { ok: false, reason: 'file_unreadable' };
+    if (stat.size > maxBytes) return { ok: false, reason: 'too_large' };
     const buf = await fs.readFile(filePath);
+    if (buf.length > maxBytes) return { ok: false, reason: 'too_large' };
     const detected = inspectMediaBytes(buf, expectedKind);
-    if (!detected) return null;
+    if (!detected) return { ok: false, reason: 'mime_mismatch' };
     return {
-      kind: detected.kind,
-      base64: buf.toString('base64'),
-      mimeType: detected.mimeType,
-      fileName: path.basename(filePath),
+      ok: true,
+      payload: {
+        kind: detected.kind,
+        base64: buf.toString('base64'),
+        mimeType: detected.mimeType,
+        fileName: path.basename(filePath),
+      },
     };
   } catch {
-    return null;
+    return { ok: false, reason: 'file_unreadable' };
   }
 }
 
@@ -196,6 +252,24 @@ export async function fetchUrlAsBase64(
   transport?: NetworkTransport,
   trustedOrigins: readonly string[] = [],
 ): Promise<MediaBinaryPayload | null> {
+  const result = await fetchUrlMedia(url, maxBytes, expectedKind, signal, allowedDomains, transport, trustedOrigins);
+  return result.ok ? result.payload : null;
+}
+
+/** {@link fetchUrlAsBase64} with the refusal reason, URL scheme and host (#1250 inbound-media-reject-reason-opaque). */
+async function fetchUrlMedia(
+  url: string,
+  maxBytes: number,
+  expectedKind: MediaKind | undefined,
+  signal: AbortSignal | undefined,
+  allowedDomains: readonly string[],
+  transport: NetworkTransport | undefined,
+  trustedOrigins: readonly string[],
+): Promise<MediaRefResult> {
+  const origin = urlScheme(url);
+  const refuse = (reason: MediaRefRejection, status?: number): MediaRefResult =>
+    Object.freeze({ ok: false as const, reason, ...origin, ...(status !== undefined ? { status } : {}) });
+  if (origin.scheme !== 'https') return refuse('scheme_unsupported');
   try {
     const result = await fetchPublicMediaBytes(url, {
       maxBytes,
@@ -204,12 +278,18 @@ export async function fetchUrlAsBase64(
       ...(trustedOrigins.length ? { trustedOrigins } : {}),
       ...(transport ? { transport } : {}),
     });
-    if (!result.ok) return null;
+    if (!result.ok) {
+      if (result.code === 'too_large') return refuse('too_large');
+      if (result.code === 'http_status') return refuse('fetch_failed', result.status);
+      if (result.code === 'failed') return refuse('fetch_failed', result.status);
+      // `blocked`: private / loopback target, non-default port, domain not allowed or a refused redirect hop.
+      return refuse('host_not_allowed');
+    }
     const detected = inspectMediaBytes(result.bytes, expectedKind);
-    if (!detected) return null;
-    return { kind: detected.kind, base64: result.bytes.toString('base64'), mimeType: detected.mimeType };
+    if (!detected) return refuse('mime_mismatch');
+    return { ok: true, payload: { kind: detected.kind, base64: result.bytes.toString('base64'), mimeType: detected.mimeType } };
   } catch {
-    return null;
+    return refuse('fetch_failed');
   }
 }
 
@@ -227,39 +307,73 @@ export async function normalizeMediaRefsToPayloads(
   /** #1250 第 48 批: the producing Endpoint's protocol-server origins, whose port a URL may keep. */
   trustedOrigins: readonly string[] = [],
 ): Promise<MediaBinaryPayload[]> {
-  const out: MediaBinaryPayload[] = [];
+  const results = await normalizeMediaRefs(refs, maxBytes, signal, authority, transport, trustedOrigins);
+  return results.flatMap(result => result.ok ? [result.payload] : []);
+}
 
+/**
+ * {@link normalizeMediaRefsToPayloads} with one result per ref (#1250 inbound-media-reject-reason-opaque,
+ * ADR 0061 `media_rejected`): a refused or failed ref says why, with the scheme and URL host (never the
+ * path, query string or data).
+ */
+export async function normalizeMediaRefs(
+  refs: readonly { type: string; media: MediaRef }[],
+  maxBytes: number,
+  signal?: AbortSignal,
+  authority?: OutboundMediaAuthority,
+  transport: NetworkTransport | undefined = authority?.mediaTransport,
+  trustedOrigins: readonly string[] = [],
+): Promise<MediaRefResult[]> {
+  const out: MediaRefResult[] = [];
   for (const { type, media } of refs) {
     signal?.throwIfAborted();
-    if (!media || media.kind === 'file') continue;
-    if (typeof media.size === 'number' && media.size > maxBytes) continue;
-    const wantKind = kindFromSegmentType(type);
-    const fileName = media.file_name ? { fileName: media.file_name } : {};
+    out.push(await normalizeMediaRef(type, media, maxBytes, signal, authority, transport, trustedOrigins));
+  }
+  return out;
+}
 
-    if (media.kind === 'base64') {
-      const dataUri = parseDataUri(media.value);
-      const base64 = (dataUri?.base64 ?? media.value).replace(/^base64:\/\//, '');
-      const bytes = decodeBase64(base64, maxBytes);
-      const detected = bytes ? inspectMediaBytes(bytes, wantKind ?? undefined) : null;
-      if (detected) out.push({ kind: detected.kind, base64: bytes!.toString('base64'), mimeType: detected.mimeType, ...fileName });
-      continue;
-    }
+async function normalizeMediaRef(
+  type: string,
+  media: MediaRef,
+  maxBytes: number,
+  signal: AbortSignal | undefined,
+  authority: OutboundMediaAuthority | undefined,
+  transport: NetworkTransport | undefined,
+  trustedOrigins: readonly string[],
+): Promise<MediaRefResult> {
+  const scheme = !media ? 'invalid' : media.kind === 'file' ? 'platform' : media.kind === 'url' ? urlScheme(media.value).scheme : media.kind;
+  const refuse = (reason: MediaRefRejection, origin: Readonly<{ scheme: string; host?: string }> = { scheme }): MediaRefResult =>
+    Object.freeze({ ok: false as const, reason, ...origin });
+  if (!media || media.kind === 'file') return refuse('unmaterialized_platform_reference');
+  if (typeof media.size === 'number' && media.size > maxBytes) {
+    return refuse('too_large', media.kind === 'url' ? urlScheme(media.value) : { scheme });
+  }
+  const wantKind = kindFromSegmentType(type);
+  const fileName = media.file_name ? { fileName: media.file_name } : {};
 
-    if (media.kind === 'path') {
-      const authorized = await authorizeOutboundMediaPath(media.value, authority);
-      if (!authorized) continue;
-      const local = await readLocalFileAsBase64(authorized, maxBytes, wantKind ?? undefined);
-      if (local) out.push({ ...local, ...fileName });
-      continue;
-    }
-
-    const network = authorizeOutboundMediaUrl(media.value, authority);
-    if (!network) continue;
-    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport, trustedOrigins);
-    if (fetched) out.push({ ...fetched, ...fileName });
+  if (media.kind === 'base64') {
+    const dataUri = parseDataUri(media.value);
+    const base64 = (dataUri?.base64 ?? media.value).replace(/^base64:\/\//, '');
+    const decoded = decodeBase64Detailed(base64, maxBytes);
+    if (!decoded.ok) return refuse(decoded.reason);
+    const detected = inspectMediaBytes(decoded.bytes, wantKind ?? undefined);
+    if (!detected) return refuse('mime_mismatch');
+    return { ok: true, payload: { kind: detected.kind, base64: decoded.bytes.toString('base64'), mimeType: detected.mimeType, ...fileName } };
   }
 
-  return out;
+  if (media.kind === 'path') {
+    const authorized = await authorizeOutboundMediaPath(media.value, authority);
+    if (!authorized) return refuse('path_not_allowed');
+    const local = await readLocalMedia(authorized, maxBytes, wantKind ?? undefined);
+    return local.ok ? { ok: true, payload: { ...local.payload, ...fileName } } : refuse(local.reason);
+  }
+
+  const origin = urlScheme(media.value);
+  if (origin.scheme !== 'https') return refuse('scheme_unsupported', origin);
+  const network = authorizeOutboundMediaUrl(media.value, authority);
+  if (!network) return refuse('host_not_allowed', origin);
+  const fetched = await fetchUrlMedia(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains, transport, trustedOrigins);
+  return fetched.ok ? { ok: true, payload: { ...fetched.payload, ...fileName } } : fetched;
 }
 
 

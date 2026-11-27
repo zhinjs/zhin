@@ -1,6 +1,8 @@
 export {
   TURN_TRACE_VERSION,
+  MEDIA_DESCRIPTION_TRACE_LENGTH,
   TurnTraceCollector,
+  describeMediaResolution,
   summarizeArgs,
   scrubSecrets,
   turnTraceTotalUsage,
@@ -13,6 +15,7 @@ export type {
   TurnTraceToolStatus,
   TurnTracePrincipal,
   TurnTraceModelCall,
+  TurnTraceMediaResolution,
   TurnTraceToolCall,
   TurnTraceBudgetExtension,
   TurnTraceTimelineEntry,
