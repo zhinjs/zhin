@@ -69,7 +69,7 @@ function fixture(options: { connectionId?: string; sessionKey?: string; requestC
     },
   };
   let handlers!: { reloadPending: () => Promise<void>; reloadResults: () => Promise<void>; earlier: () => Promise<void> };
-  const renderedInteractions = vi.fn((segments, id, submitted, onSubmitted) => createElement('interaction', { segments, id, submitted, onSubmitted }));
+  const renderedInteractions = vi.fn((segments, id, submitted, onSubmitted, answerAs) => createElement('interaction', { segments, id, submitted, onSubmitted, answerAs }));
   const props = { connectionId: options.connectionId ?? 'connection-A', sessionKey: options.sessionKey ?? 'sandbox:bot:group:room',
     locale: 'zh-CN', requestContext: options.requestContext, pendingRefreshEpoch: 0, renderInteraction: renderedInteractions,
     onRetiredInteractions: vi.fn() };
@@ -280,4 +280,27 @@ it('pins later recovery requests to the original Host and header snapshot before
     expect(f.requests.slice(2).every(request => request.init.headers === headers)).toBe(true);
     f.respond(2, page(f.props.sessionKey, [])); f.respond(3, { generation: 1, pending: [] }); await loading; await f.settle();
   } finally { f.close(); }
+});
+
+it('#1250 b114: a recovered prompt keeps the speaker the Host says it was asked of, and a malformed one guesses none', async () => {
+  const f = fixture();
+  try {
+    f.respond(0, { generation: 1, pending: [
+      { ...prompt('simulated'), answerAs: { kind: 'sender', senderId: '~sim:dev-user' } },
+      { ...prompt('open'), answerAs: { kind: 'anyone' } },
+      { ...prompt('forged'), answerAs: { kind: 'sender', senderId: 42 } },
+    ] });
+    f.respond(1, page(f.props.sessionKey, [])); await f.settle();
+    expect(f.all('interaction').map(element => [element.props.id, element.props.answerAs])).toEqual([
+      ['simulated', { kind: 'sender', senderId: '~sim:dev-user' }], ['open', { kind: 'anyone' }], ['forged', undefined]]);
+  } finally { f.close(); }
+});
+
+it('#1250 b114: a recovered click answers as the asked simulated speaker or with the chat identity, never invents one', async () => {
+  const { SANDBOX_SIMULATED_PREFIX } = await import('../src/protocol.js');
+  expect(recovery.SANDBOX_PAGE_SIMULATED_PREFIX).toBe(SANDBOX_SIMULATED_PREFIX);
+  expect(recovery.recoveredAnswerSpeaker({ kind: 'sender', senderId: '~sim:dev-user' })).toEqual({ senderId: '~sim:dev-user', asMe: false });
+  expect(recovery.recoveredAnswerSpeaker({ kind: 'sender', senderId: 'sandbox-identity-1' })).toEqual({ asMe: true });
+  expect(recovery.recoveredAnswerSpeaker({ kind: 'anyone' })).toBeUndefined();
+  expect(recovery.recoveredAnswerSpeaker(undefined)).toBeUndefined();
 });

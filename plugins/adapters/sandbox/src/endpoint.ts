@@ -81,6 +81,26 @@ function claimSandboxWsPath(
   };
 }
 
+/** Background scenes one retaining socket keeps (a page's session list is far shorter). */
+const MAX_RETAINED_SCENES = 32;
+
+function sandboxSceneKey(scene: { readonly type: string; readonly id: string }): string {
+  return `${scene.type}\0${scene.id}`;
+}
+
+/** Makes `scene` the socket's current one; a retaining socket keeps its previous scene in the background. */
+function focusSandboxScene(connection: SandboxConnection, scene: SandboxConversation): void {
+  const retained = connection.retained;
+  if (retained) {
+    const previous = connection.conversation;
+    retained.delete(sandboxSceneKey(previous));
+    retained.set(sandboxSceneKey(previous), previous);
+    retained.delete(sandboxSceneKey(scene));
+    while (retained.size > MAX_RETAINED_SCENES) retained.delete(retained.keys().next().value!);
+  }
+  connection.conversation = scene;
+}
+
 interface SandboxConnection {
   readonly connectionId: string;
   readonly target: string;
@@ -90,6 +110,12 @@ interface SandboxConnection {
   readonly canExecute: boolean;
   conversation: SandboxConversation;
   scoped: boolean;
+  /**
+   * #1250 b114: scenes this socket viewed before its current one, most recent last, kept only after a
+   * `subscribe` with `retain: true`. A reply still running in a scene the page switched away from
+   * reaches the page (which files it under that scene) instead of failing as undelivered.
+   */
+  retained?: Map<string, SandboxConversation>;
   /** true = 占位连接（尚无真实 WS 客户端），send 命中时按 miss 处理。 */
   readonly placeholder?: boolean;
 }
@@ -480,7 +506,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   #subscribers(scene: { readonly type: string; readonly id: string }, echo = false): SandboxConnection[] {
     return [...this.connectionRecords.values()].filter(connection => !connection.placeholder && connection.canExecute
       && (!echo || connection.scoped)
-      && connection.conversation.type === scene.type && connection.conversation.id === scene.id
+      && (connection.conversation.type === scene.type && connection.conversation.id === scene.id
+        || connection.retained?.has(sandboxSceneKey(scene)) === true)
       && (connection.socket.readyState === undefined || connection.socket.readyState === 1));
   }
 
@@ -572,7 +599,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             return;
           }
           if (frame.kind === 'subscribe') {
-            subscription.conversation = frame.conversation;
+            if (frame.retain) subscription.retained ??= new Map();
+            focusSandboxScene(subscription, frame.conversation);
             subscription.scoped = true;
             socket.send(JSON.stringify({
               type: 'subscribed', id: frame.conversation.id, conversation: frame.conversation,
@@ -621,7 +649,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             text: parsed.text.slice(0, 80),
           }));
           const scene: SandboxConversation = { type: conversation.kind as SandboxConversation['type'], id: sceneId };
-          subscription.conversation = scene;
+          focusSandboxScene(subscription, scene);
           const messageId = parsed.messageId ?? randomUUID();
           this.#broadcast(this.#subscribers(scene, true), JSON.stringify({
             ...scene, conversation: scene, direction: 'inbound', senderId,

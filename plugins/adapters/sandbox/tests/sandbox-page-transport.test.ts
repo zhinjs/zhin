@@ -10,6 +10,7 @@ import * as chatIdentity from '../pages/index/chatIdentity.js';
 import * as directories from '../pages/index/workspaceDirectory.js';
 import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
 import * as composer from '../pages/index/composerCommands.js';
+import { recoveredAnswerSpeaker } from '../pages/index/conversationRecovery.js';
 import { segmentFallbackText, segmentPreviewText } from '../pages/index/segmentFallback.js';
 
 const file = new URL('../pages/index/SandboxChat.tsx', import.meta.url);
@@ -78,7 +79,7 @@ function fixture(options: {
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => [] })));
   const bindings = {
-    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax, ...sandboxMedia,
+    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax, ...sandboxMedia, recoveredAnswerSpeaker,
     useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
     readSandboxCommandHints: options.readSandboxCommandHints ?? (async () => null),
     loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),
@@ -447,13 +448,13 @@ describe('Sandbox page transport boundary', () => {
     try {
       const view = f.ready(), socket = f.socket();
       expect(view.endpointId).toBe('stable-bot');
-      expect(socket.frames).toEqual([{ op: 'subscribe', conversation: { type: 'private', id: 'sandbox-user' } }]);
+      expect(socket.frames).toEqual([{ op: 'subscribe', conversation: { type: 'private', id: 'sandbox-user' }, retain: true }]);
       socket.receive({ type: 'subscribed', id: 'sandbox-user', conversation: { type: 'private', id: 'sandbox-user' }, timestamp: 2 });
       expect(f.render().messages).toEqual([]);
       view.switchChannel(view.channels[1]);
       f.render();
       expect(socket.frames).toHaveLength(2);
-      expect(socket.frames[1]).toEqual({ op: 'subscribe', conversation: { type: 'group', id: 'sandbox-group' } });
+      expect(socket.frames[1]).toEqual({ op: 'subscribe', conversation: { type: 'group', id: 'sandbox-group' }, retain: true });
       // The socket callback was created before this switch and must use the current scene ref.
       socket.receive({ type: 'ready', id: 'owner', endpoint: 'stable-bot', connectionId: 'new-connection', protocol: transport.SANDBOX_SCOPED_PROTOCOL, timestamp: 3 });
       expect(socket.frames.at(-1)).toEqual(socket.frames[1]);
@@ -561,7 +562,7 @@ describe('Sandbox page transport boundary', () => {
       stale?.({ data: JSON.stringify({ ...echo('stale'), content: text('must not appear') }) });
       expect(f.render().messages).toHaveLength(1);
       f.ready();
-      expect(second.frames).toEqual([{ op: 'subscribe', conversation: { type: 'private', id: 'sandbox-user' } }]);
+      expect(second.frames).toEqual([{ op: 'subscribe', conversation: { type: 'private', id: 'sandbox-user' }, retain: true }]);
       expect(f.render().messages).toHaveLength(1);
     } finally { f.close(); }
   });
@@ -628,6 +629,43 @@ describe('Sandbox page transport boundary', () => {
         senderRole: 'admin',
         content: [{ type: 'action', data: { id: 'confirm:1', payload: 'confirm:1' } }],
       });
+    } finally { f.close(); }
+  });
+});
+
+describe('#1250 b114: switching sessions mid-reply and answering a recovered prompt', () => {
+  it('keeps a reply that finishes in the session the person switched away from, and counts it as unread', () => {
+    const f = fixture();
+    try {
+      f.ready();
+      const [first, second] = f.view.channels as playground.PlaygroundSession[];
+      const frame = { type: first!.type, id: first!.id, conversation: { type: first!.type, id: first!.id },
+        messageId: 'background-reply', bot: 'stable-bot', timestamp: 10, revision: 1, streaming: true, content: text('part one') };
+      f.socket().receive(frame); f.render();
+      f.view.switchChannel(second); f.render();
+      f.socket().receive({ ...frame, revision: 2, streaming: false, content: text('part one, part two'), timestamp: 20 }); f.render();
+      expect(f.view.activeChannel).toMatchObject({ id: second!.id, type: second!.type });
+      expect(f.view.channels.find((row: playground.PlaygroundSession) => row.id === first!.id)?.unread).toBe(1);
+      f.view.switchChannel(f.view.channels.find((row: playground.PlaygroundSession) => row.id === first!.id)); f.render();
+      const rows = f.view.messages.filter((row: playground.PlaygroundMessage) => row.id === 'background-reply');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ channelId: first!.id, revision: 2, streaming: false, content: text('part one, part two') });
+      expect(f.view.channels.find((row: playground.PlaygroundSession) => row.id === first!.id)?.unread).toBe(0);
+    } finally { f.close(); }
+  });
+
+  it('answers a recovered prompt as the simulated speaker it was asked of, or with the chat identity', () => {
+    const f = fixture();
+    try {
+      f.ready();
+      f.view.setSenderId('someone-else'); const view = f.render();
+      view.sendInteractiveAction('zhin:ask:a:0', 'prompt-a', undefined, { kind: 'sender', senderId: '~sim:dev-user' });
+      view.sendInteractiveAction('zhin:ask:b:0', 'prompt-b', undefined, { kind: 'sender', senderId: 'identity-1' });
+      view.sendInteractiveAction('zhin:ask:c:0', 'prompt-c', undefined, { kind: 'anyone' });
+      const [simulated, identity, anyone] = f.socket().frames.slice(-3);
+      expect(simulated).toMatchObject({ senderId: '~sim:dev-user' }); expect(simulated!.asMe).toBeUndefined();
+      expect(identity).toMatchObject({ asMe: true });
+      expect(anyone).toMatchObject({ senderId: 'someone-else' }); expect(anyone!.asMe).toBeUndefined();
     } finally { f.close(); }
   });
 });

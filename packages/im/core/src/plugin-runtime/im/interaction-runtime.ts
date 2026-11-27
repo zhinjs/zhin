@@ -108,6 +108,8 @@ export interface PendingUserInteraction {
   readonly subjectId: string;
   readonly expiresAt: number;
   readonly segments: SendContent;
+  /** `'anyone'`: any sender in the conversation may answer (`subjectId` is then not a sender id). */
+  readonly answeredBy?: 'anyone';
 }
 
 const ASK_ACTION_PREFIX = 'zhin:ask:';
@@ -427,6 +429,27 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     snapshot?: RuntimeSnapshot,
   ): PendingUserInteraction | undefined {
     return this.#claims.get(`${conversationRefKey(conversation)}:${subjectId}`)?.project(generation, snapshot);
+  }
+
+  /**
+   * Every current prompt of exactly this conversation, whatever its subject (one per subject), oldest
+   * deadline first. Read-only like {@link readPendingInteraction}: it never re-delivers, renews or answers.
+   */
+  listPendingInteractions(
+    conversation: ConversationRef,
+    generation: number,
+    snapshot?: RuntimeSnapshot,
+  ): PendingUserInteraction[] {
+    const key = conversationRefKey(conversation);
+    const pending: PendingUserInteraction[] = [];
+    for (const [claimKey, claim] of this.#claims) {
+      if (!claimKey.startsWith(`${key}:`)) continue;
+      const projected = claim.project(generation, snapshot);
+      // The key prefix alone is ambiguous when a conversation id contains ':'; compare the owner exactly.
+      if (!projected || conversationRefKey(projected.conversation) !== key) continue;
+      pending.push(projected.subjectId === ANYONE_SUBJECT ? { ...projected, answeredBy: 'anyone' } : projected);
+    }
+    return pending.sort((a, b) => a.expiresAt - b.expiresAt || a.id.localeCompare(b.id));
   }
 
   createForMessage(

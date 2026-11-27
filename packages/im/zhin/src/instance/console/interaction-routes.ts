@@ -5,12 +5,39 @@ import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
 
-/** Current prompts only; responses still enter through the original Sandbox IM interaction path. */
+/** One prompt per subject; a bound response never grows with the number of simulated speakers. */
+const MAX_PENDING_INTERACTIONS = 20;
+
+type PendingUserInteraction = ReturnType<ImRuntime['listPendingInteractions']>[number];
+
+/** How a page answers one pending prompt: as any sender, or as the exact sender it asked. */
+export type PendingInteractionAnswerer = Readonly<{ kind: 'anyone' }> | Readonly<{ kind: 'sender'; senderId: string }>;
+
+/** The redacted projection a page receives: no conversation ref, claim owner or internal subject marker. */
+export interface PendingInteractionView {
+  readonly id: string;
+  readonly generation: number;
+  readonly expiresAt: number;
+  readonly segments: PendingUserInteraction['segments'];
+  readonly answerAs: PendingInteractionAnswerer;
+}
+
+export function projectPendingInteraction(pending: PendingUserInteraction): PendingInteractionView {
+  return { id: pending.id, generation: pending.generation, expiresAt: pending.expiresAt, segments: pending.segments,
+    answerAs: pending.answeredBy === 'anyone' ? { kind: 'anyone' } : { kind: 'sender', senderId: pending.subjectId } };
+}
+
+/**
+ * Current prompts only; responses still enter through the original Sandbox IM interaction path.
+ * Lists every prompt of the bound conversation, not only one asked of the connection owner: a
+ * Sandbox page speaks as a simulated sender or as the viewer's chat identity (ADR 0060 §5.4), never
+ * as the owner, so an owner-only read never found the prompt the page itself raised (#1250 b114).
+ */
 export function registerInteractionRoutes(options: Readonly<{
   http: HttpHost;
   base: string;
   snapshots?: SnapshotReader;
-  im?: Pick<ImRuntime, 'readPendingInteraction'>;
+  im?: Pick<ImRuntime, 'listPendingInteractions'>;
 }>): void {
   const { http, base, snapshots, im } = options;
   http.route('GET', `${base}/interactions/pending`, noStore(async (_request, { url }) => {
@@ -31,9 +58,10 @@ export function registerInteractionRoutes(options: Readonly<{
         if (session.status === 'invalid') {
           return jsonResponse(400, { success: false, code: 'invalid_interaction_query', error: '请提供有效的连接和会话' });
         }
-        const pending = im.readPendingInteraction({ endpoint: scope.endpoint, kind: session.kind, id: session.id },
-          scope.ownerId, snapshot.generation);
-        return jsonResponse(200, { success: true, data: { generation: snapshot.generation, pending: pending ? [pending] : [] } });
+        const pending = im.listPendingInteractions({ endpoint: scope.endpoint, kind: session.kind, id: session.id },
+          snapshot.generation);
+        return jsonResponse(200, { success: true, data: { generation: snapshot.generation,
+          pending: pending.slice(0, MAX_PENDING_INTERACTIONS).map(projectPendingInteraction) } });
       });
     } catch (error) {
       if (error instanceof SandboxWorkspaceBindingError) {

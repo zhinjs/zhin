@@ -1,12 +1,40 @@
 import type { MessageSegment, ConsoleLocale } from '@zhin.js/client';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
 
+/** How the Host says a recovered prompt is answered: by anyone, or by the exact sender it asked. */
+export type PendingInteractionAnswerer = Readonly<{ kind: 'anyone' }> | Readonly<{ kind: 'sender'; senderId: string }>;
+
 export interface PendingInteraction {
   readonly id: string;
   readonly generation: number;
-  readonly subjectId: string;
   readonly expiresAt: number;
   readonly segments: MessageSegment[];
+  /** Absent on an older Host (owner-only read): the click then uses the page's current speaker. */
+  readonly answerAs?: PendingInteractionAnswerer;
+}
+
+/** The Host's answerer field, or undefined when it is missing or malformed (never a guessed sender). */
+export function readPendingAnswerer(value: unknown): PendingInteractionAnswerer | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const item = value as Record<string, unknown>;
+  if (item.kind === 'anyone') return { kind: 'anyone' };
+  return item.kind === 'sender' && typeof item.senderId === 'string' && item.senderId.trim()
+    ? { kind: 'sender', senderId: item.senderId.slice(0, 256) } : undefined;
+}
+
+/** `SANDBOX_SIMULATED_PREFIX` of `src/protocol.ts` (a Node module the page cannot import); a test keeps them equal. */
+export const SANDBOX_PAGE_SIMULATED_PREFIX = '~sim:';
+
+/**
+ * The speaker fields a click on a recovered prompt carries. A prompt asked of a simulated speaker
+ * (`~sim:<id>`) is answered as that speaker — the Host keeps a `~sim:` id as is — whatever the page's
+ * sender box says now; one asked of a real chat identity is answered with 「以我的聊天身份发言」.
+ * The Host still decides whether this socket's speaker may answer; nothing here grants it.
+ */
+export function recoveredAnswerSpeaker(answerAs: PendingInteractionAnswerer | undefined, simulatedPrefix = SANDBOX_PAGE_SIMULATED_PREFIX):
+  Readonly<{ senderId: string; asMe: false }> | Readonly<{ asMe: true }> | undefined {
+  if (!answerAs || answerAs.kind === 'anyone') return undefined;
+  return answerAs.senderId.startsWith(simulatedPrefix) ? { senderId: answerAs.senderId, asMe: false } : { asMe: true };
 }
 
 export interface RecoveredDelivery {
@@ -45,8 +73,13 @@ async function readRecovery<T>(path: string, connectionId: string, sessionKey: s
   return body.data;
 }
 
-export function readPendingInteractions(connectionId: string, sessionKey: string, signal?: AbortSignal, context?: SandboxRequestContext) {
-  return readRecovery<{ generation: number; pending: readonly PendingInteraction[] }>('/api/interactions/pending', connectionId, sessionKey, signal, undefined, context);
+export async function readPendingInteractions(connectionId: string, sessionKey: string, signal?: AbortSignal, context?: SandboxRequestContext) {
+  const data = await readRecovery<{ generation: number; pending: readonly PendingInteraction[] }>('/api/interactions/pending', connectionId, sessionKey, signal, undefined, context);
+  if (!data || !Array.isArray(data.pending)) return data;
+  return { ...data, pending: data.pending.map(({ answerAs, ...interaction }) => {
+    const answerer = readPendingAnswerer(answerAs);
+    return answerer ? { ...interaction, answerAs: answerer } : interaction;
+  }) };
 }
 
 export function readConversationResults(connectionId: string, sessionKey: string, signal?: AbortSignal, cursor?: string, context?: SandboxRequestContext) {

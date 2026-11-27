@@ -31,7 +31,7 @@ import { sandboxStyles } from './styles.js';
 import { workspaceStyles } from './workspaceStyles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
-import { actionOutcomeFeedback, quietOutcomeNotice, readMessageOutcome } from './conversationRecovery.js';
+import { actionOutcomeFeedback, quietOutcomeNotice, readMessageOutcome, recoveredAnswerSpeaker, type PendingInteractionAnswerer } from './conversationRecovery.js';
 import {
   agentSessionsPath,
   buildAgentRunReport,
@@ -149,6 +149,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     // #1250 sandbox-speak-as-me: messages this page sent asking for 「以我的聊天身份发言」, and why the
     // server could not use it for the last one (the switch is turned off then, with the reason).
     const asMeSentRef = useRef(new Set<string>())
+    const unreadCountedRef = useRef(new Set<string>())
     const [asMeNotice, setAsMeNotice] = useState<SandboxAsMeNotice | null>(null)
     const [showSenderSettings, setShowSenderSettings] = useState(false)
     /** Live binding of the current socket; drives the Host-provided quick commands. */
@@ -298,7 +299,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const subscribeToScene = (scene: Pick<Channel, 'id' | 'type'>) => {
         // Old Hosts parse unknown JSON as chat, so control frames require this explicit handshake.
         if (connectionRef.current.protocol !== SANDBOX_SCOPED_PROTOCOL || !connectionRef.current.canExecute) return
-        if (!submitSandboxFrame(wsRef.current, { op: 'subscribe', conversation: { type: scene.type, id: scene.id } })) {
+        // #1250 b114: `retain` keeps this socket receiving the sessions it showed before, so a reply still
+        // running in one of them is filed there instead of being lost when the person switches away.
+        if (!submitSandboxFrame(wsRef.current, { op: 'subscribe', conversation: { type: scene.type, id: scene.id }, retain: true })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，会话切换未发送。"))
         }
     }
@@ -413,8 +416,18 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             ? sandboxText(locale, "群组场景 {0}", [sceneId])
             : sandboxText(locale, "频道场景 {0}", [sceneId])
 
+        // A reply that arrives (or keeps streaming) in a background session counts once as unread.
+        const unreadKey = JSON.stringify([channelType, sceneId, data.messageId ?? ''])
+        const background = !isInput && (activeChannelRef.current.id !== sceneId || activeChannelRef.current.type !== channelType)
+            && !(data.messageId && unreadCountedRef.current.has(unreadKey))
+        if (background && data.messageId) {
+            unreadCountedRef.current.add(unreadKey)
+            if (unreadCountedRef.current.size > 500) unreadCountedRef.current.delete(unreadCountedRef.current.values().next().value!)
+        }
         setChannels((prev) => {
-            if (prev.some((c) => c.id === sceneId && c.type === channelType)) return prev
+            if (prev.some((c) => c.id === sceneId && c.type === channelType)) {
+                return background ? prev.map((c) => c.id === sceneId && c.type === channelType ? { ...c, unread: c.unread + 1 } : c) : prev
+            }
             const created: Channel = {
                 id: sceneId, name: channelName, type: channelType, unread: 0,
                 runConfig: { ...activeChannelRef.current.runConfig },
@@ -443,19 +456,23 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         if (sent.size > 200) sent.delete(sent.values().next().value!)
     }
 
-    const sendInteractiveAction = (payload: string, messageId?: string, buttonId?: string) => {
+    const sendInteractiveAction = (payload: string, messageId?: string, buttonId?: string, answerAs?: PendingInteractionAnswerer) => {
         if (!connectionRef.current.canExecute) return false
         const scene = activeChannelRef.current
         // #1250 sandbox-action-button-id-dropped: the button's own id and its payload, like a platform callback.
         const segments: MessageSegment[] = [sandboxActionSegment(payload, buttonId)]
-        const resolvedSenderId = senderId.trim() || connectionRef.current.ownerId || 'dev-user'
+        // #1250 b114: a prompt recovered after a reload answers as the speaker it was asked of, not as
+        // whatever the sender box says now (the Host still decides whether that answer is accepted).
+        const recovered = recoveredAnswerSpeaker(answerAs)
+        const speakAsMe = recovered ? recovered.asMe : asMe
+        const resolvedSenderId = recovered && !recovered.asMe ? recovered.senderId : senderId.trim() || connectionRef.current.ownerId || 'dev-user'
         const resolvedSenderName = senderName.trim() || sandboxText(localeRef.current, "测试用户")
         const actionId = createSandboxMessageId()
         const clickedAt = Date.now()
-        if (asMe) rememberAsMe(actionId)
+        if (speakAsMe) rememberAsMe(actionId)
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: actionId, content: segments,
-            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(asMe ? { asMe: true } : {}),
+            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole, ...(speakAsMe ? { asMe: true } : {}),
             agentRun: scene.runConfig, timestamp: clickedAt,
         })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，审批选择未发送。"))
@@ -705,6 +722,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         onInteractionSubmitted?: () => void,
         allowInteraction = true,
         submittedPayloads?: readonly string[],
+        answerAs?: PendingInteractionAnswerer,
     ): React.ReactNode[] => {
         // ADR 0064 §2: one best-effect renderer per outbound segment type (pages/index/segments/).
         const context: SandboxSegmentRenderContext = {
@@ -712,7 +730,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             canInteract: !isSent && canExecute && allowInteraction,
             submittedPayloads,
             sendAction: (payload, buttonId) => {
-                const sent = sendInteractiveAction(payload, messageId, buttonId)
+                const sent = sendInteractiveAction(payload, messageId, buttonId, answerAs)
                 if (sent) onInteractionSubmitted?.()
                 return sent
             },
@@ -1363,7 +1381,7 @@ ${sandboxStyles}`}</style>
                             })
                         }}
                         requestContext={socketRequestContextRef.current ?? undefined}
-                        renderInteraction={(segments, id, submitted, onSubmitted) => renderMessageSegments(segments, false, id, submitted, onSubmitted)} />
+                        renderInteraction={(segments, id, submitted, onSubmitted, answerAs) => renderMessageSegments(segments, false, id, submitted, onSubmitted, true, undefined, answerAs)} />
                 )}
 
                 {showConversationDetails && props.renderConversationDetails && (

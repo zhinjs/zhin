@@ -55,9 +55,9 @@ async function fixture() {
     return {
       client, frames,
       ready: frames.find(frame => frame.type === 'ready')!,
-      async subscribe(scene: Scene) {
+      async subscribe(scene: Scene, retain?: boolean) {
         const start = frames.length;
-        client.send(JSON.stringify({ op: 'subscribe', conversation: scene }));
+        client.send(JSON.stringify({ op: 'subscribe', conversation: scene, ...(retain ? { retain } : {}) }));
         await vi.waitFor(() => expect(frames.slice(start).some(frame => frame.type === 'subscribed')).toBe(true));
       },
     };
@@ -136,6 +136,30 @@ describe('Sandbox scoped multi-connection transport', () => {
     await vi.waitFor(() => expect(second.frames.some(frame => frame.messageId === nextReceipt)).toBe(true));
     await first.subscribe({ type: 'private', id: scene.id });
     expect(first.frames.some(frame => frame.messageId === nextReceipt)).toBe(false);
+  });
+
+  it('#1250 b114: a retaining page keeps receiving a reply in progress after it switched to another scene', async () => {
+    const { endpoint, connect } = await fixture();
+    const page = await connect(), plain = await connect();
+    const first: Scene = { type: 'group', id: 'room-a' }, second: Scene = { type: 'private', id: 'room-b' };
+    await page.subscribe(first, true); await plain.subscribe(first);
+    const transport = endpointRuntimeOf(endpoint.endpoint).streaming!;
+    const stream = transport.open({ conversation: conversation(first), format: 'markdown' })!;
+    const opened = await stream.write('part one');
+    // Switch scenes mid-reply, as the page does when the person opens another session.
+    await page.subscribe(second, true); await plain.subscribe(second);
+    const done = await stream.finish('part one, part two');
+    expect(done).toMatchObject({ status: 'sent', messageId: opened.messageId });
+    await vi.waitFor(() => expect(page.frames.filter(frame => frame.messageId === opened.messageId).at(-1)).toMatchObject({
+      conversation: first, revision: 2, streaming: false, content: [{ type: 'markdown', data: { content: 'part one, part two' } }] }));
+    // A plain subscription still replaces its scene (older pages keep their exact behaviour).
+    expect(plain.frames.filter(frame => frame.messageId === opened.messageId)).toHaveLength(1);
+    // The current scene still reaches the page too, and switching back keeps both scenes live.
+    const current = await endpoint.send({ conversation: conversation(second), payload: 'current scene' });
+    await vi.waitFor(() => expect(page.frames.some(frame => frame.messageId === current)).toBe(true));
+    await page.subscribe(first, true);
+    const back = await endpoint.send({ conversation: conversation(second), payload: 'background again' });
+    await vi.waitFor(() => expect(page.frames.some(frame => frame.messageId === back)).toBe(true));
   });
 
   it('treats typed [@bot] in a group as a mention of the bot (#1250)', async () => {

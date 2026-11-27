@@ -106,3 +106,23 @@ it('removes a pending question on explicit Root stop without resurrecting its pr
   await expect(answer).resolves.toMatchObject({ name: 'AbortError' });
   lease.release(); await closing;
 });
+
+it('lists every current prompt of one exact conversation, whatever its subject, and marks open prompts', async () => {
+  const coordinator = new RuntimeInteractionCoordinator(), abort = new AbortController();
+  const ask = (sender: string, conv = conversation, answeredBy?: 'anyone') => coordinator.create({ conversation: conv, generation: 1,
+    sender: { id: sender }, $reply: reply }).ask({ type: 'text', title: `Question ${sender}`, signal: abort.signal,
+    ...(answeredBy ? { answeredBy } : {}) }).catch(error => error);
+  // A conversation whose id extends this one's with ':' must not leak into its list.
+  const answers = [ask('~sim:dev-user'), ask('member', conversation, 'anyone'), ask('owner', { ...conversation, id: 'room:x' }),
+    ask('owner', { ...conversation, id: 'other' })];
+  await flush();
+  const listed = coordinator.listPendingInteractions(conversation, 1);
+  expect(listed.map(item => [item.subjectId === '~sim:dev-user' ? 'simulated' : item.answeredBy, item.conversation.id]))
+    .toEqual(expect.arrayContaining([['simulated', 'room'], ['anyone', 'room']]));
+  expect(listed).toHaveLength(2);
+  expect(listed.find(item => item.answeredBy === 'anyone')).toBeDefined();
+  expect(coordinator.listPendingInteractions(conversation, 2)).toEqual([]);
+  expect(coordinator.listPendingInteractions({ ...conversation, id: 'room:x' }, 1)).toHaveLength(1);
+  abort.abort(); await Promise.all(answers);
+  expect(coordinator.listPendingInteractions(conversation, 1)).toEqual([]);
+});
