@@ -105,6 +105,14 @@ test.describe('login-assist captcha helper', () => {
     expect(loaderUrls).toEqual([`https://ssl.captcha.qq.com/template/TCapIframeApi.js${QUERY}`]);
   });
 
+  test('accepts an NT login slider query with login_appid', async ({ page, context, baseURL }) => {
+    const ntQuery = 'aid=2053843612&login_appid=16&sid=7000000000000000000&uin=10001';
+    const { loaderUrls } = await stubNetwork(context, { ret: 0, ticket: 'T', randstr: 'R' });
+    const popup = await openFromConsole(page, helperUrl(baseURL!, { q: ntQuery, n: 'nonce-123', o: CONSOLE_ORIGIN }));
+    await expect(popup.getByRole('heading', { name: '验证完成，可以关闭此窗口' })).toBeVisible();
+    expect(loaderUrls).toEqual([`https://ssl.captcha.qq.com/template/TCapIframeApi.js?${ntQuery}`]);
+  });
+
   test('a result the Console would refuse (comma in the ticket) is not reported as handed back', async ({ page, context, baseURL }) => {
     await stubNetwork(context, { ret: 0, ticket: 'T,X', randstr: 'R' });
     const popup = await openFromConsole(page, helperUrl(baseURL!, { q: QUERY, n: 'nonce-123', o: CONSOLE_ORIGIN }));

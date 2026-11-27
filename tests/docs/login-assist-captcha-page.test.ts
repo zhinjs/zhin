@@ -81,6 +81,14 @@ describe('login-assist captcha helper page', () => {
     expect(script).toContain('decodeFragment(fragment)');
   });
 
+  it('accepts the query parameters of ICQQ and NT login slider URLs (login_appid included)', () => {
+    const allowed = scripts[0][2].match(/var ALLOWED_PARAMS = \[([^\]]*)\]/)?.[1] ?? '';
+    const names = [...allowed.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    for (const name of ['aid', 'login_appid', 'uin', 'sid', 'cap_cd', 'clientype', 'apptype']) {
+      expect(names).toContain(name);
+    }
+  });
+
   it('has no inline event handlers or external resources besides the docs link', () => {
     expect(html).not.toMatch(/\son[a-z]+=/i);
     const urls = [...html.matchAll(/https?:\/\/[A-Za-z0-9*.-]+/g)].map((match) => match[0]);
