@@ -1,14 +1,7 @@
 import { Time } from "zhin.js";
+import * as fs from "node:fs";
 import * as os from "node:os";
-import {
-  getCpuInfo,
-  getCurrentNetwork,
-  getCurrentProcessInfo,
-  getDiskInfo,
-  getGpuInfo,
-  getHostInfo,
-  getMemoryInfo,
-} from "@puniyu/system-info";
+import * as path from "node:path";
 
 const isBun = typeof Bun !== "undefined";
 
@@ -94,7 +87,9 @@ function resolveUsagePercent(reported: number | undefined, used: number, total: 
   return undefined;
 }
 
-function pickPrimaryIp(ipInfo: Array<{ ipAddress: string; netmask?: number }>) {
+export type ZtIpInfo = { ipAddress: string; netmask?: number };
+
+export function pickPrimaryIp(ipInfo: ReadonlyArray<ZtIpInfo>) {
   const ipv4 = ipInfo.find((i) => /^\d+\.\d+\.\d+\.\d+$/.test(i.ipAddress) && !i.ipAddress.startsWith("127."));
   if (ipv4) {
     return ipv4.netmask != null ? `${ipv4.ipAddress}/${ipv4.netmask}` : ipv4.ipAddress;
@@ -104,7 +99,7 @@ function pickPrimaryIp(ipInfo: Array<{ ipAddress: string; netmask?: number }>) {
   return sane?.ipAddress ?? ipInfo[0]?.ipAddress ?? "—";
 }
 
-function pickIpv6(ipInfo: Array<{ ipAddress: string }>) {
+export function pickIpv6(ipInfo: ReadonlyArray<ZtIpInfo>) {
   const global = ipInfo.find((i) =>
     i.ipAddress.includes(":") && !i.ipAddress.startsWith("fe80:") && !i.ipAddress.startsWith("::1"));
   if (global) return truncateText(global.ipAddress, 36);
@@ -112,9 +107,120 @@ function pickIpv6(ipInfo: Array<{ ipAddress: string }>) {
   return link ? truncateText(link.ipAddress, 36) : undefined;
 }
 
-/** system-info 累计流量单位为 KB。 */
-function formatTrafficKb(kb: number) {
-  return formatMemoSize(kb * 1024);
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+/* ------------------------------------------------------------------ */
+/* 采样：以下全部基于 node:os / node:fs / process，无原生依赖。          */
+/* CPU、进程 CPU 与网速需要两次采样求差；首个样本在模块加载时取得。      */
+/* ------------------------------------------------------------------ */
+
+type CpuTimes = { idle: number; total: number };
+
+function readCpuTimes(): CpuTimes {
+  let idle = 0;
+  let total = 0;
+  for (const cpu of os.cpus()) {
+    const t = cpu.times;
+    idle += t.idle;
+    total += t.user + t.nice + t.sys + t.idle + t.irq;
+  }
+  return { idle, total };
+}
+
+/** 两个 os.cpus() 样本之间的系统 CPU 占用率（%）；无增量时为 undefined。 */
+export function cpuUsageBetween(prev: CpuTimes, next: CpuTimes): number | undefined {
+  const total = next.total - prev.total;
+  if (total <= 0) return undefined;
+  return Math.min(100, Math.max(0, (1 - (next.idle - prev.idle) / total) * 100));
+}
+
+type NetCounters = { rx: number; tx: number };
+
+/** 解析 Linux /proc/net/dev，返回每个网卡的累计收发字节。 */
+export function parseProcNetDev(text: string): Map<string, NetCounters> {
+  const result = new Map<string, NetCounters>();
+  for (const line of text.split("\n").slice(2)) {
+    const idx = line.indexOf(":");
+    if (idx < 0) continue;
+    const name = line.slice(0, idx).trim();
+    const fields = line.slice(idx + 1).trim().split(/\s+/).map(Number);
+    if (fields.length < 9 || fields.some(Number.isNaN)) continue;
+    result.set(name, { rx: fields[0]!, tx: fields[8]! });
+  }
+  return result;
+}
+
+function readNetCounters(): Map<string, NetCounters> | undefined {
+  try {
+    return parseProcNetDev(fs.readFileSync("/proc/net/dev", "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/** 解析 Linux /proc/meminfo（单位 kB），返回字节。 */
+export function parseProcMeminfo(text: string): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const line of text.split("\n")) {
+    const m = /^(\w+):\s+(\d+)\s*kB/.exec(line);
+    if (m) result.set(m[1]!, Number(m[2]) * 1024);
+  }
+  return result;
+}
+
+type Sample = {
+  at: number;
+  cpu: CpuTimes;
+  proc: NodeJS.CpuUsage;
+  net?: Map<string, NetCounters>;
+};
+
+function takeSample(): Sample {
+  return { at: Date.now(), cpu: readCpuTimes(), proc: process.cpuUsage(), net: readNetCounters() };
+}
+
+let lastSample: Sample = takeSample();
+
+/** 选出主网卡：优先带非回环 IPv4 的非 internal 网卡。 */
+function pickInterface() {
+  const entries = Object.entries(os.networkInterfaces())
+    .map(([name, addrs]) => [name, (addrs ?? []).filter((a) => !a.internal)] as const)
+    .filter(([, addrs]) => addrs.length > 0);
+  return entries.find(([, addrs]) => addrs.some((a) => a.family === "IPv4")) ?? entries[0];
+}
+
+function cidrPrefix(cidr: string | null | undefined) {
+  const n = cidr ? Number(cidr.split("/")[1]) : NaN;
+  return Number.isInteger(n) ? n : undefined;
+}
+
+type DiskEntry = { mount: string; usedSpace: number; totalSpace: number };
+
+function statDisk(mount: string): DiskEntry | undefined {
+  try {
+    const st = fs.statfsSync(mount);
+    const total = st.blocks * st.bsize;
+    if (total <= 0) return undefined;
+    const used = (st.blocks - st.bfree) * st.bsize;
+    return { mount, usedSpace: used / GB, totalSpace: total / GB };
+  } catch {
+    return undefined;
+  }
+}
+
+function readDisks(): DiskEntry[] {
+  const mounts = [path.parse(process.cwd()).root || "/"];
+  if (process.platform === "darwin") mounts.push("/System/Volumes/Data");
+  const seen = new Set<string>();
+  const disks: DiskEntry[] = [];
+  for (const mount of mounts) {
+    if (seen.has(mount)) continue;
+    seen.add(mount);
+    const disk = statDisk(mount);
+    if (disk) disks.push(disk);
+  }
+  return disks;
 }
 
 export function formatCpuSample(value: number | undefined, runTimeSec: number) {
@@ -127,56 +233,85 @@ function frameworkLine(counts: ZtFrameworkCounts) {
 }
 
 export function collectZtReportData(counts: ZtFrameworkCounts): ZtReportData {
-  const host = getHostInfo();
-  const cpu = getCpuInfo();
-  const memory = getMemoryInfo();
-  const disk = getDiskInfo();
-  const network = getCurrentNetwork();
-  const proc = getCurrentProcessInfo();
-  const gpu = getGpuInfo();
+  const now = takeSample();
+  const prev = lastSample;
+  lastSample = now;
+  const elapsedSec = Math.max(0, (now.at - prev.at) / 1000);
+
+  const cpus = os.cpus();
+  if (cpus.length === 0) throw new Error("os.cpus() returned no CPUs");
+  const cpuUsage = cpuUsageBetween(prev.cpu, now.cpu);
+  const frequencyGhz = (cpus[0]!.speed || 0) / 1000;
+
+  const totalmem = os.totalmem();
+  const meminfo = (() => {
+    try {
+      return parseProcMeminfo(fs.readFileSync("/proc/meminfo", "utf8"));
+    } catch {
+      return undefined;
+    }
+  })();
+  const available = meminfo?.get("MemAvailable") ?? os.freemem();
+  const usedmem = Math.max(0, totalmem - available);
+  const swapTotal = meminfo?.get("SwapTotal") ?? 0;
+  const swapUsed = swapTotal > 0 ? swapTotal - (meminfo?.get("SwapFree") ?? swapTotal) : 0;
+
+  const disks = readDisks();
+  const diskTotal = disks.reduce((sum, d) => sum + d.totalSpace, 0);
+  const diskUsed = disks.reduce((sum, d) => sum + d.usedSpace, 0);
+
+  const iface = pickInterface();
+  const ipInfo: ZtIpInfo[] = (iface?.[1] ?? []).map((a) => ({ ipAddress: a.address, netmask: cidrPrefix(a.cidr) }));
+  const mac = iface?.[1].find((a) => a.mac && a.mac !== "00:00:00:00:00:00")?.mac;
+  const counters = iface ? now.net?.get(iface[0]) : undefined;
+  const prevCounters = iface ? prev.net?.get(iface[0]) : undefined;
+  const networkSpeedLine = counters && prevCounters && elapsedSec > 0
+    ? `↑ ${((counters.tx - prevCounters.tx) / 1024 / elapsedSec).toFixed(1)}  ↓ ${((counters.rx - prevCounters.rx) / 1024 / elapsedSec).toFixed(1)} KB/s`
+    : "—";
+
   const memUsage = process.memoryUsage();
+  const runTimeSec = process.uptime();
+  const procCpuMicros = (now.proc.user - prev.proc.user) + (now.proc.system - prev.proc.system);
+  const botCpu = elapsedSec > 0 ? (procCpuMicros / 1e6 / elapsedSec) * 100 : undefined;
   const runtime = isBun ? `Bun ${Bun.version}` : `Node ${process.version.replace(/^v/, "")}`;
-  const primaryIp = pickPrimaryIp(network.ipInfo);
-  const diskUsage = resolveUsagePercent(disk.totalUsage, disk.totalUsedSpace, disk.totalSpace);
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return {
-    hostName: host.hostName,
-    osLine: `${host.osName} ${host.osVersion} · ${host.arch} · ${host.timeZone}`,
-    uptimeLine: `已运行 ${Time.formatTime(host.uptime * 1000)}`,
-    cpuUsage: cpu.usage,
-    cpuModel: truncateText(cpu.modelName, 40),
-    cpuCoresLine: `${cpu.physicalCores}C / ${cpu.logicalCores}T · ${cpu.frequency.toFixed(2)} GHz`,
-    memValue: `${formatMb(memory.used)} / ${formatMb(memory.total)}`,
-    memUsage: memory.usage,
-    swapValue: memory.swapTotal
-      ? `${formatMb(memory.swapUsed ?? 0)} / ${formatMb(memory.swapTotal)}`
-      : undefined,
-    swapUsage: memory.swapUsage,
-    diskValue: `${formatGb(disk.totalUsedSpace)} / ${formatGb(disk.totalSpace)}`,
-    diskUsage,
-    diskIoLine: `读 ${disk.readSpeed.toFixed(1)} · 写 ${disk.writeSpeed.toFixed(1)} MB/s`,
-    diskMounts: disk.disks.slice(0, 3).map((d) => ({
+    hostName: os.hostname(),
+    osLine: `${os.type()} ${os.release()} · ${os.arch()} · ${timeZone}`,
+    uptimeLine: `已运行 ${Time.formatTime(os.uptime() * 1000)}`,
+    cpuUsage,
+    cpuModel: truncateText(cpus[0]!.model.trim() || "—", 40),
+    cpuCoresLine: `${cpus.length}T${frequencyGhz > 0 ? ` · ${frequencyGhz.toFixed(2)} GHz` : ""}`,
+    memValue: `${formatMb(usedmem / MB)} / ${formatMb(totalmem / MB)}`,
+    memUsage: totalmem > 0 ? (usedmem / totalmem) * 100 : undefined,
+    swapValue: swapTotal > 0 ? `${formatMb(swapUsed / MB)} / ${formatMb(swapTotal / MB)}` : undefined,
+    swapUsage: swapTotal > 0 ? (swapUsed / swapTotal) * 100 : undefined,
+    diskValue: disks.length ? `${formatGb(diskUsed)} / ${formatGb(diskTotal)}` : "—",
+    diskUsage: disks.length ? resolveUsagePercent(undefined, diskUsed, diskTotal) : undefined,
+    diskIoLine: "—",
+    diskMounts: disks.slice(0, 3).map((d) => ({
       mount: shortenMount(d.mount),
       used: formatGb(d.usedSpace),
       total: formatGb(d.totalSpace),
-      usage: resolveUsagePercent(d.usage, d.usedSpace, d.totalSpace),
+      usage: resolveUsagePercent(undefined, d.usedSpace, d.totalSpace),
     })),
-    networkName: network.name,
-    networkIp: primaryIp,
-    networkIpv6: pickIpv6(network.ipInfo),
-    networkMac: network.macAddr || undefined,
-    networkSpeedLine: `↑ ${network.upload.toFixed(1)}  ↓ ${network.download.toFixed(1)} KB/s`,
-    networkTrafficLine: `↑ ${formatTrafficKb(network.totalUpload)}  ↓ ${formatTrafficKb(network.totalDownload)}`,
-    gpuLine: gpu
-      ? `${truncateText(gpu.model, 32)} · ${gpu.memoryUsed ?? "—"}/${gpu.memoryTotal ?? "—"} MB · ${formatPercent(gpu.usage)}`
+    networkName: iface?.[0] ?? "—",
+    networkIp: pickPrimaryIp(ipInfo),
+    networkIpv6: pickIpv6(ipInfo),
+    networkMac: mac || undefined,
+    networkSpeedLine,
+    networkTrafficLine: counters
+      ? `↑ ${formatMemoSize(counters.tx)}  ↓ ${formatMemoSize(counters.rx)}`
       : undefined,
-    botName: proc.name,
-    botPid: proc.pid,
-    botUptime: Time.formatTime(proc.runTime * 1000),
-    botRunTimeSec: proc.runTime,
-    botCpu: proc.cpuUsage,
-    botMemMb: formatMb(proc.usedMemory),
-    botMemPct: proc.memoryUsage,
+    gpuLine: undefined,
+    botName: path.basename(process.title) || runtime,
+    botPid: process.pid,
+    botUptime: Time.formatTime(runTimeSec * 1000),
+    botRunTimeSec: runTimeSec,
+    botCpu,
+    botMemMb: formatMb(memUsage.rss / MB),
+    botMemPct: totalmem > 0 ? (memUsage.rss / totalmem) * 100 : undefined,
     botRuntime: runtime,
     botRss: formatMemoSize(memUsage.rss),
     botHeap: `${formatMemoSize(memUsage.heapUsed)} / ${formatMemoSize(memUsage.heapTotal)}`,
@@ -196,7 +331,7 @@ export function collectZtFallbackData(counts: ZtFrameworkCounts): ZtReportData {
     osLine: `${os.type()} ${os.release()} · ${os.arch()}`,
     uptimeLine: `负载 ${load} · ${os.cpus().length} 线程`,
     cpuModel: "—",
-    cpuCoresLine: "system-info 不可用",
+    cpuCoresLine: "系统信息采集失败",
     memValue: `${formatMemoSize(totalmem - freemem)} / ${formatMemoSize(totalmem)}`,
     memUsage: ((totalmem - freemem) / totalmem) * 100,
     diskValue: "—",
@@ -214,7 +349,7 @@ export function collectZtFallbackData(counts: ZtFrameworkCounts): ZtReportData {
     botRss: formatMemoSize(memUsage.rss),
     botHeap: `${formatMemoSize(memUsage.heapUsed)} / ${formatMemoSize(memUsage.heapTotal)}`,
     frameworkLine: frameworkLine(counts),
-    fallbackNote: "system-info 不可用，已回退基础信息",
+    fallbackNote: "系统信息采集失败，已回退基础信息",
   };
 }
 

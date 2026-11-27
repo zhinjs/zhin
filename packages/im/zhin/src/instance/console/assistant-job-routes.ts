@@ -108,6 +108,12 @@ export function parseScheduleAgentField(
   };
 }
 
+/**
+ * Longest delay of a one-shot (`at`) job: 365 days, the same bound as the Agent's schedule tools
+ * (`schedule-job-service`, #1250 b111). It also keeps `atMs` far below the largest `Date` (8.64e15).
+ */
+export const MAX_SCHEDULE_AT_DELAY_MS = 365 * 24 * 60 * 60_000;
+
 const TARGET_REQUIRED = '投递渠道为 im 时需要指定投递目标：zhin schedule add --target <adapter>:<endpoint>:<kind>:<id>，'
   + '或在 assistant.defaults.notify / assistant.profile.yml 的 defaults.notify 中配置默认目标';
 
@@ -141,6 +147,9 @@ function parseScheduleBody(
     const atMs = input.atMs;
     if (typeof atMs !== 'number' || !Number.isSafeInteger(atMs) || atMs <= now) {
       return invalidInput('执行时间（schedule.atMs）必须是未来的时间');
+    }
+    if (atMs - now > MAX_SCHEDULE_AT_DELAY_MS) {
+      return invalidInput('执行时间（schedule.atMs）最多是 365 天以后');
     }
     return { schedule: { kind: 'at', atMs, deleteAfterRun: true } };
   }
