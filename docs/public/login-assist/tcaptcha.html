@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-CrYEhaa0JuW9wOgrs7+qDCAScNo7nbBXJ0/zn+4TgD0=' https://ssl.captcha.qq.com https://captcha.gtimg.com https://t.captcha.qq.com; style-src 'unsafe-inline' https://captcha.gtimg.com; img-src 'self' https: data: blob:; frame-src https://captcha.gtimg.com https://t.captcha.qq.com https://ssl.captcha.qq.com; connect-src https://*.captcha.qq.com https://captcha.gtimg.com; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-6ebzbL82vqCTapvUHRapcbh4IrmXMlEsoDFoEWK+nA8=' https://ssl.captcha.qq.com https://captcha.gtimg.com https://t.captcha.qq.com; style-src 'unsafe-inline' https://captcha.gtimg.com; img-src 'self' https: data: blob:; frame-src https://captcha.gtimg.com https://t.captcha.qq.com https://ssl.captcha.qq.com; connect-src https://*.captcha.qq.com https://captcha.gtimg.com; worker-src blob:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
@@ -206,8 +206,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   var MAX_RESULT = 4096;
   var MAX_RANDSTR = 256;
   // Query parameter names seen in ICQQ / NT login slider URLs and read by TCapIframeApi.js.
+  // `login_appid` appears in NT login slider URLs (e.g. `aid=…&login_appid=16&sid=…&uin=…`).
   var ALLOWED_PARAMS = [
-    'style', 'aid', 'uin', 'uid', 'sid', 'subsid', 'cap_cd', 'clientype', 'apptype', 'lang',
+    'style', 'aid', 'login_appid', 'uin', 'uid', 'sid', 'subsid', 'cap_cd', 'clientype', 'apptype', 'lang',
     'accver', 'protocol', 'showtype', 'noheader', 'enableDarkMode', 'aged', 'enableAged',
     'grayscale', 'color', 'theme', 'fb', 'captype', 'disturblevel'
   ];
