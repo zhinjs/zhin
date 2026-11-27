@@ -5,12 +5,13 @@
 
 /*
  * Defaults are cleared, then only the scale is offered:
- *   p-* / m-* / gap-* / space-*   0, px, 1, 2, 3, 4, 6, 8, 12, 16 (= space-1 … space-8)
+ *   p-* / m-* / gap-* / space-*   0, px, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16 (4px grid)
  *   w / h / size / inset / min / max / translate / basis   Tailwind's numeric keys + control, control-compact, touch, badge
- *   text-*        label, body, section, title, display
+ *   text-*        xs, sm, md, lg, xl, 2xl, title, display, label, body, section
  *   font-*        regular, medium, strong
- *   rounded-*     0–4, full + semantic (control, card, badge, popover, dialog, …)
- *   shadow-*      e1–e3 + semantic (card, card-hover, popover, dialog)
+ *   rounded-*     0–7, full + semantic (control, pill, card, sub, hero, badge, popover, dialog, …)
+ *   shadow-*      e1–e3 + semantic (card, card-hover, popover, dialog, float)
+ *   colors        theme colours + soft-card colours (surface, sunken, ink, tint-1…5, accent-1…5, ok, warn, danger, …)
  *   breakpoints   sm 40rem, md 48rem, lg 64rem, xl 90rem
  * Arbitrary values (p-[…]) are not blocked here; the ESLint rules of @zhin.js/console-ui/eslint are.
  */
@@ -38,8 +39,10 @@
   --spacing-2: var(--console-space-2);
   --spacing-3: var(--console-space-3);
   --spacing-4: var(--console-space-4);
+  --spacing-5: var(--console-space-4-5);
   --spacing-6: var(--console-space-5);
   --spacing-8: var(--console-space-6);
+  --spacing-10: var(--console-space-6-5);
   --spacing-12: var(--console-space-7);
   --spacing-16: var(--console-space-8);
   --width-0: 0rem;
@@ -77,7 +80,12 @@
   --width-2\.5: 0.625rem;
   --width-3\.5: 0.875rem;
   --width-control: var(--console-control-height);
+  --width-control-medium: var(--console-control-height-medium);
   --width-control-compact: var(--console-control-height-compact);
+  --width-tile: var(--console-size-tile-md);
+  --width-tile-sm: var(--console-size-tile-sm);
+  --width-tile-lg: var(--console-size-tile-lg);
+  --width-icon-button: var(--console-size-icon-button);
   --width-touch: var(--console-touch-target);
   --width-touch-min: var(--console-touch-min);
   --width-badge: var(--console-badge-height);
@@ -116,7 +124,12 @@
   --height-2\.5: 0.625rem;
   --height-3\.5: 0.875rem;
   --height-control: var(--console-control-height);
+  --height-control-medium: var(--console-control-height-medium);
   --height-control-compact: var(--console-control-height-compact);
+  --height-tile: var(--console-size-tile-md);
+  --height-tile-sm: var(--console-size-tile-sm);
+  --height-tile-lg: var(--console-size-tile-lg);
+  --height-icon-button: var(--console-size-icon-button);
   --height-touch: var(--console-touch-target);
   --height-touch-min: var(--console-touch-min);
   --height-badge: var(--console-badge-height);
@@ -155,7 +168,12 @@
   --size-2\.5: 0.625rem;
   --size-3\.5: 0.875rem;
   --size-control: var(--console-control-height);
+  --size-control-medium: var(--console-control-height-medium);
   --size-control-compact: var(--console-control-height-compact);
+  --size-tile: var(--console-size-tile-md);
+  --size-tile-sm: var(--console-size-tile-sm);
+  --size-tile-lg: var(--console-size-tile-lg);
+  --size-icon-button: var(--console-size-icon-button);
   --size-touch: var(--console-touch-target);
   --size-touch-min: var(--console-touch-min);
   --size-badge: var(--console-badge-height);
@@ -194,7 +212,12 @@
   --min-width-2\.5: 0.625rem;
   --min-width-3\.5: 0.875rem;
   --min-width-control: var(--console-control-height);
+  --min-width-control-medium: var(--console-control-height-medium);
   --min-width-control-compact: var(--console-control-height-compact);
+  --min-width-tile: var(--console-size-tile-md);
+  --min-width-tile-sm: var(--console-size-tile-sm);
+  --min-width-tile-lg: var(--console-size-tile-lg);
+  --min-width-icon-button: var(--console-size-icon-button);
   --min-width-touch: var(--console-touch-target);
   --min-width-touch-min: var(--console-touch-min);
   --min-width-badge: var(--console-badge-height);
@@ -233,7 +256,12 @@
   --max-width-2\.5: 0.625rem;
   --max-width-3\.5: 0.875rem;
   --max-width-control: var(--console-control-height);
+  --max-width-control-medium: var(--console-control-height-medium);
   --max-width-control-compact: var(--console-control-height-compact);
+  --max-width-tile: var(--console-size-tile-md);
+  --max-width-tile-sm: var(--console-size-tile-sm);
+  --max-width-tile-lg: var(--console-size-tile-lg);
+  --max-width-icon-button: var(--console-size-icon-button);
   --max-width-touch: var(--console-touch-target);
   --max-width-touch-min: var(--console-touch-min);
   --max-width-badge: var(--console-badge-height);
@@ -272,7 +300,12 @@
   --inset-2\.5: 0.625rem;
   --inset-3\.5: 0.875rem;
   --inset-control: var(--console-control-height);
+  --inset-control-medium: var(--console-control-height-medium);
   --inset-control-compact: var(--console-control-height-compact);
+  --inset-tile: var(--console-size-tile-md);
+  --inset-tile-sm: var(--console-size-tile-sm);
+  --inset-tile-lg: var(--console-size-tile-lg);
+  --inset-icon-button: var(--console-size-icon-button);
   --inset-touch: var(--console-touch-target);
   --inset-touch-min: var(--console-touch-min);
   --inset-badge: var(--console-badge-height);
@@ -311,7 +344,12 @@
   --translate-2\.5: 0.625rem;
   --translate-3\.5: 0.875rem;
   --translate-control: var(--console-control-height);
+  --translate-control-medium: var(--console-control-height-medium);
   --translate-control-compact: var(--console-control-height-compact);
+  --translate-tile: var(--console-size-tile-md);
+  --translate-tile-sm: var(--console-size-tile-sm);
+  --translate-tile-lg: var(--console-size-tile-lg);
+  --translate-icon-button: var(--console-size-icon-button);
   --translate-touch: var(--console-touch-target);
   --translate-touch-min: var(--console-touch-min);
   --translate-badge: var(--console-badge-height);
@@ -350,20 +388,37 @@
   --flex-basis-2\.5: 0.625rem;
   --flex-basis-3\.5: 0.875rem;
   --flex-basis-control: var(--console-control-height);
+  --flex-basis-control-medium: var(--console-control-height-medium);
   --flex-basis-control-compact: var(--console-control-height-compact);
+  --flex-basis-tile: var(--console-size-tile-md);
+  --flex-basis-tile-sm: var(--console-size-tile-sm);
+  --flex-basis-tile-lg: var(--console-size-tile-lg);
+  --flex-basis-icon-button: var(--console-size-icon-button);
   --flex-basis-touch: var(--console-touch-target);
   --flex-basis-touch-min: var(--console-touch-min);
   --flex-basis-badge: var(--console-badge-height);
+  --text-xs: var(--console-text-xs);
+  --text-xs--line-height: var(--console-leading-xs);
+  --text-sm: var(--console-text-sm);
+  --text-sm--line-height: var(--console-leading-sm);
+  --text-md: var(--console-text-md);
+  --text-md--line-height: var(--console-leading-md);
+  --text-lg: var(--console-text-lg);
+  --text-lg--line-height: var(--console-leading-lg);
+  --text-xl: var(--console-text-xl);
+  --text-xl--line-height: var(--console-leading-xl);
+  --text-2xl: var(--console-text-2xl);
+  --text-2xl--line-height: var(--console-leading-2xl);
+  --text-title: var(--console-text-title);
+  --text-title--line-height: var(--console-leading-title);
+  --text-display: var(--console-text-display);
+  --text-display--line-height: var(--console-leading-display);
   --text-label: var(--console-text-label);
   --text-label--line-height: var(--console-leading-label);
   --text-body: var(--console-text-body);
   --text-body--line-height: var(--console-leading-body);
   --text-section: var(--console-text-section);
   --text-section--line-height: var(--console-leading-section);
-  --text-title: var(--console-text-title);
-  --text-title--line-height: var(--console-leading-title);
-  --text-display: var(--console-text-display);
-  --text-display--line-height: var(--console-leading-display);
   --font-weight-regular: var(--console-weight-regular);
   --font-weight-medium: var(--console-weight-medium);
   --font-weight-strong: var(--console-weight-strong);
@@ -372,10 +427,16 @@
   --radius-2: var(--console-radius-2);
   --radius-3: var(--console-radius-3);
   --radius-4: var(--console-radius-4);
+  --radius-5: var(--console-radius-5);
+  --radius-6: var(--console-radius-6);
+  --radius-7: var(--console-radius-7);
   --radius-full: var(--console-radius-full);
   --radius-card: var(--console-card-radius);
   --radius-card-edge: var(--console-card-edge-radius);
+  --radius-sub: var(--console-sub-radius);
+  --radius-hero: var(--console-hero-radius);
   --radius-control: var(--console-control-radius);
+  --radius-pill: var(--console-pill-radius);
   --radius-check: var(--console-check-radius);
   --radius-segment: var(--console-segment-radius);
   --radius-badge: var(--console-badge-radius);
@@ -383,6 +444,7 @@
   --radius-popover-item: var(--console-popover-item-radius);
   --radius-dialog: var(--console-dialog-radius);
   --radius-sheet: var(--console-sheet-radius);
+  --radius-skeleton: var(--console-skeleton-radius);
   --shadow-e1: var(--console-elevation-1);
   --shadow-e2: var(--console-elevation-2);
   --shadow-e3: var(--console-elevation-3);
@@ -390,6 +452,10 @@
   --shadow-card-hover: var(--console-card-hover-elevation);
   --shadow-popover: var(--console-popover-elevation);
   --shadow-dialog: var(--console-dialog-elevation);
+  --shadow-float: var(--console-float-elevation);
+  --shadow-hairline: var(--console-hairline-ring);
+  --shadow-selected: var(--console-selected-bar);
+  --shadow-field-focus: var(--console-field-focus-ring);
   --font-sans: var(--console-font-sans);
   --font-mono: var(--console-font-mono);
   --color-border: hsl(var(--border));
@@ -452,8 +518,45 @@
   --color-chart-7: hsl(var(--console-chart-7));
   --color-chart-8: hsl(var(--console-chart-8));
   --color-chart-other: hsl(var(--console-chart-other));
+  --color-surface: hsl(var(--console-surface));
+  --color-sunken: hsl(var(--console-sunken));
+  --color-raised: hsl(var(--console-raised));
+  --color-line: hsl(var(--console-line));
+  --color-control: hsl(var(--console-control));
+  --color-ink: hsl(var(--console-ink));
+  --color-faint: hsl(var(--console-faint));
+  --color-on-primary: hsl(var(--console-on-primary));
+  --color-primary-hover: hsl(var(--console-primary-hover));
+  --color-primary-soft: hsl(var(--console-primary-soft));
+  --color-primary-line: hsl(var(--console-primary-line));
+  --color-focus: hsl(var(--console-focus));
+  --color-tint-1: hsl(var(--console-tint-1));
+  --color-accent-1: hsl(var(--console-accent-1));
+  --color-tint-2: hsl(var(--console-tint-2));
+  --color-accent-2: hsl(var(--console-accent-2));
+  --color-tint-3: hsl(var(--console-tint-3));
+  --color-accent-3: hsl(var(--console-accent-3));
+  --color-tint-4: hsl(var(--console-tint-4));
+  --color-accent-4: hsl(var(--console-accent-4));
+  --color-tint-5: hsl(var(--console-tint-5));
+  --color-accent-5: hsl(var(--console-accent-5));
+  --color-ok: hsl(var(--console-ok));
+  --color-ok-bg: hsl(var(--console-ok-bg));
+  --color-warn: hsl(var(--console-warn));
+  --color-warn-bg: hsl(var(--console-warn-bg));
+  --color-danger: hsl(var(--console-danger));
+  --color-danger-bg: hsl(var(--console-danger-bg));
+  --color-danger-solid: hsl(var(--console-danger-solid));
+  --color-on-danger-solid: hsl(var(--console-on-danger-solid));
+  --color-progress: hsl(var(--console-progress));
+  --color-inverse: hsl(var(--console-inverse));
+  --color-on-inverse: hsl(var(--console-on-inverse));
+  --color-scrim: var(--console-scrim);
+  --background-image-hero: var(--console-gradient-hero);
+  --background-image-hero-2: var(--console-gradient-hero-2);
   --default-transition-duration: var(--console-motion-fast);
   --default-transition-timing-function: var(--console-ease-out);
+  --animate-spin: console-spin calc(var(--console-motion-slow) * 3) linear infinite;
   --animate-accordion-down: accordion-down var(--console-motion-base) var(--console-ease-out);
   --animate-accordion-up: accordion-up var(--console-motion-base) var(--console-ease-out);
 
@@ -465,6 +568,19 @@
     from { height: var(--radix-accordion-content-height); }
     to { height: 0; }
   }
+  @keyframes console-spin {
+    to { transform: rotate(360deg); }
+  }
 }
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* Dark theme variant (D38): .dark / [data-theme="dark"] ancestors, or the system preference on a root without an explicit theme. */
+@custom-variant dark {
+  &:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not(.light, [data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}

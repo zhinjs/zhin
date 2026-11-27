@@ -7,11 +7,19 @@
     "xl": "90rem"
   },
   "text": {
-    "label": "0.8125rem",
-    "body": "0.875rem",
-    "section": "1rem",
-    "title": "1.375rem",
-    "display": "1.75rem"
+    "xs": "0.75rem",
+    "sm": "0.8125rem",
+    "md": "0.875rem",
+    "lg": "0.9375rem",
+    "xl": "1.0625rem",
+    "2xl": "1.375rem",
+    "title": "1.625rem",
+    "display": "2rem"
+  },
+  "textAliases": {
+    "label": "sm",
+    "body": "md",
+    "section": "xl"
   },
   "weight": {
     "regular": "400",
@@ -35,6 +43,10 @@
       "value": "1rem",
       "tailwind": "4"
     },
+    "space-4-5": {
+      "value": "1.25rem",
+      "tailwind": "5"
+    },
     "space-5": {
       "value": "1.5rem",
       "tailwind": "6"
@@ -42,6 +54,10 @@
     "space-6": {
       "value": "2rem",
       "tailwind": "8"
+    },
+    "space-6-5": {
+      "value": "2.5rem",
+      "tailwind": "10"
     },
     "space-7": {
       "value": "3rem",
@@ -58,10 +74,14 @@
     "r-2": "0.625rem",
     "r-3": "0.875rem",
     "r-4": "1.125rem",
+    "r-5": "1.25rem",
+    "r-6": "1.5rem",
+    "r-7": "1.75rem",
     "r-full": "9999px"
   },
   "border": {
     "hairline": "1px",
+    "check": "1.5px",
     "focus": "2px"
   },
   "elevation": [
@@ -72,16 +92,96 @@
   ],
   "contentWidth": {
     "reading": "60rem",
-    "data": "120rem"
+    "data": "80rem"
+  },
+  "controlSize": {
+    "control-sm": "2.25rem",
+    "control-md": "2.5rem",
+    "control-lg": "3rem",
+    "icon-button": "2.75rem",
+    "switch-width": "2.875rem",
+    "switch-height": "1.75rem",
+    "tile-sm": "2rem",
+    "tile-md": "2.5rem",
+    "tile-lg": "3rem",
+    "icon": "1.25rem"
   },
   "touchTarget": "2.75rem",
+  "colors": [
+    "bg",
+    "surface",
+    "sunken",
+    "raised",
+    "line",
+    "control",
+    "ink",
+    "muted",
+    "faint",
+    "primary",
+    "on-primary",
+    "primary-hover",
+    "primary-soft",
+    "primary-line",
+    "focus",
+    "tint-1",
+    "accent-1",
+    "tint-2",
+    "accent-2",
+    "tint-3",
+    "accent-3",
+    "tint-4",
+    "accent-4",
+    "tint-5",
+    "accent-5",
+    "ok",
+    "ok-bg",
+    "warn",
+    "warn-bg",
+    "danger",
+    "danger-bg",
+    "danger-solid",
+    "on-danger-solid",
+    "progress",
+    "inverse",
+    "on-inverse",
+    "brand",
+    "brand-foreground",
+    "brand-text",
+    "brand-tint",
+    "signal-danger-fill",
+    "signal-danger-text",
+    "signal-warning-fill",
+    "signal-warning-text",
+    "signal-success-fill",
+    "signal-success-text",
+    "signal-info-fill",
+    "signal-info-text",
+    "chart-1",
+    "chart-2",
+    "chart-3",
+    "chart-4",
+    "chart-5",
+    "chart-6",
+    "chart-7",
+    "chart-8",
+    "chart-other",
+    "scrim",
+    "gradient-hero",
+    "gradient-hero-2",
+    "hero-overlay",
+    "aurora-1",
+    "aurora-2",
+    "aurora-3",
+    "aurora-4",
+    "aurora-opacity"
+  ],
   "semantic": {
     "page-padding-inline": {
       "kind": "space",
       "scope": "viewport",
-      "base": "space-3",
-      "sm": "space-4",
-      "lg": "clamp(space-4, 2.5vw, space-6)"
+      "base": "space-4",
+      "sm": "space-5",
+      "lg": "space-6"
     },
     "page-padding-block": {
       "kind": "space",
@@ -93,9 +193,9 @@
     "section-gap": {
       "kind": "space",
       "scope": "viewport",
-      "base": "space-4",
-      "sm": "space-5",
-      "lg": "space-6"
+      "base": "space-3",
+      "sm": "space-4-5",
+      "lg": "space-5"
     },
     "stack-gap": {
       "kind": "space",
@@ -117,81 +217,117 @@
     },
     "card-padding": {
       "kind": "space",
-      "base": "space-3",
-      "sm": "space-4",
-      "lg": "space-4"
+      "base": "space-4",
+      "sm": "space-4-5",
+      "lg": "space-5"
     },
     "card-padding-wide": {
       "kind": "space",
-      "base": "space-3",
-      "sm": "space-4",
+      "base": "space-4",
+      "sm": "space-4-5",
       "lg": "space-5"
     },
     "card-radius": {
       "kind": "radius",
-      "base": "r-2",
-      "sm": "r-3",
-      "lg": "r-3"
+      "base": "r-6",
+      "sm": "r-7",
+      "lg": "r-7"
     },
     "card-edge-radius": {
       "kind": "radius",
       "base": "r-0",
-      "sm": "r-3",
-      "lg": "r-3"
+      "sm": "r-7",
+      "lg": "r-7"
     },
     "card-border": {
       "kind": "border",
-      "base": "hairline",
-      "sm": "hairline",
-      "lg": "hairline"
+      "base": "0px",
+      "sm": "0px",
+      "lg": "0px"
     },
     "card-elevation": {
       "kind": "elevation",
-      "base": "e-0",
-      "sm": "e-0",
-      "lg": "e-0"
+      "base": "e-1",
+      "sm": "e-1",
+      "lg": "e-1"
     },
     "card-hover-elevation": {
       "kind": "elevation",
-      "base": "e-0",
-      "sm": "e-0",
-      "lg": "e-1"
+      "base": "e-1",
+      "sm": "e-2",
+      "lg": "e-2"
+    },
+    "sub-radius": {
+      "kind": "radius",
+      "base": "r-4",
+      "sm": "r-4",
+      "lg": "r-4"
+    },
+    "hero-radius": {
+      "kind": "radius",
+      "base": "r-6",
+      "sm": "r-6",
+      "lg": "r-6"
     },
     "grid-gap": {
       "kind": "space",
-      "base": "space-2",
-      "sm": "space-3",
-      "lg": "space-4"
+      "base": "space-3",
+      "sm": "space-4-5",
+      "lg": "space-5"
     },
     "list-row-padding": {
       "kind": "space",
-      "base": "space-3",
+      "base": "space-2",
       "sm": "space-2",
       "lg": "space-2"
     },
     "list-row-padding-inline": {
       "kind": "space",
-      "base": "space-3",
-      "sm": "space-3",
-      "lg": "space-3"
+      "base": "space-4",
+      "sm": "space-4",
+      "lg": "space-4"
+    },
+    "list-row-height": {
+      "kind": "size",
+      "base": "3.5rem",
+      "sm": "3.25rem",
+      "lg": "3.25rem"
+    },
+    "divider-width": {
+      "kind": "border",
+      "base": "hairline",
+      "sm": "hairline",
+      "lg": "hairline"
     },
     "control-height": {
       "kind": "size",
-      "base": "2.75rem",
-      "sm": "2.25rem",
-      "lg": "2.25rem"
+      "base": "3rem",
+      "sm": "3rem",
+      "lg": "3rem"
+    },
+    "control-height-medium": {
+      "kind": "size",
+      "base": "2.5rem",
+      "sm": "2.5rem",
+      "lg": "2.5rem"
     },
     "control-height-compact": {
       "kind": "size",
       "base": "2.75rem",
       "sm": "2.25rem",
-      "lg": "2rem"
+      "lg": "2.25rem"
     },
     "control-radius": {
       "kind": "radius",
-      "base": "r-2",
-      "sm": "r-2",
-      "lg": "r-2"
+      "base": "r-3",
+      "sm": "r-3",
+      "lg": "r-3"
+    },
+    "pill-radius": {
+      "kind": "radius",
+      "base": "r-full",
+      "sm": "r-full",
+      "lg": "r-full"
     },
     "check-radius": {
       "kind": "radius",
@@ -199,13 +335,37 @@
       "sm": "r-1",
       "lg": "r-1"
     },
+    "check-border-width": {
+      "kind": "border",
+      "base": "1.5px",
+      "sm": "1.5px",
+      "lg": "1.5px"
+    },
     "segment-radius": {
       "kind": "radius",
-      "base": "r-1",
-      "sm": "r-1",
-      "lg": "r-1"
+      "base": "r-full",
+      "sm": "r-full",
+      "lg": "r-full"
     },
     "control-padding-inline": {
+      "kind": "space",
+      "base": "space-4",
+      "sm": "space-4",
+      "lg": "space-4"
+    },
+    "button-padding-inline": {
+      "kind": "space",
+      "base": "space-4-5",
+      "sm": "space-4-5",
+      "lg": "space-4-5"
+    },
+    "button-padding-inline-compact": {
+      "kind": "space",
+      "base": "space-4",
+      "sm": "space-4",
+      "lg": "space-4"
+    },
+    "chip-padding-inline": {
       "kind": "space",
       "base": "space-3",
       "sm": "space-3",
@@ -231,9 +391,9 @@
     },
     "badge-height": {
       "kind": "size",
-      "base": "1.25rem",
-      "sm": "1.25rem",
-      "lg": "1.25rem"
+      "base": "1.5rem",
+      "sm": "1.5rem",
+      "lg": "1.5rem"
     },
     "badge-radius": {
       "kind": "radius",
@@ -243,23 +403,30 @@
     },
     "badge-padding-inline": {
       "kind": "space",
-      "base": "space-2",
-      "sm": "space-2",
-      "lg": "space-2"
+      "base": "space-3",
+      "sm": "space-3",
+      "lg": "space-3"
     },
     "popover-radius": {
       "kind": "radius",
       "scope": "viewport",
-      "base": "r-4 r-4 r-0 r-0",
-      "sm": "r-3",
-      "lg": "r-3"
+      "base": "r-7 r-7 r-0 r-0",
+      "sm": "r-5",
+      "lg": "r-5"
     },
     "popover-item-radius": {
       "kind": "radius",
       "scope": "viewport",
       "base": "r-3",
-      "sm": "r-2",
-      "lg": "r-2"
+      "sm": "r-3",
+      "lg": "r-3"
+    },
+    "popover-item-height": {
+      "kind": "size",
+      "scope": "viewport",
+      "base": "2.875rem",
+      "sm": "2.875rem",
+      "lg": "2.875rem"
     },
     "popover-padding": {
       "kind": "space",
@@ -272,20 +439,20 @@
       "kind": "elevation",
       "scope": "viewport",
       "base": "e-3",
-      "sm": "e-2",
-      "lg": "e-2"
+      "sm": "e-3",
+      "lg": "e-3"
     },
     "dialog-radius": {
       "kind": "radius",
       "scope": "viewport",
-      "base": "r-4 r-4 r-0 r-0",
-      "sm": "r-4",
-      "lg": "r-4"
+      "base": "r-7 r-7 r-0 r-0",
+      "sm": "r-7",
+      "lg": "r-7"
     },
     "dialog-padding": {
       "kind": "space",
       "scope": "viewport",
-      "base": "space-4",
+      "base": "space-4-5",
       "sm": "space-5",
       "lg": "space-5"
     },
@@ -306,9 +473,40 @@
     "sheet-radius": {
       "kind": "radius",
       "scope": "viewport",
-      "base": "r-4",
-      "sm": "r-4",
-      "lg": "r-4"
+      "base": "r-7",
+      "sm": "r-7",
+      "lg": "r-7"
+    },
+    "cell-padding": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-3",
+      "lg": "space-3"
+    },
+    "field-padding-block": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-3",
+      "lg": "space-3"
+    },
+    "text-button-padding-inline": {
+      "kind": "space",
+      "base": "space-3",
+      "sm": "space-3",
+      "lg": "space-3"
+    },
+    "skeleton-radius": {
+      "kind": "radius",
+      "base": "r-2",
+      "sm": "r-2",
+      "lg": "r-2"
+    },
+    "float-elevation": {
+      "kind": "elevation",
+      "scope": "viewport",
+      "base": "e-2",
+      "sm": "e-2",
+      "lg": "e-2"
     },
     "focus-ring-width": {
       "kind": "border",
@@ -333,8 +531,10 @@
       "2",
       "3",
       "4",
+      "5",
       "6",
       "8",
+      "10",
       "12",
       "16"
     ],
@@ -374,7 +574,12 @@
       "80",
       "96",
       "control",
+      "control-medium",
       "control-compact",
+      "tile",
+      "tile-sm",
+      "tile-lg",
+      "icon-button",
       "touch",
       "touch-min",
       "badge"
@@ -386,17 +591,24 @@
       "2",
       "3",
       "4",
+      "5",
+      "6",
+      "7",
       "full",
       "card",
       "card-edge",
+      "sub",
+      "hero",
       "control",
+      "pill",
       "check",
       "segment",
       "badge",
       "popover",
       "popover-item",
       "dialog",
-      "sheet"
+      "sheet",
+      "skeleton"
     ],
     "shadowKeys": [
       "none",
@@ -406,14 +618,24 @@
       "card",
       "card-hover",
       "popover",
-      "dialog"
+      "dialog",
+      "float",
+      "hairline",
+      "selected",
+      "field-focus"
     ],
     "textKeys": [
+      "xs",
+      "sm",
+      "md",
+      "lg",
+      "xl",
+      "2xl",
+      "title",
+      "display",
       "label",
       "body",
-      "section",
-      "title",
-      "display"
+      "section"
     ],
     "fontWeightKeys": [
       "regular",
@@ -435,16 +657,28 @@
   },
   "css": {
     "baseTokens": [
+      "--console-text-xs",
+      "--console-leading-xs",
+      "--console-text-sm",
+      "--console-leading-sm",
+      "--console-text-md",
+      "--console-leading-md",
+      "--console-text-lg",
+      "--console-leading-lg",
+      "--console-text-xl",
+      "--console-leading-xl",
+      "--console-text-2xl",
+      "--console-leading-2xl",
+      "--console-text-title",
+      "--console-leading-title",
+      "--console-text-display",
+      "--console-leading-display",
       "--console-text-label",
       "--console-leading-label",
       "--console-text-body",
       "--console-leading-body",
       "--console-text-section",
       "--console-leading-section",
-      "--console-text-title",
-      "--console-leading-title",
-      "--console-text-display",
-      "--console-leading-display",
       "--console-weight-regular",
       "--console-weight-medium",
       "--console-weight-strong",
@@ -452,8 +686,10 @@
       "--console-space-2",
       "--console-space-3",
       "--console-space-4",
+      "--console-space-4-5",
       "--console-space-5",
       "--console-space-6",
+      "--console-space-6-5",
       "--console-space-7",
       "--console-space-8",
       "--console-radius-0",
@@ -461,8 +697,12 @@
       "--console-radius-2",
       "--console-radius-3",
       "--console-radius-4",
+      "--console-radius-5",
+      "--console-radius-6",
+      "--console-radius-7",
       "--console-radius-full",
       "--console-border-hairline",
+      "--console-border-check",
       "--console-border-focus",
       "--console-elevation-0",
       "--console-elevation-1",
@@ -474,6 +714,16 @@
       "--console-bp-xl",
       "--console-content-reading",
       "--console-content-data",
+      "--console-size-control-sm",
+      "--console-size-control-md",
+      "--console-size-control-lg",
+      "--console-size-icon-button",
+      "--console-size-switch-width",
+      "--console-size-switch-height",
+      "--console-size-tile-sm",
+      "--console-size-tile-md",
+      "--console-size-tile-lg",
+      "--console-size-icon",
       "--console-touch-target",
       "--console-font-sans",
       "--console-font-mono",
@@ -481,6 +731,8 @@
       "--console-leading-code",
       "--console-shadow-color",
       "--console-ease-out",
+      "--console-ease-fast",
+      "--console-ease-exit",
       "--console-surface-raised",
       "--console-surface-muted",
       "--console-surface-inset",
@@ -492,6 +744,44 @@
       "--console-motion-fast",
       "--console-motion-base",
       "--console-motion-slow",
+      "--console-motion-exit",
+      "--console-motion-pulse",
+      "--console-bg",
+      "--console-surface",
+      "--console-sunken",
+      "--console-raised",
+      "--console-line",
+      "--console-control",
+      "--console-ink",
+      "--console-muted",
+      "--console-faint",
+      "--console-primary",
+      "--console-on-primary",
+      "--console-primary-hover",
+      "--console-primary-soft",
+      "--console-primary-line",
+      "--console-focus",
+      "--console-tint-1",
+      "--console-accent-1",
+      "--console-tint-2",
+      "--console-accent-2",
+      "--console-tint-3",
+      "--console-accent-3",
+      "--console-tint-4",
+      "--console-accent-4",
+      "--console-tint-5",
+      "--console-accent-5",
+      "--console-ok",
+      "--console-ok-bg",
+      "--console-warn",
+      "--console-warn-bg",
+      "--console-danger",
+      "--console-danger-bg",
+      "--console-danger-solid",
+      "--console-on-danger-solid",
+      "--console-progress",
+      "--console-inverse",
+      "--console-on-inverse",
       "--console-brand",
       "--console-brand-foreground",
       "--console-brand-text",
@@ -512,7 +802,16 @@
       "--console-chart-6",
       "--console-chart-7",
       "--console-chart-8",
-      "--console-chart-other"
+      "--console-chart-other",
+      "--console-scrim",
+      "--console-gradient-hero",
+      "--console-gradient-hero-2",
+      "--console-hero-overlay",
+      "--console-aurora-1",
+      "--console-aurora-2",
+      "--console-aurora-3",
+      "--console-aurora-4",
+      "--console-aurora-opacity"
     ],
     "semanticTokens": [
       "--console-page-padding-inline",
@@ -528,15 +827,25 @@
       "--console-card-border",
       "--console-card-elevation",
       "--console-card-hover-elevation",
+      "--console-sub-radius",
+      "--console-hero-radius",
       "--console-grid-gap",
       "--console-list-row-padding",
       "--console-list-row-padding-inline",
+      "--console-list-row-height",
+      "--console-divider-width",
       "--console-control-height",
+      "--console-control-height-medium",
       "--console-control-height-compact",
       "--console-control-radius",
+      "--console-pill-radius",
       "--console-check-radius",
+      "--console-check-border-width",
       "--console-segment-radius",
       "--console-control-padding-inline",
+      "--console-button-padding-inline",
+      "--console-button-padding-inline-compact",
+      "--console-chip-padding-inline",
       "--console-control-gap",
       "--console-control-border",
       "--console-touch-min",
@@ -545,6 +854,7 @@
       "--console-badge-padding-inline",
       "--console-popover-radius",
       "--console-popover-item-radius",
+      "--console-popover-item-height",
       "--console-popover-padding",
       "--console-popover-elevation",
       "--console-dialog-radius",
@@ -552,9 +862,20 @@
       "--console-dialog-elevation",
       "--console-dialog-close-clearance",
       "--console-sheet-radius",
+      "--console-cell-padding",
+      "--console-field-padding-block",
+      "--console-text-button-padding-inline",
+      "--console-skeleton-radius",
+      "--console-float-elevation",
       "--console-focus-ring-width",
       "--console-focus-ring-offset",
       "--console-focus-ring",
+      "--console-field-focus-ring",
+      "--console-field-error-ring",
+      "--console-selected-bar",
+      "--console-progress-halo",
+      "--console-progress-halo-wide",
+      "--console-hairline-ring",
       "--console-content-max"
     ],
     "removedTokens": {

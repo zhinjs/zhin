@@ -15,7 +15,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         data-slot="input"
         data-variant={variant === 'ghost' ? 'ghost' : undefined}
         className={cn(
-          "console-control flex min-h-20 w-full rounded-control border px-3 py-2 leading-relaxed text-body transition-colors placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60",
+          "console-control flex min-h-24 w-full",
           controlVariantClass(variant),
           className
         )}

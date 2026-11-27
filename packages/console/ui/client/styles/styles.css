@@ -12,6 +12,7 @@
 @import "./generated/tokens.css";
 @import "./base.css";
 @import "./components.css";
+@import "./soft.css";
 @import "./searchable-select.css";
 @import "./date-field.css";
 @import "./shell.css";

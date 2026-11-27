@@ -52,7 +52,7 @@ const DialogContent = forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="console-dialog-close disabled:pointer-events-none">
+      <DialogPrimitive.Close className="console-dialog-close console-touch disabled:pointer-events-none">
         <X strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-4" />
         <span className="sr-only"><ConsoleUiText id="dialog.close" /></span>
       </DialogPrimitive.Close>

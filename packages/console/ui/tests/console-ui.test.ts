@@ -82,34 +82,62 @@ describe('Button', () => {
   const classes = (variant?: Parameters<typeof buttonVariants>[0] extends infer P ? P extends { variant?: infer V } ? V : never : never) =>
     new Set(cn(buttonVariants(variant === undefined ? {} : { variant })).split(' '));
 
-  it('primary is the solid brand button with brand-foreground text (zhinjs/console#125)', () => {
+  it('primary is the solid black / white pill (soft cards D39), not the brand colour', () => {
     const primary = classes('primary');
-    for (const name of ['bg-brand', 'text-brand-foreground']) expect(primary.has(name), name).toBe(true);
-    expect(renderToStaticMarkup(h(Button, { variant: 'primary' }, '保存'))).toContain('bg-brand');
+    for (const name of ['bg-primary', 'text-primary-foreground', 'hover:bg-primary-hover', 'console-button']) expect(primary.has(name), name).toBe(true);
+    expect(primary.has('bg-brand')).toBe(false);
+    const html = renderToStaticMarkup(h(Button, { variant: 'primary' }, '保存'));
+    expect(html).toContain('data-variant="primary"');
+    expect(html).toContain('data-size="default"');
   });
 
-  it('soft is the default variant; the `default` alias was removed in ADR 0063 P4', () => {
+  it('soft is the default variant and looks like secondary (sunken); the `default` alias was removed in ADR 0063 P4', () => {
     expect(classes(undefined)).toEqual(classes('soft'));
-    expect(classes('default' as never).has('bg-primary-action')).toBe(false);
-    expect(classes('soft').has('bg-primary-action')).toBe(true);
+    expect(classes('soft')).toEqual(classes('secondary'));
+    expect(classes('default' as never).has('bg-sunken')).toBe(false);
+    expect(classes('soft').has('bg-sunken')).toBe(true);
+    expect(classes('white').has('shadow-e1')).toBe(true);
+    for (const variant of ['text', 'link'] as const) expect(classes(variant).has('bg-transparent'), variant).toBe(true);
   });
 
-  it('destructive is a ghost (red text, no fill); the solid red is destructive-solid', () => {
-    const ghost = classes('destructive');
-    expect(ghost.has('text-destructive')).toBe(true);
-    expect(ghost.has('bg-destructive')).toBe(false);
+  it('sizes: 48 default, 36 sm; old size names still render', () => {
+    const size = (value: 'default' | 'sm' | 'lg' | 'icon' | 'icon-sm') => new Set(cn(buttonVariants({ size: value })).split(' '));
+    expect(size('default').has('h-control')).toBe(true);
+    expect(size('lg').has('h-control')).toBe(true);
+    expect(size('sm').has('h-control-compact')).toBe(true);
+    expect(size('icon').has('size-control')).toBe(true);
+    expect(size('icon-sm').has('size-control-compact')).toBe(true);
+  });
+
+  it('loading keeps the label (and width), shows a spinner and marks the button busy', () => {
+    const html = renderToStaticMarkup(h(Button, { loading: true }, '保存'));
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('console-button-spinner');
+    expect(html).toContain('保存');
+    expect(html).not.toContain('disabled=""');
+    expect(renderToStaticMarkup(h(Button, null, '保存'))).not.toContain('aria-busy');
+  });
+
+  it('destructive and danger-text are red text without a fill; the solid red is destructive-solid (alias danger)', () => {
+    for (const variant of ['destructive', 'danger-text'] as const) {
+      const ghost = classes(variant);
+      expect(ghost.has('text-danger'), variant).toBe(true);
+      expect(ghost.has('bg-danger-solid'), variant).toBe(false);
+    }
     const solid = classes('destructive-solid');
-    for (const name of ['bg-destructive', 'text-destructive-foreground']) expect(solid.has(name), name).toBe(true);
+    for (const name of ['bg-danger-solid', 'text-on-danger-solid']) expect(solid.has(name), name).toBe(true);
+    expect(classes('danger')).toEqual(solid);
   });
 
   it('solid red appears only in ConfirmDialog; PageAction tone primary is the primary button', () => {
     const users = files(join(clientRoot, 'components'), /\.tsx$/u)
-      .filter((file) => !file.endsWith('button.tsx') && readFileSync(file, 'utf8').includes("'destructive-solid'"))
+      .filter((file) => !file.endsWith('button.tsx') && /'destructive-solid'|variant=["']danger["']|variant: ["']danger["']/u.test(readFileSync(file, 'utf8')))
       .map((file) => relative(clientRoot, file));
     expect(users).toEqual(['components/confirm-dialog.tsx']);
     expect(readFileSync(join(clientRoot, 'components/confirm-dialog.tsx'), 'utf8')).toContain("variant === 'destructive' ? 'destructive-solid' : 'primary'");
     const header = renderToStaticMarkup(h(PageActions, { actions: [{ label: '新建', tone: 'primary', onSelect: () => undefined }, { label: '导入', onSelect: () => undefined }] }));
-    expect(header.match(/text-brand-foreground/gu)).toHaveLength(1);
+    expect(header.match(/data-variant="primary"/gu)).toHaveLength(1);
+    expect(header.match(/data-variant="secondary"/gu)).toHaveLength(1);
   });
 });
 
@@ -295,8 +323,11 @@ describe('styles', () => {
     expect([...missing]).toEqual([]);
   });
 
-  it('keeps the colors; the deprecated aliases are gone (ADR 0063 P4)', () => {
-    expect(tokens).toMatch(/\.dark \{[\s\S]*--background: var\(--palette-hue\) var\(--surface-chroma\) 5%;/u);
+  it('maps the shadcn names onto the soft-card palette on every theme root; the deprecated aliases are gone (ADR 0063 P4)', () => {
+    expect(tokens).toContain(':root, .light, .dark, [data-theme="light"], [data-theme="dark"] {\n    --background: var(--console-bg);');
+    expect(tokens).toMatch(/\.dark, \[data-theme="dark"\] \{\n {4}color-scheme: dark;[\s\S]*--console-surface: 15 7\.69% 10\.2%;/u);
+    expect(tokens).toMatch(/@media \(prefers-color-scheme: dark\) \{\n {4}:root:not\(\.light\):not\(\[data-theme="light"\]\) \{/u);
+    expect(tokens).not.toContain('data-palette="');
     for (const alias of ['--console-radius-md', '--console-shadow-sm', '--console-shadow-ring', '--console-space-card', '--console-space-page-x', '--console-control-height-sm', '--console-duration-fast', '--radius']) {
       expect(defined.has(alias), alias).toBe(false);
     }
@@ -323,36 +354,43 @@ describe('EmptyState (ADR 0063 D28)', () => {
     const html = renderToStaticMarkup(h(EmptyState, { illustration: 'tasks', action: { label: '新建定时任务', variant: 'primary' } }));
     expect(html).toContain('data-illustration="tasks"');
     expect(html).toContain('还没有任务');
-    expect(html).toContain('bg-brand');
+    expect(html).toContain('data-variant="primary"');
     expect(html).toContain('新建定时任务');
     expect(renderToStaticMarkup(h(EmptyState, { illustration: 'not-found', action: { label: '返回首页', href: '/' } }))).toMatch(/<a [^>]*href="\/"[^>]*>返回首页<\/a>/u);
-    expect(renderToStaticMarkup(h(EmptyState, { action: { label: '刷新' } }))).toContain('bg-primary-action');
+    expect(renderToStaticMarkup(h(EmptyState, { action: { label: '刷新' } }))).toContain('data-variant="soft"');
     const titled = renderToStaticMarkup(h(EmptyState, { title: '没有记录' }));
     expect(titled).toContain('没有记录');
     expect(titled).not.toContain('这里还没有内容');
     expect(renderToStaticMarkup(h(ConsoleUiI18nProvider, { locale: 'en' }, h(EmptyState, { illustration: 'messages' })))).toContain('No messages yet');
   });
 
-  it('without an illustration keeps the icon, in brand-text at full opacity', () => {
+  it('without an illustration puts the icon in a 48 tile (soft cards D41); presets render below the action', () => {
     const Icon = (props: Record<string, unknown>) => h('svg', { ...props, 'data-icon': '' });
     const html = renderToStaticMarkup(h(EmptyState, { icon: Icon as never, title: '没有日志' }));
+    expect(html).toContain('console-empty-tile');
     expect(html).toContain('console-empty-icon');
     expect(html).not.toContain('opacity-30');
+    const presets = renderToStaticMarkup(h(EmptyState, { title: '没有任务', action: { label: '新建' }, presets: h('span', null, '每日天气') }));
+    expect(presets).toMatch(/console-empty-action[\s\S]*console-empty-presets[^>]*><span>每日天气/u);
   });
 });
 
 describe('ghost controls (ADR 0063 D29)', () => {
   it('Input, Textarea, SelectTrigger and SearchableSelectField take variant="ghost"', () => {
+    // The look lives in the console-field class (48 tall, radius 14, control border); ghost is data-variant.
     const input = renderToStaticMarkup(h(Input, { variant: 'ghost', 'aria-label': 'x' }));
     expect(input).toContain('data-variant="ghost"');
-    expect(input).toContain('border-transparent');
-    expect(input).toContain('hover:border-input');
-    expect(input).not.toContain('bg-card');
+    expect(input).toContain('console-field');
+    expect(input).toContain('h-control');
     const plain = renderToStaticMarkup(h(Input, { 'aria-label': 'x' }));
-    expect(plain).toContain('border-input');
+    expect(plain).toContain('console-field');
     expect(plain).not.toContain('data-variant');
-    expect(renderToStaticMarkup(h(Textarea, { variant: 'ghost' }))).toContain('border-transparent');
-    expect(renderToStaticMarkup(h(Select, null, h(SelectTrigger, { variant: 'ghost' }, 'x')))).toContain('border-transparent');
+    expect(renderToStaticMarkup(h(Textarea, { variant: 'ghost' }))).toContain('data-variant="ghost"');
+    expect(renderToStaticMarkup(h(Select, null, h(SelectTrigger, { variant: 'ghost' }, 'x')))).toMatch(/data-variant="ghost"[^>]*console-field|console-field[^>]*data-variant="ghost"/u);
+    const css = readFileSync(join(clientRoot, 'styles/components.css'), 'utf8');
+    expect(css).toMatch(/\.console-field\[data-variant="ghost"\] \{ border-color: transparent; background: transparent; \}/u);
+    expect(css).toMatch(/\.console-field\[aria-invalid="true"\]/u);
+    expect(renderToStaticMarkup(h(Input, { 'aria-invalid': true, 'aria-label': 'x' }))).toContain('aria-invalid="true"');
     expect(renderToStaticMarkup(h(SearchableSelectField, { variant: 'ghost', options: [], value: '', onValueChange: () => undefined }))).toContain('data-variant="ghost"');
   });
 });

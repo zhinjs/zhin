@@ -61,6 +61,7 @@ async function mountAuditPage(pageModule, pageName, custom) {
   const params = new URLSearchParams(location.search);
   const theme = params.get("theme") === "dark" ? "dark" : "light";
   document.documentElement.classList.toggle("dark", theme === "dark");
+  document.documentElement.dataset.theme = theme;
   window.addEventListener("error", (event) => publish({ status: "error", message: event.message }));
   const element = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"));
   const root = createRoot(element);

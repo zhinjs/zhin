@@ -69,7 +69,7 @@ export function ConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <div className="flex items-start gap-3">
+          <div className="flex items-center gap-3">
             <span className={cn('console-confirm-icon', variant === 'destructive' && 'is-destructive')} aria-hidden="true">
               <Icon strokeWidth={CONSOLE_ICON_STROKE_WIDTH} className="size-5" />
             </span>
@@ -103,7 +103,7 @@ export function ConfirmDialog({
             {i18n.t("confirm.notCompleted", [error])}
           </p>
         )}
-        <DialogFooter className="border-t border-border/70 pt-3">
+        <DialogFooter className="pt-2">
           <DialogClose asChild>
             <Button variant="outline" size="sm">{cancelLabel ?? i18n.t("confirm.cancel")}</Button>
           </DialogClose>

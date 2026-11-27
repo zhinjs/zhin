@@ -11,10 +11,10 @@ export type { ClassValue } from 'clsx';
  * this list in step with the generated scale.
  */
 export const CN_THEME = {
-  text: ['label', 'body', 'section', 'title', 'display'],
+  text: ['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'title', 'display', 'label', 'body', 'section'],
   'font-weight': ['regular', 'medium', 'strong'],
-  radius: ['0', '1', '2', '3', '4', 'card', 'card-edge', 'control', 'check', 'segment', 'badge', 'popover', 'popover-item', 'dialog', 'sheet'],
-  shadow: ['e1', 'e2', 'e3', 'card', 'card-hover', 'popover', 'dialog'],
+  radius: ['0', '1', '2', '3', '4', '5', '6', '7', 'card', 'card-edge', 'sub', 'hero', 'control', 'pill', 'check', 'segment', 'badge', 'popover', 'popover-item', 'dialog', 'sheet', 'skeleton'],
+  shadow: ['e1', 'e2', 'e3', 'card', 'card-hover', 'popover', 'dialog', 'float', 'hairline', 'selected', 'field-focus'],
   breakpoint: ['sm', 'md', 'lg', 'xl'],
 } as const;
 

@@ -7,6 +7,11 @@ import { cn } from '../../cn.js'
 
 const Tabs = TabsPrimitive.Root
 
+/**
+ * Tabs (soft cards, ADR 0063 D39): the segmented control `sc-seg` — a sunken pill with pill
+ * segments, the selected one primary (black / white). Radix supplies `role="tablist"` / `tab` and
+ * `aria-selected`.
+ */
 const TabsList = forwardRef<
   React.ComponentRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
@@ -14,7 +19,7 @@ const TabsList = forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex max-w-full items-center justify-start gap-1 overflow-x-auto rounded-control bg-foreground/6 p-1 text-tab-inactive",
+      "console-segmented inline-flex max-w-full items-center justify-start gap-1 overflow-x-auto p-1 text-tab-inactive",
       className
     )}
     {...props}
@@ -30,7 +35,7 @@ const TabsTrigger = forwardRef<
     ref={ref}
     value={value}
     className={cn(
-      "console-tabs-trigger inline-flex min-h-control-compact items-center justify-center whitespace-nowrap rounded-segment px-3 text-body font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 hover:text-foreground data-[state=active]:bg-card data-[state=active]:text-foreground",
+      "console-tabs-trigger console-touch console-segment inline-flex flex-1 items-center justify-center whitespace-nowrap disabled:pointer-events-none disabled:opacity-40 hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground",
       className
     )}
     {...props}

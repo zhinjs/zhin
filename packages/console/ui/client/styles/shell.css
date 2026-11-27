@@ -35,10 +35,25 @@
     flex-direction: column-reverse;
   }
 
+  /* Phones (D40): side sheets become bottom sheets with a grab handle. */
   .console-sheet-content[data-side="right"],
-  .console-sheet-content[data-side="left"] {
-    width: 100vw;
-    border-radius: 0;
+  .console-sheet-content[data-side="left"],
+  .console-sheet-content[data-side="bottom"] {
+    inset: auto 0 0 0;
+    width: 100%;
+    height: auto;
+    max-height: 90dvh;
+    border-radius: var(--console-sheet-radius) var(--console-sheet-radius) 0 0;
+    padding-bottom: max(var(--console-dialog-padding), env(safe-area-inset-bottom));
+  }
+  .console-sheet-content::before {
+    content: "";
+    flex: none;
+    align-self: center;
+    width: 2.25rem;
+    height: 0.25rem;
+    border-radius: var(--console-pill-radius);
+    background: hsl(var(--console-control) / 0.6);
   }
 }
 
@@ -46,21 +61,37 @@
  * Motion (ADR 0063 D26 / D32): every animation of the package runs only when the user has no
  * reduced-motion preference; the reset below also stops transitions under `reduce`.
  */
+/*
+ * Entering (D37, D40): dialogs grow from 96 %, drawers slide in from the right, sheets rise 24px;
+ * all fade in, over motion-slow (enter). Skeletons breathe, the in-progress dot pulses.
+ */
 @media (prefers-reduced-motion: no-preference) {
-  .console-sheet-content[data-side="right"] { animation: console-sheet-in-right var(--console-motion-slow) var(--console-ease-out); }
+  .console-dialog { animation: console-pop var(--console-motion-slow) var(--console-ease-out); }
+  .console-sheet-content[data-side="right"] { animation: console-drawer-in var(--console-motion-slow) var(--console-ease-out); }
   .console-sheet-content[data-side="left"] { animation: console-sheet-in-left var(--console-motion-slow) var(--console-ease-out); }
-  .console-sheet-content[data-side="bottom"] { animation: console-sheet-in-bottom var(--console-motion-slow) var(--console-ease-out); }
-  /* One shimmer = five slow steps (1.4s); a loop, not a transition. */
-  .console-skeleton::after { animation: console-skeleton-shimmer calc(var(--console-motion-slow) * 5) var(--console-ease-out) infinite; }
+  .console-sheet-content[data-side="bottom"] { animation: console-sheet-in-up var(--console-motion-slow) var(--console-ease-out); }
+  .console-popover { animation: console-fade var(--console-motion-fast) var(--console-ease-fast); }
+  .console-dialog-overlay,
+  .console-sheet-overlay { animation: console-fade var(--console-motion-slow) var(--console-ease-out); }
+  .console-skeleton { animation: console-skeleton-pulse calc(var(--console-motion-pulse) * 0.75) var(--console-ease-fast) infinite; }
+  .console-status[data-tone="progress"]::before { animation: console-pulse var(--console-motion-pulse) var(--console-ease-fast) infinite; }
+  .console-button-spinner { animation: console-spin calc(var(--console-motion-slow) * 3) linear infinite; }
+  .console-toast { animation: console-sheet-in-up var(--console-motion-slow) var(--console-ease-out); }
 }
 
 @media (width < 40rem) and (prefers-reduced-motion: no-preference) {
   .console-popover,
-  .console-dialog {
-    animation: console-sheet-in-bottom var(--console-motion-slow) var(--console-ease-out);
+  .console-dialog,
+  .console-sheet-content[data-side="right"],
+  .console-sheet-content[data-side="left"] {
+    animation: console-sheet-in-up var(--console-motion-slow) var(--console-ease-out);
   }
 }
 
+/*
+ * Reduced motion (D37): only opacity changes are kept — every movement stops, overlays and
+ * toasts still fade, and the spinner fades in and out instead of turning.
+ */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -68,4 +99,13 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .console-dialog,
+  .console-popover,
+  .console-sheet-content,
+  .console-toast,
+  .console-dialog-overlay,
+  .console-sheet-overlay {
+    animation: console-fade 120ms ease-out !important;
+  }
+  .console-button-spinner { animation: console-skeleton-pulse 1.2s ease-in-out infinite !important; animation-iteration-count: infinite !important; }
 }

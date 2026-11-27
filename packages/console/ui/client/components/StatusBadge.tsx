@@ -2,18 +2,29 @@ import type { ReactNode } from 'react'
 import { cn } from '../cn.js'
 
 /**
- * State of an object as shown in lists (ADR 0063 D15 第 1 条): colored badges only for states that
- * are abnormal or need attention; 「正常」 and neutral states are muted text.
+ * State of an object as shown in lists (ADR 0063 D15 第 1 条, soft cards D39): a dot and a word,
+ * never colour alone. The five soft-card tones are `ok`, `warn`, `danger`, `neutral` and
+ * `progress` (ink text, a breathing progress dot). The older names stay: `warning` = `warn`,
+ * `error` = `danger`, `info` / `pending` = `progress`.
  */
-export type ConsoleStatus = 'ok' | 'neutral' | 'info' | 'pending' | 'warning' | 'error'
+export type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'progress'
+export type ConsoleStatus = StatusTone | 'info' | 'pending' | 'warning' | 'error'
 
-const QUIET: ReadonlySet<ConsoleStatus> = new Set(['ok', 'neutral'])
+const TONE: Readonly<Record<ConsoleStatus, StatusTone>> = {
+  ok: 'ok',
+  warn: 'warn',
+  danger: 'danger',
+  neutral: 'neutral',
+  progress: 'progress',
+  info: 'progress',
+  pending: 'progress',
+  warning: 'warn',
+  error: 'danger',
+}
 
-const BADGE_CLASS: Readonly<Record<Exclude<ConsoleStatus, 'ok' | 'neutral'>, string>> = {
-  info: 'console-badge-info',
-  pending: 'console-badge-info',
-  warning: 'console-badge-warning',
-  error: 'console-badge-danger',
+/** The soft-card tone of a status (`warning` → `warn`, `error` → `danger`, `info` / `pending` → `progress`). */
+export function statusTone(status: ConsoleStatus): StatusTone {
+  return TONE[status] ?? 'neutral'
 }
 
 export interface StatusBadgeProps {
@@ -22,22 +33,29 @@ export interface StatusBadgeProps {
   className?: string
 }
 
-/** Whether a status is rendered as a colored badge (only abnormal / attention states are). */
+/** Whether a status needs attention (ok and neutral are quiet; the rest stand out). */
 export function isAttentionStatus(status: ConsoleStatus): boolean {
-  return !QUIET.has(status)
+  const tone = statusTone(status)
+  return tone !== 'ok' && tone !== 'neutral'
 }
 
+/** 「点 + 文字」 status (soft cards). Same component as {@link StatusDot}. */
 export function StatusBadge({ status, children, className }: StatusBadgeProps) {
-  if (QUIET.has(status)) {
-    return <span className={cn('console-status-quiet', className)} data-slot="status" data-status={status}>{children}</span>
-  }
+  const tone = statusTone(status)
   return (
-    <span
-      className={cn('console-badge', BADGE_CLASS[status as keyof typeof BADGE_CLASS], className)}
-      data-slot="badge"
-      data-status={status}
-    >
+    <span className={cn('console-status', className)} data-slot="status" data-status={status} data-tone={tone}>
       {children}
     </span>
   )
+}
+
+export interface StatusDotProps {
+  tone: StatusTone
+  children: ReactNode
+  className?: string
+}
+
+/** The soft-card status: a coloured dot and its word (`<StatusDot tone="ok">在线</StatusDot>`). */
+export function StatusDot({ tone, children, className }: StatusDotProps) {
+  return <StatusBadge status={tone} className={className}>{children}</StatusBadge>
 }

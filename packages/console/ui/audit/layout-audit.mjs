@@ -3,16 +3,19 @@
  *
  * Reads the computed style of every element at 375 / 768 / 1280 / 1920 px in the light and dark
  * theme and checks:
- *   type-scale      ≤ 5 font sizes, ≤ 3 weights, all on the scale (D16)
- *   spacing         padding and gap on the space scale (or a resolved semantic spacing token)
- *   radius / border / shadow   border-radius, border-width, box-shadow on the scale
- *   consistency     one radius / border / shadow per component kind (`data-slot`) and width
+ *   type-scale      ≤ 8 font sizes, ≤ 3 weights, all on the scale (soft cards D35, was ≤ 5 in D16)
+ *   spacing         padding and gap on the 4px space scale (or a resolved semantic spacing token)
+ *   radius / border / shadow   border-radius (r-0 … r-7 / full), border-width (hairline / check /
+ *                   focus), box-shadow (e-0 … e-3 or one of the soft-card rings) on the scale
+ *   consistency     one radius / border / shadow per component kind (`data-slot`, `data-variant`,
+ *                   selected or not) and width
  *   overflow        no page-level horizontal scroll, no element pushed out of the viewport
  *   touch-target    ≥ 44 × 44 px interactive targets at 375 (an `::after` hit area counts)
  *   edge-card       edge-to-edge cards have no radius at 375
- *   static-card     static cards have no shadow
+ *   static-card     static cards carry at most shadow-sm (e-1; soft cards D39) — never e-2 / e-3
  *   bottom-drawer   open menus, selects and dialogs are bottom drawers at 375
- *   content-width   data pages ≥ 85 % of a 1920 viewport, reading pages ≤ 60rem
+ *   content-width   data pages fill min(85 % of a 1920 viewport, the 80rem content width),
+ *                   reading pages ≤ 60rem
  *   duplicate-text  the same explanation at most once per page
  *   focus-visible   every focusable element shows a focus style (D19)
  *   contrast        text readable on its background, WCAG 4.5 / 3 (D19)
@@ -36,9 +39,15 @@ export const AUDIT_CHECKS = Object.freeze([
   'contrast', 'shell-overlap',
 ]);
 
-/** Default theme switch: the Console's `.dark` class on <html>. */
+/**
+ * Default theme switch (D38): the Console's `.dark` class and `data-theme` on <html>, so the
+ * result never depends on the browser's `prefers-color-scheme`.
+ */
 export async function setConsoleTheme(page, theme) {
-  await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), theme === 'dark');
+  await page.evaluate((dark) => {
+    document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  }, theme === 'dark');
 }
 
 /**
@@ -62,6 +71,7 @@ export async function auditPage(page, options = {}) {
       radius: Object.values(scale.radius),
       border: Object.values(scale.border),
       readingWidth: scale.contentWidth.reading,
+      dataWidth: scale.contentWidth.data,
       touchTarget: scale.touchTarget,
       breakpointSm: scale.breakpoints.sm,
     },
@@ -131,7 +141,10 @@ async function focusViolations(page, maxSteps) {
       const describe = element.tagName.toLowerCase() + (element.id ? `#${element.id}` : '')
         + (element.getAttribute('aria-label') ? `[aria-label="${element.getAttribute('aria-label')}"]` : '')
         + (element.textContent?.trim() ? ` "${element.textContent.trim().slice(0, 30)}"` : '');
-      return { key: describe + element.getBoundingClientRect().top, describe, visible: outline || ring, ignored };
+      // A stable identity per element: positions change while the page scrolls to the focus.
+      const ids = (window.__zhinAuditFocusIds ??= new WeakMap());
+      if (!ids.has(element)) ids.set(element, (window.__zhinAuditFocusNext = (window.__zhinAuditFocusNext ?? 0) + 1));
+      return { key: String(ids.get(element)), describe, visible: outline || ring, ignored };
     });
     if (!state) break;
     if (seen.has(state.key)) break;
@@ -173,9 +186,13 @@ function collect({ scale, checks, contentSelector, pageType }) {
     probe.style.setProperty(property, value);
     const computed = getComputedStyle(probe).getPropertyValue(property);
     probe.style.removeProperty(property);
-    return computed;
+    return property === 'box-shadow' ? normalizeShadow(computed) : computed;
   };
-  const shadows = new Set(['none', ...[1, 2, 3].map((level) => resolve('box-shadow', `var(--console-elevation-${level})`))]);
+  const elevations = [1, 2, 3].map((level) => resolve('box-shadow', `var(--console-elevation-${level})`));
+  // The soft-card rings (D39): outline badges, selected rows, the in-progress halo, field focus.
+  const rings = ['hairline-ring', 'selected-bar', 'progress-halo', 'progress-halo-wide', 'field-focus-ring', 'field-error-ring'].map((name) => resolve('box-shadow', `var(--console-${name})`));
+  const shadows = new Set(['none', ...elevations, ...rings]);
+  const cardShadows = new Set(['none', elevations[0]]);
   probe.remove();
 
   const spacing = [0, 1, ...scale.space.map(px)];
@@ -307,17 +324,18 @@ function collect({ scale, checks, contentSelector, pageType }) {
     for (const corner of corners) {
       const value = px(corner.split(' ')[0]);
       if (value >= 1000 || value >= Math.min(rect.width, rect.height) / 2 && value >= radii[radii.length - 2]) continue;
-      if (!inSet(value, radii)) report('radius', element, `border-radius ${corner} is not r-0 … r-4 / full`);
+      if (!inSet(value, radii)) report('radius', element, `border-radius ${corner} is not r-0 … r-7 / full`);
     }
 
     // border widths
     const borderWidths = ['top', 'right', 'bottom', 'left'].map((side) => (style.getPropertyValue(`border-${side}-style`) === 'none' ? 0 : px(style.getPropertyValue(`border-${side}-width`))));
     for (const value of borderWidths) {
-      if (!inSet(value, borders)) report('border', element, `border-width ${value}px is not hairline / focus`);
+      if (!inSet(value, borders)) report('border', element, `border-width ${value}px is not hairline / check / focus`);
     }
 
     // shadow
-    if (!shadows.has(style.boxShadow)) report('shadow', element, `box-shadow "${style.boxShadow}" is not e-0 … e-3`);
+    const shadow = normalizeShadow(style.boxShadow);
+    if (!shadows.has(shadow)) report('shadow', element, `box-shadow "${shadow}" is not e-0 … e-3 or a soft-card ring`);
 
     // consistency
     const slot = element.getAttribute('data-slot');
@@ -326,15 +344,19 @@ function collect({ scale, checks, contentSelector, pageType }) {
       if (element.parentElement?.closest(`[data-slot="${slot}"]`)) key += ':nested';
       if (element.hasAttribute('data-edge')) key += ':edge';
       if (element.hasAttribute('data-interactive')) key += ':interactive';
-      const signature = `radius ${corners.join(' / ')}; border ${borderWidths.join(' ')}; shadow ${style.boxShadow}`;
+      // Variants and selection are deliberate differences (a white button has shadow-sm, a selected row its bar).
+      const variant = element.getAttribute('data-variant');
+      if (variant) key += `:${variant}`;
+      if (element.hasAttribute('data-selected') || element.getAttribute('aria-selected') === 'true' || element.hasAttribute('aria-current')) key += ':selected';
+      const signature = `radius ${corners.join(' / ')}; border ${borderWidths.join(' ')}; shadow ${shadow}`;
       const group = groups.get(key) ?? new Map();
       if (!group.has(signature)) group.set(signature, element);
       groups.set(key, group);
     }
 
     // static cards
-    if ((slot === 'card' || slot === 'stat-card') && !element.hasAttribute('data-interactive') && style.boxShadow !== 'none') {
-      report('static-card', element, 'a static card has a shadow (D16: e-0, hairline)');
+    if ((slot === 'card' || slot === 'stat-card' || slot === 'list-group') && !element.hasAttribute('data-interactive') && !cardShadows.has(shadow)) {
+      report('static-card', element, 'a static card has more than shadow-sm (soft cards D39: e-1 at most)');
     }
 
     // edge cards at phone width
@@ -373,7 +395,7 @@ function collect({ scale, checks, contentSelector, pageType }) {
     }
   }
 
-  if (fontSizeSet.size > 5) report('type-scale', null, `${fontSizeSet.size} font sizes on the page (at most 5): ${[...fontSizeSet].sort((a, b) => a - b).join(', ')}px`);
+  if (fontSizeSet.size > fontSizes.length) report('type-scale', null, `${fontSizeSet.size} font sizes on the page (at most ${fontSizes.length}): ${[...fontSizeSet].sort((a, b) => a - b).join(', ')}px`);
   if (weightSet.size > 3) report('type-scale', null, `${weightSet.size} font weights on the page (at most 3): ${[...weightSet].join(', ')}`);
 
   for (const [key, group] of groups) {
@@ -390,15 +412,41 @@ function collect({ scale, checks, contentSelector, pageType }) {
   // content width
   if (content && enabled.has('content-width')) {
     const contentWidth = content.getBoundingClientRect().width;
-    if (type === 'data' && width >= 1920 && contentWidth < width * 0.85) {
-      report('content-width', content, `data page content is ${Math.round(contentWidth)}px, < 85% of ${width}px`);
+    const dataTarget = Math.min(width * 0.85, px(scale.dataWidth));
+    if (type === 'data' && width >= 1920 && contentWidth < dataTarget - 0.5) {
+      report('content-width', content, `data page content is ${Math.round(contentWidth)}px, < ${Math.round(dataTarget)}px (85% of ${width}px, at most the content width)`);
     }
     if (type === 'reading' && contentWidth > px(scale.readingWidth) + 0.5) {
       report('content-width', content, `reading page content is ${Math.round(contentWidth)}px, > 60rem`);
     }
   }
 
-  return { width, height, theme: root.classList.contains('dark') ? 'dark' : 'light', violations, exemptions };
+  const dark = root.classList.contains('dark') || root.dataset.theme === 'dark'
+    || (root.dataset.theme !== 'light' && !root.classList.contains('light') && matchMedia('(prefers-color-scheme: dark)').matches);
+  return { width, height, theme: dark ? 'dark' : 'light', violations, exemptions };
+
+  /**
+   * Drops the transparent, zero-size layers Tailwind composes into every shadow utility
+   * (`--tw-ring-shadow`, `--tw-inset-shadow`, …), so `shadow-e1` and `var(--console-elevation-1)`
+   * compare equal; `none` when nothing is left.
+   */
+  function normalizeShadow(value) {
+    if (!value || value === 'none') return 'none';
+    const layers = [];
+    let depth = 0;
+    let start = 0;
+    for (let index = 0; index <= value.length; index += 1) {
+      const char = value[index];
+      if (char === '(') depth += 1;
+      else if (char === ')') depth -= 1;
+      else if ((char === ',' && depth === 0) || index === value.length) {
+        layers.push(value.slice(start, index).trim());
+        start = index + 1;
+      }
+    }
+    const visible = layers.filter((layer) => !/^rgba\(0, 0, 0, 0\)\s+0px\s+0px(?:\s+0px)?(?:\s+0px)?(?:\s+inset)?$/u.test(layer));
+    return visible.length ? visible.join(', ') : 'none';
+  }
 
   function isInteractive(element) {
     if (element.closest('[inert]')) return false;

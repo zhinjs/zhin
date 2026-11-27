@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Activity, Inbox, Pencil, RefreshCw, Trash2, Users } from 'lucide-react'
+import { Activity, Check, ChevronRight, Clock, Home, Inbox, MessageSquare, MoreHorizontal, Pencil, Puzzle, RefreshCw, Search, Server, Trash2, Users } from 'lucide-react'
 import {
   Alert, AlertDescription, AlertTitle, Badge, BrandMark, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
   Checkbox, ConfirmDialog, ConsoleUiI18nProvider, DateField, DateTimeField, EMPTY_ILLUSTRATIONS, EmptyState, ErrorAlert, Grid,
@@ -13,6 +13,8 @@ import {
   PageChromeActions, PageChromeProvider, PageHeader, PageShell, RowActions, SearchableSelectField, Section,
   SelectField, StatCard, StatGrid, StatusBadge, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
   Tabs, TabsContent, TabsList, TabsTrigger, Textarea, createPageChromeStore, usePageChrome, type PageAction,
+  ActionBar, Aurora, Banner, Chip, HeroCard, IconButton, ListCaption, ListGroup, ListRow, NavIcon, NavPill, Segmented,
+  StatusDot, Stepper, TabBar, TabBarItem, Tile, Toast,
 } from '../client/index.js'
 
 const params = new URLSearchParams(location.search)
@@ -20,6 +22,7 @@ const theme = params.get('theme') === 'dark' ? 'dark' : 'light'
 const locale = params.get('locale') ?? 'zh-CN'
 const width = params.get('width') === 'reading' ? 'reading' : 'data'
 document.documentElement.classList.toggle('dark', theme === 'dark')
+document.documentElement.dataset.theme = theme
 document.documentElement.lang = locale
 
 /** Fixed clock so 「更新于 hh:mm:ss」 is stable in screenshots. */
@@ -93,6 +96,120 @@ function FeedTable({ onOpen }: { onOpen: (id: string) => void }) {
         ))}
       </TableBody>
     </Table>
+  )
+}
+
+/** Soft-card components (ADR 0063 D39–D41), as in the design files CButtons / CForms / CLists / CFeedback / CLayout. */
+function SoftCards() {
+  const [range, setRange] = useState('7d')
+  const [filters, setFilters] = useState<Record<string, boolean>>({ all: true, enabled: false, attention: false })
+  const [limit, setLimit] = useState(20)
+  const [reply, setReply] = useState(true)
+  return (
+    <Section title="柔光卡片" description="大圆角、无描边卡片、胶囊按钮；黑白主色，浅色多彩只给内容。">
+      <div className="console-aurora-host grid gap-6">
+        <Aurora />
+        <nav aria-label="网页导航示例" className="console-nav">
+          <NavIcon href="#overview" label="概览" icon={<Home aria-hidden="true" strokeWidth={1.75} />} />
+          <NavPill href="#plugins" icon={<Puzzle aria-hidden="true" strokeWidth={1.75} />}>插件</NavPill>
+          <NavIcon href="#chat" label="会话" icon={<MessageSquare aria-hidden="true" strokeWidth={1.75} />} />
+          <NavIcon href="#ops" label="运维" icon={<Server aria-hidden="true" strokeWidth={1.75} />} />
+          <IconButton aria-label="搜索"><Search aria-hidden="true" strokeWidth={1.75} /></IconButton>
+        </nav>
+        <Grid min="18rem">
+          <HeroCard title="主卡 hero" description="这一页最重要的一件事">
+            <StatusDot tone="ok">运行中</StatusDot>
+            <div><Button variant="white" size="sm">重启</Button></div>
+          </HeroCard>
+          <HeroCard variant="hero-2" description="下次运行">
+            <strong className="console-stat-value">19:00</strong>
+          </HeroCard>
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-3">
+              <Tile tone={1}><Clock aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile tone={2} size="lg"><Puzzle aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile tone={3} size="sm" text>T</Tile>
+              <Tile tone={4}><MessageSquare aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile tone={5}><Clock aria-hidden="true" strokeWidth={1.75} /></Tile>
+              <Tile>z</Tile>
+            </CardContent>
+          </Card>
+        </Grid>
+      </div>
+      <Grid min="20rem">
+        <Card>
+          <CardHeader><CardTitle>按钮与选择</CardTitle></CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="primary">保存</Button>
+              <Button>次要</Button>
+              <Button variant="white">白色</Button>
+              <Button variant="text">还原默认</Button>
+              <Button variant="danger-text" size="sm">停止</Button>
+              <Button variant="danger" size="sm">再点停止</Button>
+              <Button loading>保存</Button>
+            </div>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="筛选插件">
+              <Chip pressed={filters.all} onPressedChange={(on) => setFilters({ ...filters, all: on })}>全部 25</Chip>
+              <Chip pressed={filters.enabled} onPressedChange={(on) => setFilters({ ...filters, enabled: on })}>已启用</Chip>
+              <Chip pressed={filters.attention} onPressedChange={(on) => setFilters({ ...filters, attention: on })}>需处理</Chip>
+              <Chip tone={2}>插件</Chip>
+            </div>
+            <Segmented aria-label="时间范围" value={range} onValueChange={setRange} options={[{ value: 'today', label: '今天' }, { value: '7d', label: '7 天' }, { value: '30d', label: '30 天' }]} />
+          </CardContent>
+        </Card>
+        <div className="grid gap-2">
+          <ListCaption>本群设置</ListCaption>
+          <ListGroup plain>
+            <ListRow plain title="群里被 @ 才回复" end={<Switch aria-label="群里被 @ 才回复" checked={reply} onCheckedChange={setReply} />} />
+            <ListRow plain changed title="每人每天上限" description="默认 0（不限）" end={<Stepper label="每人每天上限" value={limit} unit="次" min={0} max={99} onValueChange={setLimit} />} />
+          </ListGroup>
+          <ListCaption>账号</ListCaption>
+          <ListGroup>
+            <ListRow href="#telegram" selected icon={<Tile tone={1} text>T</Tile>} title="Telegram" description="当前选中" end={<StatusDot tone="ok">在线</StatusDot>} />
+            <ListRow href="#discord" icon={<Tile tone={4} text>D</Tile>} title="Discord" description="连接中" end={<StatusDot tone="progress">连接中</StatusDot>} />
+            <ListRow href="#qq" icon={<Tile tone={2} text>Q</Tile>} title="QQ 主号" description="进下一层" end={<ChevronRight aria-hidden="true" strokeWidth={1.75} />} />
+          </ListGroup>
+        </div>
+        <div className="grid gap-3">
+          <Banner tone="warn" action={<Button variant="white" size="sm">去登录</Button>}>QQ 主号待登录</Banner>
+          <Banner tone="danger" action={<Button variant="white" size="sm">去配置</Button>}>rss 加载失败</Banner>
+          <Banner action={<Button variant="white" size="sm">去更新</Button>}>有新版本 1.13</Banner>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusDot tone="ok">在线</StatusDot>
+            <StatusDot tone="progress">连接中</StatusDot>
+            <StatusDot tone="warn">待登录</StatusDot>
+            <StatusDot tone="danger">登录失败</StatusDot>
+            <StatusDot tone="neutral">离线</StatusDot>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="success">已启用</Badge>
+            <Badge variant="warning">可更新</Badge>
+            <Badge variant="destructive">加载失败</Badge>
+            <Badge variant="neutral">v1.4.2</Badge>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Toast icon={<Check aria-hidden="true" strokeWidth={1.75} />}>已保存</Toast>
+            <Toast onUndo={noop}>已停用 rss</Toast>
+          </div>
+        </div>
+      </Grid>
+      <Card>
+        <EmptyState
+          icon={Clock}
+          title="还没有定时任务"
+          action={{ label: '新建任务', onSelect: noop }}
+          presets={<><Chip>每日天气</Chip><Chip>签到提醒</Chip><Chip>周报汇总</Chip></>}
+        />
+      </Card>
+      <TabBar aria-label="手机导航示例">
+        <TabBarItem href="#t-overview" current icon={<Home aria-hidden="true" strokeWidth={1.75} />}>概览</TabBarItem>
+        <TabBarItem href="#t-chat" icon={<MessageSquare aria-hidden="true" strokeWidth={1.75} />}>会话</TabBarItem>
+        <TabBarItem href="#t-plugins" icon={<Puzzle aria-hidden="true" strokeWidth={1.75} />}>插件</TabBarItem>
+        <TabBarItem href="#t-more" icon={<MoreHorizontal aria-hidden="true" strokeWidth={1.75} />}>更多</TabBarItem>
+      </TabBar>
+      <ActionBar floating={false} start={<Button variant="text">取消</Button>} primary={<Button variant="primary">保存设置</Button>} />
+    </Section>
   )
 }
 
@@ -240,6 +357,7 @@ function Gallery() {
             ))}
           </Grid>
         </Section>
+        <SoftCards />
         <PageChromeProvider store={chrome}>
           <PluginContent />
         </PageChromeProvider>

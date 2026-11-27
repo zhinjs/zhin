@@ -28,7 +28,7 @@ const SEMANTIC = new Set(scale.css.semanticTokens);
 const REMOVED = new Map(Object.entries(scale.css.removedTokens));
 const KNOWN = new Set([...BASE, ...SEMANTIC]);
 /** Tier-1 tokens that have semantic replacements (D16: components use tier 2). */
-const TIER_ONE_SIZED = /^--console-(?:space-[1-8]|radius-(?:\d|full)|elevation-\d|border-(?:hairline|focus))$/u;
+const TIER_ONE_SIZED = /^--console-(?:space-[1-8](?:-5)?|radius-(?:\d|full)|elevation-\d|border-(?:hairline|check|focus))$/u;
 const MEDIA = new Set(scale.css.mediaParams.map(normalizeParams));
 const CONTAINER = new Set(scale.css.containerParams.map(normalizeParams));
 const CUSTOM_MEDIA = new Set(Object.keys(scale.css.customMedia));

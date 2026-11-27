@@ -20,8 +20,9 @@ export interface PageAction {
   readonly onSelect: () => void
   readonly icon?: LucideIcon
   /**
-   * `primary` is the solid brand button — at most one per view (zhinjs/console#125); `destructive`
-   * renders the outline button with destructive text (ADR 0063 决策 5).
+   * `primary` is the solid black / white button — at most one per screen (soft cards D39);
+   * `destructive` renders the outline button with danger text (ADR 0063 决策 5); the rest are
+   * secondary (sunken) buttons.
    */
   readonly tone?: 'default' | 'primary' | 'destructive'
   readonly disabled?: boolean
@@ -30,7 +31,7 @@ export interface PageAction {
 function buttonVariant(action: PageAction): ButtonProps['variant'] {
   if (action.tone === 'destructive') return 'destructive-outline'
   if (action.tone === 'primary') return 'primary'
-  return 'outline'
+  return 'secondary'
 }
 
 function ActionButton({ action, size }: { action: PageAction; size?: ButtonProps['size'] }) {
@@ -75,7 +76,7 @@ export function MoreMenu({ actions, label, size, align = 'end', className }: Mor
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" size={size} className={cn('console-more-trigger', className)}>
+        <Button type="button" variant="secondary" size={size} className={cn("console-more-trigger", className)}>
           <MoreHorizontal strokeWidth={CONSOLE_ICON_STROKE_WIDTH} aria-hidden="true" />
           {label ?? i18n.t('actions.more')}
         </Button>

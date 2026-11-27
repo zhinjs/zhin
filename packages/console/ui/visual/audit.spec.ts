@@ -78,7 +78,7 @@ test('the audit reports what it checks (self-test)', async ({ page }) => {
     content.append(bad);
   });
   // The injected button sits after the whole gallery: tab far enough to reach it.
-  const run = await auditPage(page, { maxFocusSteps: 120 });
+  const run = await auditPage(page, { maxFocusSteps: 260 });
   const checks = new Set(run.violations.map((violation) => violation.check));
   for (const check of ['type-scale', 'spacing', 'radius', 'border', 'shadow', 'static-card', 'touch-target', 'overflow', 'shell-overlap', 'duplicate-text', 'contrast', 'focus-visible']) {
     expect(checks, `${check} is reported`).toContain(check);

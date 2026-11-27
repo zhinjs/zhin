@@ -36,7 +36,7 @@
   @container console (width < 40rem) {
     .console-kv { grid-template-columns: minmax(0, 1fr); }
   }
-  .console-kv-item { display: flex; min-width: 0; flex-direction: column; gap: var(--console-heading-gap); padding-block: var(--console-list-row-padding); border-bottom: var(--console-card-border) solid var(--console-border-subtle); }
+  .console-kv-item { display: flex; min-width: 0; flex-direction: column; gap: var(--console-heading-gap); padding-block: var(--console-list-row-padding); border-bottom: var(--console-divider-width) solid hsl(var(--console-line)); }
   .console-kv-label { display: flex; flex-direction: column; font-size: var(--console-text-label); line-height: var(--console-leading-label); color: hsl(var(--muted-foreground)); }
   .console-kv-hint { font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
   .console-kv-value { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); margin: 0; overflow-wrap: anywhere; font-size: var(--console-text-body); }
@@ -71,10 +71,10 @@
   .console-timeline-time { margin-inline-start: auto; font-size: var(--console-text-label); font-variant-numeric: tabular-nums; color: hsl(var(--muted-foreground)); }
   .console-timeline-description { margin: 0; font-size: var(--console-text-label); color: hsl(var(--muted-foreground)); }
 
-  .console-disclosure { min-width: 0; border: var(--console-card-border) solid var(--console-border-subtle); border-radius: var(--console-card-radius); background: var(--console-surface-raised); }
+  .console-disclosure { min-width: 0; border: 0; border-radius: var(--console-sub-radius); background: hsl(var(--console-sunken)); }
   .console-disclosure-summary { display: flex; min-height: var(--console-touch-target); flex-wrap: wrap; align-items: center; gap: var(--console-inline-gap); padding: var(--console-inline-gap) var(--console-card-padding); cursor: pointer; list-style: none; }
   .console-disclosure-summary::-webkit-details-marker { display: none; }
-  .console-disclosure-summary::before { content: ''; width: 0.4rem; height: 0.4rem; border-right: var(--console-card-border) solid currentColor; border-bottom: var(--console-card-border) solid currentColor; transform: rotate(-45deg); transition: transform var(--console-motion-fast) var(--console-ease-out); }
+  .console-disclosure-summary::before { content: ''; width: 0.4rem; height: 0.4rem; border-right: var(--console-divider-width) solid currentColor; border-bottom: var(--console-divider-width) solid currentColor; transform: rotate(-45deg); transition: transform var(--console-motion-fast) var(--console-ease-out); }
   .console-disclosure[open] > .console-disclosure-summary::before { transform: rotate(45deg); }
   .console-disclosure-summary:focus-visible { outline: var(--console-focus-ring); outline-offset: var(--console-focus-ring-offset); border-radius: var(--console-card-radius); }
   .console-disclosure-title { font-weight: var(--console-weight-medium); }
@@ -82,7 +82,7 @@
   .console-disclosure-body { display: flex; min-width: 0; flex-direction: column; gap: var(--console-stack-gap); padding: 0 var(--console-card-padding) var(--console-card-padding); }
 
   .console-json-block { max-height: 24rem; margin: 0; overflow: auto; padding: var(--console-stack-gap); border-radius: var(--console-control-radius); background: var(--console-surface-inset); font-family: var(--console-font-mono); font-size: var(--console-text-label); line-height: var(--console-leading-code); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .console-media-preview { max-width: min(100%, 12.5rem); max-height: 12.5rem; padding: var(--console-inline-gap); border: var(--console-card-border) solid var(--console-border-subtle); border-radius: var(--console-control-radius); background: hsl(0 0% 100%); object-fit: contain; }
+  .console-media-preview { max-width: min(100%, 12.5rem); max-height: 12.5rem; padding: var(--console-inline-gap); border: var(--console-divider-width) solid hsl(var(--console-line)); border-radius: var(--console-control-radius); background: hsl(0 0% 100%); object-fit: contain; }
 
   /* RecordCard is a Card; only its header row is laid out here. */
   .console-record-card-head { display: flex; min-width: 0; align-items: center; gap: var(--console-inline-gap); }
