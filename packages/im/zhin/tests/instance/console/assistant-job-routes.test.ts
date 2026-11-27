@@ -8,6 +8,7 @@ import type { ConsoleUserPrincipal } from '@zhin.js/host-http';
 import { testUser, withTestUsers } from '../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import {
+  MAX_SCHEDULE_AT_DELAY_MS,
   parseAssistantJobInput,
   registerAssistantJobRoutes,
 } from '../../../src/instance/console/assistant-job-routes.js';
@@ -124,6 +125,25 @@ it('names why job writes are unavailable while keeping the legacy error string (
     .toMatchObject({ status: 'disabled', reason: 'agent-not-installed', message: expect.stringContaining('@zhin.js/agent') });
   state.reason = undefined;
   expect((await (await post('/pause', { id: 'known' })).json()).data).toMatchObject({ reason: 'agent-disabled' });
+});
+
+it('bounds schedule.atMs to a future time at most 365 days ahead, the same 365-day bound as the Agent schedule tools (#1250 b112)', async () => {
+  const now = 1_000_000;
+  expect(MAX_SCHEDULE_AT_DELAY_MS).toBe(365 * 24 * 60 * 60_000);
+  expect(parseAssistantJobInput({ prompt: 'p', schedule: { kind: 'at', atMs: now + MAX_SCHEDULE_AT_DELAY_MS } }, now))
+    .toMatchObject({ job: { schedule: { kind: 'at', atMs: now + MAX_SCHEDULE_AT_DELAY_MS } } });
+  for (const atMs of [now, now + MAX_SCHEDULE_AT_DELAY_MS + 1, 8.64e15, 8.64e15 + 1, Number.MAX_SAFE_INTEGER, now + 0.5]) {
+    expect(parseAssistantJobInput({ prompt: 'p', schedule: { kind: 'at', atMs } }, now), String(atMs))
+      .toMatchObject({ code: 'invalid_argument', error: expect.stringContaining('schedule.atMs') });
+  }
+
+  const post = await start();
+  for (const atMs of [Date.now() + MAX_SCHEDULE_AT_DELAY_MS + 60_000, Number.MAX_SAFE_INTEGER]) {
+    const response = await post('', { prompt: 'x', schedule: { kind: 'at', atMs } });
+    expect(response.status, String(atMs)).toBe(400);
+    expect((await response.json()).error).toContain('365 天');
+  }
+  expect(jobs.add).not.toHaveBeenCalled();
 });
 
 it('parseAssistantJobInput builds at/every schedules', () => {
@@ -448,6 +468,8 @@ describe('POST /assistant/jobs/update (#1250 b90)', () => {
     expect(await answer({ id: 'brief' })).toMatchObject({ status: 400, body: { code: 'invalid_argument', error: expect.stringContaining('没有要修改的内容') } });
     expect(await answer({ id: 'brief', enabled: 'yes' })).toMatchObject({ status: 400 });
     expect(await answer({ id: 'brief', schedule: { cron: 'not a cron' } })).toMatchObject({ status: 400, body: { error: expect.stringMatching(/cron 表达式无效/iu) } });
+    expect(await answer({ id: 'tick', schedule: { kind: 'at', atMs: Number.MAX_SAFE_INTEGER } }))
+      .toMatchObject({ status: 400, body: { code: 'invalid_argument', error: expect.stringContaining('365 天') } });
     expect(await answer({ id: 'tick', schedule: { kind: 'solar' } })).toMatchObject({ status: 400, body: { error: expect.stringContaining('不是 cron 计划') } });
     expect(await answer({ id: 'ghost', enabled: false })).toMatchObject({ status: 404, body: { code: 'not_found' } });
     expect(await answer({ id: 'assistant-profile-morning-brief', schedule: { cron: '0 0 8 * * *' } }))

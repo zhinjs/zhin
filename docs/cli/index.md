@@ -595,7 +595,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear] [--host <url>]
 zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "早上好，汇报今日日程" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "检查一下 RSS"
-zhin schedule add --at 2026-08-01T09:00:00Z --prompt "一次性提醒"
+zhin schedule add --at <iso8601> --prompt "一次性提醒"   # 未来 365 天以内，如明天 09:00 的 ISO8601 时间
 zhin schedule add "0 0 8 * * *" --prompt "整理今日早报" --agent news
 zhin schedule set-agent <id> <agent>     # 修改任务由哪个 Agent 执行
 zhin schedule set-agent <id> --clear     # 恢复默认 Agent（zhin）
@@ -614,7 +614,7 @@ zhin schedule resume <id>
 | `--notify-channel` | `im` / `silent`（默认；给了 `--target` 时为 `im`）/ `log` |
 | `--target` | `im` 投递目标 `<adapter>:<endpoint>:<kind>:<id>`（`kind` 为 `private` / `group` / `channel`），如 `sandbox:sandbox-bot:private:u1`；省略时沿用 `assistant.defaults.notify` 或 profile 的 `defaults.notify`。没有可用目标或目标账号不存在时，实例拒绝添加并说明原因。显式给出的目标还要求调用者在该账号上有 `endpoint.operate`（与 `zhin send` / `/message/send` 相同；Console 的 `cron:add` 同样），否则返回 403 `schedule_target_forbidden` |
 | `--agent` | 到点由哪个 Agent 执行，填 `ai.agents` 中的名称（如 `ai.agents.news`）；省略时用默认 Agent `zhin`，与以前相同。名称不存在时实例拒绝添加（400 `schedule_agent_not_found`），并列出可用的 Agent |
-| cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
+| cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`）。`--at` 须是未来 365 天以内的时间（与 Agent schedule 工具的上限相同），更远的时间 CLI 在本地报错、不发请求；直接调用 `POST /api/assistant/jobs` / `jobs/update` 时实例返回 400 `invalid_argument` |
 
 已有任务改用别的 Agent 用 `zhin schedule set-agent <id> <agent>`，`--clear` 恢复默认 Agent；不必停服改数据库。名称同样按 `ai.agents` 校验，心跳任务始终由默认 Agent 执行、不能修改；Profile 例程会被拒绝（每次启动按 Profile 重新声明，请改 `assistant.profile.yml` 中该 routine 的 `agent` 字段）；任务有投递目标时需要该账号上的 `endpoint.operate`，否则 403。`zhin schedule list` 对 Agent 已从 `ai.agents` 删除的任务标出「⚠ Agent 不存在」。修改在下次运行时生效。两条命令都需要 `ops.schedule.write`（经 `POST /api/assistant/jobs`、`POST /api/assistant/jobs/set-agent`；Console 对应 `cron:add` 的 `agent` 字段与 `cron:set-agent`）。
 

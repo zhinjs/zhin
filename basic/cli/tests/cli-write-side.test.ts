@@ -885,6 +885,8 @@ describe('migrate: build scripts of the gateway native dependencies (#1250)', ()
   });
 });
 
+const DAY_MS = 24 * 60 * 60_000;
+
 describe('schedule (running Host)', () => {
   let requests: { url: string; method: string; body: any }[];
   function stubHost(reply: (path: string) => { status: number; body: unknown }) {
@@ -929,9 +931,33 @@ describe('schedule (running Host)', () => {
   });
 
   it('--at + --prompt 可正常添加', async () => {
-    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--at', '2099-12-31T09:00:00Z', '--prompt', '年终提醒']);
+    const at = new Date(Date.now() + 30 * DAY_MS).toISOString();
+    await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--at', at, '--prompt', '年终提醒']);
     expect(requests[0].body.schedule.kind).toBe('at');
     expect(requests[0].body.prompt).toBe('年终提醒');
+  });
+
+  it('--at 超过 365 天时 add / update 在本地报错，不发请求（与服务端 MAX_SCHEDULE_AT_DELAY_MS 一致，#1250 b112）', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as never);
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+    const far = new Date(Date.now() + 366 * DAY_MS).toISOString();
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'add', '--at', far, '--prompt', 'hi']))
+      .rejects.toThrow('process.exit:1');
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'update', 'j1', '--at', far]))
+      .rejects.toThrow('process.exit:1');
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'add', '--at', '2099-12-31T09:00:00Z', '--prompt', 'hi']))
+      .rejects.toThrow('process.exit:1');
+    expect(requests).toHaveLength(0);
+    const text = [...errors.mock.calls, ...stderr.mock.calls].map(call => String(call[0])).join('\n');
+    expect(text).toContain('365 天');
+    vi.restoreAllMocks();
+    // 364 天仍在上限内，照常发送。
+    await scheduleCommand.parseAsync(['node', 'zhin', 'update', 'j1', '--at', new Date(Date.now() + 364 * DAY_MS).toISOString()]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.schedule.kind).toBe('at');
   });
 
   it('cron 位置参数 + --prompt 仍可添加', async () => {
