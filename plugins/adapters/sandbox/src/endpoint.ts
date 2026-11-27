@@ -919,6 +919,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       connectionId: name,
       canExecute: false,
       scoped: false,
+      subscribed: false,
       conversation: { type: 'private', id: owner },
       target: name,
       owner,
