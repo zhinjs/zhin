@@ -4,12 +4,17 @@
  * startup entry (`bootstrapNode`, `zhin.js/node`).
  *
  * Scans every example, plugin and package source (plus `basic/` for the runtime-wide rules);
- * `lib/`, `dist/`, `node_modules/`, tests and fixtures are skipped. Files whose job is to describe or
- * detect a removed API are listed in `DESCRIBES_REMOVED_API` with a reason.
+ * `lib/`, `dist/`, `node_modules/`, tests and fixtures are skipped. Comments are blanked with the shared
+ * string-aware stripper (`scripts/lib/strip-comments.mjs`) before the per-line rules run. Code whose job
+ * is to detect a removed API is exempt line by line through `DESCRIBES_REMOVED_API` (file → reason +
+ * the exact line fragments); an unused fragment fails the check.
+ *
+ * Not covered: specifiers assembled at run time (`import(base + '/node')`, `require(name)`).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from './lib/strip-comments.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const pluginRoots = Object.freeze([
@@ -23,14 +28,22 @@ export const allRuntimeRoots = Object.freeze([
 ]);
 const skippedDirectories = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', '__tests__', 'fixtures']);
 
-/** Repo-relative files that detect / describe a removed API on purpose → reason. */
+/**
+ * Repo-relative files whose code detects a removed API on purpose → reason and the line fragments that
+ * are exempt (every other line of the file is still checked).
+ * @type {Readonly<Record<string, Readonly<{ reason: string; lines: readonly string[] }>>>}
+ */
 export const DESCRIBES_REMOVED_API = Object.freeze({
-  'packages/im/agent/src/self-change/trial.ts':
-    'The self-change trial rejects drafts that use bootstrapNode / zhin.js/node; its detection regex names the API.',
+  // Empty today: the self-change trial's detectors (`/\bbootstrapNode\b/u`, the escaped `zhin\.js\/node`
+  // pattern) do not match themselves, so packages/im/agent/src/self-change/trial.ts needs no exemption.
 });
 
-/** Import of the deleted `zhin.js/node` entry (static, dynamic, require, side-effect, re-export). */
-export const REMOVED_NODE_ENTRY_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"`])zhin\.js\/node(?:\/[^'"`]*)?\1/u;
+/**
+ * Import of the deleted `zhin.js/node` entry (static, dynamic, require, require.resolve,
+ * import.meta.resolve, side-effect, re-export; quotes or backticks; subpaths). The self-change trial
+ * keeps an identical copy (`SELF_CHANGE_REMOVED_NODE_ENTRY_IMPORT`, asserted by the test).
+ */
+export const REMOVED_NODE_ENTRY_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire(?:\.resolve)?\s*\(\s*|\bimport\.meta\.resolve\s*\(\s*|\bimport\s+)(['"`])zhin\.js\/node(?:\/[^'"`]*)?\1/u;
 /** Any executable reference to `bootstrapNode` (call, import binding, re-export). */
 export const REMOVED_BOOTSTRAP_NODE = /\bbootstrapNode\b/u;
 
@@ -66,21 +79,50 @@ export function executableLine(line) {
   );
 }
 
-function collect(roots, pattern, violations, project = executableLine) {
+/**
+ * Is this line of `relative` an exempt detector line? Marks the fragment as used.
+ * @param {string} relative repo-relative POSIX path
+ * @param {string} line
+ * @param {Set<string>} [used]
+ * @param {Readonly<Record<string, Readonly<{ reason: string; lines: readonly string[] }>>>} [exemptions]
+ */
+export function isExemptDetectorLine(relative, line, used, exemptions = DESCRIBES_REMOVED_API) {
+  const entry = exemptions[relative];
+  const fragment = entry?.lines.find((candidate) => line.includes(candidate));
+  if (!fragment) return false;
+  used?.add(`${relative}\0${fragment}`);
+  return true;
+}
+
+/** Per-run cache: file → raw lines and comment-stripped lines (each file is read and stripped once). */
+let sourceCache = new Map();
+
+function readSource(file) {
+  let entry = sourceCache.get(file);
+  if (!entry) {
+    const text = fs.readFileSync(file, 'utf8');
+    entry = { raw: text.split(/\r?\n/u), lines: stripComments(text).split(/\r?\n/u) };
+    sourceCache.set(file, entry);
+  }
+  return entry;
+}
+
+function collect(roots, pattern, violations, project = executableLine, used = new Set()) {
   for (const root of roots) {
     const files = [];
     walkTypeScript(path.join(repoRoot, root), files);
     for (const file of files) {
-      if (Object.hasOwn(DESCRIBES_REMOVED_API, path.relative(repoRoot, file).split(path.sep).join('/'))) continue;
-      const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/u);
+      const posix = path.relative(repoRoot, file).split(path.sep).join('/');
+      const { raw, lines } = readSource(file);
       for (let index = 0; index < lines.length; index += 1) {
         if (!pattern.test(project(lines[index]))) continue;
+        if (isExemptDetectorLine(posix, raw[index], used)) continue;
         const relative = path.relative(repoRoot, file);
         if (violations.some((violation) => violation.file === relative && violation.line === index + 1)) continue;
         violations.push({
           file: path.relative(repoRoot, file),
           line: index + 1,
-          text: lines[index].trim(),
+          text: raw[index].trim(),
         });
       }
     }
@@ -88,18 +130,29 @@ function collect(roots, pattern, violations, project = executableLine) {
 }
 
 export function findRemovedApiViolations() {
+sourceCache = new Map();
 const violations = [];
-collect(pluginRoots, /\b(?:usePlugin|getPlugin)\s*\(/u, violations);
-collect(allRuntimeRoots, /\b(?:getHostRootPlugin|setHostRootPlugin)\s*\(/u, violations);
-collect(allRuntimeRoots, /\b(?:createGenerationStore|GenerationStoreContext)\b/u, violations);
-collect(allRuntimeRoots, /\bPackageCompatibilityError\b|['"]\.\/compatibility\.js['"]/u, violations);
+const used = new Set();
+collect(pluginRoots, /\b(?:usePlugin|getPlugin)\s*\(/u, violations, executableLine, used);
+collect(allRuntimeRoots, /\b(?:getHostRootPlugin|setHostRootPlugin)\s*\(/u, violations, executableLine, used);
+collect(allRuntimeRoots, /\b(?:createGenerationStore|GenerationStoreContext)\b/u, violations, executableLine, used);
+collect(allRuntimeRoots, /\bPackageCompatibilityError\b|['"]\.\/compatibility\.js['"]/u, violations, executableLine, used);
 collect(
   allRuntimeRoots,
   /\b(?:RuntimeEndpointSummary|resolveActivityFeedbackForTarget|resolveDefaultProviderFromConfig)\b/u,
   violations,
+  executableLine,
+  used,
 );
-collect(allRuntimeRoots, REMOVED_BOOTSTRAP_NODE, violations);
-collect(allRuntimeRoots, REMOVED_NODE_ENTRY_IMPORT, violations, codeLine);
+collect(allRuntimeRoots, REMOVED_BOOTSTRAP_NODE, violations, executableLine, used);
+collect(allRuntimeRoots, REMOVED_NODE_ENTRY_IMPORT, violations, codeLine, used);
+for (const [file, entry] of Object.entries(DESCRIBES_REMOVED_API)) {
+  for (const fragment of entry.lines) {
+    if (used.has(`${file}\0${fragment}`)) continue;
+    violations.push({ file, line: 0, text: `stale DESCRIBES_REMOVED_API fragment (no matching line): ${fragment}` });
+  }
+}
+sourceCache = new Map();
 return violations;
 }
 

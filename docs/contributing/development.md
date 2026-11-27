@@ -85,7 +85,7 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 
 | 检查 | 说明 |
 | --- | --- |
-| Architecture Layers（`pnpm check:architecture`） | 分层依赖方向（basic → kernel → ai → core → agent → zhin） |
+| Architecture Layers（`pnpm check:architecture`） | 分层依赖方向（basic → kernel → ai → core → agent → zhin）；包 `src/` 下的源码禁止跨包相对导入（用包名导入），`evals/`、`tests/` 等跨包相对导入按目标包层级检查，`*.config.ts` 不受限；路径先转成 POSIX 形式再比较（Windows 同样生效） |
 | Dependency Policy（`pnpm check:dependency-policy`） | 脚手架依赖策略、Changesets 配置与内部 peer 范围 |
 | Release Plan（`pnpm check:release-plan`） | 只允许 patch；minor/major（含依赖传播）均由门禁拒绝 |
 | No Koa Import（`pnpm check:no-koa`） | 插件不得直接 import koa |
@@ -110,8 +110,8 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | --- | --- |
 | IM Send Path（`pnpm check:harness-paths`） | 不得绕过 Adapter.sendMessage 统一链路 |
 | IM Session SSOT（`pnpm check:im-session-ssot`） | IM 场景/session 身份解析走 core SSOT |
-| No Platform Branches（`pnpm check:no-platform-branches`） | core / agent / ai / adapter `src`、实例装配根 `packages/im/zhin/src/instance` 与管理网关 `packages/host/gateway/src` 禁止平台名字面量与平台名表键（`icqq`、`discord`…），差异须读适配器能力画像（ADR 0044）；例外登记在 `scripts/no-platform-branches-allowlist.json` 并写明理由 |
-| Removed Plugin API（`pnpm check:no-removed-plugin-api`） | 禁止在生产源码中重新引入已删除的 Plugin lookup API |
+| No Platform Branches（`pnpm check:no-platform-branches`） | core / agent / ai / adapter `src`、实例装配根 `packages/im/zhin/src/instance` 与管理网关 `packages/host/gateway/src` 禁止平台名字面量与平台名表键（`icqq`、`discord`…），差异须读适配器能力画像（ADR 0044）；例外登记在 `scripts/no-platform-branches-allowlist.json` 并写明理由，用 `text` 片段限定到具体行。平台名从 `plugins/adapters/*` 自动收集，新适配器的 id 若是常见词（`line`、`email`、`sandbox`）会带来误报：`check-no-platform-branches.test.ts` 保存收集结果的快照，新增适配器时须在那里确认，常见词同时加入 `LITERAL_ONLY_NAMES`（只查字面量、不查对象键） |
+| Removed Plugin API（`pnpm check:no-removed-plugin-api`） | 禁止在生产源码中重新引入已删除的 Plugin lookup API、`bootstrapNode` 与 `zhin.js/node`（含 `require.resolve`、`import.meta.resolve`、反引号与子路径；运行时拼接的说明符不处理）；检测代码本身按行豁免（`DESCRIBES_REMOVED_API`），不整文件豁免 |
 
 **AI 层**
 

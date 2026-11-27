@@ -6,8 +6,8 @@
  *   （与生产加载 `.ts` 同一实现，`enum` 等 strip-only 不支持的语法同样算失败）；`.tsx` / `.jsx`
  *   由宿主注入的检查器（CLI 用 esbuild，与 tsx 加载器同源），未注入时记 `skipped`。
  * - `default_export`：约定目录的能力文件必须默认导出对应的 `defineXxx()`（形状的权威校验在沙箱加载）。
- * - `forbidden_import`：沿用 harness 检查——直调 `bot.$sendMessage`、直接 import `koa`、插件直连
- *   `@zhin.js/kernel`、已删除的 `zhin.js/node` / `bootstrapNode`。
+ * - `forbidden_import`：沿用 harness 检查——绕过出站链直调 Endpoint / 平台 client 的发送、直接 import `koa`、
+ *   插件直连 `@zhin.js/kernel`、已删除的 `zhin.js/node` / `bootstrapNode`。规则对去注释后的文本与原文各跑一遍。
  * - `skill` / `agent_manifest`：`SKILL.md` 能被 Skill 解析器接受，`agent.json` 是 JSON 对象。
  *
  * 静态检查全部在内存里完成，不写临时文件；结果写进 `change.json` 的 `trial`（每条消息截断，总量有界）。
@@ -136,21 +136,37 @@ interface ForbiddenRule {
   readonly message: string;
 }
 
+/** IM 对象（`bot` / `endpoint` / `lease` / `$client`）上的发送系方法。 */
+const IM_OBJECT_METHODS = String.raw`send|sendPayload|send\w*(?:Message|Msg)\w*|send(?:Text|Image|Photo|File|Document|Voice|Audio|Video|Sticker|Poll|Card|Markdown)\w*|postMessage`;
+/** 通用 client / transport / SDK 上只算 IM 专用方法（不含单独的 `send`，AWS SDK / WebSocket / MCP 都用它）。 */
+const IM_SPECIFIC_METHODS = String.raw`send\w*(?:Message|Msg)\w*|send(?:Text|Image|Photo|File|Document|Voice|Audio|Video|Sticker|Poll|Card|Markdown)\w*|postMessage`;
+/** 对象与成员访问之间：`!`、` as T`、右括号。 */
+const OBJECT_TAIL = String.raw`(?:\s*!)?(?:\s+as\s+[\w$.]+(?:<[^<>()\n]*>)?(?:\[\])?)?(?:\s*\))*`;
+/** `.m(`、`?.m(`、`.m?.(`、`['m'](`、`?.['m'](`。 */
+const sendAccess = (methods: string) => String.raw`\s*(?:(?:\?\.|\.)\s*(?:${methods})|(?:\?\.)?\s*\[\s*['"\x60](?:${methods})['"\x60]\s*\])\s*(?:\?\.\s*)?\(`;
+
 /**
  * 绕过 IM 出站链的写法（直调 Endpoint / transport / 平台 client / AdapterIndex 的发送）。必须与
  * `scripts/lib/send-bypass-rules.mjs` 的 `SEND_BYPASS_PATTERNS` 逐项一致（`check:harness-paths` 用同一组；
- * `scripts/check-im-send-bypass.test.ts` 断言两边相同）。
+ * `scripts/check-im-send-bypass.test.ts` 断言两边相同）。这是 lint 级护栏：解构、别名、`.bind` 等间接写法
+ * 正则管不了；真正的约束是运行时不把 Endpoint 交给插件，加上每个草稿都要主人人工批准。
  */
 export const SELF_CHANGE_SEND_BYPASS_PATTERNS: readonly Readonly<{ id: string; source: string }>[] = Object.freeze([
-  Object.freeze({ id: 'endpoint_send_message', source: String.raw`\$sendMessage\s*\(` }),
-  Object.freeze({
-    id: 'endpoint_send',
-    source: String.raw`(?<![\w$])(?:bot|endpoint|lease|transport|client|\$client|sdk)\s*\??\.\s*(?:send|sendPayload|send\w*(?:Message|Msg)\w*|send(?:Text|Image|Photo|File|Document|Voice|Audio|Video|Sticker|Poll|Card|Markdown)\w*|postMessage)\s*\(`,
-  }),
-  Object.freeze({ id: 'adapter_index_send', source: String.raw`(?<![\w$])(?:adapterIndex|adapters)\s*\??\.\s*send(?:Target)?\s*\(` }),
+  Object.freeze({ id: 'endpoint_send_message', source: String.raw`(?:\$sendMessage|\[\s*['"\x60]\$sendMessage['"\x60]\s*\])\s*(?:\?\.\s*)?\(` }),
+  Object.freeze({ id: 'endpoint_send', source: String.raw`(?<![\w$])(?:bot|endpoint|lease|\$client)` + OBJECT_TAIL + sendAccess(IM_OBJECT_METHODS) }),
+  Object.freeze({ id: 'platform_client_send', source: String.raw`(?<![\w$])(?:client|transport|sdk)` + OBJECT_TAIL + sendAccess(IM_SPECIFIC_METHODS) }),
+  Object.freeze({ id: 'adapter_index_send', source: String.raw`(?<![\w$])(?:adapterIndex|adapters)` + OBJECT_TAIL + sendAccess(String.raw`send(?:Target)?`) }),
 ]);
 
-const SEND_BYPASS_REGEXES = SELF_CHANGE_SEND_BYPASS_PATTERNS.map(pattern => new RegExp(pattern.source, 'mu'));
+const SEND_BYPASS_REGEXES = SELF_CHANGE_SEND_BYPASS_PATTERNS.map(pattern => new RegExp(pattern.source, 'u'));
+
+/**
+ * 已删除的 `zhin.js/node` 入口（静态 / 动态 import、require、require.resolve、import.meta.resolve、副作用导入、
+ * re-export，含子路径与反引号写法）。必须与 `scripts/check-no-removed-plugin-api.mjs` 的
+ * `REMOVED_NODE_ENTRY_IMPORT` 一致（`scripts/check-no-removed-plugin-api.test.ts` 断言）。运行时拼出来的说明符管不了。
+ */
+export const SELF_CHANGE_REMOVED_NODE_ENTRY_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire(?:\.resolve)?\s*\(\s*|\bimport\.meta\.resolve\s*\(\s*|\bimport\s+)(['"`])zhin\.js\/node(?:\/[^'"`]*)?\1/u;
+const REMOVED_BOOTSTRAP_NODE = /\bbootstrapNode\b/u;
 
 const FORBIDDEN_RULES: readonly ForbiddenRule[] = Object.freeze([
   {
@@ -170,12 +186,12 @@ const FORBIDDEN_RULES: readonly ForbiddenRule[] = Object.freeze([
   },
   {
     id: 'removed_api',
-    test: (source, specifiers) => specifiers.includes('zhin.js/node') || /\bbootstrapNode\b/u.test(source),
+    test: source => SELF_CHANGE_REMOVED_NODE_ENTRY_IMPORT.test(source) || REMOVED_BOOTSTRAP_NODE.test(source),
     message: 'uses the removed zhin.js/node / bootstrapNode entry; use definePlugin() and convention directories',
   },
 ]);
 
-const IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"])([^'"\n]+)\1/gu;
+const IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire(?:\.resolve)?\s*\(\s*|\bimport\.meta\.resolve\s*\(\s*|\bimport\s+)(['"`])([^'"`\n]+)\1/gu;
 
 /**
  * 对一组暂存文件跑静态检查（纯函数，除注入的检查器外不碰外部）。删除条目不在这里出现。
@@ -230,9 +246,12 @@ export async function checkSelfChangeFiles(
       add('syntax', file.path, 'failed', errorMessage(error));
     }
 
-    const source = stripComments(file.content);
+    // 规则对去注释后的文本和原文各跑一遍，任一命中即失败：去注释识别字符串，不会把 `'a//'` 后面的代码
+    // 当注释藏掉；原文那一遍兜住去注释本身的任何误判（代价是注释里写出禁止写法也会失败）。
+    const source = stripCommentsForRules(file.content);
     const specifiers = importSpecifiers(source);
-    const violations = FORBIDDEN_RULES.filter(rule => rule.test(source, specifiers));
+    const rawSpecifiers = importSpecifiers(file.content);
+    const violations = FORBIDDEN_RULES.filter(rule => rule.test(source, specifiers) || rule.test(file.content, rawSpecifiers));
     if (violations.length) add('forbidden_import', file.path, 'failed', violations.map(rule => rule.message).join('; '));
     else add('forbidden_import', file.path, 'passed');
 
@@ -453,22 +472,134 @@ function stripSyntaxError(source: string): string | null {
   }
 }
 
-/** 粗略去掉注释，避免注释里的示例代码触发规则（字符串里的 `//` 可能被误删，只用于规则匹配）。 */
-function stripComments(source: string): string {
-  // 块注释用线性扫描去掉（正则 `/\*[\s\S]*?\*\/` 在未闭合的 `/*` 上会回溯成多项式，CodeQL js/polynomial-redos）。
-  let withoutBlocks = '';
-  let cursor = 0;
-  while (cursor < source.length) {
-    const open = source.indexOf('/*', cursor);
-    if (open < 0) break;
-    const close = source.indexOf('*/', open + 2);
-    // 未闭合的 `/*` 保持原样（与原正则一致），不能借此藏住后面的禁止导入。
-    if (close < 0) break;
-    withoutBlocks += `${source.slice(cursor, open)} `;
-    cursor = close + 2;
+const REGEX_KEYWORDS = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
+const IDENT_CHAR = /[\w$]/u;
+
+/**
+ * 去掉注释（注释字符换成空格、保留换行，长度与原文相同），只用于规则匹配。逐行对应
+ * `scripts/lib/strip-comments.mjs` 的 `stripComments`（`scripts/check-im-send-bypass.test.ts` 断言两边输出相同）：
+ * 线性扫描，识别字符串、模板字面量（含嵌套 `${}`）与正则字面量，其中的 `//`、`/*` 不算注释。未闭合的 `/*`
+ * 之后保持原样（不能借此藏住后面的代码）；JSX 文本不建模。
+ */
+export function stripCommentsForRules(source: string): string {
+  const length = source.length;
+  const out: string[] = [];
+  let index = 0;
+  let copied = 0;
+  const templateDepths: number[] = [];
+  let depth = 0;
+  let regexAllowed = true;
+
+  const blank = (from: number, to: number) => {
+    out.push(source.slice(copied, from), source.slice(from, to).split('\n').map(part => ' '.repeat(part.length)).join('\n'));
+    copied = to;
+  };
+
+  const scanTemplate = (from: number): { end: number; open: boolean } => {
+    let at = from;
+    while (at < length) {
+      const char = source[at];
+      if (char === '\\') { at += 2; continue; }
+      if (char === '`') return { end: at + 1, open: false };
+      if (char === '$' && source[at + 1] === '{') return { end: at + 2, open: true };
+      at += 1;
+    }
+    return { end: length, open: false };
+  };
+
+  const enterTemplate = (from: number) => {
+    const scanned = scanTemplate(from);
+    index = scanned.end;
+    if (scanned.open) {
+      templateDepths.push(depth);
+      depth = 0;
+      regexAllowed = true;
+    } else {
+      regexAllowed = false;
+    }
+  };
+
+  while (index < length) {
+    const char = source[index]!;
+    const next = source[index + 1];
+    if (char === '/' && next === '/') {
+      const newline = source.indexOf('\n', index);
+      const end = newline < 0 ? length : newline;
+      blank(index, end);
+      index = end;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      const close = source.indexOf('*/', index + 2);
+      if (close < 0) break;
+      blank(index, close + 2);
+      index = close + 2;
+      continue;
+    }
+    if (char === '\'' || char === '"') {
+      let at = index + 1;
+      while (at < length && source[at] !== char && source[at] !== '\n') at += source[at] === '\\' ? 2 : 1;
+      index = Math.min(length, at + 1);
+      regexAllowed = false;
+      continue;
+    }
+    if (char === '`') {
+      enterTemplate(index + 1);
+      continue;
+    }
+    if (char === '/' && regexAllowed) {
+      let at = index + 1;
+      let inClass = false;
+      let closed = false;
+      while (at < length && source[at] !== '\n') {
+        const current = source[at];
+        if (current === '\\') { at += 2; continue; }
+        if (current === '[') inClass = true;
+        else if (current === ']') inClass = false;
+        else if (current === '/' && !inClass) { closed = true; break; }
+        at += 1;
+      }
+      if (closed) {
+        at += 1;
+        while (at < length && IDENT_CHAR.test(source[at]!)) at += 1;
+        index = at;
+        regexAllowed = false;
+        continue;
+      }
+      index += 1;
+      regexAllowed = true;
+      continue;
+    }
+    if (IDENT_CHAR.test(char)) {
+      let at = index + 1;
+      while (at < length && IDENT_CHAR.test(source[at]!)) at += 1;
+      regexAllowed = REGEX_KEYWORDS.has(source.slice(index, at));
+      index = at;
+      continue;
+    }
+    if (char === '{') {
+      depth += 1;
+      regexAllowed = true;
+      index += 1;
+      continue;
+    }
+    if (char === '}') {
+      if (depth === 0 && templateDepths.length > 0) {
+        depth = templateDepths.pop()!;
+        enterTemplate(index + 1);
+        continue;
+      }
+      depth = Math.max(0, depth - 1);
+      regexAllowed = false;
+      index += 1;
+      continue;
+    }
+    if (char === ')' || char === ']') regexAllowed = false;
+    else if (!/\s/u.test(char)) regexAllowed = true;
+    index += 1;
   }
-  withoutBlocks += source.slice(cursor);
-  return withoutBlocks.replace(/(^|[^:'"`\\])\/\/[^\n]*/gu, '$1');
+  out.push(source.slice(copied));
+  return out.join('');
 }
 
 function importSpecifiers(source: string): string[] {

@@ -70,7 +70,18 @@ For cross-platform outbound messages (sending from one platform to another), use
 
 Adapter Agent tools (`plugins/adapters/<name>/agents/**`) must not call a platform SDK / Client send API either: send to the current conversation with `context.use(outboundMessageToken).send({ requester, conversation, content })`, expressing platform-specific content as the adapter's namespaced segment (such as `discord:embed`, `telegram:poll`, `telegram:sticker`, `napcat:node`) that its outbound encoder renders. `check:harness-paths` scans for such calls; a call the outbound chain cannot express (creating a forum post, a work notice) is recorded with its reason in `scripts/agent-send-bypass-allowlist.json`.
 
-Plugin code (everything under `plugins/**` except an adapter's own `src/` and `adapters/` implementation — games, services and utils included — and `examples/**`) and the framework host sources are scanned by `check:harness-paths` too: calling `$sendMessage()`, a send method on `endpoint` / `lease` / `transport` / `client` / `$client` / `bot` / `sdk` (`send`, `send*Message`, `sendPhoto`, ...; platform actions such as `sendLike` are not sends) or `adapterIndex.send` fails the check. The rules live in `scripts/lib/send-bypass-rules.mjs`, and the self-change trial (`packages/im/agent/src/self-change/trial.ts`) uses the same patterns; exceptions are recorded as `{ file, rule, reason }` in the same allowlist.
+Plugin code (everything under `plugins/**` except an adapter's own `src/` and `adapters/` implementation — games, services and utils included — and `examples/**`) and the framework host sources are scanned by `check:harness-paths` too. These fail the check:
+
+- calling `$sendMessage()` (including `obj['$sendMessage'](` and `$sendMessage?.(`);
+- a send-family method on `endpoint` / `lease` / `$client` / `bot` (`send`, `send*Message`, `send*Msg`, `sendPhoto`, ...; platform actions such as `sendLike` are not sends);
+- an IM-specific method on `client` / `transport` / `sdk` (`send*Message`, `send*Msg`, `sendPhoto` / `sendFile` / ..., `postMessage`). Those three names are also what AWS SDK clients, WebSockets and MCP / A2A transports are usually called, so a bare `.send(` (`client.send(new PutObjectCommand())`, `transport.send(frame)`) does not count;
+- `adapterIndex.send` / `sendTarget`.
+
+`obj!.send(`, `(obj as T).send(`, `obj?.send?.(`, `obj['send'](` and call chains broken across lines all count: the rules run on the whole file and each match is mapped back to its line. Comments are blanked first by `scripts/lib/strip-comments.mjs`, which knows strings, template literals and regexes, so `'a//'` or `"/*"` cannot hide the code after it. The rules live in `scripts/lib/send-bypass-rules.mjs`; the self-change trial (`packages/im/agent/src/self-change/trial.ts`) uses the same patterns and the same comment stripping (tests keep the two in sync) and runs the rules on the raw text as well, so forbidden code written in a comment also fails a draft's trial. Exceptions are recorded as `{ file, rule, text, reason }` in the same allowlist, where `text` limits the entry to lines containing that fragment.
+
+This is a lint-level guard rail: destructuring (`const { send } = endpoint`), aliasing, `.bind` / `.call` and other indirection are out of its reach. The real constraint is that the runtime never hands an Endpoint to plugin code (plugins only get the outbound port), plus the owner's manual approval of every self-change draft.
+
+`check:no-removed-plugin-api` rejects the deleted `zhin.js/node` entry through `from`, `import()`, `require()`, `require.resolve()` and `import.meta.resolve()`, with quotes or backticks, subpaths included; specifiers assembled at run time (`import(base + '/node')`) are not handled. The self-change trial uses the same regex (asserted by a test).
 
 ## Host Token Pattern
 

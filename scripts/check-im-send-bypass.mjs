@@ -11,12 +11,16 @@
  *    （`context.use(outboundMessageToken).send(...)`）发送消息，不能直调平台 SDK / Client 的发送接口。
  *
  * 确实无法由出站链表达的调用列在 `scripts/agent-send-bypass-allowlist.json`：Agent 工具条目为
- * 文件 + 调用名（`call`）+ 理由；插件 / 宿主条目为文件 + 规则 id（`rule`）+ 理由。
+ * 文件 + 调用名（`call`）+ 理由；插件 / 宿主条目为文件 + 规则 id（`rule`）+ 理由。两类条目都可以再加文本片段
+ * （`text`），只放行包含该片段的那一行；保留的宿主条目必须写片段，不能按整文件放行。
+ *
+ * 规则对整份文件匹配（换行的链式调用也算），注释先用 `scripts/lib/strip-comments.mjs` 换成空格，
+ * 字符串里的 `//`、`/*` 不会被当成注释。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findSendBypasses } from './lib/send-bypass-rules.mjs';
+import { findSendBypasses, stripComments } from './lib/send-bypass-rules.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -64,11 +68,28 @@ const toRel = (file) => path.relative(repoRoot, file).split(path.sep).join('/');
 // Platform send calls an adapter Agent tool must not make (CLAUDE.md Guardrail #1).
 const agentSendRe = /(?:\.|\b)(send|sendMessage|sendMsg|sendPayload|sendPrivateMsg|sendGroupMsg|sendForwardMsg|sendGroupForwardMsg|sendPrivateForwardMsg|sendPoll|sendSticker\w*|sendTextMessage|sendWorkNotice|sendGroupAiRecord|postMessage|forward\w*SingleMsg|threads\.create)\s*\(/g;
 
+/**
+ * Allowlist entry → does it cover this hit? Plugin / host entries name a rule (`rule`), adapter Agent
+ * tool entries a call (`call`); either may narrow itself to lines containing a text fragment (`text`).
+ * @param {{ file: string; rule?: string; call?: string; text?: string }} entry
+ * @param {{ file: string; rule?: string; call?: string; text: string }} hit
+ */
+export function allowlistCovers(entry, hit) {
+  if (entry.file !== hit.file) return false;
+  if (entry.rule ? entry.rule !== hit.rule : entry.call !== hit.call) return false;
+  return !entry.text || hit.text.includes(entry.text);
+}
+
 export function run() {
   const allowlist = JSON.parse(fs.readFileSync(path.join(__dirname, 'agent-send-bypass-allowlist.json'), 'utf8'));
-  const keyOf = (entry) => (entry.rule ? `rule\0${entry.file}\0${entry.rule}` : `call\0${entry.file}\0${entry.call}`);
-  const allowed = new Set(allowlist.map(keyOf));
   const usedAllow = new Set();
+  /** @param {{ file: string; rule?: string; call?: string; text: string }} hit */
+  const allow = (hit) => {
+    const index = allowlist.findIndex((entry) => allowlistCovers(entry, hit));
+    if (index < 0) return false;
+    usedAllow.add(index);
+    return true;
+  };
 
   /** @type {Array<{ file: string; line: number; id: string; text: string }>} */
   const violations = [];
@@ -80,8 +101,7 @@ export function run() {
       if (isTestFile(rel) || isAdapterImplementationPath(rel)) continue;
       if (rel.startsWith('packages/host/') && !/^packages\/host\/[^/]+\/src\//u.test(rel)) continue;
       for (const hit of findSendBypasses(fs.readFileSync(file, 'utf8'))) {
-        const key = `rule\0${rel}\0${hit.id}`;
-        if (allowed.has(key)) { usedAllow.add(key); continue; }
+        if (allow({ file: rel, rule: hit.id, text: hit.text })) continue;
         violations.push({ file: rel, ...hit });
       }
     }
@@ -95,19 +115,18 @@ export function run() {
     for (const file of files) {
       const rel = toRel(file);
       if (isTestFile(rel)) continue;
-      fs.readFileSync(file, 'utf8').split(/\r?\n/).forEach((line, i) => {
+      stripComments(fs.readFileSync(file, 'utf8')).split(/\r?\n/).forEach((line, i) => {
         if (line.includes('outboundMessageToken')) return; // the IM outbound port itself
         for (const match of line.matchAll(agentSendRe)) {
           const call = match[1];
           if (call === 'send' && !/\.send\s*\(/.test(line)) continue;
-          const key = `call\0${rel}\0${call}`;
-          if (allowed.has(key)) { usedAllow.add(key); continue; }
+          if (allow({ file: rel, call, text: line.trim() })) continue;
           agentViolations.push({ file: rel, line: i + 1, text: line.trim() });
         }
       });
     }
   }
-  const staleAllow = allowlist.filter((entry) => !usedAllow.has(keyOf(entry)));
+  const staleAllow = allowlist.filter((_entry, index) => !usedAllow.has(index));
 
   let failed = false;
   if (agentViolations.length) {
@@ -127,7 +146,7 @@ export function run() {
   if (staleAllow.length) {
     failed = true;
     console.error('Harness check: stale entries in scripts/agent-send-bypass-allowlist.json (no matching call):\n');
-    for (const entry of staleAllow) console.error(`  ${entry.file}: ${entry.rule ?? entry.call}`);
+    for (const entry of staleAllow) console.error(`  ${entry.file}: ${entry.rule ?? entry.call}${entry.text ? ` (text: ${entry.text})` : ''}`);
     console.error('');
   }
   if (failed) return 1;

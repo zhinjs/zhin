@@ -209,6 +209,9 @@ describe('dotenv files stay out of the project file manager (issue #1250)', () =
   });
 
   it('lists every bootstrap file the bot reads, BOT.md included (#1250)', async () => {
+    // Intentional cross-package sync check: host-http must not depend on @zhin.js/agent (layer rule), so
+    // the test reads the agent's bootstrap file list from source to keep the project-file allowlist in
+    // step with it. Test-only; production code never imports across these packages.
     const { BOOTSTRAP_FILENAMES, BOT_BOOTSTRAP_FILENAMES } = await import('../../../im/agent/src/bootstrap.js');
     for (const name of new Set([...BOOTSTRAP_FILENAMES, ...BOT_BOOTSTRAP_FILENAMES])) {
       expect(isProjectPathAllowed(name)).toBe(true);

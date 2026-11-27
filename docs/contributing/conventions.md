@@ -78,7 +78,18 @@ flowchart LR
 
 适配器 Agent 工具（`plugins/adapters/<name>/agents/**`）同样不能直调平台 SDK / Client 的发送接口：用 `context.use(outboundMessageToken).send({ requester, conversation, content })` 发往当前会话；平台特有内容用适配器的命名空间段表达（如 `discord:embed`、`telegram:poll`、`telegram:sticker`、`napcat:node`），由该适配器的出站编码器渲染。`check:harness-paths` 会扫描这类直调；确实无法由出站链表达的调用（如创建论坛帖、工作通知）登记在 `scripts/agent-send-bypass-allowlist.json` 并写明理由。
 
-插件代码（`plugins/**` 中适配器 `src/`、`adapters/` 实现以外的部分，含 games、services、utils，以及 `examples/**`）与框架宿主源码同样由 `check:harness-paths` 扫描：直调 `$sendMessage()`、`endpoint` / `lease` / `transport` / `client` / `$client` / `bot` / `sdk` 上的发送方法（`send`、`send*Message`、`sendPhoto` 等，`sendLike` 一类平台动作不算）或 `adapterIndex.send` 都会报错。规则定义在 `scripts/lib/send-bypass-rules.mjs`，自改代码试运行（`packages/im/agent/src/self-change/trial.ts`）使用同一组模式；例外以 `{ file, rule, reason }` 登记在同一白名单文件。
+插件代码（`plugins/**` 中适配器 `src/`、`adapters/` 实现以外的部分，含 games、services、utils，以及 `examples/**`）与框架宿主源码同样由 `check:harness-paths` 扫描。会报错的写法：
+
+- 直调 `$sendMessage()`（含 `obj['$sendMessage'](`、`$sendMessage?.(`）；
+- `endpoint` / `lease` / `$client` / `bot` 上的发送系方法（`send`、`send*Message`、`send*Msg`、`sendPhoto` 等，`sendLike` 一类平台动作不算）；
+- `client` / `transport` / `sdk` 上的 IM 专用方法（`send*Message`、`send*Msg`、`sendPhoto` / `sendFile` 等、`postMessage`）。这三个名字也是 AWS SDK client、WebSocket、MCP / A2A transport 的常用名，单独的 `.send(`（如 `client.send(new PutObjectCommand())`、`transport.send(frame)`）不算；
+- `adapterIndex.send` / `sendTarget`。
+
+`obj!.send(`、`(obj as T).send(`、`obj?.send?.(`、`obj['send'](` 和跨行的链式调用都算：规则对整份文件匹配，命中换算成行号；注释先由识别字符串、模板字面量和正则的 `scripts/lib/strip-comments.mjs` 换成空格，`'a//'`、`"/*"` 不会把后面的代码藏掉。规则定义在 `scripts/lib/send-bypass-rules.mjs`，自改代码试运行（`packages/im/agent/src/self-change/trial.ts`）用同一组模式和同一份去注释逻辑（由测试保证两边一致），并且对原文再跑一遍，注释里写出的禁止写法也会让草稿试跑失败。例外以 `{ file, rule, text, reason }` 登记在同一白名单文件，`text` 是只放行包含该片段的行的文本片段。
+
+这是 lint 级护栏，管不了解构（`const { send } = endpoint`）、别名、`.bind` / `.call` 等间接写法。真正的约束是运行时不把 Endpoint 交给插件（插件只拿到出站端口），以及每个自改草稿都要主人人工批准。
+
+`check:no-removed-plugin-api` 拦截已删除的 `zhin.js/node` 入口：`from`、`import()`、`require()`、`require.resolve()`、`import.meta.resolve()`，引号或反引号，含子路径；运行时拼出来的说明符（`import(base + '/node')`）不处理。自改代码试运行用同一个正则（测试保证一致）。
 
 ## Host token 模式
 
