@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=8720867920e7f91d -->
+<!-- sync-adapter-docs:sha256=b4b7fca450f0bcee -->
 
 # @zhin.js/adapter-sandbox
 
@@ -112,7 +112,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 关闭页面不会取消任务。重新进入会话后，可只读查看 journal 中已完成但未投递、部分投递或投递结果未知的结果，每页 50 个回合；这些结果不会补发、重跑，也不会写成已发送消息。结果正文复用 journal，媒体只保留已授权的资源链接，不复制 base64，不改变 journal 留存规则。
 
-刷新后仅恢复当前进程和 generation 中仍有效的待处理交互，继续使用原发起人、会话、期限和单次处理规则。历史与浏览器缓存中的控件不提供当前审批权限；已结束或重启前的操作不会重新激活。
+刷新后仅恢复当前进程和 generation 中仍有效的待处理交互，继续使用原发起人、会话、期限和单次处理规则。历史与浏览器缓存中的控件不提供当前审批权限；已结束或重启前的操作不会重新激活。恢复的交互按它所问的发言人作答：服务端把它所问的对象和本次请求的连接比对后给出 `answerAs`——`simulated`（带模拟 ID `~sim:<id>`）以该模拟身份作答，与发送框当前填的 ID 无关；`self`（问的是你自己的聊天身份）以「我的聊天身份」作答；`anyone`（`answeredBy: 'anyone'`）用当前发言人；`other`（问的是别人的真实身份）只读显示，不可点击，也不下发对方的 ID。读取接口 `GET /api/interactions/pending`（`endpoint.view`）只返回 `id`、`generation`、`expiresAt`、`segments` 和 `answerAs`。它和会话历史、任务结果等按 `connectionId` 读取的接口一样，只接受由同一个 Console 用户（会话或 API 令牌）打开的连接，其他用户的连接返回 `403`（`sandbox_connection_forbidden`）。
 
 无人值守任务等产生的 Host 工具审批，可在「运维 → 定时任务 → 管理员任务」的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
 
