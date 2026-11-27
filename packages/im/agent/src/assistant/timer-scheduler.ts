@@ -21,6 +21,7 @@ import {
   resolveFreeDayJob,
   resolveHolidayJob,
   resolveScatterJob,
+  redactSecretText,
   type ResolvedJob,
 } from '@zhin.js/kernel';
 import { ScheduleExecutionQueue, ScheduleQueueCancellation } from '../schedule-domain/schedule-execution-queue.js';
@@ -38,7 +39,7 @@ import type { ScheduleJobStore } from './job-store.js';
 import type { ScheduleJob, ScheduleJobState, ScheduleJobUpdate, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
 import { ScheduleJobAgentError, profileJobAgentMessage } from './schedule-agent.js';
-import { type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
+import { type DeliverResult, type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
 import { SCHEDULE_MODEL_RETRY_DELAYS_MS, scheduleModelFailureNotice } from './schedule-model-failure.js';
 
@@ -55,6 +56,43 @@ function pendingModelRetryNote(retryInMs: number, attempt: number): string {
   return `；${Math.round(retryInMs / 60_000)} 分钟后自动重试（第 ${attempt}/${SCHEDULE_MODEL_RETRY_DELAYS_MS.length} 次）`;
 }
 const PENDING_MODEL_RETRY_NOTE = /；\d+ 分钟后自动重试（第 \d+\/\d+ 次）$/;
+
+/** `lastError` note of a run whose failure notice could not be delivered (#1250 b111). */
+const UNDELIVERED_NOTICE_NOTE = '；失败通知未送达';
+
+/**
+ * `lastError` with the undelivered-notice note, placed before a pending-retry note so that note stays
+ * last (`withoutPendingModelRetry` looks for it at the end).
+ */
+function withUndeliveredNoticeNote(lastError: string | undefined, reason: string): string {
+  const note = `${UNDELIVERED_NOTICE_NOTE}（${reason}）`;
+  const base = lastError ?? 'unknown error';
+  const pending = PENDING_MODEL_RETRY_NOTE.exec(base);
+  return pending ? `${base.slice(0, pending.index)}${note}${pending[0]}` : `${base}${note}`;
+}
+
+/** A log-safe description of a notice target: routing kind and masked conversation id, no content. */
+export function describeNotifyTarget(notify: ScheduleJob['notify']): string {
+  if (notify.channel !== 'im') return notify.channel === 'ha' ? `ha:${notify.service}` : notify.channel;
+  const scene = notify.target.scene;
+  const id = scene.sceneId ? `${String(scene.sceneId).slice(0, 2)}***` : '-';
+  return `im:${scene.platform || '-'}/${scene.endpointKey || '-'}/${scene.kind || '-'}:${id}`;
+}
+
+/** Why a notice was not delivered, redacted and bounded; `undefined` when it was delivered. */
+export function undeliveredNoticeReason(outcome: Readonly<{ result?: DeliverResult; error?: unknown }>): string | undefined {
+  let reason: string;
+  if (outcome.error !== undefined) {
+    reason = outcome.error instanceof Error ? outcome.error.message || outcome.error.name : String(outcome.error);
+  } else if (outcome.result && !outcome.result.delivered) {
+    const receipt = outcome.result.receipt;
+    reason = receipt?.failure
+      ? `${receipt.failure.code}: ${receipt.failure.message}`
+      : receipt ? `status ${receipt.status}` : `not delivered (${outcome.result.channel})`;
+  } else return undefined;
+  const text = redactSecretText(reason.replace(/\s+/g, ' ').trim()) || 'unknown';
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+}
 
 /**
  * The stored state once a pending automatic retry will no longer run (the job was paused, or the
@@ -426,7 +464,7 @@ export class TimerScheduler {
     const modelFailure = result.success ? undefined : result.modelFailure;
     // The run's own state writes, under the job's lock (#1250 b90 review): a change made in between
     // waits for them, or is read by them, never half of each.
-    const { retryInMs } = await this.#withJobLock(jobId, async () => {
+    const { retryInMs, lastExecutedAt: ranAt } = await this.#withJobLock(jobId, async () => {
       const lastExecutedAt = Date.now();
       // #1250 b90: the job may have been changed (`schedule_update`) while it ran; what follows the run
       // (its next run, an automatic retry, removing a finished one-shot) goes by the job as stored now,
@@ -478,7 +516,7 @@ export class TimerScheduler {
       if (result.success && !rescheduled && current.schedule.kind === 'at' && current.schedule.deleteAfterRun) {
         await this.#removeJobUnlocked(jobId);
       }
-      return { retryInMs };
+      return { retryInMs, lastExecutedAt };
     });
 
     const degraded = result.success && result.status === 'degraded' ? result.degraded : undefined;
@@ -497,17 +535,40 @@ export class TimerScheduler {
           label: job.label || jobId, failure: modelFailure, turnId: result.audit.executionId,
           ...(retryInMs !== undefined ? { retryInMs } : {}), retries: retried,
         });
-        await this.router.deliver({
-          notify, content, jobId, label: job.label, locale: resolveLocale(job.locale),
-        }).catch(() => {});
+        await this.#deliverFailureNotice(job, notify, content, ranAt);
       }
     } else if ((!result.success || (degraded && !alreadyExplained)) && notifyFailures) {
       if (deliverable) {
         const msg = messages(job.locale, degraded ? 'degraded' : 'failed', { label: job.label || jobId, error: result.error || 'unknown error' });
-        await this.router.deliver({
-          notify, content: msg, jobId, label: job.label, locale: resolveLocale(job.locale),
-        }).catch(() => {});
+        await this.#deliverFailureNotice(job, notify, msg, ranAt);
       }
+    }
+  }
+
+  /**
+   * #1250 b111: a failure notice that cannot be delivered (thrown, or `delivered: false`) is logged
+   * with the job, its target and why (redacted), and marked on the run's `lastError`.
+   */
+  async #deliverFailureNotice(job: ScheduleJob, notify: ScheduleJob['notify'], content: string, ranAt: number): Promise<void> {
+    let outcome: { result?: DeliverResult; error?: unknown };
+    try {
+      outcome = { result: await this.router.deliver({ notify, content, jobId: job.id, label: job.label, locale: resolveLocale(job.locale) }) };
+    } catch (error) {
+      outcome = { error };
+    }
+    const reason = undeliveredNoticeReason(outcome);
+    if (reason === undefined) return;
+    logger.warn(formatCompact({ op: 'schedule_failure_notice_undelivered', job: job.id,
+      target: describeNotifyTarget(notify), reason }));
+    try {
+      await this.#withJobLock(job.id, async () => {
+        const current = await this.store.getJob(job.id);
+        // Only the run that failed is marked: not a later run, nor a job removed meanwhile.
+        if (!current || current.state.lastExecutedAt !== ranAt) return;
+        await this.store.updateJobState(job.id, { lastError: withUndeliveredNoticeNote(current.state.lastError, reason) });
+      });
+    } catch (error) {
+      logger.warn(`undelivered failure notice not recorded for ${job.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

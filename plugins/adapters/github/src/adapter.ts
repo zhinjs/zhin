@@ -15,7 +15,8 @@ export class GithubAdapter extends Adapter<GithubEndpoint, GithubEndpointConfig,
   protected override async identifyConfiguration(input: GithubEndpointConfig, signal: AbortSignal, _changed: readonly string[]): Promise<string | undefined> {
     const config = resolveGithubConfig(input), client = new GhClient({ host: config.host, appAuth: { appId: config.appId, privateKey: config.privateKey }, signal });
     const authenticated = await client.verifyAuth(); signal.throwIfAborted();
-    if (!authenticated.ok) throw new Error('GitHub application identity verification failed');
+    // #1250 b111: why it failed (status and GitHub's message), without credentials.
+    if (!authenticated.ok) throw new Error(client.safeReason(`GitHub application identity verification failed: ${authenticated.message || 'unknown'}`));
     const identity = await client.getBotIdentity(); signal.throwIfAborted();
     if (!identity?.userId) throw new Error('GitHub identity verification returned no bot userId');
     return JSON.stringify(['github', config.host ?? 'github.com', identity.userId]);

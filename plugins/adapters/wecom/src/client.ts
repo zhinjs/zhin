@@ -291,7 +291,10 @@ export class WecomClient extends EventEmitter {
 
   async getApplicationInfo(request: EndpointOperationOptions = {}): Promise<WecomApiResponse> {
     const response = await this.#request('/cgi-bin/agent/get', { params: { agentid: this.config.agentId }, signal: request.signal });
-    if (response.errcode !== 0) throw new Error('WeCom application identity verification failed');
+    if (response.errcode !== 0) {
+      // #1250 b111: the platform's code and message say why (wrong agentid, IP not allowed, …).
+      throw new Error(this.#safeReason(`WeCom application identity verification failed: ${platformMessage(response.errmsg)} (errcode ${response.errcode})`));
+    }
     return response;
   }
 
@@ -379,7 +382,7 @@ export class WecomClient extends EventEmitter {
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      throw new Error(`WeCom API error ${response.status}: ${text}`);
+      throw new Error(this.#safeReason(`WeCom API error ${response.status}: ${platformMessage(text)}`));
     }
     return await response.json() as WecomApiResponse;
   }
@@ -419,8 +422,33 @@ export class WecomClient extends EventEmitter {
       this.#logger.debug('Access token refreshed successfully');
       return;
     }
-    throw new Error(`Failed to get access token: ${data.errmsg} (${data.errcode})`);
+    throw new Error(this.#safeReason(`Failed to get access token: ${platformMessage(data.errmsg)} (${data.errcode})`));
   }
+
+  /** An error text without this account's credentials (secret, callback token / key, access token). */
+  #safeReason(text: string): string {
+    const { agentSecret, token, encodingAESKey } = this.#options.config;
+    return redactValues(text, [agentSecret, token, encodingAESKey, this.#accessToken.access_token]);
+  }
+}
+
+/** A platform-supplied message as one bounded line. */
+function platformMessage(value: unknown): string {
+  const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+  if (!text) return 'unknown';
+  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+}
+
+/** Replaces every occurrence of each (non-trivial) secret value, also URL-encoded, with `***`. */
+export function redactValues(text: string, secrets: readonly (string | undefined)[]): string {
+  let out = text;
+  for (const secret of secrets) {
+    if (typeof secret !== 'string' || secret.length < 4) continue;
+    for (const form of new Set([secret, encodeURIComponent(secret), new URLSearchParams({ v: secret }).toString().slice(2)])) {
+      out = out.split(form).join('***');
+    }
+  }
+  return out;
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;

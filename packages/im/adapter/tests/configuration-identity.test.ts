@@ -1,4 +1,5 @@
-import { sameConfigurationIdentity } from '../src/configuration-identity.js';
+import { getLogger } from '@zhin.js/logger';
+import { identityFailureReason, sameConfigurationIdentity } from '../src/configuration-identity.js';
 import type { EndpointDesiredRecord } from '../src/adapter-types.js';
 
 const previous: EndpointDesiredRecord = { instanceId: 'account-instance', canonicalId: 'account-canonical', endpointId: 'bot',
@@ -47,5 +48,22 @@ describe('read-only credential identity verification', () => {
     options.identify.mockImplementationOnce(async () => { controller.abort(reason); return 'platform:123'; });
     await expect(sameConfigurationIdentity(options)).rejects.toBe(reason);
     expect(options.identify).toHaveBeenCalledOnce();
+  });
+  it('#1250 b111: logs why the lookup failed, with resolved credentials masked', async () => {
+    const warn = vi.spyOn(getLogger('adapter'), 'warn');
+    const options = { ...input(), previous: { ...previous, secretRefs: { token: 'old-ref' } },
+      secrets: { resolve: vi.fn(async () => 'resolved-secret-1') } };
+    options.identify.mockRejectedValueOnce(new Error('platform said 401 for resolved-secret-1 at https://api.test/x?token=abc\nstack'));
+    await expect(sameConfigurationIdentity(options)).rejects.toMatchObject({ code: 'unavailable' });
+    const line = warn.mock.calls.map(call => String(call[0])).find(text => text.includes('endpoint_identity_verification_failed'));
+    expect(line).toContain('platform said 401 for *** at https://api.test/x?***');
+    expect(line).not.toContain('resolved-secret-1');
+    expect(line).not.toContain('stack');
+    warn.mockRestore();
+  });
+  it('bounds and masks identity failure reasons', () => {
+    expect(identityFailureReason(new Error('Bearer abcdef denied'))).toBe('Bearer *** denied');
+    expect(identityFailureReason('x'.repeat(300))).toHaveLength(201);
+    expect(identityFailureReason(new Error(''))).toBe('Error');
   });
 });

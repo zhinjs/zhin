@@ -13,8 +13,10 @@ export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkC
   protected override async identifyConfiguration(input: LarkEndpointConfig, signal: AbortSignal, _changed: readonly string[]): Promise<string | undefined> {
     const config = resolveLarkConfig(input), client = new LarkClient({ id: this.descriptor.id, config, signal });
     try {
-      const response = await client.request<{ code?: number; bot?: { open_id?: unknown } }>({ url: `${config.apiBaseUrl}/bot/v3/info`, method: 'GET' });
-      if (response.code !== 0 || typeof response.bot?.open_id !== 'string' || !response.bot.open_id) throw new Error('Lark identity verification returned no bot open_id');
+      const response = await client.request<{ code?: number; msg?: unknown; bot?: { open_id?: unknown } }>({ url: `${config.apiBaseUrl}/bot/v3/info`, method: 'GET' });
+      // #1250 b111: a refused lookup says why (Lark's code and msg), without credentials.
+      if (response.code !== 0) throw new Error(`Lark identity verification failed: ${larkFailureReason(response, [config.appSecret, config.encryptKey, config.verificationToken])}`);
+      if (typeof response.bot?.open_id !== 'string' || !response.bot.open_id) throw new Error('Lark identity verification returned no bot open_id');
       return JSON.stringify(['lark', new URL(config.apiBaseUrl).origin, response.bot.open_id]);
     } finally { await client[Symbol.asyncDispose](); }
   }
@@ -27,4 +29,13 @@ export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkC
 
 declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { readonly 'lark': LarkAdapter; }
+}
+
+/** Lark's `code` and `msg`, bounded, with the account's secrets masked. */
+export function larkFailureReason(response: Readonly<{ code?: unknown; msg?: unknown }>, secrets: readonly (string | undefined)[]): string {
+  let text = typeof response.msg === 'string' ? response.msg.replace(/\s+/g, ' ').trim() : '';
+  if (!text) text = 'unknown';
+  if (text.length > 300) text = `${text.slice(0, 300)}…`;
+  for (const secret of secrets) if (secret && secret.length >= 4) text = text.split(secret).join('***');
+  return `${text} (code ${String(response.code)})`;
 }

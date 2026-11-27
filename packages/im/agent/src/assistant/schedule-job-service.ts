@@ -65,17 +65,60 @@ export async function addScheduleJob(
   });
 }
 
+/**
+ * Longest delay of a one-shot job (#1250 b111): 365 days. The scheduler waits past Node's ~24.8-day
+ * timer limit in segments, so the bound is a sane date range, checked before anything is saved
+ * (a value past it used to be stored first and fail afterwards with a RangeError).
+ */
+export const MAX_SCHEDULE_DELAY_MINUTES = 365 * 24 * 60;
+const MAX_SCHEDULE_DELAY_MS = MAX_SCHEDULE_DELAY_MINUTES * 60_000;
+/** Node's timer limit: a longer run budget would fire at once (#1250 b111). */
+export const MAX_SCHEDULE_BUDGET_TIMEOUT_MS = 2_147_483_647;
+
+/** `delay_minutes` as a whole number of minutes in 1…{@link MAX_SCHEDULE_DELAY_MINUTES}. */
+export function parseScheduleDelayMinutes(value: unknown): number | { error: string } {
+  const delay = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(delay) || delay <= 0) {
+    return { error: `delay_minutes 必须是大于 0 的整数分钟数，收到: ${String(value)}；任务未保存` };
+  }
+  if (delay > MAX_SCHEDULE_DELAY_MINUTES) {
+    return { error: `delay_minutes 最多 ${MAX_SCHEDULE_DELAY_MINUTES}（365 天），收到: ${delay}；任务未保存` };
+  }
+  return delay;
+}
+
+/** `at_ms` as a future time at most 365 days ahead (#1250 b111). */
+function parseScheduleAtMs(value: unknown, now: number): number | { error: string } {
+  const atMs = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(atMs) || atMs <= now) {
+    return { error: `at_ms 必须是未来时间的毫秒时间戳，收到: ${String(value)}；任务未保存` };
+  }
+  if (atMs - now > MAX_SCHEDULE_DELAY_MS) {
+    return { error: `at_ms 最多是 365 天以后，收到: ${String(value)}；任务未保存` };
+  }
+  return atMs;
+}
+
 function buildScheduleFromRecord(record: Record<string, unknown>): JobSchedule | { error: string } {
   const kind = record.schedule_kind ?? record.scheduleKind;
   const cron = record.cron as string | undefined;
   const delayMin = record.delay_minutes ?? record.delayMinutes;
   const atMsRaw = record.at_ms ?? record.atMs;
 
-  if (String(kind || '').toLowerCase() === 'at' || (typeof delayMin === 'number' && delayMin > 0)) {
-    const atMs = typeof delayMin === 'number' && delayMin > 0
-      ? Date.now() + delayMin * 60 * 1000
-      : atMsRaw != null ? Number(atMsRaw) : undefined;
-    if (!atMs) return { error: '请提供 delay_minutes 或 at_ms' };
+  // #1250 b111: any given delay is checked (a negative, fractional or too large one used to be
+  // ignored or stored and fail later), before anything is saved.
+  // A `0` next to a cron stays "no delay", as before.
+  const delayGiven = given(delayMin) && !(given(cron) && Number(delayMin) === 0);
+  if (String(kind || '').toLowerCase() === 'at' || delayGiven) {
+    const now = Date.now();
+    if (delayGiven) {
+      const delay = parseScheduleDelayMinutes(delayMin);
+      if (typeof delay !== 'number') return delay;
+      return { kind: 'at', atMs: now + delay * 60_000, deleteAfterRun: true };
+    }
+    if (!given(atMsRaw)) return { error: '请提供 delay_minutes 或 at_ms' };
+    const atMs = parseScheduleAtMs(atMsRaw, now);
+    if (typeof atMs !== 'number') return atMs;
     return { kind: 'at', atMs, deleteAfterRun: true };
   }
 
@@ -144,6 +187,13 @@ function parseScheduleBudget(record: Record<string, unknown>): ScheduleJob['budg
   return maxTokens || maxToolCalls || timeoutMs ? { maxTokens, maxToolCalls, timeoutMs } : undefined;
 }
 
+/** A run budget timeout past Node's timer limit would end every run at once (#1250 b111). */
+function scheduleBudgetError(budget: ScheduleJob['budget']): { error: string } | undefined {
+  const timeoutMs = budget?.timeoutMs;
+  if (timeoutMs === undefined || timeoutMs <= MAX_SCHEDULE_BUDGET_TIMEOUT_MS) return undefined;
+  return { error: `budget_timeout_ms 最多 ${MAX_SCHEDULE_BUDGET_TIMEOUT_MS}（约 24.8 天），收到: ${timeoutMs}；任务未保存` };
+}
+
 export function parseScheduleNotifyFromRpc(message: Record<string, unknown>): JobNotify {
   const raw = message.notify;
   if (raw && typeof raw === 'object' && raw !== null && 'channel' in raw) {
@@ -170,6 +220,10 @@ export function parseScheduleAddFromToolArgs(
   const notify = resolveNotifyFromToolArgs(args, context);
   if ('error' in notify) return notify;
 
+  const budget = parseScheduleBudget(args);
+  const budgetError = scheduleBudgetError(budget);
+  if (budgetError) return budgetError;
+
   const executionPlan = parseExecutionPlanFromArgs(args, prompt);
   if (executionPlan) executionPlan.confirmed = true;
 
@@ -183,7 +237,7 @@ export function parseScheduleAddFromToolArgs(
     createdBy: scheduleJobCreatorFromPrincipal(context.principal, context.origin),
     executionPlan,
     activityFeedback: args.activity_feedback === true ? true : undefined,
-    budget: parseScheduleBudget(args),
+    budget,
   };
 }
 
@@ -234,11 +288,9 @@ function buildScheduleUpdate(args: Record<string, unknown>, current: JobSchedule
     if (given(args.cron) || (kindArg !== undefined && kindArg !== 'at')) {
       return { error: 'delay_minutes（改为一次性任务）不能与 cron 或 schedule_kind 同时提供，请只给其中一种' };
     }
-    const delay = typeof args.delay_minutes === 'number' ? args.delay_minutes : Number(args.delay_minutes);
-    if (!Number.isFinite(delay) || delay <= 0) {
-      return { error: `delay_minutes 必须是大于 0 的分钟数，收到: ${String(args.delay_minutes)}` };
-    }
-    return { kind: 'at', atMs: Date.now() + delay * 60 * 1000, deleteAfterRun: true };
+    const delay = parseScheduleDelayMinutes(args.delay_minutes);
+    if (typeof delay !== 'number') return delay;
+    return { kind: 'at', atMs: Date.now() + delay * 60_000, deleteAfterRun: true };
   }
   if (kindArg === 'at') return { error: '改为一次性任务请提供 delay_minutes（从现在起延迟的分钟数）' };
   const built = buildCronJobSchedule({ kind: kindArg, cron: given(args.cron) ? String(args.cron) : undefined }, current);
@@ -353,6 +405,10 @@ export function parseScheduleAddFromRpcMessage(
     return { error: (e as Error).message };
   }
 
+  const budget = parseScheduleBudget(message);
+  const budgetError = scheduleBudgetError(budget);
+  if (budgetError) return budgetError;
+
   const executionPlan = parseExecutionPlanFromArgs(message, prompt);
   if (executionPlan) executionPlan.confirmed = true;
 
@@ -365,6 +421,6 @@ export function parseScheduleAddFromRpcMessage(
     createdBy: parseScheduleJobCreator(message.createdBy),
     executionPlan,
     activityFeedback: message.activityFeedback === true ? true : undefined,
-    budget: parseScheduleBudget(message),
+    budget,
   };
 }

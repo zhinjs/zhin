@@ -187,7 +187,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
       schema({
         schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday，默认 solar' },
         cron: { type: 'string', description: '6 段 cron（秒 分 时 日 月 周）' },
-        delay_minutes: { type: 'number', description: '一次性延迟（分钟）' },
+        delay_minutes: { type: 'number', description: '一次性延迟（整数分钟，1～525600 即最多 365 天）' },
         prompt: { type: 'string', description: SCHEDULE_PROMPT_DESCRIPTION },
         label: { type: 'string', description: '标签' },
         notify_channel: { type: 'string', description: 'im | silent | log' },
@@ -272,7 +272,7 @@ export function createScheduleTools(manager: ScheduleManager): readonly Schedule
         id: { type: 'string', description: '任务 ID' },
         cron: { type: 'string', description: '新的 6 段 cron（秒 分 时 日 月 周）' },
         schedule_kind: { type: 'string', description: 'solar|lunar|workday|freeDay|holiday；省略时沿用原来的' },
-        delay_minutes: { type: 'number', description: '改为一次性任务：从现在起延迟的分钟数（大于 0；不能与 cron 同时给）' },
+        delay_minutes: { type: 'number', description: '改为一次性任务：从现在起延迟的整数分钟数（1～525600 即最多 365 天；不能与 cron 同时给）' },
         label: { type: 'string', description: '新标签；空字符串清除标签' },
         enabled: { type: 'boolean', description: 'true 启用，false 停用' },
       }, ['id']),

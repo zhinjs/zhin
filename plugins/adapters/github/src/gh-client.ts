@@ -248,10 +248,10 @@ export class GhClient {
           const repos = this._repoToInstallation.size;
           return { ok: true, user: name, message: `GitHub App: ${name} (${this._allInstallations.length} 安装, ${repos} 仓库)` };
         }
-        const errBody = await appRes.text();
-        return { ok: false, user: '', message: `App Token 验证失败 (${appRes.status}): ${errBody}` };
+        const errBody = await appRes.text().catch(() => '');
+        return { ok: false, user: '', message: this.safeReason(`App Token 验证失败 (${appRes.status}): ${githubErrorMessage(errBody)}`) };
       } catch (e: unknown) {
-        return { ok: false, user: '', message: (e instanceof Error ? e.message : String(e)) || 'App 认证失败' };
+        return { ok: false, user: '', message: this.safeReason((e instanceof Error ? e.message : String(e)) || 'App 认证失败') };
       }
     }
     // Token 模式（用户绑定）或 gh CLI 默认模式
@@ -271,7 +271,7 @@ export class GhClient {
       this._user = login;
       return { ok: true, user: login, message: `gh CLI: ${login}` };
     } catch (e: unknown) {
-      return { ok: false, user: '', message: (e instanceof Error ? e.message : String(e)) || 'gh 认证检查失败' };
+      return { ok: false, user: '', message: this.safeReason((e instanceof Error ? e.message : String(e)) || 'gh 认证检查失败') };
     }
   }
 
@@ -486,6 +486,11 @@ export class GhClient {
   }
 
   // ── GitHub App JWT + Installation Token ──────────────────────────
+
+  /** #1250 b111: a failure reason without this client's credentials (private key, JWT, tokens). */
+  safeReason(text: string): string {
+    return redactGithubSecrets(text, [this._appAuth?.privateKey, this._resolvedKey ?? undefined, this.token]);
+  }
 
   /** 解析私钥：PEM字符串 或 文件路径 */
   private resolvePrivateKey(): string {
@@ -788,4 +793,29 @@ function abortableDelay(ms: number, signal?: AbortSignal): Promise<boolean> {
     const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(true); }, ms);
     signal?.addEventListener('abort', onAbort, { once: true });
   });
+}
+
+/** GitHub API error bodies are JSON `{ message }`; anything else is kept as one bounded line. */
+export function githubErrorMessage(body: string): string {
+  let text = body;
+  try {
+    const parsed = JSON.parse(body) as { message?: unknown };
+    if (parsed && typeof parsed.message === 'string') text = parsed.message;
+  } catch { /* not JSON */ }
+  text = text.replace(/\s+/g, ' ').trim();
+  if (!text) return 'unknown';
+  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
+}
+
+/** Masks the given secret values and anything token-shaped (PEM blocks, JWTs, GitHub tokens, Bearer). */
+export function redactGithubSecrets(text: string, secrets: readonly (string | undefined)[]): string {
+  let out = text;
+  for (const secret of secrets) {
+    if (typeof secret === 'string' && secret.trim().length >= 4) out = out.split(secret.trim()).join('***');
+  }
+  return out
+    .replace(/-----BEGIN [^-]+-----[\s\S]*?(?:-----END [^-]+-----|$)/g, '***')
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+){0,2}/g, '***')
+    .replace(/\b(?:ghp|gho|ghs|ghu|ghr|github_pat)_[A-Za-z0-9_]{8,}/g, '***')
+    .replace(/\b(bearer|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***');
 }

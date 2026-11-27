@@ -20,11 +20,21 @@ export async function probeOnebot11Identity(config: OneBot11WsConfig, signal: Ab
 
     const response = await rpc.call({ action: 'get_login_info' });
     signal.throwIfAborted();
-    if (response.status !== 'ok' || response.retcode !== 0) throw new Error('OneBot11 identity lookup failed');
+    if (response.status !== 'ok' || response.retcode !== 0) throw new Error(`OneBot11 identity lookup failed: ${onebot11FailureReason(response, config.access_token)}`);
     const data: unknown = response.data;
     const id = resolveOnebot11SelfId(data && typeof data === 'object' && 'user_id' in data ? data.user_id : undefined);
     return id === undefined ? undefined : `qq:${id}`;
   } finally {
     signal.removeEventListener('abort', abort); rpc.dispose(); socket.terminate();
   }
+}
+
+/** #1250 b111: the implementation's retcode and message, bounded, without the access token. */
+function onebot11FailureReason(response: Readonly<{ retcode?: unknown; message?: unknown; wording?: unknown }>, accessToken: string | undefined): string {
+  const raw = typeof response.message === 'string' && response.message.trim() ? response.message
+    : typeof response.wording === 'string' ? response.wording : '';
+  let text = raw.replace(/\s+/g, ' ').trim() || 'unknown';
+  if (text.length > 300) text = `${text.slice(0, 300)}…`;
+  if (accessToken && accessToken.length >= 4) text = text.split(accessToken).join('***');
+  return `${text} (retcode ${String(response.retcode)})`;
 }
