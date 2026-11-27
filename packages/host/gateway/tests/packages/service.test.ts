@@ -371,6 +371,28 @@ describe('GatewayPackageService transactions', () => {
     await rm(join(root, 'pnpm-workspace.yaml'), { force: true });
   });
 
+  it('refuses to update a bare name the project does not declare, before touching the instance (#1250)', async () => {
+    const calls: string[][] = [];
+    const instance = new FakeInstance('running');
+    const packages = service({ instance, pm: fakePackageManager({ calls }) });
+    await expect(packages.update(['nonexistent-pkg-xyz'], { principal: owner }))
+      .rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('zhin install nonexistent-pkg-xyz') });
+    await expect(packages.update(['zod', 'nonexistent-pkg-xyz'], { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(calls).toEqual([]);
+    expect(instance.calls).toEqual([]);
+  });
+
+  it('accepts a bare name declared only by a workspace member (#1250)', async () => {
+    const calls: string[][] = [];
+    await writeFile(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    await mkdir(join(root, 'plugins', 'x'), { recursive: true });
+    await writeFile(join(root, 'plugins', 'x', 'package.json'), JSON.stringify({ name: 'x', devDependencies: { 'member-only': '^1.0.0' } }));
+    const packages = service({ pm: fakePackageManager({ calls }) });
+    expect(await packages.update(['member-only'], { principal: owner })).toMatchObject({ ok: true });
+    expect(calls.map(call => call.join(' '))).toEqual(['update -r member-only']);
+    await expect(packages.update(['still-unknown'], { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+  });
+
   it('passes removeDependency: false to the workflow on uninstall', async () => {
     const seen: unknown[] = [];
     const workflow: PackageWorkflowPort = {

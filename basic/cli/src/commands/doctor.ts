@@ -32,6 +32,7 @@ import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
 import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
 import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
+import { CREATE_PROJECT_COMMAND, locateProjectRoot, notAProjectMessage } from '../utils/project-root.js';
 import { diagnosePromptCache } from '../utils/prompt-cache-check.js';
 import { loadProviderResolver } from './usage.js';
 import { botInstructionsFile } from '../utils/bot-bootstrap.js';
@@ -115,6 +116,11 @@ export const doctorCommand = new Command('doctor')
       (projectPackage ??= fs.readJSON(projectPackagePath));
 
     if (options.upgradeL4) {
+      const location = diagnoseProjectLocation(cwd);
+      if (location) {
+        printDoctorResults([location], options.fix === true);
+        return;
+      }
       const configPath = findConfigFile(cwd);
       let config: Record<string, unknown> = {};
       if (configPath) {
@@ -191,6 +197,14 @@ export const doctorCommand = new Command('doctor')
         message: '未安装',
         fix: 'npm install -g pnpm（或 corepack enable && corepack prepare pnpm@latest --activate）'
       });
+    }
+
+    // 2b. 项目位置：非项目目录只报这一条并停下，不跑依赖项目的检查，也不让 --fix 写文件
+    const location = diagnoseProjectLocation(cwd);
+    if (location) {
+      results.push(location);
+      printDoctorResults(results, options.fix === true);
+      return;
     }
 
     // 3. 检查配置文件（存在且可解析；解析失败给出行号）
@@ -392,11 +406,12 @@ export const doctorCommand = new Command('doctor')
         });
       }
     } else {
+      // Reached only with a Zhin config file and no package.json (see 2b).
       results.push({
         name: 'package.json',
         status: 'warn',
-        message: '不存在',
-        fix: 'pnpm init'
+        message: '不存在：实例启动需要依赖 zhin.js 的 package.json',
+        fix: `新建项目用 ${CREATE_PROJECT_COMMAND}；已有配置的目录运行 pnpm init && pnpm add zhin.js`
       });
     }
 
@@ -918,25 +933,45 @@ export const doctorCommand = new Command('doctor')
       results.push(check);
     }
 
-    // 打印结果
-    console.log('');
-    for (const result of results) {
-      const icon = result.status === 'ok' ? '✅' : result.status === 'info' ? 'ℹ️' : result.status === 'warn' ? '⚠️' : '❌';
-      const color = result.status === 'ok' ? chalk.green : result.status === 'info' ? chalk.cyan : result.status === 'warn' ? chalk.yellow : chalk.red;
-      console.log(`${icon} ${chalk.bold(result.name)}: ${color(result.message)}`);
-      // With --fix, an item --fix handled says so in its message; the others still show how to fix them.
-      if (result.fix && (!options.fix || !isAutoFixNote(result.fix))) {
-        console.log(`   ${chalk.gray(options.fix ? '需手动修复:' : '修复:')} ${chalk.cyan(result.fix)}`);
-      }
-    }
-    console.log('');
-    const summary = summarizeDoctorResults(results, options.fix === true);
-    for (const line of summary.lines) {
-      const color = summary.level === 'error' ? chalk.red : summary.level === 'warn' ? chalk.yellow : chalk.green;
-      console.log(line.startsWith('提示') ? chalk.gray(line) : color(line));
-    }
-    if (summary.level === 'error') process.exit(1);
+    printDoctorResults(results, options.fix === true);
   });
+
+/** Prints the check list and the closing summary; exits 1 when an item is an error. */
+function printDoctorResults(results: readonly CheckResult[], fix: boolean): void {
+  console.log('');
+  for (const result of results) {
+    const icon = result.status === 'ok' ? '✅' : result.status === 'info' ? 'ℹ️' : result.status === 'warn' ? '⚠️' : '❌';
+    const color = result.status === 'ok' ? chalk.green : result.status === 'info' ? chalk.cyan : result.status === 'warn' ? chalk.yellow : chalk.red;
+    console.log(`${icon} ${chalk.bold(result.name)}: ${color(result.message)}`);
+    // With --fix, an item --fix handled says so in its message; the others still show how to fix them.
+    if (result.fix && (!fix || !isAutoFixNote(result.fix))) {
+      console.log(`   ${chalk.gray(fix ? '需手动修复:' : '修复:')} ${chalk.cyan(result.fix)}`);
+    }
+  }
+  console.log('');
+  const summary = summarizeDoctorResults(results, fix);
+  for (const line of summary.lines) {
+    const color = summary.level === 'error' ? chalk.red : summary.level === 'warn' ? chalk.yellow : chalk.green;
+    console.log(line.startsWith('提示') ? chalk.gray(line) : color(line));
+  }
+  if (summary.level === 'error') process.exit(1);
+}
+
+/**
+ * #1250 `doctor-non-project-advice`: the project checks (and `--fix`, which writes files) run at
+ * a project root only. Outside a project the first item says so and names the scaffold command;
+ * from a sub-directory it names the root. Undefined when `cwd` is a project root.
+ */
+export function diagnoseProjectLocation(cwd: string): CheckResult | undefined {
+  const root = locateProjectRoot(cwd);
+  if (!root) {
+    return { name: 'Zhin 项目', status: 'error', message: notAProjectMessage(cwd), fix: `${CREATE_PROJECT_COMMAND}（新建项目），或 cd 到已有项目的根目录再运行 zhin doctor` };
+  }
+  if (root !== path.resolve(cwd)) {
+    return { name: 'Zhin 项目', status: 'error', message: `当前目录不是项目根：项目根在 ${root}`, fix: `cd ${root} && zhin doctor` };
+  }
+  return undefined;
+}
 
 /** A `fix` text that only says what `--fix` did or will do (`将写入…`, `已补全…`). */
 function isAutoFixNote(fix: string): boolean {

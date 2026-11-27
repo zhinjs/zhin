@@ -10,9 +10,9 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { findConfigFile } from '@zhin.js/gateway/project';
 import { readPluginMarketplaceMetadata } from '@zhin.js/plugin-runtime';
 import { classifyPackage } from './plugin-registry.js';
+import { locateProjectRoot } from './project-root.js';
 
 export type ProjectPackageGroup = 'adapter' | 'plugin' | 'framework' | 'dependency' | 'missing';
 
@@ -57,17 +57,7 @@ function groupOf(name: string, manifest: Record<string, unknown>): ProjectPackag
  * Run from `plugins/foo/` it still finds the project, not the member package.
  */
 export function findProjectRoot(cwd: string): string {
-  let byManifest: string | undefined;
-  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
-    if (findConfigFile(dir)) return dir;
-    if (!byManifest) {
-      try {
-        const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as Record<string, Record<string, unknown> | undefined>;
-        if (manifest.dependencies?.['zhin.js'] !== undefined || manifest.devDependencies?.['zhin.js'] !== undefined) byManifest = dir;
-      } catch { /* no package.json here */ }
-    }
-    if (path.dirname(dir) === dir) return byManifest ?? path.resolve(cwd);
-  }
+  return locateProjectRoot(cwd) ?? path.resolve(cwd);
 }
 
 /** The root package.json's dependencies with their installed version and group, sorted by name. */

@@ -37,11 +37,12 @@ import {
   LocalGatewayRpcError,
 } from '@zhin.js/gateway/local';
 import { findConfigFile } from '@zhin.js/gateway/project';
-import { openGatewayStore, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
+import { gatewayStorePath, openGatewayStore, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
 import { localGatewayFetch } from '../utils/host-http.js';
 import { describeGatewayError, probeGateway } from '../utils/gateway.js';
 import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
 import { NonInteractiveError, stdinIsInteractive } from '../utils/interactive.js';
+import { requireProjectRoot } from '../utils/project-root.js';
 
 export interface ConsoleCliIo {
   log(message: string): void;
@@ -643,6 +644,29 @@ function finish(code: number): void {
   if (code !== 0) process.exitCode = code;
 }
 
+/**
+ * The project root the `zhin console` commands work on (#1250 `console-cli-store-in-cwd`, plan a):
+ * found up the tree from the current directory, so a run from `plugins/x/` uses the project's
+ * `.zhin/gateway.db` instead of creating a stray one there. Prints the store it uses (stderr, so
+ * `--json` output stays clean); outside any project reports it and exits 1 without creating files.
+ */
+function consoleProjectRoot(): string | undefined {
+  const project = requireProjectRoot(process.cwd(), { from: 'nearest' });
+  if (!project.ok) {
+    process.stderr.write(`zhin: ${project.message}\n`);
+    process.exitCode = 1;
+    return undefined;
+  }
+  process.stderr.write(`账号库：${gatewayStorePath(project.root)}\n`);
+  return project.root;
+}
+
+/** Runs `action` at the project root (see {@link consoleProjectRoot}). */
+async function atProjectRoot(action: (projectRoot: string) => Promise<number>): Promise<void> {
+  const root = consoleProjectRoot();
+  if (root !== undefined) finish(await action(root));
+}
+
 const initCommand = new Command('init')
   .description('初始化 Console：选择数据库并创建第一个所有者（与 Console 初始化向导相同）')
   .option('--status', '只显示初始化状态')
@@ -668,7 +692,7 @@ initCommand.action(async (raw: Record<string, unknown>) => {
     const value = raw[key];
     if (typeof value === 'string') connection[field === 'db-name' ? 'dbName' : field] = value;
   }
-  finish(await runConsoleInit(process.cwd(), {
+  await atProjectRoot(projectRoot => runConsoleInit(projectRoot, {
     status: raw.status === true,
     json: raw.json === true,
     ...(typeof raw.database === 'string' ? { database: raw.database } : {}),
@@ -690,31 +714,31 @@ userCommand.command('create <username>')
   .option('--display-name <name>', '显示名')
   .option('--password-stdin', '从标准输入读取密码')
   .action(async (username: string, raw: { role?: string; displayName?: string; passwordStdin?: boolean }) => {
-    finish(await consoleUserActions.create(process.cwd(), username, raw));
+    await atProjectRoot(projectRoot => consoleUserActions.create(projectRoot, username, raw));
   });
 userCommand.command('passwd <username>')
   .description('重置密码（吊销该用户全部会话）')
   .option('--password-stdin', '从标准输入读取密码')
   .action(async (username: string, raw: { passwordStdin?: boolean }) => {
-    finish(await consoleUserActions.passwd(process.cwd(), username, raw));
+    await atProjectRoot(projectRoot => consoleUserActions.passwd(projectRoot, username, raw));
   });
 userCommand.command('disable <username>').description('禁用用户').action(async (username: string) => {
-  finish(await consoleUserActions.setDisabled(process.cwd(), username, true));
+  await atProjectRoot(projectRoot => consoleUserActions.setDisabled(projectRoot, username, true));
 });
 userCommand.command('enable <username>').description('启用用户').action(async (username: string) => {
-  finish(await consoleUserActions.setDisabled(process.cwd(), username, false));
+  await atProjectRoot(projectRoot => consoleUserActions.setDisabled(projectRoot, username, false));
 });
 userCommand.command('list').description('列出用户（含用户 id）')
   .option('--json', '以 JSON 输出（供脚本使用）')
   .action(async (raw: { json?: boolean }) => {
-    finish(await consoleUserActions.list(process.cwd(), defaultConsoleCliIo, openConsoleAdmin, { json: raw.json === true }));
+    await atProjectRoot(projectRoot => consoleUserActions.list(projectRoot, defaultConsoleCliIo, openConsoleAdmin, { json: raw.json === true }));
   });
 
 const migrateCommand = new Command('migrate')
   .description('把旧版存在项目数据库里的 Console 账号表迁入 .zhin/gateway.db（ADR 0059；网关启动时也会自动执行）')
   .option('--revert', '写回项目数据库并清空 gateway.db（安装旧版本之前必须执行；需先 zhin stop）')
   .action(async (raw: { revert?: boolean }) => {
-    finish(await runConsoleMigrate(process.cwd(), { revert: raw.revert === true }));
+    await atProjectRoot(projectRoot => runConsoleMigrate(projectRoot, { revert: raw.revert === true }));
   });
 
 export const consoleCommand = new Command('console')

@@ -175,6 +175,7 @@ A missing `ready` (60 seconds by default) counts as a failed start. `--once` ign
 | `zhin start --foreground` / `zhin runtime start` | `0` | Normal end (SIGTERM, `zhin stop`); systemd treats it as a clean stop |
 | | `130` | Interrupted with Ctrl+C (SIGINT) |
 | | non-zero | Startup failed (port in use, another gateway for this project, unsupported Node, unreadable config). An instance crash does **not** end the gateway |
+| | `1` | The current directory is not the project root: outside any Zhin project it suggests `npm create zhin-app`, in a sub-directory of a project it names the project root; no gateway starts and no `.zhin/` is written (background `zhin start` and `zhin restart` check the same) |
 | `zhin start --once` | the instance's exit code | Exit code after one start; non-zero when it failed or crashed |
 | `zhin start` (background) | `0` / `1` | Gateway ready / gateway exited early or was not ready within 30 s (prints the tail of `.zhin/logs/gateway.log`) |
 | `zhin status` | `0` / `3` | Gateway running / not running |

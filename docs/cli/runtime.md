@@ -175,6 +175,7 @@ flowchart TD
 | `zhin start --foreground` / `zhin runtime start` | `0` | 正常结束（SIGTERM、`zhin stop`）；systemd 视为正常停止 |
 | | `130` | 被 Ctrl+C（SIGINT）中断 |
 | | 非零 | 启动失败（端口被占用、同一项目已有网关、Node 版本不满足、配置读取失败）。实例崩溃**不会**结束网关 |
+| | `1` | 当前目录不是项目根：不是 Zhin 项目时提示 `npm create zhin-app`，在项目子目录里时给出项目根路径；不启动网关、不写 `.zhin/`（`zhin start` 后台运行与 `zhin restart` 同样检查） |
 | `zhin start --once` | 实例退出码 | 实例完成一次启动后的退出码；启动失败或崩溃时非零 |
 | `zhin start`（后台） | `0` / `1` | 网关就绪 / 网关进程提前退出或 30 秒内未就绪（打印 `.zhin/logs/gateway.log` 尾部） |
 | `zhin status` | `0` / `3` | 网关在运行 / 未运行 |

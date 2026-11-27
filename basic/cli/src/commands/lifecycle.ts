@@ -45,6 +45,7 @@ import {
   type LogFilterOptions,
 } from '../utils/log-filter.js';
 import { previewUpdate, renderUpdatePreview } from '../utils/update-preview.js';
+import { requireProjectRoot } from '../utils/project-root.js';
 import { runtimeCommand } from './runtime.js';
 
 /**
@@ -54,6 +55,19 @@ import { runtimeCommand } from './runtime.js';
 export const STATUS_NOT_RUNNING_EXIT_CODE = 3;
 
 const target = (): GatewayTarget => ({ root: resolve(process.cwd()) });
+
+/**
+ * #1250 `start-no-project-check`: `start` / `restart` run at the project root only. Outside a
+ * project, or from one of its sub-directories, reports where to run instead (exit 1) before
+ * anything is probed, spawned or written.
+ */
+function projectTarget(command: string): GatewayTarget | undefined {
+  const project = requireProjectRoot(process.cwd(), { command });
+  if (project.ok) return { root: project.root };
+  process.stderr.write(`zhin: ${project.message}\n`);
+  process.exitCode = 1;
+  return undefined;
+}
 
 function fail(error: unknown): void {
   process.stderr.write(`zhin: ${describeGatewayError(error)}\n`);
@@ -101,7 +115,9 @@ export const startCommand = new Command('start')
       await runtimeCommand.parseAsync(['start', ...rest], { from: 'user' });
       return;
     }
-    const { root } = target();
+    const project = projectTarget('zhin start');
+    if (!project) return;
+    const { root } = project;
     try {
       const parsed = parseStartOptions(rest);
       const running = await probeGateway({ root });
@@ -156,7 +172,9 @@ export const restartCommand = new Command('restart')
   .description('重启实例（网关保持运行）；--gateway 重启网关本身')
   .option('--gateway', '重启网关进程（仅后台网关，沿用原启动参数；前台网关会提示 systemd / PM2 等替代命令并以非 0 退出）')
   .action(async (options: { gateway?: boolean }) => {
-    const { root } = target();
+    const project = projectTarget(`zhin restart${options.gateway ? ' --gateway' : ''}`);
+    if (!project) return;
+    const { root } = project;
     try {
       const running = await probeGateway({ root });
       if (!running) {

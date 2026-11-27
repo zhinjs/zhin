@@ -714,3 +714,56 @@ describe('doctor: retired @zhin.js packages (#1250 retired-package-not-flagged)'
     } finally { fs.rmSync(directory, { recursive: true, force: true }); }
   });
 });
+
+describe('doctor outside a project (#1250 doctor-non-project-advice)', () => {
+  async function doctorIn(directory: string, flags: string[] = []): Promise<{ output: string; exited: boolean }> {
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    let exited = false;
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => { exited = true; throw new Error('doctor exited'); });
+    try {
+      const { doctorCommand } = await import('../src/commands/doctor.js');
+      await doctorCommand.parseAsync(['node', 'zhin', ...flags]).catch(() => {});
+      return { output: log.mock.calls.map(args => args.join(' ')).join('\n'), exited };
+    } finally {
+      cwd.mockRestore();
+      log.mockRestore();
+      exit.mockRestore();
+    }
+  }
+
+  it.each([[[]], [['--fix']]])('reports "not a Zhin project" with the scaffold command, exits 1 and writes nothing (flags %j)', async flags => {
+    const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-not-project-')));
+    try {
+      const { output, exited } = await doctorIn(directory, flags);
+      expect(output).toContain('不是 Zhin 项目');
+      expect(output).toContain('npm create zhin-app');
+      expect(output).not.toContain('pnpm init');
+      expect(exited).toBe(true);
+      expect(fs.readdirSync(directory)).toEqual([]);
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('names the project root when run from a sub-directory', async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-sub-')));
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'bot', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+      const member = path.join(root, 'plugins', 'x');
+      fs.mkdirSync(member, { recursive: true });
+      const { output, exited } = await doctorIn(member);
+      expect(output).toContain(`项目根在 ${root}`);
+      expect(exited).toBe(true);
+      expect(fs.readdirSync(member)).toEqual([]);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('gateway storage diagnosis does not create .zhin/ in a project without one', async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-storage-')));
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'bot', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+      const { diagnoseGatewayStorage } = await import('../src/utils/gateway-storage-check.js');
+      await diagnoseGatewayStorage(root);
+      expect(fs.existsSync(path.join(root, '.zhin'))).toBe(false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});

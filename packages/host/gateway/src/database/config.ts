@@ -141,12 +141,20 @@ export function normalizeProjectDatabaseConfig(input: ProjectDatabaseConfig): Pr
   return Object.freeze(config) as ProjectDatabaseConfig;
 }
 
+export interface ResolveProjectDatabaseOptions {
+  /**
+   * Create the directory of the default SQLite file (`.zhin/`) when no `database` block is
+   * configured (default true). Read-only callers (`zhin doctor`, #1250) pass false.
+   */
+  readonly createDirectory?: boolean;
+}
+
 /**
  * Resolves the expanded root config document's `database` block. A relative SQLite file is
  * anchored at the project root (the instance runs with the project root as cwd, so both
  * processes open the same file).
  */
-export async function resolveProjectDatabaseConfig(projectRoot: string, document: unknown): Promise<ProjectDatabaseConfig> {
+export async function resolveProjectDatabaseConfig(projectRoot: string, document: unknown, options: ResolveProjectDatabaseOptions = {}): Promise<ProjectDatabaseConfig> {
   const configured = document && typeof document === 'object' ? (document as Record<string, unknown>).database : undefined;
   if (configured && typeof configured === 'object' && !Array.isArray(configured)) {
     const value = configured as Record<string, unknown>;
@@ -157,7 +165,7 @@ export async function resolveProjectDatabaseConfig(projectRoot: string, document
     return normalized;
   }
   const filename = join(projectRoot, DEFAULT_PROJECT_DATABASE_FILE);
-  await mkdir(dirname(filename), { recursive: true });
+  if (options.createDirectory !== false) await mkdir(dirname(filename), { recursive: true });
   return Object.freeze({ dialect: 'sqlite', filename });
 }
 

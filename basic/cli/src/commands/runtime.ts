@@ -15,6 +15,7 @@ import {
 } from '@zhin.js/runtime';
 import { runProjectInstance } from './runtime-instance.js';
 import { output } from '../utils/output.js';
+import { requireProjectRoot } from '../utils/project-root.js';
 import {
   describeBuildPlan,
   describePublishPlan,
@@ -85,6 +86,13 @@ runtimeCommand.command('start')
   .allowExcessArguments(true)
   .action(async (_options, command) => {
     // Process supervision belongs to the executable, not the reusable startup API.
+    // #1250: nothing (no `.zhin/`, no port) outside a project root.
+    const project = isSupervisedInstanceProcess() ? undefined : requireProjectRoot(process.cwd(), { command: 'zhin start' });
+    if (project && !project.ok) {
+      process.stderr.write(`zhin: ${project.message}\n`);
+      process.exitCode = 1;
+      return;
+    }
     const root = resolve(process.cwd());
     const parsed = parseStartOptions(command.args);
     if (!isSupervisedInstanceProcess() && !parsed.standalone) {

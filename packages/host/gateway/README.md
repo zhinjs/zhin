@@ -32,7 +32,7 @@ zhin console init           # 首次创建 Console 所有者；之后 http.token
 | `@zhin.js/gateway/config` | 原始配置文件与 `.env` 读写：`ConsoleConfigurationStore`、`readEnvFile` / `writeEnvFile`（Host 内部用）、Console 用的打码视图与逐键保存（`readEnvFileView` / `revealEnvVariable` / `updateEnvVariables` / `replaceEnvFileContent`）、配置路径与补丁、Console Schema |
 | `@zhin.js/gateway/plugin-management` | 项目级依赖事务：`PluginManagementWorkflow`、`PluginManagementActivity`、插件用例 |
 | `@zhin.js/gateway/project` | 项目文件工具：`findConfigFile`、`loadRuntimeEnvironmentLayers`、`createTsxModuleLoader`、实例声明迁移、旧配置检测、Node 版本要求 |
-| `@zhin.js/gateway/supervisor` | 实例进程监管 `InstanceSupervisor`：IPC 控制通道（`ready` / `shutdown` / `restart-request`）、崩溃重启与风暴保护、日志采集（环形缓冲 + `.zhin/logs/instance.log` 按大小轮转）；`runSupervisedInstance` 供 `zhin start` 使用 |
+| `@zhin.js/gateway/supervisor` | 实例进程监管 `InstanceSupervisor`：IPC 控制通道（`ready` / `shutdown` / `restart-request`）、崩溃重启与风暴保护、日志采集（环形缓冲 + `.zhin/logs/instance.log` 按大小轮转）；`runSupervisedInstance`（已弃用）已不被 `zhin start` 使用，保留以兼容外部调用，新代码请用 `@zhin.js/gateway/server` 的 `runGateway` |
 | `@zhin.js/gateway/usage` | 用量统计聚合 |
 | `@zhin.js/gateway/onboarding` | Console 引导（ADR 0053）：`.zhin/onboarding.json` 状态（`OnboardingStateStore`、自动识别已配置步骤）、`OnboardingService`、安装白名单与 `authorizeInstall`、流式 `installPackages` |
 | `@zhin.js/gateway/http` | HTML / SSE 响应工具（实例也导入，不加载 Node HTTP 栈） |

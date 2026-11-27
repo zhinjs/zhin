@@ -36,7 +36,8 @@ export async function diagnoseGatewayStorage(projectRoot: string, options: Gatew
   const results: GatewayStorageCheck[] = [];
   const environment = options.environment ?? (process.env.NODE_ENV === 'production' ? 'production' : 'development');
   const file = gatewayStorePath(projectRoot);
-  const projectDatabase = async () => resolveProjectDatabaseConfig(projectRoot, await loadExpandedProjectConfig(projectRoot, environment));
+  // Read-only (#1250 doctor-non-project-advice): resolving the default SQLite file creates no `.zhin/`.
+  const projectDatabase = async () => resolveProjectDatabaseConfig(projectRoot, await loadExpandedProjectConfig(projectRoot, environment), { createDirectory: false });
 
   // ---- the file itself
   if (existsSync(file) && process.platform !== 'win32') {
