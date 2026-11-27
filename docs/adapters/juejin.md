@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/juejin/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/juejin/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1b7931071cd3ca81 -->
+<!-- sync-adapter-docs:sha256=cda3320f407fc8de -->
 
 # @zhin.js/adapter-juejin
 
@@ -21,7 +21,7 @@ Zhin.js 掘金评论适配器（Plugin Runtime）：让 AI 辅助回复**你自�
 ## 先读这几条
 
 - **以你的账号身份操作**：掘金没有开放的评论读写 API，本适配器在发送时使用你的登录 Cookie。Cookie **只能经环境变量注入**（如 `cookie: ${JUEJIN_COOKIE}`），不会被写入数据目录。Cookie 等同于账号密码：**不要写进 `zhin.config.yml` 明文，不要提交到仓库，不要贴进日志或 issue**。不提供扫码登录。
-- **默认先审再发**：`sendMode` 只有 `review`（默认）和 `off`。AI 写好的回复只进入草稿队列，**不会自动发到掘金**；只有你在 Console「掘金评论审批」页点「发送」，或 master 执行 `juejin-draft send <id>` 后才真正发出。不提供自动直发。
+- **默认先审再发**：`sendMode` 只有 `review`（默认）和 `off`。AI 写好的回复只进入草稿队列，**不会自动发到掘金**；只有你在 Console「掘金评论审批」页点「发送」，或持有聊天角色 `owner` 的人执行 `juejin-draft send <id>` 后才真正发出。不提供自动直发。
 - **只回复评论，不发顶层评论**：出站只能回复白名单文章下已有的评论楼（或楼内回复），不会在文章下新开评论。
 - **只管白名单文章**：只轮询 `articles` 里列出的文章（只填你自己的）；留空就不轮询。不做全站搜索、不去别人的评论区；请遵守掘金用户协议，禁止用于营销、引流、刷屏。
 - **风控即熔断**：遇到频繁 / 验证码 / 风控 / 非 JSON 响应等情况，endpoint 立即停止轮询与发送，不自动重试；人工确认账号状态后重启。
@@ -37,7 +37,7 @@ Zhin.js 掘金评论适配器（Plugin Runtime）：让 AI 辅助回复**你自�
 | 过滤自己的评论（登录 uid，或接口标记的作者本人） | ✅ 已实现 |
 | AI 回复进入草稿队列（`review`） | ✅ 已实现 |
 | 草稿持久化（重启不丢，发送中断会提示先确认） | ✅ 已实现（`data/juejin/<账号>/drafts.json`，权限 600） |
-| master 审批后真正发出（`juejin-draft send` → `interact_api/v1/reply/publish`） | ⚠️ 已实现但**未实测**（带发送间隔与风控熔断，结果不明时不当作「未发送」） |
+| 聊天角色 owner 审批后真正发出（`juejin-draft send` → `interact_api/v1/reply/publish`） | ⚠️ 已实现但**未实测**（带发送间隔与风控熔断，结果不明时不当作「未发送」） |
 | 审批前改写 / 丢弃草稿（`juejin-draft edit` / `drop`） | ✅ 已实现 |
 | Cookie 失效识别（`err_no 403 must login`） | ✅ 已实现 |
 | Console「掘金评论审批」页：登录状态、白名单文章、待审草稿的发送 / 改写 / 丢弃 | ✅ 已实现 |
@@ -91,7 +91,7 @@ juejin:
 | `juejin:review` | 发送 / 改写 / 丢弃草稿 |
 | `juejin:login` | 重新检查登录 |
 
-审批命令只认 master 角色（在你平时和机器人聊天的适配器配置里设置 `master`）。
+审批命令只认聊天角色 `owner`（在你平时和机器人聊天的适配器上授予，见[聊天角色](https://zhin.js.org/concepts/chat-roles)）。适配器配置里不要写已删除的 `master`：迁移完成后再写不会授予角色，实例会删掉该字段，并在 Console「需要你处理」里等你确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。
 
 ## 会话与消息
 

@@ -19,7 +19,7 @@ Zhin.js Bilibili comment adapter (Plugin Runtime): lets AI help you reply to com
 ## Read this first
 
 - **It acts as your account**: Bilibili's open platform grants no comment read/write scopes, so this adapter uses your login cookies (`SESSDATA` + `bili_jct`). The recommended way is **QR login** on the Console "Comment review" page; the credentials stay only in the data directory of the machine running the bot (`data/bilibili/<account>/credentials.json`, mode 600). Environment variables still work. Treat cookies like a password: **never put them in `zhin.config.yml` in plain text, commit them, or paste them into logs or issues.**
-- **Review before send by default**: `sendMode` defaults to `review`. AI-written replies only land in a draft queue and are **never posted to Bilibili automatically**; they are posted only when you press Send on the Console "Comment review" page or a master runs `bili-draft send <id>`. There is no auto-send.
+- **Review before send by default**: `sendMode` defaults to `review`. AI-written replies only land in a draft queue and are **never posted to Bilibili automatically**; they are posted only when you press Send on the Console "Comment review" page or someone with the chat role `owner` runs `bili-draft send <id>`. There is no auto-send.
 - **Allow-listed content only**: only the videos, dynamics and articles listed in `videos` / `dynamics` / `articles` are polled (ideally your own); a blank list polls nothing of that kind. No site-wide search, no posting in other people's comment sections. Follow Bilibili's user agreement — no marketing, lead generation, or spam.
 - **Risk control trips a breaker**: on rate-limit / captcha / risk-block / duplicate-comment codes the endpoint stops polling and logs an error with no automatic retry; restart after checking the account manually.
 
@@ -34,7 +34,7 @@ Zhin.js Bilibili comment adapter (Plugin Runtime): lets AI help you reply to com
 | First poll only records a baseline (history is not fed to AI) | ✅ |
 | AI replies go to a draft queue (`review`) | ✅ |
 | Draft persistence (survives restarts; interrupted sends are flagged) | ✅ `data/bilibili/<account>/drafts.json` |
-| Posting after master approval (`bili-draft send` → `x/v2/reply/add`) | ✅ with send interval and risk breaker |
+| Posting after a chat-role `owner` approves (`bili-draft send` → `x/v2/reply/add`) | ✅ with send interval and risk breaker |
 | Edit / discard drafts before sending (`bili-draft edit` / `drop`) | ✅ |
 | QR login / cookie persistence (Console page or `bili-login start`) | ✅ environment variables still work and take precedence |
 | Expired-cookie detection: clear stale credentials, ask you to scan again | ✅ |
@@ -111,7 +111,7 @@ Permissions (plugin-defined, granted by level — see [Plugin permission levels]
 | `bilibili:review` | Send / edit / discard drafts |
 | `bilibili:login` | QR login / sign out |
 
-Review commands require the chat role `owner`: grant yourself `owner` on the chat adapter you talk to the bot through (QQ / Telegram, …) in the **Roles** tab of the Console object pages or with `role grant` (see [Chat roles](../concepts/chat-roles.md)); to run them from Bilibili comments your Bilibili identity needs `owner` too. With no owner, nobody can send via commands.
+Review commands require the chat role `owner`: grant yourself `owner` on the chat adapter you talk to the bot through (QQ / Telegram, …) in the **Roles** tab of the Console object pages or with `role grant` (see [Chat roles](../concepts/chat-roles.md)); to run them from Bilibili comments your Bilibili identity needs `owner` too. With no owner, nobody can send via commands. Do not write the removed `master` field: after the chat-role migration, writing it again does not grant a role. The instance removes the field and lists it under Console **Needs attention** until someone imports or ignores it (see [Upgrading to chat roles](../migrations/chat-roles.md)).
 
 ## Conversations and messages
 
@@ -203,7 +203,7 @@ Without `notify`, drafts only show on the Console page and in logs (`bilibili_dr
 | No "Comment review" in the Console | Make sure the Console (`@zhin.js/page`) is installed and the token has `bilibili:read` |
 | Page buttons say you lack permission | The token lacks `bilibili:review` / `bilibili:login` |
 | `bili-draft send` says it is too soon | `minSendIntervalSec` has not passed; try again later, the draft is kept |
-| `bili-draft` reports no permission | You do not hold the chat role `owner`; grant it in the **Roles** tab of the Console object pages |
+| `bili-draft` reports no permission | The sender does not hold the chat role `owner`; grant it in the **Roles** tab of the Console object pages. Writing the removed `master` field again does not grant the role |
 | Log `bilibili_notifications_disabled` | `notifications` is on but you are not signed in, so notifications are not polled |
 | Log `bilibili_notify_failed` | The `notify` conversation cannot be reached: check adapter / endpoint / id and that the adapter is online |
 | Log `bilibili_draft_persist_failed` | The data directory is not writable; check `dataDir` permissions. Drafts remain in memory |

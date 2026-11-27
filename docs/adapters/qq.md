@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=670a9075819f25a2 -->
+<!-- sync-adapter-docs:sha256=79560322f8e9f50e -->
 
 # @zhin.js/adapter-qq
 
@@ -145,9 +145,7 @@ qq:
 | `qq endpoint list` | 列出运行中与配置中的 endpoints |
 | `qq endpoint remove <name>` | 删除账号配置，取消目标在途并关闭，保留历史 |
 
-add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i].master`）时仅
-master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoint 的 `master`）。二维码当前以链接文本下发
-（出站富媒体待迁移），用手机 QQ 打开链接即可扫码。
+只有 `cancel` 接受两种人：在适配器层或全局持有聊天角色 `owner`（账号层、会话层的 owner 不够），或者发送者 id 与顶层 `notify.id`、某个 `endpoints[].notify.id` 相同。`add` 和 `remove` 只接受适配器层或全局的 `owner`；只匹配 `notify.id`、没有这一层 owner 时，可以取消进行中的绑定，不能新增或删除账号。适配器配置里不要写已删除的 `master`：迁移完成后再写不会授予角色，实例会删掉该字段，并在 Console「需要你处理」里等你确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。二维码当前以链接文本下发（出站富媒体待迁移），用手机 QQ 打开链接即可扫码。
 
 ## 环境变量
 
@@ -260,21 +258,20 @@ QQ 开放平台按有没有带上用户消息的 `msg_id`（或事件的 `event_
 
 ## 掉线通知
 
-QQ 官方机器人掉线 / 启动失败时，可以配置 `notify` 让另一个适配器实例通知 master：
+QQ 官方机器人掉线 / 启动失败时，可以配置 `notify` 让另一个适配器实例通知管理员：
 
 ```yaml
 icqq:
   # ... 已配置好的 ICQQ 实例
 qq:
-  master: "${QQ_MASTER_OPENID}"
   notify:
     adapter: icqq
     endpoint: "123456"
     kind: private
-    id: "123456"   # master 的 QQ 号
+    id: "123456"   # 接收通知的人在那个平台上的 id（ICQQ 为 QQ 号）
 ```
 
-通知里会提示恢复方式：在 QQ 回复 `qq endpoint add` 重新扫码绑定（或打开 Console 的 QQ 页面）。`notify.id` 同时作为 endpoint 管理命令的 master 身份，方便从通知会话直接完成绑定。未配置 `notify` 时只在日志和 Console 的 QQ 页面显示连接状态。
+通知只说明这台机器人掉线了。接收者 id 与 `notify.id` 相同，并不能因此执行 `qq endpoint add` 或 `remove`（那只够 `cancel`）。重新绑定请用 Console 的 QQ 页「平台操作」扫码（写操作需要 `qq:write`，见上文），或由适配器层 / 全局聊天角色 `owner` 在聊天里发送 `qq endpoint add`。未配置 `notify` 时只在日志和 Console 的 QQ 页面显示连接状态。
 
 ## 故障排查
 

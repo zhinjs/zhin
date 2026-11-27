@@ -213,7 +213,7 @@ http:
 
 Without `http.port` the gateway listens on 8068, the value the scaffold writes (early 1.x runtimes defaulted to 8086; projects that set a port are unaffected). `http.port` accepts only an integer from 1 to 65535, or a `${VAR}` reference that expands to one (`0` lets the system pick a free port, for tests); anything else is refused by `zhin config set`, Console saves and `zhin config check`, and startup fails instead of silently using the default port.
 
-Local development can access without `token`; production must set one. `tokens` supports multiple scoped tokens.
+Until the first owner exists, a Host with no `http.token` accepts unauthenticated requests only from loopback peers that did not come through a proxy (local development). After an owner exists, only Console sessions and API tokens are accepted, and `http.token` is refused everywhere. `http.tokens` is removed: startup fails while it is still configured; use Console users and API tokens instead.
 
 ## database
 

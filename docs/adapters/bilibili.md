@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=096b66ecf8970c1e -->
+<!-- sync-adapter-docs:sha256=9b7c76cb82e9f0ba -->
 
 # @zhin.js/adapter-bilibili
 
@@ -21,7 +21,7 @@ Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你�
 ## 先读这几条
 
 - **以你的账号身份操作**：B 站开放平台没有评论读写权限，本适配器使用你的登录 Cookie（`SESSDATA` + `bili_jct`）。推荐在 Console「评论审批」页**扫码登录**，凭据只存在运行机器人那台机器的数据目录里（`data/bilibili/<账号>/credentials.json`，权限 600）。也可以用环境变量注入。Cookie 等同于账号密码：**不要写进 `zhin.config.yml` 明文，不要提交到仓库，不要贴进日志或 issue**。
-- **默认先审再发**：`sendMode` 默认 `review`，AI 写好的回复只进入草稿队列，**不会自动发到 B 站**；只有你在 Console「评论审批」页点「发送」，或 master 执行 `bili-draft send <id>` 后才真正发出。不提供自动直发。
+- **默认先审再发**：`sendMode` 默认 `review`，AI 写好的回复只进入草稿队列，**不会自动发到 B 站**；只有你在 Console「评论审批」页点「发送」，或持有聊天角色 `owner` 的人执行 `bili-draft send <id>` 后才真正发出。不提供自动直发。
 - **只管白名单内容**：只轮询 `videos` / `dynamics` / `articles` 里列出的视频、动态、专栏（建议只填自己的）；哪一项留空就不轮询那一类。不做全站搜索、不去别人的评论区刷评论；请遵守 B 站用户协议，禁止用于营销、引流、刷屏。
 - **风控即熔断**：遇到频繁 / 验证码 / 风控拦截 / 重复评论等错误码，endpoint 立即停止轮询并记录错误，不自动重试；人工确认账号状态后重启。
 
@@ -36,7 +36,7 @@ Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你�
 | 首轮只建基线，不把历史评论灌给 AI | ✅ 已实现 |
 | AI 回复进入草稿队列（`review`） | ✅ 已实现 |
 | 草稿持久化（重启不丢，发送中断会提示先确认） | ✅ 已实现（`data/bilibili/<账号>/drafts.json`） |
-| master 审批后真正发出（`bili-draft send` → `x/v2/reply/add`） | ✅ 已实现（带发送间隔与风控熔断） |
+| 聊天角色 owner 审批后真正发出（`bili-draft send` → `x/v2/reply/add`） | ✅ 已实现（带发送间隔与风控熔断） |
 | 审批前改写 / 丢弃草稿（`bili-draft edit` / `drop`） | ✅ 已实现 |
 | 扫码登录 / Cookie 持久化（Console 页或 `bili-login start`） | ✅ 已实现（环境变量注入仍可用且优先） |
 | Cookie 失效识别：清除失效凭据、提醒重新扫码 | ✅ 已实现 |
@@ -119,7 +119,7 @@ bilibili:
 | `bilibili:review` | 发送 / 改写 / 丢弃草稿 |
 | `bilibili:login` | 扫码登录 / 退出登录 |
 
-审批命令只认 master 角色：在你平时和机器人聊天的那个适配器（QQ / Telegram 等）配置里把自己设为 `master`（`bilibili.master` 则是 B 站 uid，可在评论区里用命令）。没配置 master 时谁都不能用命令发送。
+审批命令只认聊天角色 `owner`：在你平时和机器人聊天的那个适配器（QQ / Telegram 等）上，于 Console 对象页的「角色」页签或用 `角色 授予` 给自己授予 `owner`（见[聊天角色](https://zhin.js.org/concepts/chat-roles)）；要在 B 站评论区里用命令，你的 B 站身份也要有 `owner`。没有 owner 时谁都不能用命令发送。适配器配置里不要写已删除的 `master`：迁移完成后再写不会授予角色，实例会删掉该字段，并在 Console「需要你处理」里等你确认（见[升级到聊天角色](https://zhin.js.org/migrations/chat-roles)）。
 
 ## 会话与消息
 
@@ -158,7 +158,7 @@ bilibili:
 
 ### 审批草稿
 
-在 Console「评论审批」页处理最方便；也可以用命令（只有 master 能用，可以在任意已接入的聊天平台里发）：
+在 Console「评论审批」页处理最方便；也可以用命令（只有聊天角色 `owner` 能用，可以在任意已接入的聊天平台里发）：
 
 | 命令 | 作用 |
 |---|---|
@@ -211,7 +211,7 @@ bilibili:
 | Console 里没有「评论审批」 | 确认装了 Console（`@zhin.js/page`），并且令牌有 `bilibili:read` 权限 |
 | 页面按钮提示「没有操作权限」 | 令牌缺少 `bilibili:review` / `bilibili:login` |
 | `bili-draft send` 说「发得太快了」 | 未到 `minSendIntervalSec`，稍后再发；草稿保留 |
-| `bili-draft` 提示没有权限 | 当前账号不是 master；在聊天平台适配器配置里设置 `master` |
+| `bili-draft` 提示没有权限 | 当前发送者没有聊天角色 `owner`；在 Console 对象页「角色」页签授予。再写已删除的 `master` 不会授予角色 |
 | 日志 `bilibili_notifications_disabled` | 开了 `notifications` 但未登录，通知不会轮询 |
 | 日志 `bilibili_notify_failed` | `notify` 指向的会话发不出去：检查 adapter / endpoint / id 是否正确、该适配器是否在线 |
 | 日志 `bilibili_draft_persist_failed` | 数据目录不可写；检查 `dataDir` 权限。草稿仍在内存里 |
