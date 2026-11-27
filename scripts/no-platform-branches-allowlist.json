@@ -8,5 +8,10 @@
     "file": "packages/im/adapter/src/capability-profile.ts",
     "name": "sandbox",
     "reason": "`runtime.sandbox` is the ADR 0044 capability FIELD an adapter declares (types and validator schema), not a platform comparison."
+  },
+  {
+    "file": "packages/im/agent/src/collaboration/turn-collaboration.ts",
+    "name": "line",
+    "reason": "`ResultBatchPlan.kind === 'line'` is the plan that shows a one-line failure notice for withheld delegated results, not the LINE platform (the adapter id is now collected from plugins/adapters/line)."
   }
 ]

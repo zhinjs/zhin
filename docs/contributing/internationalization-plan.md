@@ -34,7 +34,7 @@ sidebar: false
 | `packages/im/command/src/provider.ts` | 创建 CommandIndex 时固定 `菜单` 或自定义关键词 | 同一索引服务不同语言用户，默认关键词必须在操作中解析 |
 | `packages/im/command/src/arguments.ts` | 参数错误只有 `field/message`，消息多为英文 | 补充稳定原因和参数，再由展示层本地化，不能匹配错误字符串翻译 |
 | `packages/im/core/src/built/user-interaction.ts` | 中文提示，输入同时接受中英；确认按钮内部值为 `yes/no` | 显示、文字输入与合法按钮动作必须分清，不能删掉英文集合后让中文按钮也失效 |
-| `packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts` | 翻页重新 dispatch，按钮与页码提示写死中文 | 首次菜单与翻页共用固定语言，不因后来点击者或偏好变化混用文案 |
+| `packages/im/core/src/plugin-runtime/im/command-feedback.ts`（`commandMenuReply`；原 `command-menu-navigation.ts` 已删除） | 翻页按钮重新 dispatch 时传入首次菜单记录的 `menu.locale`；页码与上一页 / 下一页按钮经 `createMessages` 按该语言本地化，文字翻页提示由 `packages/im/command/src/messages.ts` 提供 | 已落实：首次菜单与翻页共用固定语言，不因后来点击者或偏好变化混用文案；新增菜单文案须同时补齐 `zh-CN` 与 `en` |
 | `plugins/utils/reminder/src/create-reminder.ts` | 接受 `取消/cancel`，只接受中文“确认”；多处写死 `remind list/create` | 文案、确认规则和可执行示例一起调整 |
 | `packages/im/plugin-runtime/src/persistent-state.ts` | 已有按 owner、完整 endpoint、sender 分区的用户状态 | 复用身份与存储机制，不新建进程级语言 Map |
 | `packages/im/runtime/src/host-config-schema.json` | 无统一 locale 配置，大量描述为固定中文 | 本地化显示元数据，保持配置字段和值的机器含义不变 |

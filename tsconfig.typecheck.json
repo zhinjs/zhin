@@ -435,6 +435,7 @@
     "packages/im/core/src/**/*",
     "packages/im/adapter-onebot-events/src/**/*",
     "packages/im/core/tests/public-events.test-d.ts",
+    "basic/schedule/tests/types.smoke.test-d.ts",
     "packages/im/agent/src/**/*",
     "packages/im/zhin/src/instance/**/*",
     "packages/host/gateway/src/**/*",

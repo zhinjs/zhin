@@ -5,7 +5,8 @@
  * Scans core / agent / ai / adapter runtime sources, the instance composition root
  * (packages/im/zhin/src/instance) and the management gateway (packages/host/gateway/src) for platform-name string
  * literals (`'icqq'`, `"discord"`, ...) and unquoted platform-name object keys (`telegram: ...`,
- * `kook?: ...`). Comments, tests and `.d.ts` files are ignored. A genuine exception must be listed in
+ * `kook?: ...`). Platform names are collected from the adapter packages (`plugins/adapters/*`, see
+ * `collectAdapterPlatformNames`) plus `EXTRA_PLATFORM_NAMES`. Comments, tests and `.d.ts` files are ignored. A genuine exception must be listed in
  * `scripts/no-platform-branches-allowlist.json` with a reason.
  */
 import * as fs from 'node:fs';
@@ -23,16 +24,58 @@ export const SCAN_ROOTS = [
   'packages/host/gateway/src',
 ];
 
-export const PLATFORM_NAMES = [
-  'icqq', 'qq', 'napcat', 'onebot', 'onebot11', 'onebot12', 'kook', 'slack', 'discord', 'telegram',
-  'sandbox', 'bilibili', 'weixin', 'wechat', 'lark', 'dingtalk', 'milky', 'satori',
-];
+/**
+ * Hand-written platform names that are not an adapter id of their own: protocol / product family names
+ * a runtime branch could still test for.
+ */
+export const EXTRA_PLATFORM_NAMES = Object.freeze(['onebot', 'weixin', 'wechat', 'feishu', 'wxwork']);
+
+/**
+ * Adapter ids declared by the adapter packages in `plugins/adapters/*`: every package whose
+ * `package.json#zhin.features` lists `@zhin.js/adapter` contributes the names of its `adapters/<name>/`
+ * convention directories (the id the Adapter registers under, which is what a branch would compare
+ * against), plus its package name without the `@zhin.js/adapter-` prefix.
+ * @param {string} [root] repository root
+ * @returns {string[]}
+ */
+export function collectAdapterPlatformNames(root = repoRoot) {
+  const adaptersRoot = path.join(root, 'plugins/adapters');
+  const names = new Set();
+  for (const entry of fs.existsSync(adaptersRoot) ? fs.readdirSync(adaptersRoot) : []) {
+    const manifestPath = path.join(adaptersRoot, entry, 'package.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const features = Array.isArray(manifest.zhin?.features) ? manifest.zhin.features : [];
+    if (!features.some((feature) => feature?.package === '@zhin.js/adapter')) continue;
+    const conventionDir = path.join(adaptersRoot, entry, 'adapters');
+    if (fs.existsSync(conventionDir)) {
+      for (const name of fs.readdirSync(conventionDir)) {
+        if (fs.statSync(path.join(conventionDir, name)).isDirectory()) names.add(name);
+      }
+    }
+    const fromPackage = typeof manifest.name === 'string' ? /^@zhin\.js\/adapter-(.+)$/u.exec(manifest.name)?.[1] : undefined;
+    if (fromPackage) names.add(fromPackage);
+  }
+  return [...names].sort();
+}
+
+export const PLATFORM_NAMES = Object.freeze([...new Set([...collectAdapterPlatformNames(), ...EXTRA_PLATFORM_NAMES])]);
+
+/**
+ * Adapter ids that are also ordinary English words / field names (`line: 3`, `email: ...`). They are
+ * flagged as string literals (`=== 'line'`) but not as unquoted object keys.
+ */
+export const LITERAL_ONLY_NAMES = Object.freeze(['email', 'github', 'line']);
 
 const ALLOWLIST_FILE = path.join(repoRoot, 'scripts/no-platform-branches-allowlist.json');
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', '__tests__']);
-const names = PLATFORM_NAMES.join('|');
+const escapeName = (name) => name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+// Longest first so `onebot11` wins over `onebot`.
+const byLength = [...PLATFORM_NAMES].sort((a, b) => b.length - a.length);
+const names = byLength.map(escapeName).join('|');
+const keyNames = byLength.filter((name) => !LITERAL_ONLY_NAMES.includes(name) && !name.includes('-')).map(escapeName).join('|');
 const LITERAL = new RegExp(`(['"\`])(${names})\\1`, 'g');
-const KEY = new RegExp(`(?<![\\w.$'"\`-])(${names})\\??\\s*:(?!:)`, 'g');
+const KEY = new RegExp(`(?<![\\w.$'"\`-])(${keyNames})\\??\\s*:(?!:)`, 'g');
 
 function walk(directory, files) {
   if (!fs.existsSync(directory)) return;

@@ -70,6 +70,8 @@ For cross-platform outbound messages (sending from one platform to another), use
 
 Adapter Agent tools (`plugins/adapters/<name>/agents/**`) must not call a platform SDK / Client send API either: send to the current conversation with `context.use(outboundMessageToken).send({ requester, conversation, content })`, expressing platform-specific content as the adapter's namespaced segment (such as `discord:embed`, `telegram:poll`, `telegram:sticker`, `napcat:node`) that its outbound encoder renders. `check:harness-paths` scans for such calls; a call the outbound chain cannot express (creating a forum post, a work notice) is recorded with its reason in `scripts/agent-send-bypass-allowlist.json`.
 
+Plugin code (everything under `plugins/**` except an adapter's own `src/` and `adapters/` implementation — games, services and utils included — and `examples/**`) and the framework host sources are scanned by `check:harness-paths` too: calling `$sendMessage()`, a send method on `endpoint` / `lease` / `transport` / `client` / `$client` / `bot` / `sdk` (`send`, `send*Message`, `sendPhoto`, ...; platform actions such as `sendLike` are not sends) or `adapterIndex.send` fails the check. The rules live in `scripts/lib/send-bypass-rules.mjs`, and the self-change trial (`packages/im/agent/src/self-change/trial.ts`) uses the same patterns; exceptions are recorded as `{ file, rule, reason }` in the same allowlist.
+
 ## Host Token Pattern
 
 The HTTP Host (`@zhin.js/host-http`) authenticates every request with a Bearer credential:

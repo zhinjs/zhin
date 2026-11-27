@@ -78,6 +78,8 @@ flowchart LR
 
 适配器 Agent 工具（`plugins/adapters/<name>/agents/**`）同样不能直调平台 SDK / Client 的发送接口：用 `context.use(outboundMessageToken).send({ requester, conversation, content })` 发往当前会话；平台特有内容用适配器的命名空间段表达（如 `discord:embed`、`telegram:poll`、`telegram:sticker`、`napcat:node`），由该适配器的出站编码器渲染。`check:harness-paths` 会扫描这类直调；确实无法由出站链表达的调用（如创建论坛帖、工作通知）登记在 `scripts/agent-send-bypass-allowlist.json` 并写明理由。
 
+插件代码（`plugins/**` 中适配器 `src/`、`adapters/` 实现以外的部分，含 games、services、utils，以及 `examples/**`）与框架宿主源码同样由 `check:harness-paths` 扫描：直调 `$sendMessage()`、`endpoint` / `lease` / `transport` / `client` / `$client` / `bot` / `sdk` 上的发送方法（`send`、`send*Message`、`sendPhoto` 等，`sendLike` 一类平台动作不算）或 `adapterIndex.send` 都会报错。规则定义在 `scripts/lib/send-bypass-rules.mjs`，自改代码试运行（`packages/im/agent/src/self-change/trial.ts`）使用同一组模式；例外以 `{ file, rule, reason }` 登记在同一白名单文件。
+
 ## Host token 模式
 
 HTTP Host（`@zhin.js/host-http`）统一用 Bearer 凭据鉴权：

@@ -1,26 +1,38 @@
 #!/usr/bin/env node
-/** Ban calls to Plugin lookup APIs that are absent from the public surface. */
+/**
+ * Ban calls to Plugin lookup APIs that are absent from the public surface, and the removed legacy
+ * startup entry (`bootstrapNode`, `zhin.js/node`).
+ *
+ * Scans every example, plugin and package source (plus `basic/` for the runtime-wide rules);
+ * `lib/`, `dist/`, `node_modules/`, tests and fixtures are skipped. Files whose job is to describe or
+ * detect a removed API are listed in `DESCRIBES_REMOVED_API` with a reason.
+ */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const pluginRoots = [
-  'plugins/adapters',
-  'plugins/features',
-  'plugins/utils',
-  'plugins/games',
-  'plugins/services',
-  'examples/minimal-bot',
-  'examples/full-bot',
-  'examples/test-bot',
-];
-const allRuntimeRoots = [
-  'basic',
+export const pluginRoots = Object.freeze([
+  'examples',
+  'plugins',
   'packages',
+]);
+export const allRuntimeRoots = Object.freeze([
+  'basic',
   ...pluginRoots,
-];
-const skippedDirectories = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests']);
+]);
+const skippedDirectories = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', '__tests__', 'fixtures']);
+
+/** Repo-relative files that detect / describe a removed API on purpose → reason. */
+export const DESCRIBES_REMOVED_API = Object.freeze({
+  'packages/im/agent/src/self-change/trial.ts':
+    'The self-change trial rejects drafts that use bootstrapNode / zhin.js/node; its detection regex names the API.',
+});
+
+/** Import of the deleted `zhin.js/node` entry (static, dynamic, require, side-effect, re-export). */
+export const REMOVED_NODE_ENTRY_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)(['"`])zhin\.js\/node(?:\/[^'"`]*)?\1/u;
+/** Any executable reference to `bootstrapNode` (call, import binding, re-export). */
+export const REMOVED_BOOTSTRAP_NODE = /\bbootstrapNode\b/u;
 
 function walkTypeScript(directory, files) {
   if (!fs.existsSync(directory)) return;
@@ -34,7 +46,18 @@ function walkTypeScript(directory, files) {
   }
 }
 
-function executableLine(line) {
+function commentLine(line) {
+  const trimmed = line.trim();
+  return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+}
+
+/** Raw line with comment lines blanked (string contents kept — import specifiers are strings). */
+export function codeLine(line) {
+  return commentLine(line) ? '' : line;
+}
+
+/** Line with comment lines blanked and string literals removed. */
+export function executableLine(line) {
   const trimmed = line.trim();
   if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/**')) return '';
   return line.replace(
@@ -43,14 +66,17 @@ function executableLine(line) {
   );
 }
 
-function collect(roots, pattern, violations) {
+function collect(roots, pattern, violations, project = executableLine) {
   for (const root of roots) {
     const files = [];
     walkTypeScript(path.join(repoRoot, root), files);
     for (const file of files) {
+      if (Object.hasOwn(DESCRIBES_REMOVED_API, path.relative(repoRoot, file).split(path.sep).join('/'))) continue;
       const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/u);
       for (let index = 0; index < lines.length; index += 1) {
-        if (!pattern.test(executableLine(lines[index]))) continue;
+        if (!pattern.test(project(lines[index]))) continue;
+        const relative = path.relative(repoRoot, file);
+        if (violations.some((violation) => violation.file === relative && violation.line === index + 1)) continue;
         violations.push({
           file: path.relative(repoRoot, file),
           line: index + 1,
@@ -61,6 +87,7 @@ function collect(roots, pattern, violations) {
   }
 }
 
+export function findRemovedApiViolations() {
 const violations = [];
 collect(pluginRoots, /\b(?:usePlugin|getPlugin)\s*\(/u, violations);
 collect(allRuntimeRoots, /\b(?:getHostRootPlugin|setHostRootPlugin)\s*\(/u, violations);
@@ -71,13 +98,25 @@ collect(
   /\b(?:RuntimeEndpointSummary|resolveActivityFeedbackForTarget|resolveDefaultProviderFromConfig)\b/u,
   violations,
 );
-
-if (violations.length > 0) {
-  console.error('Removed runtime APIs are forbidden in production source:\n');
-  for (const violation of violations) {
-    console.error(`  ${violation.file}:${violation.line}  ${violation.text}`);
-  }
-  process.exit(1);
+collect(allRuntimeRoots, REMOVED_BOOTSTRAP_NODE, violations);
+collect(allRuntimeRoots, REMOVED_NODE_ENTRY_IMPORT, violations, codeLine);
+return violations;
 }
 
-console.log('check:no-removed-plugin-api passed.');
+export function run() {
+  const violations = findRemovedApiViolations();
+  if (violations.length > 0) {
+    console.error('Removed runtime APIs are forbidden in production source:\n');
+    for (const violation of violations) {
+      console.error(`  ${violation.file}:${violation.line}  ${violation.text}`);
+    }
+    console.error('\nzhin.js/node / bootstrapNode are deleted: use definePlugin() + `zhin start`.');
+    return 1;
+  }
+  console.log('check:no-removed-plugin-api passed.');
+  return 0;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = run();
+}

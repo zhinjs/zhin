@@ -9,11 +9,13 @@ import {
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
 import {
+  checkImport,
   extractBarePackageName,
   findManagementManifestViolations,
   findUndeclaredWorkspaceImports,
   layers,
   packageNameToPath,
+  resolveRelativeImport,
 } from './check-architecture-layers.mjs';
 import {
   isAgentForbiddenWorkroomReference,
@@ -380,6 +382,44 @@ describe('ADR 0054 management packages', () => {
     expect(violations.map(v => v.import).sort()).toEqual(['@zhin.js/agent', '@zhin.js/core', '@zhin.js/mcp', 'zhin.js']);
     expect(findManagementManifestViolations({ dependencies: { '@zhin.js/cli': 'workspace:*' } }, 'packages/host/gateway/package.json', '@zhin.js/gateway'))
       .toEqual([expect.objectContaining({ import: '@zhin.js/cli' })]);
+  });
+});
+
+describe('relative imports are resolved to their package', () => {
+  it('allows relative imports inside the same package', () => {
+    expect(checkImport('packages/im/core', 'packages/im/core/src/message.ts', './utils.js')).toEqual({ valid: true });
+    expect(checkImport('packages/im/zhin', 'packages/im/zhin/src/index.ts', './instance/start-command.js')).toEqual({ valid: true });
+  });
+
+  it('resolves the target package and layer', () => {
+    expect(resolveRelativeImport('packages/im/core/src/message.ts', '../../agent/src/index.js')).toMatchObject({
+      target: 'packages/im/agent/src/index.js',
+      sourcePackage: 'packages/im/core',
+      targetPackage: 'packages/im/agent',
+      targetLayer: 'packages/im/agent',
+      samePackage: false,
+    });
+  });
+
+  it('checks a cross-package relative import against the target layer', () => {
+    expect(checkImport('packages/im/core', 'packages/im/core/src/message.ts', '../../agent/src/index.js'))
+      .toMatchObject({ valid: false, targetLayer: 'packages/im/agent', reason: 'Layer "packages/im/core" cannot import from "packages/im/agent"' });
+    expect(checkImport('packages/im/kernel', 'packages/im/kernel/src/index.ts', '../../core/src/index.js'))
+      .toMatchObject({ valid: false, targetLayer: 'packages/im/core' });
+    // agent may depend on core / ai, whether by name or by (eval-only) relative path
+    expect(checkImport('packages/im/agent', 'packages/im/agent/evals/framework/driver.ts', '../../../core/src/index.js'))
+      .toEqual({ valid: true });
+  });
+
+  it('rejects relative imports that leave every layered package', () => {
+    expect(checkImport('packages/im/core', 'packages/im/core/src/message.ts', '../../../../plugins/utils/rss/plugin.js'))
+      .toMatchObject({ valid: false, reason: expect.stringContaining('outside every architecture layer') });
+    expect(checkImport('packages/im/kernel', 'packages/im/kernel/src/index.ts', '../../../../scripts/lib/parse-imports.mjs'))
+      .toMatchObject({ valid: false, reason: expect.stringContaining('"scripts/lib/parse-imports.mjs"') });
+  });
+
+  it('lets tool configs extend the root config', () => {
+    expect(checkImport('packages/im/agent', 'packages/im/agent/evals/vitest.config.ts', '../../../../vitest.config.js')).toEqual({ valid: true });
   });
 });
 

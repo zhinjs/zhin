@@ -136,11 +136,27 @@ interface ForbiddenRule {
   readonly message: string;
 }
 
+/**
+ * 绕过 IM 出站链的写法（直调 Endpoint / transport / 平台 client / AdapterIndex 的发送）。必须与
+ * `scripts/lib/send-bypass-rules.mjs` 的 `SEND_BYPASS_PATTERNS` 逐项一致（`check:harness-paths` 用同一组；
+ * `scripts/check-im-send-bypass.test.ts` 断言两边相同）。
+ */
+export const SELF_CHANGE_SEND_BYPASS_PATTERNS: readonly Readonly<{ id: string; source: string }>[] = Object.freeze([
+  Object.freeze({ id: 'endpoint_send_message', source: String.raw`\$sendMessage\s*\(` }),
+  Object.freeze({
+    id: 'endpoint_send',
+    source: String.raw`(?<![\w$])(?:bot|endpoint|lease|transport|client|\$client|sdk)\s*\??\.\s*(?:send|sendPayload|send\w*(?:Message|Msg)\w*|send(?:Text|Image|Photo|File|Document|Voice|Audio|Video|Sticker|Poll|Card|Markdown)\w*|postMessage)\s*\(`,
+  }),
+  Object.freeze({ id: 'adapter_index_send', source: String.raw`(?<![\w$])(?:adapterIndex|adapters)\s*\??\.\s*send(?:Target)?\s*\(` }),
+]);
+
+const SEND_BYPASS_REGEXES = SELF_CHANGE_SEND_BYPASS_PATTERNS.map(pattern => new RegExp(pattern.source, 'mu'));
+
 const FORBIDDEN_RULES: readonly ForbiddenRule[] = Object.freeze([
   {
     id: 'send_bypass',
-    test: source => /\bbot\.\$sendMessage\s*\(/u.test(source),
-    message: 'calls the endpoint $sendMessage directly; reply with message.$reply() or adapter.sendMessage() so the send chain applies',
+    test: source => SEND_BYPASS_REGEXES.some(pattern => pattern.test(source)),
+    message: 'sends through the Endpoint, its transport or the platform client directly; reply with message.$reply() / $sendTo() or the outbound port (outboundMessageToken) so the send chain applies',
   },
   {
     id: 'koa_import',
