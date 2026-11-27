@@ -235,8 +235,16 @@ export type MailBody =
        */
       readonly unaddressed?: boolean;
     }
-  | { readonly kind: 'ask'; readonly question: string }
-  | { readonly kind: 'delegate'; readonly brief: string; readonly deliverable?: string }
+  | {
+      readonly kind: 'ask';
+      readonly question: string;
+      /**
+       * The sender asked for the human's original media of the root turn to go with this mail
+       * (`attach_media`, #1250). The host decides what is attached; absent means none.
+       */
+      readonly attachMedia?: true;
+    }
+  | { readonly kind: 'delegate'; readonly brief: string; readonly deliverable?: string; readonly attachMedia?: true }
   | { readonly kind: 'tell'; readonly content: string }
   | {
       readonly kind: 'result';

@@ -199,20 +199,38 @@ export async function readLocalFileAsBase64(
   maxBytes: number,
   expectedKind?: MediaKind,
 ): Promise<MediaBinaryPayload | null> {
+  const result = await readLocalMedia(filePath, maxBytes, expectedKind);
+  return result.ok ? result.payload : null;
+}
+
+/**
+ * {@link readLocalFileAsBase64} with the reason (#1250): `too_large` (over `maxBytes`), `mime_mismatch`
+ * (not the expected kind or no known media type), `file_unreadable` (missing, not a regular file, I/O error).
+ */
+async function readLocalMedia(
+  filePath: string,
+  maxBytes: number,
+  expectedKind?: MediaKind,
+): Promise<Readonly<{ ok: true; payload: MediaBinaryPayload }> | Readonly<{ ok: false; reason: 'too_large' | 'mime_mismatch' | 'file_unreadable' }>> {
   try {
     const stat = await fs.stat(filePath);
-    if (!stat.isFile() || stat.size > maxBytes) return null;
+    if (!stat.isFile()) return { ok: false, reason: 'file_unreadable' };
+    if (stat.size > maxBytes) return { ok: false, reason: 'too_large' };
     const buf = await fs.readFile(filePath);
+    if (buf.length > maxBytes) return { ok: false, reason: 'too_large' };
     const detected = inspectMediaBytes(buf, expectedKind);
-    if (!detected) return null;
+    if (!detected) return { ok: false, reason: 'mime_mismatch' };
     return {
-      kind: detected.kind,
-      base64: buf.toString('base64'),
-      mimeType: detected.mimeType,
-      fileName: path.basename(filePath),
+      ok: true,
+      payload: {
+        kind: detected.kind,
+        base64: buf.toString('base64'),
+        mimeType: detected.mimeType,
+        fileName: path.basename(filePath),
+      },
     };
   } catch {
-    return null;
+    return { ok: false, reason: 'file_unreadable' };
   }
 }
 
@@ -346,8 +364,8 @@ async function normalizeMediaRef(
   if (media.kind === 'path') {
     const authorized = await authorizeOutboundMediaPath(media.value, authority);
     if (!authorized) return refuse('path_not_allowed');
-    const local = await readLocalFileAsBase64(authorized, maxBytes, wantKind ?? undefined);
-    return local ? { ok: true, payload: { ...local, ...fileName } } : refuse('file_unreadable');
+    const local = await readLocalMedia(authorized, maxBytes, wantKind ?? undefined);
+    return local.ok ? { ok: true, payload: { ...local.payload, ...fileName } } : refuse(local.reason);
   }
 
   const origin = urlScheme(media.value);

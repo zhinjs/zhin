@@ -614,8 +614,8 @@ describe('FullAgentTurnEngine', () => {
     // #1250 trace-media-perception-provenance-clipped: the perception call is a model call of the turn
     // (trace `model_calls`, `ai.usage`, usage rows), tagged with its purpose and the answering model.
     expect(events.filter(event => (event as { type: string }).type === 'usage')).toEqual([expect.objectContaining({
-      type: 'usage', purpose: 'media_perception', provider: 'g', model: 'm',
-      usage: expect.objectContaining({ promptTokens: 300, completionTokens: 12, totalTokens: 312 }),
+      type: 'usage', purpose: 'media_perception', provider: 'g', model: 'm', stopReason: 'stop',
+      usage: { promptTokens: 300, completionTokens: 12, totalTokens: 312 },
     })]);
     expect(events).toContainEqual(expect.objectContaining({
       type: 'media_resolution', status: 'derived', description: '一个红圈',

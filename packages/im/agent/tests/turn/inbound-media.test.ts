@@ -313,15 +313,39 @@ describe('resolveTurnMediaInjection', () => {
     ]);
   });
 
-  it('platform_ref 未物化时明确 unsupported', async () => {
-    const injection = await resolveMedia([
-      { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-image-id' } },
-    ]);
-    expect(injection.blocks).toEqual([]);
-    expect(injection.textAppends).toEqual(['[Media unsupported:unresolved_platform_reference: image]']);
-    expect(injection.outcomes).toEqual([
-      { kind: 'image', status: 'unsupported', code: 'unresolved_platform_reference' },
-    ]);
+  it('platform_ref 无 key / 无 resolver：走统一拒绝路径（unmaterialized_platform_reference + 日志）', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
+    try {
+      const injection = await resolveMedia([
+        { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-image-id' } },
+      ], { scene: 'qq/group/42', messageId: 'm-9' });
+      expect(injection.blocks).toEqual([]);
+      expect(injection.textAppends).toEqual(['[Media rejected:unmaterialized_platform_reference: image]']);
+      expect(injection.outcomes).toEqual([
+        { kind: 'image', status: 'rejected', code: 'unmaterialized_platform_reference' },
+      ]);
+      const lines = warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('inbound_media_rejected'));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('reason: unmaterialized_platform_reference');
+      expect(lines[0]).toContain('scene: qq/group/42');
+      expect(lines[0]).toContain('scheme: platform');
+      expect(lines[0]).not.toContain('opaque-image-id');
+    } finally { warn.mockRestore(); }
+  });
+
+  it('path 超过 maxFileBytes 且未声明大小 → too_large（不是 file_unreadable）', async () => {
+    const { DEFAULT_MULTIMODAL_CONFIG } = await import('../../src/media/media-types.js');
+    const file = path.join(root, 'huge.png');
+    fs.writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    fs.truncateSync(file, DEFAULT_MULTIMODAL_CONFIG.maxFileBytes + 1);
+    const injection = await resolveMedia([{ kind: 'image', source: { kind: 'path', value: file } }],
+      { providerInput: ['text', 'image'], inboundMediaRoots: [root] });
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'rejected', code: 'too_large' }]);
+    const missing = await resolveMedia([{ kind: 'image', source: { kind: 'path', value: path.join(root, 'gone.png') } }],
+      { providerInput: ['text', 'image'], inboundMediaRoots: [root] });
+    expect(missing.outcomes[0]!.status).toBe('rejected');
+    expect(missing.outcomes[0]!.code).not.toBe('too_large');
   });
 
   it('Provider 省略输入能力声明时按 text-only 处理并产生 unsupported 终态', async () => {
@@ -394,8 +418,10 @@ describe('resolveTurnMediaInjection — perception pre-pass', () => {
       provenance: { source: 'media_perception', provider: 'g', model: 'flash-lite', cached: false },
       description: '白底红色圆形',
     }]);
-    // A description without reported usage is not counted as a provider call.
-    expect(injection.perceptionCalls).toBeUndefined();
+    // #1250: a fresh description is a provider call even when the port reported no usage; it counts with
+    // zero tokens marked as not reported (usage rows store unknown). Earlier this was no call at all.
+    expect(injection.perceptionCalls).toEqual([expect.objectContaining({ provider: 'g', model: 'flash-lite', status: 'completed',
+      usageReported: false, usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } })]);
   });
 
   it('notes after a perception description that the media needs no second look by another agent (#1250 vision-ask-after-perception)', async () => {
@@ -413,7 +439,11 @@ describe('resolveTurnMediaInjection — perception pre-pass', () => {
     let call = 0;
     const perception = fakePerception(async () => {
       call += 1;
-      if (call === 2) throw new MediaPerceptionFailedError(new Error('boom'), { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 }, { provider: 'b', model: 'backup' });
+      if (call === 2) {
+        const failed = { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 };
+        throw new MediaPerceptionFailedError(new Error('boom'), failed,
+          [{ provider: 'b', model: 'backup', status: 'failed', usage: failed, usageReported: false, durationMs: 1 }]);
+      }
       return { text: '图', provider: 'g', model: 'm', cached: false, usage };
     });
     const injection = await resolveMedia([pngTurn(), pngTurn()], { providerInput: ['text'], perception });
@@ -421,6 +451,34 @@ describe('resolveTurnMediaInjection — perception pre-pass', () => {
       expect.objectContaining({ kind: 'image', provider: 'g', model: 'm', usage, status: 'completed' }),
       expect.objectContaining({ kind: 'image', provider: 'b', model: 'backup', status: 'failed', usage: { prompt_tokens: 50, completion_tokens: 0, total_tokens: 50 } }),
     ]);
+  });
+
+  it('reports every request the port made, one per candidate, and still reports them when the turn is cancelled (#1250)', async () => {
+    const reported = { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 };
+    const estimate = { prompt_tokens: 1_050, completion_tokens: 0, total_tokens: 1_050 };
+    const fallback = fakePerception(async (_payload, _signal, observe) => {
+      observe?.({ provider: 'svc-a', model: 'primary', status: 'failed', usage: estimate, usageReported: false, durationMs: 5 });
+      observe?.({ provider: 'svc-b', model: 'backup', status: 'completed', usage: reported, usageReported: true, durationMs: 7 });
+      return { text: '图', provider: 'b', model: 'backup', cached: false, usage: { prompt_tokens: 1_060, completion_tokens: 2, total_tokens: 1_062 } };
+    });
+    const seen: unknown[] = [];
+    const injection = await resolveMedia([pngTurn()], { providerInput: ['text'], perception: fallback, onPerceptionCall: call => seen.push(call) });
+    expect(injection.perceptionCalls).toEqual([
+      expect.objectContaining({ provider: 'svc-a', model: 'primary', status: 'failed', usage: estimate, usageReported: false }),
+      expect.objectContaining({ provider: 'svc-b', model: 'backup', status: 'completed', usage: reported, usageReported: true }),
+    ]);
+    expect(seen).toEqual(injection.perceptionCalls);
+
+    const controller = new AbortController();
+    const cancelled = fakePerception(async (_payload, _signal, observe) => {
+      controller.abort(new Error('stopped'));
+      observe?.({ provider: 'svc-a', model: 'primary', status: 'cancelled', usage: estimate, usageReported: false, durationMs: 3 });
+      throw new Error('aborted');
+    });
+    const during: unknown[] = [];
+    await expect(resolveMedia([pngTurn()], { providerInput: ['text'], perception: cancelled, signal: controller.signal,
+      onPerceptionCall: call => during.push(call) })).rejects.toThrow();
+    expect(during).toEqual([expect.objectContaining({ status: 'cancelled', provider: 'svc-a' })]);
   });
 
   it('sums perception usage across items (including empty descriptions) into perceptionUsage', async () => {

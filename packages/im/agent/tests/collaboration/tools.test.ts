@@ -167,6 +167,25 @@ describe('collaboration tools: shape and visibility', () => {
   });
 });
 
+describe('collaboration tools: attach_media (#1250 vision-ask-after-perception)', () => {
+  it('ask / delegate mark the mail only when the model passes attach_media: true, and refuse a non-boolean', async () => {
+    const seen: Mail[] = [];
+    const { tools, attached } = await setup([ceiling('zhin'), ceiling('vision')], {
+      vision: async (mail) => { seen.push(mail); return { status: 'completed', content: 'ok' }; },
+    });
+    expect(find(tools, 'ask').inputSchema).toMatchObject({ properties: { attach_media: { type: 'boolean' } } });
+    expect(find(tools, 'delegate').inputSchema).toMatchObject({ properties: { attach_media: { type: 'boolean' } } });
+    expect((find(tools, 'ask').inputSchema as { required: string[] }).required).not.toContain('attach_media');
+    await call(tools, 'ask', { agent: 'vision', question: 'plain' });
+    await call(tools, 'ask', { agent: 'vision', question: 'look', attach_media: true });
+    await call(tools, 'delegate', { agent: 'vision', brief: 'look too', attach_media: true, wait: false });
+    expect(await call(tools, 'ask', { agent: 'vision', question: 'x', attach_media: 'yes' })).toMatch(/attach_media must be true or false/);
+    expect(await call(tools, 'delegate', { agent: 'vision', brief: 'x', attach_media: 1 })).toMatch(/attach_media must be true or false/);
+    await attached.detach({ status: 'completed' });
+    expect(seen.map(mail => (mail.body as { attachMedia?: true }).attachMedia)).toEqual([undefined, true, true]);
+  });
+});
+
 describe('collaboration tools: agents', () => {
   it('lists only contactable agents, never the actor itself', async () => {
     const { tools } = await setup([ceiling('zhin', ALL, only(['researcher'])), ceiling('researcher'), ceiling('writer')]);

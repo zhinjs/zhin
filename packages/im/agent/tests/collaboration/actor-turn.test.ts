@@ -421,8 +421,12 @@ describe('actor turn runner', () => {
   });
 });
 
-describe('#1250 vision-ask-after-perception: a delegation carries the human\'s original media', () => {
-  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+describe('#1250 vision-ask-after-perception: a delegation carries the human\'s original media only on request', () => {
+  const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const PNG = PNG_BYTES.toString('base64');
+  const MP4 = Buffer.from([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]).toString('base64');
+  const PDF = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'latin1').toString('base64');
+  const OGG = Buffer.from('OggS\0\x02\0\0\0\0\0\0\0\0', 'latin1').toString('base64');
   const image = { kind: 'image' as const, source: { kind: 'base64' as const, value: PNG }, mimeType: 'image/png' };
   function visionScope(input: readonly string[]) {
     const bundle = executionBundle({
@@ -431,40 +435,116 @@ describe('#1250 vision-ask-after-perception: a delegation carries the human\'s o
     });
     return { acquire: async () => ({ chat: bundle, purpose: 'agent:vision', release: async () => undefined }) as never } as ActorModelSource;
   }
+  const agents = () => [agentDef('zhin', ALL), agentDef('vision', ALL), agentDef('critic', ALL)];
+  const mediaOf = (input: CoreInput) => input.initialMessages[0]!.media as Array<{ type: string }> | undefined;
 
-  it('attaches the root turn\'s image to an ask handled by an image-capable agent', async () => {
+  it('attaches the root turn\'s image to an ask with attach_media, without spending the root turn\'s image budget', async () => {
     const budget = { remaining: 4 };
-    const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image],
-      models: visionScope(['text', 'image']), imageInspectionBudget: budget });
+    const ctx = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text', 'image']), imageInspectionBudget: budget });
     const { root, detach } = await ctx.attach();
-    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'Is this the Octocat?' });
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'Is this the Octocat?', attachMedia: true });
     const message = ctx.inputs[0]!.initialMessages[0]!;
     expect(message.media).toEqual([expect.objectContaining({ type: 'image', data: expect.objectContaining({ media: expect.objectContaining({ kind: 'base64', value: PNG, mime_type: 'image/png' }) }) })]);
     expect(JSON.stringify(message.content)).toContain('original image');
-    expect(budget.remaining).toBe(3);
+    // A delegation never uses up the root model's inspect_image budget.
+    expect(budget.remaining).toBe(4);
     await detach({ status: 'completed' });
   });
 
-  it('sends no media to an agent whose model cannot take it, nor to the entry agent, nor beyond the image budget', async () => {
-    const textOnly = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image], models: visionScope(['text']) });
+  it('attaches nothing when the asking agent did not ask for the media', async () => {
+    const ctx = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text', 'image']) });
+    const { root, detach } = await ctx.attach();
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'q' });
+    await ctx.harness.send('zhin', root, { kind: 'delegate', to: 'critic', text: 'brief' });
+    await detach({ status: 'completed' });
+    // ask + delegate (the delegate's result then runs a turn of the entry agent).
+    expect(ctx.inputs.length).toBeGreaterThanOrEqual(2);
+    expect(ctx.inputs.map(mediaOf).every(media => media === undefined)).toBe(true);
+  });
+
+  it('sends no media to an agent whose model cannot take it', async () => {
+    const textOnly = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text']) });
     const first = await textOnly.attach();
-    await textOnly.harness.send('zhin', first.root, { kind: 'ask', to: 'vision', text: 'q' });
-    expect(textOnly.inputs[0]!.initialMessages[0]!.media).toBeUndefined();
+    await textOnly.harness.send('zhin', first.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    expect(mediaOf(textOnly.inputs[0]!)).toBeUndefined();
+    await first.detach({ status: 'completed' });
+  });
+
+  it('never attaches to the entry agent, even for an ask from another agent that asks for it', async () => {
+    const entry = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text', 'image']) });
+    const { root, detach } = await entry.attach();
+    const ask = mailFrom(root, { to: 'zhin', from: { kind: 'actor', actor: 'vision' }, kind: 'ask',
+      body: { kind: 'ask', question: 'look?', attachMedia: true } } as never);
+    await entry.runner('zhin', [ask], new AbortController().signal);
+    expect(entry.inputs).toHaveLength(1);
+    expect(mediaOf(entry.inputs[0]!)).toBeUndefined();
+    // Control: the same mail to a non-entry agent does carry it.
+    await entry.runner('vision', [{ ...ask, id: 'x2', to: 'vision', from: { kind: 'actor', actor: 'zhin' } } as Mail], new AbortController().signal);
+    expect(mediaOf(entry.inputs[1]!)).toEqual([expect.objectContaining({ type: 'image' })]);
+    await detach({ status: 'completed' });
+  });
+
+  it('attaches once per agent and root turn: a second ask to the same agent carries none, another agent still gets it', async () => {
+    const ctx = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text', 'image']) });
+    const { root, detach } = await ctx.attach();
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'q1', attachMedia: true });
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'q2', attachMedia: true });
+    await ctx.harness.send('zhin', root, { kind: 'delegate', to: 'critic', text: 'b', attachMedia: true });
+    await detach({ status: 'completed' });
+    // The fourth turn is the entry agent's, for the delegate's result.
+    expect(ctx.inputs.slice(0, 3).map(input => mediaOf(input)?.length)).toEqual([1, undefined, 1]);
+  });
+
+  it('leaves out audio, attaches video and files the model takes, and only those', async () => {
+    const media = [
+      { kind: 'audio' as const, source: { kind: 'base64' as const, value: OGG }, mimeType: 'audio/ogg' },
+      { kind: 'video' as const, source: { kind: 'base64' as const, value: MP4 }, mimeType: 'video/mp4' },
+      { kind: 'file' as const, source: { kind: 'base64' as const, value: PDF }, mimeType: 'application/pdf' },
+      image,
+    ];
+    const all = setup({ agents: agents(), tools: [], rootMedia: media, models: visionScope(['text', 'image', 'audio', 'video', 'file']) });
+    const first = await all.attach();
+    await all.harness.send('zhin', first.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    expect(mediaOf(all.inputs[0]!)?.map(block => block.type)).toEqual(['video', 'file', 'image']);
     await first.detach({ status: 'completed' });
 
-    const spent = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image],
-      models: visionScope(['text', 'image']), imageInspectionBudget: { remaining: 0 } });
-    const second = await spent.attach();
-    await spent.harness.send('zhin', second.root, { kind: 'ask', to: 'vision', text: 'q' });
-    expect(spent.inputs[0]!.initialMessages[0]!.media).toBeUndefined();
+    const videoOnly = setup({ agents: agents(), tools: [], rootMedia: media, models: visionScope(['text', 'video']) });
+    const second = await videoOnly.attach();
+    await videoOnly.harness.send('zhin', second.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    expect(mediaOf(videoOnly.inputs[0]!)?.map(block => block.type)).toEqual(['video']);
     await second.detach({ status: 'completed' });
+  });
 
-    const entry = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image], models: visionScope(['text', 'image']) });
-    const third = await entry.attach();
-    await entry.runner('zhin', [mailFrom(third.root, { to: 'zhin', from: { kind: 'actor', actor: 'vision' }, kind: 'result',
-      body: { kind: 'result', inReplyTo: 'q', status: 'completed', content: 'yes' } } as never)], new AbortController().signal);
-    expect(entry.inputs[0]!.initialMessages[0]!.media).toBeUndefined();
-    await third.detach({ status: 'completed' });
+  it('bounds the media handed out in one root turn by count and bytes, every kind counted', async () => {
+    const { DELEGATED_MEDIA_MAX_ITEMS, DELEGATED_MEDIA_MAX_BYTES } = await import('../../src/collaboration/actor-turn.js');
+    const many = Array.from({ length: DELEGATED_MEDIA_MAX_ITEMS + 2 }, (_, index) =>
+      index % 2 ? { kind: 'video' as const, source: { kind: 'base64' as const, value: MP4 }, mimeType: 'video/mp4' } : image);
+    const counted = setup({ agents: agents(), tools: [], rootMedia: many, models: visionScope(['text', 'image', 'video']) });
+    const first = await counted.attach();
+    await counted.harness.send('zhin', first.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    await counted.harness.send('zhin', first.root, { kind: 'ask', to: 'critic', text: 'q', attachMedia: true });
+    expect(mediaOf(counted.inputs[0]!)).toHaveLength(DELEGATED_MEDIA_MAX_ITEMS);
+    expect(mediaOf(counted.inputs[1]!)).toBeUndefined();
+    await first.detach({ status: 'completed' });
+
+    // Two images of 11 MiB each: the second would pass the per-turn byte bound.
+    const big = Buffer.concat([PNG_BYTES, Buffer.alloc(11 * 1024 * 1024)]).toString('base64');
+    expect(2 * 11 * 1024 * 1024).toBeGreaterThan(DELEGATED_MEDIA_MAX_BYTES);
+    const heavy = { kind: 'image' as const, source: { kind: 'base64' as const, value: big }, mimeType: 'image/png' };
+    const sized = setup({ agents: agents(), tools: [], rootMedia: [heavy, heavy], models: visionScope(['text', 'image']) });
+    const second = await sized.attach();
+    await sized.harness.send('zhin', second.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    expect(mediaOf(sized.inputs[0]!)).toHaveLength(1);
+    await second.detach({ status: 'completed' });
+  });
+
+  it('a failed item does not keep later readable ones out', async () => {
+    const broken = { kind: 'image' as const, source: { kind: 'base64' as const, value: 'not base64!' }, mimeType: 'image/png' };
+    const ctx = setup({ agents: agents(), tools: [], rootMedia: [broken, image], models: visionScope(['text', 'image']) });
+    const { root, detach } = await ctx.attach();
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    expect(mediaOf(ctx.inputs[0]!)).toHaveLength(1);
+    await detach({ status: 'completed' });
   });
 });
 

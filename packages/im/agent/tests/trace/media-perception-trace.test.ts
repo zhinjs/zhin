@@ -52,4 +52,40 @@ describe('perception pre-pass in the turn trace', () => {
     expect(logs.summary).toContain('g/vision');
     expect(logs.details[0]).toContain('purpose: media_perception');
   });
+
+  it('redacts credentials in a description (#1250)', () => {
+    const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' });
+    const secret = 'sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+    trace.record({ type: 'media_resolution', index: 0, mediaKind: 'image', status: 'derived', code: 'media_perception', provenance,
+      description: `截图里写着 api_key=${secret} 和 Bearer ${secret}` });
+    const snapshot = trace.snapshot();
+    expect(snapshot.media![0]!.description).not.toContain(secret);
+    expect(formatTurnTrace(snapshot)).not.toContain(secret);
+  });
+
+  it('strips terminal control sequences (CSI / OSC, C0 / C1) from a description before it is printed (#1250)', () => {
+    const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' });
+    const hostile = 'cat\u001b[2J\u001b]0;pwned\u0007\u009b31m\u0000done';
+    trace.record({ type: 'media_resolution', index: 0, mediaKind: 'image', status: 'derived', code: 'media_perception',
+      provenance: { ...provenance, model: 'm\u001b[31m' }, description: hostile });
+    const snapshot = trace.snapshot();
+    const control = /[\u0000-\u001f\u007f-\u009f]/u;
+    expect(snapshot.media![0]!.description).not.toMatch(control);
+    expect(snapshot.media![0]!.provenance!.model).not.toMatch(control);
+    expect(snapshot.media![0]!.description).toContain('cat');
+    expect(snapshot.media![0]!.description).toContain('done');
+    // A trace stored before stripping is still printed safely.
+    const stored = { ...snapshot, media: [{ ...snapshot.media![0]!, description: hostile }] };
+    const printed = formatTurnTrace(stored as never).split('\n').join('');
+    expect(printed).not.toMatch(control);
+  });
+
+  it('a perception estimate is marked as not reported: ai.usage shows no figure for it', () => {
+    const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' }, () => 0);
+    trace.record({ type: 'usage', purpose: 'media_perception', provider: 'g', model: 'vision', stopReason: 'error',
+      usage: { promptTokens: 1_050, completionTokens: 0, totalTokens: 1_050, reported: { input: false, output: false, totalTokens: false } } });
+    const logs = formatTurnUsageLogs(trace.snapshot(), { traceId: 'tr', scene: 'x' });
+    expect(logs.details[0]).toContain('status: error');
+    expect(logs.details[0]).not.toContain('1050');
+  });
 });

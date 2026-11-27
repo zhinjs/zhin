@@ -20,7 +20,7 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 
 - `input`、`output`、`cache_read`、`cache_write`、`reasoning` 单位均为 token；缓存读写属于输入的分项，思考属于输出的分项，不能重复相加。数值沿用 Provider 经 SDK 归一化后的 usage，不用字符估算替代。
 - `?` 表示没有可证明的数据；`0` 表示明确的零值，或没有记录到模型响应；`>=60` 表示部分调用缺少该字段，已确认的部分合计为 60。旧记录无法证明的零值也会显示为 `?`。
-- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复、协作子回合，以及识图预处理（`ai.multimodal.perception`）已经发到识图服务的请求（缓存命中不算；失败的请求按保守估算计入）；`subagent_calls` 是其中其他 Agent 子回合的次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
+- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复、协作子回合，以及识图预处理（`ai.multimodal.perception`）已经发到识图服务的请求：备用链上每个候选的每次请求各记一次，失败、本回合被取消时正在进行的请求也记（缓存命中不算）；`subagent_calls` 是其中其他 Agent 子回合的次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
 - 汇总包含当前 trace 中已记录的子回合；`partial` 表示回合未正常完成、子回合结果不完整或记录达到上限；此时显示的只是已记录用量，不能当作全部消耗。它不是整个账号的账单：独立决策、嵌入、图像生成等没有进入该 trace 的调用不在此汇总，Provider 未回传的失败请求用量也无法推算。
 - `ms` 是 trace 记录的回合耗时；`trace` 用于串联日志，`turn` 可以交给 `zhin trace <turn>` 查看已有归档。日志无需归档开关；只开日志不会新增落盘存储。
 
@@ -35,7 +35,7 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 - 一次判断写一行：`calls` 是判断次数，不是模型请求次数。请求阶段切到备用模型时，这一行写备用模型，`ms` 是两次请求的合计，token 是作答那次请求回传的用量。
 - 决策模型没有回传用量时只写 `calls` 和 `ms`。Console「群聊插话」状态的 `judgeDaily` 按天汇总这些调用的次数与 token（进程内存，重启后从当天重新计）。
 
-需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时，识图预处理的调用另带 `purpose: media_perception`；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。
+需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时，识图预处理的调用另带 `purpose: media_perception`，`provider` 写服务 id（与对话调用一致），结束原因为 `stop`、`error`（失败）或 `aborted`（取消）。识图请求失败、被取消，或供应商成功作答却没回报用量时，配额按保守估算扣，日志与 `agent_usage_calls` 里这次调用的 token 记为未知（`?` / `NULL`），不把估算当成供应商数字；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。
 
 ```yaml
 log_level: debug
@@ -184,7 +184,7 @@ ai:
 | 工具 | 用途 |
 |------|------|
 | `agents` | 列出当前可联系的 Agent 及其职责说明 |
-| `ask` | 同步提问，在本回合内等待对方答复并返回结果 |
+| `ask` | 同步提问，在本回合内等待对方答复并返回结果。`ask` / `delegate` 可带 `attach_media: true`（默认 `false`）把用户本回合发来的原始图片 / 视频 / 文件交给对方，见下文「委派时附带原始媒体」 |
 | `delegate` | 委派任务。默认在本回合内最多等 20 秒：结果按时回来就直接出现在工具结果里，模型据此回答一次；`wait: false`（长任务）或超时时立即返回 `mailId`，结果之后作为 `result` 邮件投回委派方信箱并唤醒新回合，工具结果要求模型期间不要自己回答被委派的部分。同一步里的多个 `delegate` 一起发出、一起等待，每个回合的等待合计最多 20 秒且给回答留出时间，不会拖到回合超时；等待中读到的结果在回合成功回复后才算已用，回合失败或超时时仍照原路唤醒委派方 |
 | `tell` | 单向通知同伴，不等待回复 |
 | `follow_up` | 针对先前已委派或提问的 `mailId` 追问或补充上下文，复用同一 Engagement 与因果链 |
@@ -221,6 +221,7 @@ ai:
 - **权限只减不增**：被委派方的有效权限 = 委派方权限 ∩ 委派时收窄的范围 ∩ 被委派方自己的能力上限。对方的回答是数据，不是指令，也不会放大调用方权限。
 - **守恒预算账本**：每个 Engagement 有根预算池（`modelCalls`、`tokens`、`wallMs`、`sideEffects`）。每次 `ask` / `delegate` 从父级剩余额度中划拨子配额，子树总消耗绝不超过父级授信。
 - **预算下限**：模型在 `ask` / `delegate` / `follow_up` 里自己写的预算不能低于一次完整回答所需：`modelCalls` 至少 4、`tokens` 至少 32000、`wallMs` 至少 60000（不超过调用方剩余额度的一半，与账本对未写字段的默认分法一致，并行委派时每个都能放下）。更低的值会被抬到下限，工具结果里写明「budget raised to the minimum…」，并记一条 `ai.collaboration` info 日志。`sideEffects` 没有下限（压低它只会限制写操作）；`agent.json` 里作者配置的 `collaboration.budget` 不受影响。
+- **委派时附带原始媒体**：只有委派方在 `ask` / `delegate` 里明确写 `attach_media: true` 时，用户本回合的原始媒体才随请求交给对方；适合识图描述回答不了、对方必须亲眼看的情况。只交给对方模型声明能收的类型（图片 / 视频 / 文件；语音不交），入口 Agent 自己不收；同一个 Agent 在一个根回合里最多收一次（之后的请求不再附带），整个根回合合计最多 8 项、20 MiB，不占根回合 `inspect_image` 的识图额度。媒体按根回合同样的授权读取（同一套入站目录与来源），每项只下载 / 读盘一次；子回合不写会话历史。注意：对方 Agent 用自己的模型 Profile 时，媒体会发给那个 Profile 的供应商。
 - **一项委派一条线**：对某个 Agent 的 `delegate` 还没出结果时，再 `ask` 同一个 Agent 会被拒绝（`delegation_in_progress`），提示等结果自动回来，或用 `follow_up`（带那封委派的 `mail_id`）补充指令；`follow_up` 只用来补充或修改指令，不用来催。
 - **少走冤枉路**：子 Agent 的提示要求能直接回答就直接回答，不为用不到的工具搜索；在按需工具目录里连续 3 次搜不到（`discover` / `load_tool` / `load_skill`）会收到一次「换个办法或直接回答」的提示。
 - **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人类 Principal，不会交给另一个 Agent 批准。
@@ -538,7 +539,7 @@ ai:
 
 入站消息里的本机路径（`MediaRef kind: 'path'`，包括平台引用物化出的路径）只在两个条件同时满足时才读：产出这条消息的端点声明了自己的入站媒体目录（`inboundMedia.roots()`，见[端点生命周期](../authoring/endpoint-lifecycle.md#入站媒体目录)），且解析符号链接、`..` 之后的真实路径落在该目录内；即使在目录内，仍要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。其他路径一律不读，记录 `op=inbound_media_rejected` 警告（`reason=inbound_path_not_owned` 或 `inbound_path_sensitive`，不含路径），模型看到「这条消息里有个文件无法读取」的占位，整轮照常进行。平台字段 `data.file` 不再被猜成本机路径。引用消息、合并转发只把内容交给模型，不会读其中的本地文件。
 
-URL、内联数据（base64）和平台引用读不到时，`inbound_media_rejected` 的 `reason` 写具体原因：`too_large`（超过 `maxFileBytes`）、`mime_mismatch`（内容不是声明的类型，或不是可识别的媒体）、`invalid_data`（内联数据无法解码）、`scheme_unsupported`（不是 HTTPS 地址）、`host_not_allowed`（私网 / 回环地址、非默认端口、跳转被拒）、`fetch_failed`（非 2xx、超时、连接或 TLS 错误；带 `status`）、`file_unreadable`、`unmaterialized_platform_reference`。日志同时带 `scene`（`平台/会话类型/会话 id`）、`message`（消息 id）、`scheme`，URL 另带 `host`；不记路径、查询串和内联数据。模型看到的占位与回合结局（`media_resolution`）用同一个原因码。
+URL、内联数据（base64）和平台引用读不到时，`inbound_media_rejected` 的 `reason` 写具体原因：`too_large`（超过 `maxFileBytes`）、`mime_mismatch`（内容不是声明的类型，或不是可识别的媒体）、`invalid_data`（内联数据无法解码）、`scheme_unsupported`（不是 HTTPS 地址）、`host_not_allowed`（私网 / 回环地址、非默认端口、跳转被拒）、`fetch_failed`（非 2xx、超时、连接或 TLS 错误；带 `status`）、`file_unreadable`、`unmaterialized_platform_reference`（平台引用没有引用键、没有解析器，或解析器没能给出媒体；日志 `detail` 写具体情况）。本机路径（入站目录内、或出站发送的 path）超过上限记 `too_large`（即使消息没声明大小），类型不符记 `mime_mismatch`，打开后发现不是授权的那个文件记 `path_not_allowed`，其余读不到才记 `file_unreadable`。日志同时带 `scene`（`平台/会话类型/会话 id`）、`message`（消息 id）、`scheme`，URL 另带 `host`；不记路径、查询串和内联数据。模型看到的占位与回合结局（`media_resolution`）用同一个原因码。
 
 `ZhinAgent` 的旧回合入口（`process()`、`processTurn()`、`processStream()`、`prompt()`，即 `processTextTurn()` 链）拿不到产出端点声明的目录，入站本机路径一律不读（同样只给占位）；仓内只有测试和 Agent eval 使用它们。IM 消息的正式回合走 Plugin Runtime 入站链（`zhin start`），由入口把端点目录写进 `TurnInput.inboundMediaRoots`。
 

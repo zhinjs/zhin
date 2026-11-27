@@ -124,6 +124,8 @@ export interface SendRequest {
   readonly deliverable?: string;
   /** Optional timeout (ms) for remote transport calls. */
   readonly timeoutMs?: number;
+  /** For `ask` / `delegate`: the sender asks for the root turn's media to be attached (`MailBody.attachMedia`). */
+  readonly attachMedia?: boolean;
 }
 
 export interface OpenEngagementInput {
@@ -621,9 +623,10 @@ export function createHarness(options: HarnessOptions): Harness {
     const granted = options.ledger.grant(current.grantId, budgetRequest);
     const grantId: GrantId = granted.ok ? granted.value : current.grantId;
     const body: MailBody = request.kind === 'ask'
-      ? { kind: 'ask', question: request.text }
+      ? { kind: 'ask', question: request.text, ...(request.attachMedia ? { attachMedia: true as const } : {}) }
       : request.kind === 'delegate'
-        ? { kind: 'delegate', brief: request.text, ...(request.deliverable ? { deliverable: request.deliverable } : {}) }
+        ? { kind: 'delegate', brief: request.text, ...(request.deliverable ? { deliverable: request.deliverable } : {}),
+            ...(request.attachMedia ? { attachMedia: true as const } : {}) }
         : { kind: 'tell', content: request.text };
     const mail: Mail = Object.freeze({
       id: newId(),

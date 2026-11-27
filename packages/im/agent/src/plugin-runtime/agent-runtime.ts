@@ -350,12 +350,9 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     let active = true;
     let models: ModelExecutionScope | undefined;
     let mediaPerception: import('../media/perception.js').MediaPerceptionPort | undefined;
-    // #1250 usage-store-never-written: the store is a Root-private resource. A generation snapshot's
-    // resource map leaves Root-private bindings out, so it is read through the Root resolver.
-    const usageStore = readLeasedRootResource(this.requireSnapshots(), lease, agentUsageStoreToken) as AgentUsageStore | undefined;
-    if (!usageStore) this.#warnUsageStoreMissing();
+    let usageStore: AgentUsageStore | undefined;
     const selected = { provider: '', model: '' };
-    const usage = usageStore ? new AgentUsageCollector(String(owner), request, selected) : undefined;
+    let usage: AgentUsageCollector | undefined;
     let usageStatus = 'failed';
     let activeTrace: TurnTraceCollector | undefined;
     let releaseTrace: (() => void) | undefined;
@@ -367,6 +364,12 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     };
     try {
       if (!active) throw new Error('Agent generation operation is not active');
+      // #1250 usage-store-never-written: the store is a Root-private resource. A generation snapshot's
+      // resource map leaves Root-private bindings out, so it is read through the Root resolver; a lease
+      // that is no longer readable fails here, inside the turn's error handling (trace finalized).
+      usageStore = readLeasedRootResource(this.requireSnapshots(), lease, agentUsageStoreToken) as AgentUsageStore | undefined;
+      if (!usageStore) this.#warnUsageStoreMissing();
+      usage = usageStore ? new AgentUsageCollector(String(owner), request, selected) : undefined;
       const modelPort = readLeasedRootResource(this.requireSnapshots(), lease, turnModelPortToken);
       // A turn routed to a specialist runs on its `agent:<key>` purpose (#1250 agent-purpose-binding-ignored).
       const specialist = specialistModelKey(lease.value, selection.agent);

@@ -489,10 +489,47 @@ const TRUST_FILE_ROLE: Readonly<Record<InitiatorTrustLevel, FileRole>> = Object.
 export const DELEGATED_MEDIA_NOTE = '[The human\'s original image / media from this conversation is attached to this message; look at it directly.]';
 
 /**
- * #1250 vision-ask-after-perception: an ask / delegate from another agent carries the root turn's media
- * (the human's own image, video or document) when this agent's model can take that kind, so the agent
- * looks at the original instead of a second-hand description or link. The entry agent and audio never
- * get it here; images count against the root turn's image inspection budget.
+ * Bounds on the root turn's media handed to delegated agents (#1250), per root turn and separate from the
+ * root turn's image inspection budget (a delegation never uses up the root model's `inspect_image`):
+ * at most {@link DELEGATED_MEDIA_MAX_ITEMS} attachments and {@link DELEGATED_MEDIA_MAX_BYTES} decoded bytes
+ * in all, every kind (image, video, file) counted; each agent gets the media at most once.
+ */
+export const DELEGATED_MEDIA_MAX_ITEMS = 8;
+export const DELEGATED_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+
+interface DelegatedMediaState {
+  /** Agents that already received (or are receiving) the root turn's media. */
+  readonly attachedTo: Set<string>;
+  items: number;
+  bytes: number;
+  /** One resolution per root media item: downloaded / read and encoded once for all delegations. */
+  readonly resolved: Map<number, Promise<MediaContentBlock | undefined>>;
+}
+
+const delegatedMediaByRootTurn = new WeakMap<object, DelegatedMediaState>();
+
+function delegatedMediaState(rootTurn: object): DelegatedMediaState {
+  let state = delegatedMediaByRootTurn.get(rootTurn);
+  if (!state) {
+    state = { attachedTo: new Set(), items: 0, bytes: 0, resolved: new Map() };
+    delegatedMediaByRootTurn.set(rootTurn, state);
+  }
+  return state;
+}
+
+function blockBytes(block: MediaContentBlock): number {
+  const media = (block.data as { media?: { kind?: string; value?: string } } | undefined)?.media;
+  if (media?.kind !== 'base64' || typeof media.value !== 'string') return 0;
+  return Math.floor(media.value.replace(/\s+/gu, '').length * 3 / 4);
+}
+
+/**
+ * #1250 vision-ask-after-perception: the human's own media of the root turn goes with an ask / delegate
+ * only when the sending agent asked for it (`attach_media: true`) and this agent's model can take that kind,
+ * so it looks at the original instead of a second-hand description or link. Never to the entry agent;
+ * never audio; once per agent and root turn; bounded by {@link DELEGATED_MEDIA_MAX_ITEMS} /
+ * {@link DELEGATED_MEDIA_MAX_BYTES}. The media is read with the root turn's own authority (references,
+ * inbound roots and origins), and the actor turn persists no conversation.
  */
 async function delegatedRootMedia(
   options: ActorTurnRunnerOptions,
@@ -500,32 +537,49 @@ async function delegatedRootMedia(
   modelInput: readonly ModelInputModality[] | undefined,
   signal: AbortSignal,
 ): Promise<MediaContentBlock[]> {
-  const { rootTurn, directory, imageInspectionBudget } = options;
+  const { rootTurn, directory } = options;
   const media = rootTurn.input.media;
   if (!media?.length || run.agent.name === directory.entry.name) return [];
-  if (!run.batch.some(mail => (mail.kind === 'ask' || mail.kind === 'delegate') && mail.from.kind === 'actor')) return [];
+  const requested = run.batch.some(mail => mail.from.kind === 'actor'
+    && (mail.body.kind === 'ask' || mail.body.kind === 'delegate') && mail.body.attachMedia === true);
+  if (!requested) return [];
+  const state = delegatedMediaState(rootTurn);
+  if (state.attachedTo.has(run.agent.name)) return [];
   const input = new Set<ModelInputModality>(modelInput ?? ['text']);
-  let images = imageInspectionBudget ? imageInspectionBudget.remaining : Number.POSITIVE_INFINITY;
-  const wanted = media.filter(item => {
-    if (item.kind === 'audio' || !input.has(item.kind)) return false;
-    if (item.kind !== 'image') return true;
-    if (images <= 0) return false;
-    images -= 1;
-    return true;
-  });
+  const wanted = media.flatMap((item, index) => item.kind !== 'audio' && input.has(item.kind) ? [{ item, index }] : []);
   if (!wanted.length) return [];
-  const injection = await resolveTurnMediaInjection(wanted, {
-    ...(rootTurn.ports.references ? { references: rootTurn.ports.references } : {}),
-    signal,
-    providerInput: [...input],
-    ...(rootTurn.input.inboundMediaRoots ? { inboundMediaRoots: rootTurn.input.inboundMediaRoots } : {}),
-    ...(rootTurn.input.inboundMediaOrigins ? { inboundMediaOrigins: rootTurn.input.inboundMediaOrigins } : {}),
-  });
-  if (imageInspectionBudget) {
-    const used = injection.blocks.filter(block => block.type === 'image').length;
-    imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining - used);
+  // Reserved before the first await: a parallel delegation to the same agent attaches nothing.
+  state.attachedTo.add(run.agent.name);
+  const blocks: MediaContentBlock[] = [];
+  for (const { item, index } of wanted) {
+    if (state.items >= DELEGATED_MEDIA_MAX_ITEMS) break;
+    let pending = state.resolved.get(index);
+    if (!pending) {
+      pending = resolveTurnMediaInjection([item], {
+        ...(rootTurn.ports.references ? { references: rootTurn.ports.references } : {}),
+        signal: rootTurn.signal,
+        providerInput: [item.kind],
+        ...(rootTurn.input.inboundMediaRoots ? { inboundMediaRoots: rootTurn.input.inboundMediaRoots } : {}),
+        ...(rootTurn.input.inboundMediaOrigins ? { inboundMediaOrigins: rootTurn.input.inboundMediaOrigins } : {}),
+        // The rejection log line names the root turn's scene and message, as the root resolution does.
+        ...(rootTurn.origin.kind === 'im' ? {
+          scene: `${rootTurn.origin.platform}/${rootTurn.origin.scope}/${rootTurn.origin.sceneId}`,
+          ...(rootTurn.origin.messageId ? { messageId: rootTurn.origin.messageId } : {}),
+        } : { scene: rootTurn.origin.kind }),
+      }).then(injection => injection.blocks[0], () => undefined);
+      state.resolved.set(index, pending);
+    }
+    const block = await pending;
+    signal.throwIfAborted();
+    if (!block) continue;
+    const bytes = blockBytes(block);
+    if (state.items >= DELEGATED_MEDIA_MAX_ITEMS || state.bytes + bytes > DELEGATED_MEDIA_MAX_BYTES) continue;
+    state.items += 1;
+    state.bytes += bytes;
+    blocks.push(block);
   }
-  return injection.blocks;
+  if (!blocks.length) state.attachedTo.delete(run.agent.name);
+  return blocks;
 }
 
 function withRootMedia(message: AgentMessage, blocks: readonly MediaContentBlock[]): AgentMessage[] {

@@ -53,6 +53,20 @@ describe('scoped perception against real SDK completion with mocked HTTP', () =>
     expect(backup.requests).toHaveLength(1);
   });
 
+  it('reports each request under its service id, as chat calls do (#1250)', async () => {
+    const primary = createProviderHarness({ sdk: 'google', alias: 'primary' }).reply(geminiGenerate.error(400, { message: 'unavailable' }));
+    const backup = createProviderHarness({ sdk: 'openai', alias: 'backup' }).reply(openaiChat.reply({ text: 'A circle', usage: { prompt: 30, completion: 4 } }));
+    const withService = (candidate: ModelExecutionCandidate, id: string): ModelExecutionCandidate =>
+      ({ ...candidate, binding: { ...candidate.binding, service: { ...candidate.binding.service, id } } });
+    const port = createScopedMediaPerceptionPort({ scope: { perception: withService(bundle(primary), 'svc-google'),
+      perceptionFallbacks: [withService(bundle(backup), 'svc-openai')] }, resilience: NO_RETRY })!;
+    const calls: Array<{ provider: string; status: string }> = [];
+    const result = await port.describe(payload, undefined, call => calls.push(call));
+    expect(calls.map(call => [call.provider, call.status])).toEqual([['svc-google', 'failed'], ['svc-openai', 'completed']]);
+    // Provenance (and the description cache) keep the Profile id.
+    expect(result).toMatchObject({ provider: 'backup' });
+  });
+
   it('does not send a backup after the turn is cancelled', async () => {
     const primary = createProviderHarness({ sdk: 'google', alias: 'primary' }).reply({ hang: 'before-headers' });
     const backup = createProviderHarness({ sdk: 'openai', alias: 'backup' });

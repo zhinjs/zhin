@@ -5,7 +5,7 @@ import { MessageAliasTable } from '@zhin.js/ai';
 import { isOwnScheduledDelivery, sessionKeyLedgerId } from '../memory/told-ledger.js';
 import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, ownPrivateInbound, plannedReplyTexts, summarizeCountedMessages, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
-import { applyInboundMediaInjection, perceptionDelegationNote, resolveTurnMediaInjection } from '../turn/inbound-media.js';
+import { applyInboundMediaInjection, perceptionDelegationNote, resolveTurnMediaInjection, type InboundPerceptionCall } from '../turn/inbound-media.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -251,9 +251,15 @@ async function* runInteractiveTurn(
   const providerInput = context.turn.input.media?.length
     ? prompt.modelInput
     : undefined;
-  const media = await resolveTurnMediaInjection(
+  // #1250: every perception request is a model call of this turn (trace `model_calls`, `ai.usage`, usage rows),
+  // one per candidate tried, also when the turn is cancelled while media is being described.
+  const perceptionCalls: InboundPerceptionCall[] = [];
+  let media: Awaited<ReturnType<typeof resolveTurnMediaInjection>>;
+  try {
+  media = await resolveTurnMediaInjection(
     context.turn.input.media,
     {
+      onPerceptionCall: call => { perceptionCalls.push(call); },
       references: context.turn.ports.references,
       signal: context.turn.signal,
       providerInput,
@@ -267,22 +273,8 @@ async function* runInteractiveTurn(
       } : { scene: context.turn.origin.kind }),
     },
   );
-  // #1250 trace-media-perception-provenance-clipped: each perception request is a model call of this turn
-  // (trace `model_calls`, the `ai.usage` line and the structured usage rows), tagged with its purpose.
-  for (const call of media.perceptionCalls ?? []) {
-    yield Object.freeze({
-      type: 'usage' as const,
-      purpose: 'media_perception' as const,
-      ...(call.provider ? { provider: call.provider } : {}),
-      ...(call.model ? { model: call.model } : {}),
-      durationMs: call.durationMs,
-      ...(call.status === 'failed' ? { stopReason: 'error' } : {}),
-      usage: {
-        promptTokens: call.usage.prompt_tokens,
-        completionTokens: call.usage.completion_tokens,
-        totalTokens: call.usage.total_tokens,
-      },
-    });
+  } finally {
+    for (const call of perceptionCalls) yield perceptionUsageEvent(call);
   }
   for (const [index, outcome] of media.outcomes.entries()) {
     yield Object.freeze({
@@ -720,4 +712,26 @@ export async function deliverUnexecutedFollowup(
   }
   noteTurnTrace(turnId, { kind: 'unexecuted_tool_notice', tools: notice.tools, delivered });
   return delivered;
+}
+
+/**
+ * One perception request as a `usage` event (#1250): `stop` / `error` / `cancelled` as its stop reason, and an
+ * estimate (failed or cancelled request, provider reported nothing) marked as not reported, so usage rows store
+ * unknown instead of a provider figure.
+ */
+export function perceptionUsageEvent(call: InboundPerceptionCall): Extract<TurnEvent, { type: 'usage' }> {
+  return Object.freeze({
+    type: 'usage' as const,
+    purpose: 'media_perception' as const,
+    ...(call.provider ? { provider: call.provider } : {}),
+    ...(call.model ? { model: call.model } : {}),
+    durationMs: call.durationMs,
+    stopReason: call.status === 'completed' ? 'stop' : call.status === 'cancelled' ? 'aborted' : 'error',
+    usage: {
+      promptTokens: call.usage.prompt_tokens,
+      completionTokens: call.usage.completion_tokens,
+      totalTokens: call.usage.total_tokens,
+      ...(call.usageReported ? {} : { reported: { input: false, output: false, totalTokens: false } }),
+    },
+  });
 }

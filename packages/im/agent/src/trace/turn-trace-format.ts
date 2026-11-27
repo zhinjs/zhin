@@ -1,6 +1,6 @@
 /** Human-readable terminal rendering of a TurnTrace for `zhin trace`. */
 import { formatDateTime } from '@zhin.js/plugin-runtime';
-import { turnTraceTotalUsage, type TurnTrace, type TurnTraceToolCall, type TurnTraceTrigger } from './turn-trace.js';
+import { stripControlCharacters, turnTraceTotalUsage, type TurnTrace, type TurnTraceToolCall, type TurnTraceTrigger } from './turn-trace.js';
 import { CONTEXT_BUDGET_SEGMENTS, type ContextBudgetReport, type ContextBudgetSegment } from './context-budget.js';
 
 const STATUS_LABEL: Record<TurnTrace['termination']['status'], string> = {
@@ -132,10 +132,11 @@ function renderTrace(
       const source = media.provenance
         ? ` · 识图 ${modelDisplay(media.provenance.provider, media.provenance.model, providerLabel)} · ${media.provenance.cached ? '缓存命中' : '新调用'}`
         : '';
-      lines.push(`${indent}    #${media.index} ${media.kind} ${media.status} ${media.code}${source}`);
+      lines.push(`${indent}    ${stripControlCharacters(`#${media.index} ${media.kind} ${media.status} ${media.code}${source}`)}`);
       if (media.description !== undefined) {
         const cut = media.description_truncated ? `（已截断，共 ${media.description_chars} 字符）` : '';
-        lines.push(`${indent}      描述${cut}: ${media.description.replace(/\s+/gu, ' ')}`);
+        // Also for traces stored before control characters were stripped at record time.
+        lines.push(`${indent}      描述${cut}: ${stripControlCharacters(media.description).replace(/\s+/gu, ' ')}`);
       }
     }
   }

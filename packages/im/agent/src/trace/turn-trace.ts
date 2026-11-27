@@ -752,18 +752,19 @@ export class TurnTraceCollector {
   #recordMedia(event: Extract<TurnEvent, { type: 'media_resolution' }>): void {
     const provenance = event.provenance ? Object.freeze({
       source: event.provenance.source,
-      provider: clip(scrubSecrets(String(event.provenance.provider)), 200),
-      model: clip(scrubSecrets(String(event.provenance.model)), 200),
+      provider: clip(stripControlCharacters(scrubSecrets(String(event.provenance.provider))), 200),
+      model: clip(stripControlCharacters(scrubSecrets(String(event.provenance.model))), 200),
       cached: event.provenance.cached === true,
     }) : undefined;
-    const raw = typeof event.description === 'string' ? scrubSecrets(event.description.trim()) : '';
+    // Untrusted text derived from user media: no terminal control sequences reach `zhin trace` output.
+    const raw = typeof event.description === 'string' ? stripControlCharacters(scrubSecrets(event.description)).trim() : '';
     const chars = Array.from(raw);
     const truncated = chars.length > MEDIA_DESCRIPTION_TRACE_LENGTH;
     const entry: TurnTraceMediaResolution = Object.freeze({
       index: event.index,
       kind: event.mediaKind,
       status: event.status,
-      code: clip(scrubSecrets(String(event.code)), 120),
+      code: clip(stripControlCharacters(scrubSecrets(String(event.code))), 120),
       ...(provenance ? { provenance } : {}),
       ...(raw ? { description: truncated ? `${chars.slice(0, MEDIA_DESCRIPTION_TRACE_LENGTH).join('')}…` : raw } : {}),
       ...(truncated ? { description_truncated: true as const, description_chars: chars.length } : {}),
@@ -794,6 +795,15 @@ export class TurnTraceCollector {
       ...(this.#principal.trust_level ? { trustLevel: this.#principal.trust_level } : {}),
     };
   }
+}
+
+/**
+ * C0 / C1 control characters and DEL become spaces (#1250): an ESC-introduced CSI / OSC sequence in a
+ * media description cannot drive the terminal that prints the trace; what remains is plain text.
+ */
+export function stripControlCharacters(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/gu, ' ');
 }
 
 /** `#0 image derived media_perception · 识图 provider/model · 缓存命中`: never clipped mid-provenance. */
