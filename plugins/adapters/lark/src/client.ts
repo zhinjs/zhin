@@ -190,7 +190,7 @@ export class LarkClient extends SdkClient {
     };
     super({ appId: options.config.appId, appSecret: options.config.appSecret,
       domain: options.config.apiBaseUrl.replace(/\/open-apis$/, ''), loggerLevel: LoggerLevel.error,
-      httpInstance: createLarkSdkHttpInstance(wire), cache: new DefaultCache() });
+      httpInstance: createLarkSdkHttpInstance(wire, [options.config.appSecret, options.config.encryptKey, options.config.verificationToken]), cache: new DefaultCache() });
     this.#bindSignal = signal => { executionSignal = signal; };
     this.#webApiTransport = transport;
     this.#logger = getAdapterLogger('lark', options.config.id);

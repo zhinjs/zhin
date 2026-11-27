@@ -24,7 +24,8 @@ async function peer(mode: 'same' | 'different' | 'multiple' | 'failed' | 'pendin
     const user = mode === 'different' && next ? '888' : '777';
     const data = frame.action === 'get_status' ? { bots: [ { self: { platform: 'qq', user_id: user } }, ...(mode === 'multiple' ? [{ self: { platform: 'qq', user_id: 'other' } }] : []) ] }
       : { user_id: user };
-    socket.send(JSON.stringify({ echo: frame.echo, status: mode === 'failed' ? 'failed' : 'ok', retcode: mode === 'failed' ? 100 : 0, data }));
+    socket.send(JSON.stringify({ echo: frame.echo, status: mode === 'failed' ? 'failed' : 'ok', retcode: mode === 'failed' ? 100 : 0,
+      ...(mode === 'failed' ? { message: 'token secret-tok-1 rejected' } : {}), data }));
   }));
   await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing local protocol address');
@@ -44,6 +45,14 @@ async function controller(mode: Parameters<typeof peer>[0]) {
   return { ...remote, harness, compareAndSet, state: () => state };
 }
 describe('isolated read-only protocol identity probes', () => {
+  it('#1250 b111: a refused lookup carries the retcode and message, without the access token', async () => {
+    const f = await peer('failed'); const signal = new AbortController().signal;
+    const onebot11 = resolveOneBot11Config({ id: 'onebot', connection: 'ws', url: f.url, access_token: 'secret-tok-1' });
+    const onebot12 = resolveOneBot12Config({ id: 'bot', platform: 'qq', userId: '777', url: f.url, access_token: 'secret-tok-1' });
+    if (onebot11.connection !== 'ws' || onebot12.connection !== 'ws') throw new Error('Expected forward WS');
+    await expect(probeOnebot11Identity(onebot11, signal)).rejects.toThrow('OneBot11 identity lookup failed: token *** rejected (retcode 100)');
+    await expect(probeOnebot12Identity(onebot12, signal)).rejects.toThrow('OneBot12 identity status lookup failed: token *** rejected (retcode 100)');
+  });
   it('uses the actual OneBot11 and NapCat login-info protocol and closes both temporary connections', async () => {
     const f = await peer(); const signal = new AbortController().signal;
     const onebot = resolveOneBot11Config({ id: 'onebot', connection: 'ws', url: f.url });

@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { redactSecretText } from '@zhin.js/logger';
 import { buildWsConnectOptions, type OneBot11WsConfig } from './protocol.js';
 import { createOneBot11Rpc } from './ws-transport.js';
 import { resolveOnebot11SelfId } from './self-id.js';
@@ -20,11 +21,24 @@ export async function probeOnebot11Identity(config: OneBot11WsConfig, signal: Ab
 
     const response = await rpc.call({ action: 'get_login_info' });
     signal.throwIfAborted();
-    if (response.status !== 'ok' || response.retcode !== 0) throw new Error('OneBot11 identity lookup failed');
+    if (response.status !== 'ok' || response.retcode !== 0) throw new Error(`OneBot11 identity lookup failed: ${onebot11FailureReason(response, config.access_token)}`);
     const data: unknown = response.data;
     const id = resolveOnebot11SelfId(data && typeof data === 'object' && 'user_id' in data ? data.user_id : undefined);
     return id === undefined ? undefined : `qq:${id}`;
   } finally {
     signal.removeEventListener('abort', abort); rpc.dispose(); socket.terminate();
   }
+}
+
+/**
+ * #1250 b111: the implementation's retcode and message, bounded, without the access token or
+ * secret-shaped text. Masked first, then cut, so a token across the cut is not half kept.
+ */
+export function onebot11FailureReason(response: Readonly<{ retcode?: unknown; message?: unknown; wording?: unknown }>, accessToken: string | undefined): string {
+  let text = typeof response.message === 'string' && response.message.trim() ? response.message
+    : typeof response.wording === 'string' ? response.wording : '';
+  if (accessToken && accessToken.length >= 4) text = text.split(accessToken).join('***');
+  text = redactSecretText(text).replace(/\s+/g, ' ').trim() || 'unknown';
+  if (text.length > 300) text = `${text.slice(0, 300)}…`;
+  return `${text} (retcode ${String(response.retcode)})`;
 }

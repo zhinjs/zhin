@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { redactSecretText } from '@zhin.js/logger';
 import { buildWsConnectOptions, callOneBot12Action, type OneBot12ActionResponse, type OneBot12WebhookConfig, type OneBot12WsConfig } from './protocol.js';
 import { createOneBot12Rpc } from './ws-transport.js';
 
@@ -17,7 +18,7 @@ export async function probeOnebot12Identity(config: OneBot12WsConfig, signal: Ab
     await new Promise<void>((resolve, reject) => { rejectOpen = reject; socket.once('open', resolve); socket.on('error', reject); });
     signal.throwIfAborted();
     const self = { platform: config.platform, user_id: config.userId };
-    return await identifySelectedBot({ selected: self, query: action => rpc.call({ action }), signal });
+    return await identifySelectedBot({ selected: self, query: action => rpc.call({ action }), signal, accessToken: config.access_token });
   } finally {
     signal.removeEventListener('abort', abort); rpc.dispose(); socket.terminate();
   }
@@ -25,18 +26,20 @@ export async function probeOnebot12Identity(config: OneBot12WsConfig, signal: Ab
 
 export async function probeOnebot12HttpIdentity(config: OneBot12WebhookConfig, signal: AbortSignal): Promise<string | undefined> {
   const self = { platform: config.platform, user_id: config.userId };
-  return identifySelectedBot({ selected: self, query: action => callOneBot12Action({ url: config.api_url, access_token: config.access_token, signal, self, action }), signal });
+  return identifySelectedBot({ selected: self, query: action => callOneBot12Action({ url: config.api_url, access_token: config.access_token, signal, self, action }), signal, accessToken: config.access_token });
 }
 
 interface OneBot12IdentityProbe {
   readonly selected: Readonly<{ platform: string; user_id: string }>;
   readonly query: (action: string) => Promise<OneBot12ActionResponse>;
   readonly signal: AbortSignal;
+  /** Masked out of failure reasons. */
+  readonly accessToken?: string;
 }
-async function identifySelectedBot({ selected, query, signal }: OneBot12IdentityProbe): Promise<string | undefined> {
+async function identifySelectedBot({ selected, query, signal, accessToken }: OneBot12IdentityProbe): Promise<string | undefined> {
     const status = await query('get_status');
     signal.throwIfAborted();
-    if (status.status !== 'ok' || status.retcode !== 0) throw new Error('OneBot12 identity status lookup failed');
+    if (status.status !== 'ok' || status.retcode !== 0) throw new Error(`OneBot12 identity status lookup failed: ${onebot12FailureReason(status, accessToken)}`);
     const data = status.data;
     if (!data || typeof data !== 'object' || !('bots' in data) || !Array.isArray(data.bots)) return undefined;
     const match = data.bots.some((bot: unknown) => {
@@ -46,7 +49,20 @@ async function identifySelectedBot({ selected, query, signal }: OneBot12Identity
     if (!match) return undefined;
     const account = await query('get_self_info');
     signal.throwIfAborted();
-    if (account.status !== 'ok' || account.retcode !== 0) throw new Error('OneBot12 account identity lookup failed');
+    if (account.status !== 'ok' || account.retcode !== 0) throw new Error(`OneBot12 account identity lookup failed: ${onebot12FailureReason(account, accessToken)}`);
     if (!account.data || typeof account.data !== 'object' || !('user_id' in account.data) || account.data.user_id !== selected.user_id) return undefined;
     return `onebot12:${JSON.stringify([selected.platform, selected.user_id])}`;
+}
+
+/**
+ * #1250 b111: the implementation's retcode and message, bounded, without the access token or
+ * secret-shaped text. Masked first, then cut, so a token across the cut is not half kept.
+ */
+export function onebot12FailureReason(response: Readonly<{ retcode?: unknown; message?: unknown; wording?: unknown }>, accessToken: string | undefined): string {
+  let text = typeof response.message === 'string' && response.message.trim() ? response.message
+    : typeof response.wording === 'string' ? response.wording : '';
+  if (accessToken && accessToken.length >= 4) text = text.split(accessToken).join('***');
+  text = redactSecretText(text).replace(/\s+/g, ' ').trim() || 'unknown';
+  if (text.length > 300) text = `${text.slice(0, 300)}…`;
+  return `${text} (retcode ${String(response.retcode)})`;
 }

@@ -3,6 +3,9 @@ import { Adapter, type AdapterContext, type EndpointCreationContext } from 'zhin
 import { LarkEndpoint } from './endpoint.js';
 import { resolveLarkConfig, type LarkEndpointConfig } from './protocol.js';
 import { httpHostToken } from '@zhin.js/host-http';
+import { larkFailureReason } from './failure-reason.js';
+
+export { larkFailureReason };
 
 export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkClientEventMap> {
   readonly #context: AdapterContext<LarkEndpointConfig>;
@@ -13,8 +16,10 @@ export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkC
   protected override async identifyConfiguration(input: LarkEndpointConfig, signal: AbortSignal, _changed: readonly string[]): Promise<string | undefined> {
     const config = resolveLarkConfig(input), client = new LarkClient({ id: this.descriptor.id, config, signal });
     try {
-      const response = await client.request<{ code?: number; bot?: { open_id?: unknown } }>({ url: `${config.apiBaseUrl}/bot/v3/info`, method: 'GET' });
-      if (response.code !== 0 || typeof response.bot?.open_id !== 'string' || !response.bot.open_id) throw new Error('Lark identity verification returned no bot open_id');
+      const response = await client.request<{ code?: number; msg?: unknown; bot?: { open_id?: unknown } }>({ url: `${config.apiBaseUrl}/bot/v3/info`, method: 'GET' });
+      // #1250 b111: a refused lookup says why (Lark's code and msg), without credentials.
+      if (response.code !== 0) throw new Error(`Lark identity verification failed: ${larkFailureReason(response, [config.appSecret, config.encryptKey, config.verificationToken])}`);
+      if (typeof response.bot?.open_id !== 'string' || !response.bot.open_id) throw new Error('Lark identity verification returned no bot open_id');
       return JSON.stringify(['lark', new URL(config.apiBaseUrl).origin, response.bot.open_id]);
     } finally { await client[Symbol.asyncDispose](); }
   }

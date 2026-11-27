@@ -2,9 +2,14 @@ import type { HttpInstance, HttpRequestOptions } from '@larksuiteoapi/node-sdk';
 import { Readable, PassThrough } from 'node:stream';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import type { LarkFetch } from './client.js';
+import { larkHttpFailureReason } from './failure-reason.js';
 
-/** The installed SDK's documented HttpInstance seam, using the same account-owned transport. */
-export function createLarkSdkHttpInstance(fetch: LarkFetch): HttpInstance {
+/**
+ * The installed SDK's documented HttpInstance seam, using the same account-owned transport.
+ * `secrets` (the account's app secret, encrypt key, verification token) are masked in the reason a
+ * non-2xx response gives (#1250 b111).
+ */
+export function createLarkSdkHttpInstance(fetch: LarkFetch, secrets: readonly (string | undefined)[] = []): HttpInstance {
   const request = async <T = unknown, R = T, D = unknown>(input: HttpRequestOptions<D>): Promise<R> => {
     if (!input.url) throw new TypeError('Lark SDK request URL is required');
     const url = new URL(input.url);
@@ -36,7 +41,13 @@ export function createLarkSdkHttpInstance(fetch: LarkFetch): HttpInstance {
     }
     const response = await fetch(url.toString(), { method: input.method, headers, body, ...(streaming ? { duplex: 'half' as const } : {}),
       ...(input.timeout ? { signal: AbortSignal.timeout(input.timeout) } : {}) });
-    if (!response.ok) throw new EndpointDeliveryError('http_error', `Lark HTTP ${response.status}`, response.status >= 400 && response.status < 500 && response.status !== 408 ? 'rejected' : 'unknown');
+    if (!response.ok) {
+      // #1250 b111: Lark answers most refusals (a bad app secret, a missing permission) with a
+      // non-2xx status and a JSON body; its code and msg (masked) say why. Unreadable: status only.
+      const reason = await larkHttpFailureReason(response as { text?: () => Promise<string> }, secrets);
+      throw new EndpointDeliveryError('http_error', `Lark HTTP ${response.status}${reason ? `: ${reason}` : ''}`,
+        response.status >= 400 && response.status < 500 && response.status !== 408 ? 'rejected' : 'unknown');
+    }
     const native = response as Partial<Response>;
     let data: unknown;
     if (input.responseType === 'stream') {
