@@ -1,6 +1,7 @@
 import { writeConfigurationPath } from './configuration-fields.js';
 import { PluginConsoleRpcError, type PluginConsoleRpcCall, type PluginConsoleRpcInput, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from './provider.js';
+import { redactSecretText } from '@zhin.js/logger';
 import { isOwnedAdapterDirectory } from './adapter-index.js';
 import { AdapterIdentityUnsupportedError, AdapterManagementError, type EndpointExecution, type EndpointMetadata } from './adapter-types.js';
 import type { AdapterInstance } from './adapter.js';
@@ -139,8 +140,9 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
 /** Fixed, credential-free texts for account failures; conflicts name the CAS that failed. */
 function consoleAccountError(error: unknown, configuration = false): PluginConsoleRpcError {
   if (error instanceof PluginConsoleRpcError) return error;
-  // The platform's fixed, credential-free reason (#1250 b115), e.g. a credential-only change it cannot verify.
-  if (error instanceof AdapterIdentityUnsupportedError) return new PluginConsoleRpcError('unsupported', error.reason);
+  // The platform's own reason (#1250 b115), e.g. a credential-only change it cannot verify. Platform code
+  // writes it, but this is the one place it leaves for the Console: masked, then bounded to one short line.
+  if (AdapterIdentityUnsupportedError.is(error)) return new PluginConsoleRpcError('unsupported', consoleIdentityReason(error.reason));
   if (error instanceof AdapterManagementError) {
     const code = error.code === 'duplicate_entry' || error.code === 'conflict' || error.code === 'closed' ? 'conflict'
       : error.code === 'not_found' ? 'not_found' : error.code === 'invalid_configuration' ? 'invalid_input'
@@ -153,6 +155,15 @@ function consoleAccountError(error: unknown, configuration = false): PluginConso
     return new PluginConsoleRpcError(code, message);
   }
   return new PluginConsoleRpcError('commit_unknown', '提交结果尚未确认，请刷新状态，勿重复提交');
+}
+
+const MAX_CONSOLE_REASON_CHARS = 200;
+
+/** A platform identity reason for the Console: secret-shaped text masked first, then cut (never half a secret). */
+function consoleIdentityReason(reason: string): string {
+  const text = redactSecretText(reason).replace(/\s+/gu, ' ').trim();
+  if (!text) return '此平台暂不支持这种修改，请使用替换账号';
+  return text.length > MAX_CONSOLE_REASON_CHARS ? `${text.slice(0, MAX_CONSOLE_REASON_CHARS)}…` : text;
 }
 
 function sensitiveFields(spec: AdapterConsoleSpec): string[] {

@@ -25,6 +25,7 @@ import {
   type ResolvedDingTalkConfig,
 } from './protocol.js';
 import { registerDingTalkWebhookRoutes } from './webhook.js';
+import { AdmissionDedup } from './admission-dedup.js';
 
 /** DingTalk redelivers a callback it did not see acknowledged; one msgId is admitted once per window. */
 const ADMISSION_DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
@@ -85,7 +86,7 @@ export class DingTalkClient extends EventEmitter {
   #accessToken: AccessToken = { token: '', expires_in: 0, timestamp: 0 };
   #refreshPromise: Promise<string> | null = null;
   #sessionWebhooks = new Map<string, { url: string; expiresAt: number }>();
-  readonly #admissions = new Map<string, { readonly promise: Promise<void>; expires: number }>();
+  readonly #admissions = new AdmissionDedup({ ttlMs: ADMISSION_DEDUP_TTL_MS, capacity: ADMISSION_DEDUP_CAPACITY });
   #stream?: DingTalkStream;
   readonly #cards = new DingTalkCards();
   #open = false;
@@ -273,34 +274,19 @@ export class DingTalkClient extends EventEmitter {
   /**
    * Hand a verified callback to the Runtime. Resolves once the Runtime holds it (#1250 b115), so the webhook
    * 200 / Stream ACK never waits for the Agent turn; a redelivered msgId shares or skips the first admission.
+   * Rejects when the event was not handed over — including a closed input, so the msgId is not recorded as
+   * done and the caller does not acknowledge it (webhook 503, no Stream ACK): DingTalk may redeliver.
    */
   async admit(event: DingTalkEvent | DingTalkMessage): Promise<void> {
-    if (!this.#open) return;
+    if (!this.#open) throw new Error('DingTalk endpoint is closed');
     const id = typeof event.msgId === 'string' && event.msgId.trim() ? event.msgId : undefined;
     if (!id) return this.receiveInboundCallback(() => this.#admitMessage(event));
-    const now = Date.now();
-    for (const [key, entry] of this.#admissions) if (entry.expires <= now) this.#admissions.delete(key);
-    const existing = this.#admissions.get(id);
-    if (existing) return existing.promise;
-    if (this.#admissions.size >= ADMISSION_DEDUP_CAPACITY) {
-      // Evict the oldest completed entry; in-flight ones stay so a concurrent redelivery still shares them.
-      for (const [key, entry] of this.#admissions) if (entry.expires !== Infinity) { this.#admissions.delete(key); break; }
-      if (this.#admissions.size >= ADMISSION_DEDUP_CAPACITY) throw new Error('DingTalk admission dedup capacity exhausted');
-    }
-    const entry = { promise: this.receiveInboundCallback(() => this.#admitMessage(event)), expires: Infinity };
-    this.#admissions.set(id, entry);
-    try {
-      await entry.promise;
-      if (this.#admissions.get(id) === entry) entry.expires = Date.now() + ADMISSION_DEDUP_TTL_MS;
-    } catch (error) {
-      // Not handed over: a redelivery must be admitted again.
-      if (this.#admissions.get(id) === entry) this.#admissions.delete(id);
-      throw error;
-    }
+    return this.#admissions.admit(id, () => this.receiveInboundCallback(() => this.#admitMessage(event)));
   }
 
   async #admitMessage(event: DingTalkEvent | DingTalkMessage): Promise<void> {
-    if (!this.#open) return;
+    // Closed between admission and hand-off: not handed over, so the dedup entry is released.
+    if (!this.#open) throw new Error('DingTalk endpoint is closed');
     this.#emitPlatformEvent(event.msgtype || 'event', event);
     if (event.sessionWebhook && event.conversationId) {
       const expiresAt = Number.isFinite(event.sessionWebhookExpiredTime) ? event.sessionWebhookExpiredTime! : Date.now() + 300_000;
@@ -573,12 +559,22 @@ export function dingtalkFailureReason(response: Readonly<{ errcode?: unknown; er
   for (const secret of [...secrets].sort((a, b) => (b?.length ?? 0) - (a?.length ?? 0))) {
     if (typeof secret !== 'string' || secret.length < 4) continue;
     for (const form of new Set([secret, encodeURIComponent(secret), new URLSearchParams({ v: secret }).toString().slice(2)])) {
-      text = text.split(form).join('***');
+      // Percent-encoding hex digits may come back in either case (`%2F` / `%2f`).
+      text = form.includes('%')
+        ? text.replace(new RegExp(form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'), '***')
+        : text.split(form).join('***');
     }
   }
   text = redactSecretText(text).replace(/\s+/g, ' ').trim() || 'unknown';
   if (text.length > MAX_REASON_CHARS) text = `${text.slice(0, MAX_REASON_CHARS)}…`;
-  return `${text} (errcode ${String(response.errcode)})`;
+  return `${text} (errcode ${dingtalkErrcode(response.errcode)})`;
+}
+
+/** Only a finite number (or an all-digit string, optionally negative) is shown; anything else is `unknown`. */
+function dingtalkErrcode(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'string' && /^-?\d{1,12}$/u.test(value.trim())) return value.trim();
+  return 'unknown';
 }
 
 function requireMessageId(value: unknown): string {

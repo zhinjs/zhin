@@ -1,5 +1,5 @@
 /**
- * DingTalk webhook HTTP: signature → parse → hand off to the Runtime → 200.
+ * DingTalk webhook HTTP: signature → parse → hand off to the Runtime → 200 (503 when the hand-off fails).
  */
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
@@ -55,10 +55,12 @@ export async function handleDingTalkWebhookRequest(
 
     if (event.msgtype && handler.isOpen) {
       // Waits for the hand-off to the Runtime only, never for the Agent turn (#1250 b115).
-      // A refused hand-off keeps the previous answer: logged, still 200.
+      // A refused hand-off answers 503 (as LINE does): the msgId dedup entry is already released, so a
+      // DingTalk redelivery is handed off again rather than skipped or handled twice.
       try { await handler.admit(event); } catch (error) {
         logger.warn(formatCompact({ op: 'dingtalk_gateway_receive_failed',
           error: error instanceof Error ? error.message : String(error) }));
+        return new Response(JSON.stringify({ code: -1, msg: 'Admission unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
       }
     }
 

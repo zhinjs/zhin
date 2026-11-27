@@ -1,4 +1,4 @@
-import { AdapterIdentityUnsupportedError, AdapterManagementError, type EndpointDesiredRecord, type EndpointSecretResolver } from './adapter-types.js';
+import { AdapterIdentityUnsupportedError, AdapterManagementError, type ConfigurationIdentityContext, type EndpointDesiredRecord, type EndpointSecretResolver } from './adapter-types.js';
 import { writeConfigurationPath } from './configuration-fields.js';
 import { formatCompact, getLogger, redactSecretText } from '@zhin.js/logger';
 
@@ -53,7 +53,9 @@ export async function sameConfigurationIdentity<Config>(input: {
   readonly changedFields: readonly string[];
   readonly signal: AbortSignal;
   readonly secrets?: EndpointSecretResolver;
-  readonly identify: (config: Config, signal: AbortSignal, changedFields: readonly string[]) => Promise<string | undefined>;
+  /** Called with `role: 'previous'` for the saved configuration, then `role: 'next'` for the proposed one. */
+  readonly identify: (config: Config, signal: AbortSignal, changedFields: readonly string[],
+    context: ConfigurationIdentityContext) => Promise<string | undefined>;
 }): Promise<boolean> {
   const { signal, changedFields, identify } = input;
   const resolvedSecrets = new Set<string>();
@@ -71,13 +73,15 @@ export async function sameConfigurationIdentity<Config>(input: {
   signal.throwIfAborted();
   let previous: string | undefined, next: string | undefined;
   try {
-    previous = await identify(await resolve(input.previous), signal, changedFields);
+    // The saved credentials may already be revoked (the reason to rotate): `previous` lets a platform answer offline.
+    previous = await identify(await resolve(input.previous), signal, changedFields, { role: 'previous' });
     signal.throwIfAborted();
-    if (previous !== undefined) next = await identify(await resolve(input.next), signal, changedFields);
+    if (previous !== undefined) next = await identify(await resolve(input.next), signal, changedFields, { role: 'next' });
   } catch (cause) {
     signal.throwIfAborted();
     // A platform that knows it cannot verify this change says so itself (#1250 b115): keep its reason.
-    if (cause instanceof AdapterIdentityUnsupportedError) throw cause;
+    // A brand check, not `instanceof`: the platform may have loaded another copy of this package.
+    if (AdapterIdentityUnsupportedError.is(cause)) throw cause;
     const masked = new Set(resolvedSecrets);
     configurationStrings(input.previous.config, changedFields, masked);
     configurationStrings(input.next.config, changedFields, masked);

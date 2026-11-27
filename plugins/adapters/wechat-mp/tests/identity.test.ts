@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { defineAdapter } from 'zhin.js/adapter';
+import { AdapterIdentityUnsupportedError, defineAdapter } from 'zhin.js/adapter';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { MemoryDesiredRepository } from '../../test-utils/desired-repository.js';
 import { WeChatMpAdapter } from '../src/adapter.js';
@@ -26,7 +26,9 @@ it('refuses an appSecret-only rotation with a Chinese reason, without the secret
   try {
     const error = await adapter.update(target.instanceId, adapter.revision, { config: { ...config, appSecret: ROTATED } })
       .then(() => undefined, (cause: unknown) => cause as Error & { code?: string });
-    expect(error).toMatchObject({ name: 'AdapterManagementError', code: 'unsupported', message: '微信公众号暂不支持只换密钥，请使用替换账号' });
+    expect(error).toMatchObject({ name: 'AdapterIdentityUnsupportedError', code: 'unsupported', message: '微信公众号暂不支持只换密钥，请使用替换账号' });
+    // Recognized by its brand, so a framework loaded from another package copy still shows the reason.
+    expect(AdapterIdentityUnsupportedError.is(error)).toBe(true);
     expect(error?.message).not.toContain(SECRET);
     expect(error?.message).not.toContain(ROTATED);
     expect(fetch).not.toHaveBeenCalled();
