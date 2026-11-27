@@ -127,7 +127,7 @@ it('names why job writes are unavailable while keeping the legacy error string (
   expect((await (await post('/pause', { id: 'known' })).json()).data).toMatchObject({ reason: 'agent-disabled' });
 });
 
-it('bounds schedule.atMs to a future time at most 365 days ahead, like schedule-job-service (#1250 b112)', async () => {
+it('bounds schedule.atMs to a future time at most 365 days ahead, the same 365-day bound as the Agent schedule tools (#1250 b112)', async () => {
   const now = 1_000_000;
   expect(MAX_SCHEDULE_AT_DELAY_MS).toBe(365 * 24 * 60 * 60_000);
   expect(parseAssistantJobInput({ prompt: 'p', schedule: { kind: 'at', atMs: now + MAX_SCHEDULE_AT_DELAY_MS } }, now))

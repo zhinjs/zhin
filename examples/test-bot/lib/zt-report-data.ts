@@ -5,6 +5,13 @@ import * as path from "node:path";
 
 const isBun = typeof Bun !== "undefined";
 
+/*
+ * 照抄本示例的用户请注意：系统状态卡片会把主机信息发进聊天（主机名、操作系统与内核版本、
+ * CPU 型号、磁盘与内存容量、网卡名）。本示例已去掉 MAC 与 IPv6、把 IP 打码成网段前缀，
+ * 并在 `commands/zt` 用 `permit: ['admin']` 限制为 owner 或管理员；改动这些之前先想清楚
+ * 卡片会发到哪些会话、谁能看到。
+ */
+
 /** Plugin Runtime 下与 Console `/api/stats` 对齐的框架计数（非 legacy Plugin.root）。 */
 export type ZtFrameworkCounts = {
   readonly adapters: number;
@@ -27,10 +34,8 @@ export interface ZtReportData {
   diskIoLine: string;
   diskMounts: Array<{ mount: string; used: string; total: string; usage?: number }>;
   networkName: string;
+  /** 打码后的主地址（只留网段前缀，如 `192.168.x.x/24`）。 */
   networkIp: string;
-  /** IPv6（优先全局地址；无则省略）。 */
-  networkIpv6?: string;
-  networkMac?: string;
   networkSpeedLine: string;
   /** 累计流量 ↑/↓。 */
   networkTrafficLine?: string;
@@ -89,22 +94,25 @@ function resolveUsagePercent(reported: number | undefined, used: number, total: 
 
 export type ZtIpInfo = { ipAddress: string; netmask?: number };
 
-export function pickPrimaryIp(ipInfo: ReadonlyArray<ZtIpInfo>) {
-  const ipv4 = ipInfo.find((i) => /^\d+\.\d+\.\d+\.\d+$/.test(i.ipAddress) && !i.ipAddress.startsWith("127."));
-  if (ipv4) {
-    return ipv4.netmask != null ? `${ipv4.ipAddress}/${ipv4.netmask}` : ipv4.ipAddress;
-  }
-  const sane = ipInfo.find((i) =>
-    !i.ipAddress.startsWith("127.") && !i.ipAddress.startsWith("fe80:") && !i.ipAddress.startsWith("::1"));
-  return sane?.ipAddress ?? ipInfo[0]?.ipAddress ?? "—";
+/**
+ * 打码地址，只留网段前缀：IPv4 留前两段（`192.168.x.x`），IPv6 留前两组（`2001:db8:…`），
+ * 有掩码时附上前缀长度。完整地址不进卡片。
+ */
+export function maskIp(info: ZtIpInfo) {
+  const address = info.ipAddress;
+  const masked = address.includes(":")
+    ? `${address.split(":").filter(Boolean).slice(0, 2).join(":")}:…`
+    : `${address.split(".").slice(0, 2).join(".")}.x.x`;
+  return info.netmask != null ? `${masked}/${info.netmask}` : masked;
 }
 
-export function pickIpv6(ipInfo: ReadonlyArray<ZtIpInfo>) {
-  const global = ipInfo.find((i) =>
-    i.ipAddress.includes(":") && !i.ipAddress.startsWith("fe80:") && !i.ipAddress.startsWith("::1"));
-  if (global) return truncateText(global.ipAddress, 36);
-  const link = ipInfo.find((i) => i.ipAddress.startsWith("fe80:"));
-  return link ? truncateText(link.ipAddress, 36) : undefined;
+/** 选出主地址（优先非回环 IPv4，其次非链路本地地址）并打码。 */
+export function pickPrimaryIp(ipInfo: ReadonlyArray<ZtIpInfo>) {
+  const ipv4 = ipInfo.find((i) => /^\d+\.\d+\.\d+\.\d+$/.test(i.ipAddress) && !i.ipAddress.startsWith("127."));
+  const sane = ipv4 ?? ipInfo.find((i) =>
+    !i.ipAddress.startsWith("127.") && !i.ipAddress.startsWith("fe80:") && !i.ipAddress.startsWith("::1"));
+  const picked = sane ?? ipInfo[0];
+  return picked ? maskIp(picked) : "—";
 }
 
 const MB = 1024 * 1024;
@@ -112,7 +120,8 @@ const GB = 1024 * MB;
 
 /* ------------------------------------------------------------------ */
 /* 采样：以下全部基于 node:os / node:fs / process，无原生依赖。          */
-/* CPU、进程 CPU 与网速需要两次采样求差；首个样本在模块加载时取得。      */
+/* CPU、进程 CPU 与网速需要两次采样求差：每次采集现取两个样本，        */
+/* 中间等待 ZT_SAMPLE_MS（可注入），不保留模块级状态。                    */
 /* ------------------------------------------------------------------ */
 
 type CpuTimes = { idle: number; total: number };
@@ -169,18 +178,37 @@ export function parseProcMeminfo(text: string): Map<string, number> {
   return result;
 }
 
-type Sample = {
+export type ZtSample = {
   at: number;
   cpu: CpuTimes;
   proc: NodeJS.CpuUsage;
   net?: Map<string, NetCounters>;
 };
 
-function takeSample(): Sample {
+function takeSample(): ZtSample {
   return { at: Date.now(), cpu: readCpuTimes(), proc: process.cpuUsage(), net: readNetCounters() };
 }
 
-let lastSample: Sample = takeSample();
+/** 两次采样之间的默认等待（ms）：CPU 占用与网速是这段窗口内的平均值。 */
+export const ZT_SAMPLE_MS = 300;
+
+export interface ZtCollectOptions {
+  /** 两次采样之间等待多久（ms），默认 {@link ZT_SAMPLE_MS}；测试可设为 0。 */
+  readonly sampleMs?: number;
+  /** 等待实现，默认 `setTimeout`；测试可替换。 */
+  readonly wait?: (ms: number) => Promise<void>;
+  /** 采样实现，默认读 os.cpus() / process.cpuUsage() / /proc/net/dev；测试可替换。 */
+  readonly sample?: () => ZtSample;
+}
+
+const defaultWait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** 由两次网卡计数求速率；计数器归零（重启网卡、溢出）时差值为负，钳到 0。 */
+export function formatNetworkSpeed(prev: NetCounters | undefined, next: NetCounters | undefined, elapsedSec: number) {
+  if (!prev || !next || !(elapsedSec > 0)) return "—";
+  const rate = (delta: number) => (Math.max(0, delta) / 1024 / elapsedSec).toFixed(1);
+  return `↑ ${rate(next.tx - prev.tx)}  ↓ ${rate(next.rx - prev.rx)} KB/s`;
+}
 
 /** 选出主网卡：优先带非回环 IPv4 的非 internal 网卡。 */
 function pickInterface() {
@@ -195,30 +223,38 @@ function cidrPrefix(cidr: string | null | undefined) {
   return Number.isInteger(n) ? n : undefined;
 }
 
-type DiskEntry = { mount: string; usedSpace: number; totalSpace: number };
+export type DiskEntry = { mount: string; usedSpace: number; totalSpace: number };
 
-function statDisk(mount: string): DiskEntry | undefined {
-  try {
-    const st = fs.statfsSync(mount);
-    const total = st.blocks * st.bsize;
-    if (total <= 0) return undefined;
-    const used = (st.blocks - st.bfree) * st.bsize;
-    return { mount, usedSpace: used / GB, totalSpace: total / GB };
-  } catch {
-    return undefined;
-  }
+export interface ReadDisksOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly cwd?: string;
+  readonly statfs?: (mount: string) => Pick<fs.StatsFs, "blocks" | "bfree" | "bsize">;
 }
 
-function readDisks(): DiskEntry[] {
-  const mounts = [path.parse(process.cwd()).root || "/"];
-  if (process.platform === "darwin") mounts.push("/System/Volumes/Data");
+/**
+ * 读取要展示的卷。macOS 上 `/` 与 `/System/Volumes/Data` 在 APFS 下属于同一个容器，statfs
+ * 返回同样的 `(blocks, bfree, bsize)`；按这三个值去重，避免合计翻倍，并优先列出数据卷。
+ */
+export function readDisks(options: ReadDisksOptions = {}): DiskEntry[] {
+  const platform = options.platform ?? process.platform;
+  const statfs = options.statfs ?? ((mount: string) => fs.statfsSync(mount));
+  const root = path.parse(options.cwd ?? process.cwd()).root || "/";
+  const mounts = platform === "darwin" ? ["/System/Volumes/Data", root] : [root];
   const seen = new Set<string>();
   const disks: DiskEntry[] = [];
   for (const mount of mounts) {
-    if (seen.has(mount)) continue;
-    seen.add(mount);
-    const disk = statDisk(mount);
-    if (disk) disks.push(disk);
+    let st: Pick<fs.StatsFs, "blocks" | "bfree" | "bsize">;
+    try {
+      st = statfs(mount);
+    } catch {
+      continue;
+    }
+    const total = st.blocks * st.bsize;
+    if (!(total > 0)) continue;
+    const key = `${st.blocks}:${st.bfree}:${st.bsize}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    disks.push({ mount, usedSpace: ((st.blocks - st.bfree) * st.bsize) / GB, totalSpace: total / GB });
   }
   return disks;
 }
@@ -232,10 +268,19 @@ function frameworkLine(counts: ZtFrameworkCounts) {
   return `适配器 ${counts.adapters} · 插件 ${counts.plugins}`;
 }
 
-export function collectZtReportData(counts: ZtFrameworkCounts): ZtReportData {
-  const now = takeSample();
-  const prev = lastSample;
-  lastSample = now;
+/** 运行时名称：可执行文件名（如 `node`、`bun`），不用可被改写、可能含命令行的 `process.title`。 */
+function botName() {
+  return path.basename(process.execPath) || (isBun ? "bun" : "node");
+}
+
+export async function collectZtReportData(
+  counts: ZtFrameworkCounts,
+  options: ZtCollectOptions = {},
+): Promise<ZtReportData> {
+  const sample = options.sample ?? takeSample;
+  const prev = sample();
+  await (options.wait ?? defaultWait)(Math.max(0, options.sampleMs ?? ZT_SAMPLE_MS));
+  const now = sample();
   const elapsedSec = Math.max(0, (now.at - prev.at) / 1000);
 
   const cpus = os.cpus();
@@ -251,6 +296,9 @@ export function collectZtReportData(counts: ZtFrameworkCounts): ZtReportData {
       return undefined;
     }
   })();
+  // Linux 读 /proc/meminfo 的 MemAvailable（可回收的缓存不算占用）。其他系统没有该文件，退回
+  // os.freemem()：macOS 上它只算完全空闲的页，文件缓存、压缩内存都会计入「已用」，所以数值
+  // 通常比活动监视器里的「内存压力」高；Windows 上与任务管理器的「可用」相近。交换只在 Linux 上显示。
   const available = meminfo?.get("MemAvailable") ?? os.freemem();
   const usedmem = Math.max(0, totalmem - available);
   const swapTotal = meminfo?.get("SwapTotal") ?? 0;
@@ -262,17 +310,14 @@ export function collectZtReportData(counts: ZtFrameworkCounts): ZtReportData {
 
   const iface = pickInterface();
   const ipInfo: ZtIpInfo[] = (iface?.[1] ?? []).map((a) => ({ ipAddress: a.address, netmask: cidrPrefix(a.cidr) }));
-  const mac = iface?.[1].find((a) => a.mac && a.mac !== "00:00:00:00:00:00")?.mac;
   const counters = iface ? now.net?.get(iface[0]) : undefined;
   const prevCounters = iface ? prev.net?.get(iface[0]) : undefined;
-  const networkSpeedLine = counters && prevCounters && elapsedSec > 0
-    ? `↑ ${((counters.tx - prevCounters.tx) / 1024 / elapsedSec).toFixed(1)}  ↓ ${((counters.rx - prevCounters.rx) / 1024 / elapsedSec).toFixed(1)} KB/s`
-    : "—";
+  const networkSpeedLine = formatNetworkSpeed(prevCounters, counters, elapsedSec);
 
   const memUsage = process.memoryUsage();
   const runTimeSec = process.uptime();
   const procCpuMicros = (now.proc.user - prev.proc.user) + (now.proc.system - prev.proc.system);
-  const botCpu = elapsedSec > 0 ? (procCpuMicros / 1e6 / elapsedSec) * 100 : undefined;
+  const botCpu = elapsedSec > 0 ? Math.max(0, (procCpuMicros / 1e6 / elapsedSec) * 100) : undefined;
   const runtime = isBun ? `Bun ${Bun.version}` : `Node ${process.version.replace(/^v/, "")}`;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -298,14 +343,12 @@ export function collectZtReportData(counts: ZtFrameworkCounts): ZtReportData {
     })),
     networkName: iface?.[0] ?? "—",
     networkIp: pickPrimaryIp(ipInfo),
-    networkIpv6: pickIpv6(ipInfo),
-    networkMac: mac || undefined,
     networkSpeedLine,
     networkTrafficLine: counters
       ? `↑ ${formatMemoSize(counters.tx)}  ↓ ${formatMemoSize(counters.rx)}`
       : undefined,
     gpuLine: undefined,
-    botName: path.basename(process.title) || runtime,
+    botName: botName(),
     botPid: process.pid,
     botUptime: Time.formatTime(runTimeSec * 1000),
     botRunTimeSec: runTimeSec,
@@ -340,7 +383,7 @@ export function collectZtFallbackData(counts: ZtFrameworkCounts): ZtReportData {
     networkName: "—",
     networkIp: "—",
     networkSpeedLine: "—",
-    botName: runtime,
+    botName: botName(),
     botPid: process.pid,
     botUptime: Time.formatTime(process.uptime() * 1000),
     botRunTimeSec: process.uptime(),
@@ -376,8 +419,6 @@ export function buildZtReportText(data: ZtReportData): string {
     "",
     "**网络**",
     `${data.networkName} · ${data.networkIp}`,
-    data.networkIpv6 ? `IPv6  ${data.networkIpv6}` : null,
-    data.networkMac ? `MAC  ${data.networkMac}` : null,
     `速率  ${data.networkSpeedLine}`,
     data.networkTrafficLine ? `累计  ${data.networkTrafficLine}` : null,
     data.gpuLine ? ["", "**GPU**", data.gpuLine].join("\n") : null,

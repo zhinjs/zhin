@@ -35,14 +35,21 @@ function readFrameworkCounts(
   }
 }
 
-/** Runtime zt：富系统报告卡（legacy /zt 同款布局）。 */
+/**
+ * Runtime zt：富系统报告卡（legacy /zt 同款布局）。
+ *
+ * 卡片含主机名、系统与内核版本、硬件容量、网卡名和打码后的网段，因此只允许 owner 或管理员
+ * （zhin 聊天角色 `admin`，owner 包含 admin）使用；要求全局角色可改成 `admin@global`。
+ * 照抄时不要去掉这条限制，也不要把 MAC / 完整 IP 加回卡片。
+ */
 export default defineCommand({
-  description: "系统状态卡片（富报告）",
+  description: "系统状态卡片（富报告，仅 owner / 管理员）",
+  permit: ["admin"],
   execute: async (context) => {
     const counts = readFrameworkCounts((token) => context.use(token));
     let data;
     try {
-      data = collectZtReportData(counts);
+      data = await collectZtReportData(counts);
     } catch {
       data = collectZtFallbackData(counts);
     }

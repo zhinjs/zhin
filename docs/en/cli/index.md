@@ -608,7 +608,7 @@ Have the AI run a prompt at given times. The command talks to the running instan
 zhin schedule list [--json] [--host <url>]
 zhin schedule add "0 0 9 * * *" --prompt "Good morning, summarize today's schedule" [--kind solar|lunar|workday|freeDay]
 zhin schedule add --every 30m --prompt "Check RSS"
-zhin schedule add --at 2026-08-01T09:00:00Z --prompt "One-off reminder"
+zhin schedule add --at <iso8601> --prompt "One-off reminder"   # within the next 365 days, e.g. tomorrow 09:00 as ISO8601
 zhin schedule add "0 0 8 * * *" --prompt "Compile today's briefing" --agent news
 zhin schedule set-agent <id> <agent>     # change the Agent a job runs on
 zhin schedule set-agent <id> --clear     # back to the default Agent (zhin)
@@ -627,7 +627,7 @@ zhin schedule resume <id>
 | `--notify-channel` | `im` / `silent` (default; `im` when `--target` is given) / `log` |
 | `--target` | IM delivery target `<adapter>:<endpoint>:<kind>:<id>` (`kind`: `private` / `group` / `channel`), e.g. `sandbox:sandbox-bot:private:u1`; defaults to `assistant.defaults.notify` or the profile's `defaults.notify`. Without a usable target, or when its account does not exist, the instance refuses the job and says why. An explicit target also needs `endpoint.operate` on that account (as `zhin send` / `/message/send` does; the Console `cron:add` RPC too), otherwise 403 `schedule_target_forbidden` |
 | `--agent` | The Agent that runs the job, by its `ai.agents` name (e.g. `ai.agents.news`); without it the job runs on the default Agent `zhin`, as before. An unknown name is refused (400 `schedule_agent_not_found`) with the list of available Agents |
-| cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
+| cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`). `--at` must be in the future and at most 365 days ahead (the same bound as the Agent's schedule tools); a later time is refused locally by the CLI without a request, and a direct `POST /api/assistant/jobs` / `jobs/update` gets 400 `invalid_argument` from the instance |
 
 To move an existing job to another Agent, run `zhin schedule set-agent <id> <agent>`; `--clear` restores the default Agent. No need to stop the bot and edit the database. The name is checked against `ai.agents` the same way; heartbeat jobs always run on the default Agent and cannot be changed; profile routines are refused (they are re-declared from the profile on every start: set the routine's `agent` field in `assistant.profile.yml`); a job with a delivery target needs `endpoint.operate` on that account, else 403. `zhin schedule list` flags a job whose Agent was removed from `ai.agents` with "⚠ Agent 不存在". The change applies from the next run. Both commands need `ops.schedule.write` (through `POST /api/assistant/jobs` and `POST /api/assistant/jobs/set-agent`; in the Console, the `agent` field of `cron:add` and `cron:set-agent`).
 

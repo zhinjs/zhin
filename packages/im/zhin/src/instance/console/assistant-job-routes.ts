@@ -109,8 +109,10 @@ export function parseScheduleAgentField(
 }
 
 /**
- * Longest delay of a one-shot (`at`) job: 365 days, the same bound as the Agent's schedule tools
- * (`schedule-job-service`, #1250 b111). It also keeps `atMs` far below the largest `Date` (8.64e15).
+ * Longest delay of a one-shot (`at`) job: 365 days, the same 365-day bound as the Agent's schedule
+ * tools. It also keeps `atMs` far below the largest `Date` (8.64e15). `zhin schedule` checks the same
+ * bound locally (`MAX_SCHEDULE_AT_DELAY_MS` in `basic/cli/src/commands/schedule.ts`; the CLI may not
+ * import this module), so change both together (#1250).
  */
 export const MAX_SCHEDULE_AT_DELAY_MS = 365 * 24 * 60 * 60_000;
 

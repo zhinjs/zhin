@@ -40,6 +40,22 @@ export type ScheduleWriteAction =
   | { readonly kind: 'add' }
   | { readonly kind: 'resume' | 'set-agent' | 'update'; readonly id: string };
 
+/**
+ * Longest delay of a one-shot `--at` job: 365 days. Mirrors `MAX_SCHEDULE_AT_DELAY_MS` in
+ * `packages/im/zhin/src/instance/console/assistant-job-routes.ts` (the instance refuses
+ * `atMs - now > 365 days` with 400 `invalid_argument`), which is also the bound of the Agent's
+ * schedule tools. Defined here because `@zhin.js/cli` must not import `zhin.js`; keep both in step.
+ */
+export const MAX_SCHEDULE_AT_DELAY_MS = 365 * 24 * 60 * 60_000;
+
+/** `--at` as epoch ms, or the error to print: a valid time, in the future, at most 365 days ahead. */
+export function parseScheduleAt(value: string, now: number): { atMs: number } | { error: string } {
+  const atMs = new Date(value).getTime();
+  if (Number.isNaN(atMs) || atMs <= now) return { error: '--at 必须是未来的有效 ISO8601 时间' };
+  if (atMs - now > MAX_SCHEDULE_AT_DELAY_MS) return { error: '--at 最多是 365 天以后（与实例的上限相同）' };
+  return { atMs };
+}
+
 const AGENT_NOT_FOUND = /Agent 不存在：(.+?)。可用的 Agent：(.*)$/u;
 
 /** Calendar kinds by lower-cased spelling: `--kind` is matched case-insensitively (#1250 b90). */
@@ -284,12 +300,12 @@ const addCommand = new Command('add')
     let schedule: JobScheduleCli;
     try {
       if (opts.at) {
-        const atMs = new Date(opts.at).getTime();
-        if (Number.isNaN(atMs) || atMs <= now) {
-          logger.error('--at 必须是未来的有效 ISO8601 时间');
+        const at = parseScheduleAt(opts.at, now);
+        if ('error' in at) {
+          logger.error(at.error);
           process.exit(1);
         }
-        schedule = { kind: 'at', atMs, deleteAfterRun: true };
+        schedule = { kind: 'at', atMs: at.atMs, deleteAfterRun: true };
       } else if (opts.every) {
         schedule = { kind: 'every', everyMs: parseEveryMs(opts.every) };
       } else {
@@ -375,10 +391,14 @@ const updateCommand = new Command('update')
       logger.error(`--kind 无效，可选 ${CRON_KIND_LIST}`);
       process.exit(1);
     }
-    const atMs = opts.at === undefined ? undefined : new Date(opts.at).getTime();
-    if (atMs !== undefined && (Number.isNaN(atMs) || atMs <= Date.now())) {
-      logger.error('--at 必须是未来的有效 ISO8601 时间');
-      process.exit(1);
+    let atMs: number | undefined;
+    if (opts.at !== undefined) {
+      const at = parseScheduleAt(opts.at, Date.now());
+      if ('error' in at) {
+        logger.error(at.error);
+        process.exit(1);
+      }
+      atMs = at.atMs;
     }
     let schedule: Record<string, unknown> | undefined;
     let invalid: string | undefined;
