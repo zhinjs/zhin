@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c21fdd61d4976c0e -->
+<!-- sync-adapter-docs:sha256=79031ddfe3418a8e -->
 
 # @zhin.js/adapter-lark
 
@@ -124,7 +124,7 @@ pnpm --filter @zhin.js/adapter-lark test
 
 在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
 
-新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。只换 appSecret 时只用新密钥读取一次机器人信息（`bot/v3/info`）核验，不用旧密钥请求飞书，所以旧密钥已重置或吊销时也能完成。账号身份为 `appId` 加平台区域（API origin）：飞书（open.feishu.cn）与 Lark Suite（open.larksuite.com）是两个独立平台，`apiBaseUrl` 换到另一个 origin 会被当作换账号。空白或遮蔽的密码不会覆盖既有密码。
 
 读取需要 `lark:read`（`read` 级别，内置角色 `viewer` 及以上都有），写入需要 `lark:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算）；首次迁移还需管理员身份，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 

@@ -163,7 +163,14 @@ export async function handleWeChatMpMessage(
       if (config.replyMode === 'passive') {
         replyXML = await collectPassiveReply(handler, wechatMessage, xmlString);
       } else {
-        handler.admit(wechatMessage, xmlString);
+        // Not awaited: WeChat gets its reply now. A rejected admission must not become an
+        // unhandled rejection.
+        Promise.resolve(handler.admit(wechatMessage, xmlString)).catch((error: unknown) => {
+          logger.warn(formatCompact({
+            op: 'wechat_mp_admit_failed',
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        });
       }
     }
 

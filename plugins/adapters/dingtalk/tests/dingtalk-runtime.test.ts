@@ -355,7 +355,8 @@ describe('dingtalk plugin runtime adapter', () => {
     }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
-    endpoint.endpoint.admit(textMessage());
+    // #1250 b115: refused, not resolved, so the msgId is not recorded as handled and nothing acknowledges it.
+    await expect(endpoint.endpoint.admit(textMessage())).rejects.toThrow('DingTalk endpoint is closed');
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });

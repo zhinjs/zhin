@@ -7,7 +7,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
  */
 import { createEndpointOperation, Endpoint, type EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
-import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
+import { formatCompact, getAdapterLogger, redactSecretText } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import {
   dingtalkInboundConversation,
@@ -25,6 +25,11 @@ import {
   type ResolvedDingTalkConfig,
 } from './protocol.js';
 import { registerDingTalkWebhookRoutes } from './webhook.js';
+import { AdmissionDedup } from './admission-dedup.js';
+
+/** DingTalk redelivers a callback it did not see acknowledged; one msgId is admitted once per window. */
+const ADMISSION_DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
+const ADMISSION_DEDUP_CAPACITY = 10_000;
 
 export type DingTalkFetch = (
   url: string,
@@ -81,6 +86,7 @@ export class DingTalkClient extends EventEmitter {
   #accessToken: AccessToken = { token: '', expires_in: 0, timestamp: 0 };
   #refreshPromise: Promise<string> | null = null;
   #sessionWebhooks = new Map<string, { url: string; expiresAt: number }>();
+  readonly #admissions = new AdmissionDedup({ ttlMs: ADMISSION_DEDUP_TTL_MS, capacity: ADMISSION_DEDUP_CAPACITY });
   #stream?: DingTalkStream;
   readonly #cards = new DingTalkCards();
   #open = false;
@@ -156,6 +162,7 @@ export class DingTalkClient extends EventEmitter {
     this.#open = false;
     await this.#stream?.stop();
     this.#sessionWebhooks.clear();
+    this.#admissions.clear();
     this.#cards.clear();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
@@ -264,14 +271,22 @@ export class DingTalkClient extends EventEmitter {
     });
   }
 
-  /** Test / internal: admit a parsed event when open (non-webhook path). */
+  /**
+   * Hand a verified callback to the Runtime. Resolves once the Runtime holds it (#1250 b115), so the webhook
+   * 200 / Stream ACK never waits for the Agent turn; a redelivered msgId shares or skips the first admission.
+   * Rejects when the event was not handed over — including a closed input, so the msgId is not recorded as
+   * done and the caller does not acknowledge it (webhook 503, no Stream ACK): DingTalk may redeliver.
+   */
   async admit(event: DingTalkEvent | DingTalkMessage): Promise<void> {
-    if (!this.#open) return;
-    return this.receiveInboundCallback(() => this.#admitMessage(event));
+    if (!this.#open) throw new Error('DingTalk endpoint is closed');
+    const id = typeof event.msgId === 'string' && event.msgId.trim() ? event.msgId : undefined;
+    if (!id) return this.receiveInboundCallback(() => this.#admitMessage(event));
+    return this.#admissions.admit(id, () => this.receiveInboundCallback(() => this.#admitMessage(event)));
   }
 
   async #admitMessage(event: DingTalkEvent | DingTalkMessage): Promise<void> {
-    if (!this.#open) return;
+    // Closed between admission and hand-off: not handed over, so the dedup entry is released.
+    if (!this.#open) throw new Error('DingTalk endpoint is closed');
     this.#emitPlatformEvent(event.msgtype || 'event', event);
     if (event.sessionWebhook && event.conversationId) {
       const expiresAt = Number.isFinite(event.sessionWebhookExpiredTime) ? event.sessionWebhookExpiredTime! : Date.now() + 300_000;
@@ -304,13 +319,14 @@ export class DingTalkClient extends EventEmitter {
         permissions: event.isAdmin === true ? ['chat_admin'] : [],
         conversationType: event.conversationType,
       }),
-    }).catch((err) => {
-      if (this.config.mode === 'stream') throw err;
-      this.#logger.warn(formatCompact({
-        op: 'dingtalk_gateway_receive_failed',
-        conversationId: conversation.id,
-        error: err instanceof Error ? err.message : String(err),
-      }));
+    });
+  }
+
+  /** A dispatch already acknowledged to DingTalk (200 / ACK) can only be logged. */
+  protected reportDispatch(dispatched: Promise<unknown>, event: string): void {
+    void dispatched.catch((err: unknown) => {
+      this.#logger.warn(formatCompact({ op: 'dingtalk_dispatch_failed', event,
+        error: err instanceof Error ? err.message : String(err) }));
     });
   }
 
@@ -505,24 +521,60 @@ export class DingTalkClient extends EventEmitter {
   }
 
   async #refreshAccessToken(): Promise<void> {
-    const { appKey, appSecret, apiBaseUrl } = this.#options.config;
-    const params = new URLSearchParams({ appkey: appKey, appsecret: appSecret });
-    const url = `${apiBaseUrl}/gettoken?${params.toString()}`;
     // The refresh promise is shared by every sender, so it must never hang.
-    const response = await this.#fetch(url, { signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) throw new Error(`Failed to get access token: HTTP ${response.status}`);
-    const data = await response.json() as DingTalkApiResponse;
-    if (data.errcode === 0 && data.access_token) {
-      this.#accessToken = {
-        token: data.access_token,
-        expires_in: data.expires_in ?? 7200,
-        timestamp: Date.now(),
-      };
-      this.#logger.debug('Access token refreshed successfully');
-      return;
-    }
-    throw new Error(`Failed to get access token: ${data.errmsg} (${data.errcode})`);
+    const data = await requestDingTalkAccessToken(this.#options.config, this.#fetch, AbortSignal.timeout(30_000));
+    this.#accessToken = {
+      token: data.access_token,
+      expires_in: data.expires_in ?? 7200,
+      timestamp: Date.now(),
+    };
+    this.#logger.debug('Access token refreshed successfully');
   }
+}
+
+/**
+ * One `gettoken` call with appKey + appSecret (the call the Endpoint already makes to refresh its token).
+ * A refusal carries DingTalk's errcode and errmsg, masked and bounded, never the secret (#1250 b115).
+ */
+export async function requestDingTalkAccessToken(
+  config: Pick<ResolvedDingTalkConfig, 'appKey' | 'appSecret' | 'apiBaseUrl'>,
+  fetch: DingTalkFetch,
+  signal: AbortSignal,
+): Promise<DingTalkApiResponse & { access_token: string }> {
+  const { appKey, appSecret, apiBaseUrl } = config;
+  const params = new URLSearchParams({ appkey: appKey, appsecret: appSecret });
+  const response = await fetch(`${apiBaseUrl}/gettoken?${params.toString()}`, { signal });
+  if (!response.ok) throw new Error(`Failed to get access token: HTTP ${response.status}`);
+  const data = await response.json() as DingTalkApiResponse;
+  if (data.errcode === 0 && data.access_token) return data as DingTalkApiResponse & { access_token: string };
+  throw new Error(`Failed to get access token: ${dingtalkFailureReason(data, [appSecret])}`);
+}
+
+const MAX_REASON_CHARS = 300;
+
+/** DingTalk's errmsg and errcode for an error line: secrets masked first (also URL-encoded), then bounded. */
+export function dingtalkFailureReason(response: Readonly<{ errcode?: unknown; errmsg?: unknown }>,
+  secrets: readonly (string | undefined)[]): string {
+  let text = typeof response.errmsg === 'string' ? response.errmsg : '';
+  for (const secret of [...secrets].sort((a, b) => (b?.length ?? 0) - (a?.length ?? 0))) {
+    if (typeof secret !== 'string' || secret.length < 4) continue;
+    for (const form of new Set([secret, encodeURIComponent(secret), new URLSearchParams({ v: secret }).toString().slice(2)])) {
+      // Percent-encoding hex digits may come back in either case (`%2F` / `%2f`).
+      text = form.includes('%')
+        ? text.replace(new RegExp(form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'), '***')
+        : text.split(form).join('***');
+    }
+  }
+  text = redactSecretText(text).replace(/\s+/g, ' ').trim() || 'unknown';
+  if (text.length > MAX_REASON_CHARS) text = `${text.slice(0, MAX_REASON_CHARS)}…`;
+  return `${text} (errcode ${dingtalkErrcode(response.errcode)})`;
+}
+
+/** Only a finite number (or an all-digit string, optionally negative) is shown; anything else is `unknown`. */
+function dingtalkErrcode(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'string' && /^-?\d{1,12}$/u.test(value.trim())) return value.trim();
+  return 'unknown';
 }
 
 function requireMessageId(value: unknown): string {

@@ -75,6 +75,13 @@ export class LineClient extends LineApiClient {
   }
   protected publishEvent(name: string, payload: unknown): Promise<unknown> { this.emit(name, payload); return Promise.resolve(); }
   protected publishAccepted(name: string, payload: unknown): Promise<void> { return this.publishEvent(name, payload).then(() => undefined); }
+  /** A dispatch the webhook already acknowledged can only be logged: LINE has its 200. */
+  protected reportDispatch(dispatched: Promise<unknown>, event: string): void {
+    void dispatched.catch((err: unknown) => {
+      this.#logger.warn(formatCompact({ op: 'line_dispatch_failed', event,
+        error: err instanceof Error ? err.message : String(err) }));
+    });
+  }
   protected publishPlatform(name: string, event: unknown): Promise<unknown> { this.emit(name, event); return Promise.resolve(); }
 
   constructor(options: LineEndpointOptions) {

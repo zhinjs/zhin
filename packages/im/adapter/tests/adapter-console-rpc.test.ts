@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PluginConsoleRpcError } from '@zhin.js/plugin-runtime';
-import { createAdapterConsoleRpc, AdapterManagementError, type AdapterConsoleSpec } from '../src/index.js';
+import { createAdapterConsoleRpc, AdapterIdentityUnsupportedError, AdapterManagementError, type AdapterConsoleSpec } from '../src/index.js';
 import { accountRuntimeFixture } from './account-runtime-fixture.js';
 
 const spec: AdapterConsoleSpec = { adapterKey: 'demo', adapterDisplayName: 'Demo',
@@ -44,6 +44,39 @@ describe('createAdapterConsoleRpc uses the exact owned runtime account authority
     const other = f.otherAdapter.list()[0]!;
     await expect(rpc.methods.get('endpoint-stop')!.handler(f.request({ instanceId: other.instanceId }), call)).rejects.toMatchObject({ code: 'not_found' });
     expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writes + 1);
+  });
+  it('shows the platform reason when it declines to verify a credential-only change (#1250 b115)', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call();
+    await rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic' } }), call);
+    const row = f.adapter.list()[0]!;
+    vi.spyOn(f.adapter, 'update').mockRejectedValueOnce(new AdapterIdentityUnsupportedError('该平台暂不支持只换密钥，请使用替换账号'));
+    await expect(rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values: { token: 'rotated' } }), call))
+      .rejects.toMatchObject({ code: 'unsupported', message: '该平台暂不支持只换密钥，请使用替换账号' });
+    vi.spyOn(f.adapter, 'update').mockRejectedValueOnce(new AdapterManagementError('unsupported', 'Identity cannot be verified; use explicit account replacement'));
+    await expect(rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values: { token: 'rotated' } }), call))
+      .rejects.toMatchObject({ code: 'unsupported', message: '账号操作未能完成，请检查输入并刷新状态' });
+  });
+  it('masks and bounds the platform reason, and recognizes a reason thrown by another package copy (#1250 b115)', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call();
+    await rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic' } }), call);
+    const row = f.adapter.list()[0]!, update = () => rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values: { token: 'rotated' } }), call);
+    const error = new AdapterIdentityUnsupportedError(`不支持 token=leaked-secret-value ${'很长的原因'.repeat(80)}`);
+    expect(error.name).toBe('AdapterIdentityUnsupportedError');
+    expect(error).toBeInstanceOf(AdapterManagementError);
+    vi.spyOn(f.adapter, 'update').mockRejectedValueOnce(error);
+    let shown: PluginConsoleRpcError | undefined;
+    try { await update(); } catch (cause) { shown = cause as PluginConsoleRpcError; }
+    expect(shown).toMatchObject({ code: 'unsupported' });
+    expect(shown!.message).not.toContain('leaked-secret-value');
+    expect(shown!.message.length).toBeLessThanOrEqual(201);
+    expect(shown!.message.endsWith('…')).toBe(true);
+    // A copy of this package bundled by a plugin: same brand, different class.
+    const copy = Object.assign(new Error('copy'), { code: 'unsupported', reason: '另一份副本的原因',
+      [Symbol.for('zhin.js/adapter:identity-unsupported')]: true });
+    expect(AdapterIdentityUnsupportedError.is(copy)).toBe(true);
+    expect(AdapterIdentityUnsupportedError.is(Object.assign(new Error('plain'), { code: 'unsupported', reason: 'x' }))).toBe(false);
+    vi.spyOn(f.adapter, 'update').mockRejectedValueOnce(copy);
+    await expect(update()).rejects.toMatchObject({ code: 'unsupported', message: '另一份副本的原因' });
   });
   it('rejects missing/undeclared fields, duplicate ids and stale revisions without a second write', async () => {
     const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call(), add = rpc.methods.get('endpoint-add')!;

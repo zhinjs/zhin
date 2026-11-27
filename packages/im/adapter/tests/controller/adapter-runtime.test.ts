@@ -2,7 +2,7 @@ import { bindPlatformEndpoint } from '../../src/endpoint-specification.js';
 import { EventEmitter } from 'node:events';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId, type CapabilityId, type RuntimeSnapshot, type TokenId, createCapabilitySlot } from '@zhin.js/plugin-runtime';
-import { Adapter, AdapterIndex, AdapterManagementError, endpointEventGatewayToken, createEndpointSpecification, endpointSpec,
+import { Adapter, AdapterIdentityUnsupportedError, AdapterIndex, type ConfigurationIdentityContext, AdapterManagementError, endpointEventGatewayToken, createEndpointSpecification, endpointSpec,
   defineAdapter, parseAdapterDefinition, type EndpointCreationContext, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
   type EndpointDesiredRecord, type EndpointPreviousIdentity, type EndpointConnectionInfo, type Endpoint } from '../../src/index.js';
 
@@ -578,15 +578,16 @@ describe('Adapter-owned native Endpoint runtime', () => {
 class VerifiedAdapter extends NativeAdapter {
   override get configurationIdentityProbeFields() { return ['token', 'remote.url']; }
   override get configurationUpdateFields() { return ['token', 'remote.url', 'reconnectDelay']; }
-  readonly identify = vi.fn(async (config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[]): Promise<string | undefined> => {
+  readonly identify = vi.fn(async (config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[], context?: ConfigurationIdentityContext): Promise<string | undefined> => {
     signal.throwIfAborted();
-    void fields;
+    void fields; void context;
     if (config.token === 'failed') throw new Error('identity verification failed');
     if (config.token === 'unsupported') return undefined;
+    if (config.token === 'declined') throw new AdapterIdentityUnsupportedError('platform cannot verify a secret-only change');
     return config.token === 'other' ? 'platform:other' : 'platform:original';
   });
-  protected override identifyConfiguration(config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[]) {
-    return this.identify(config, signal, fields);
+  protected override identifyConfiguration(config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[], context?: ConfigurationIdentityContext) {
+    return this.identify(config, signal, fields, context);
   }
   protected override prepareConfiguration(config: Record<string, unknown>, identity: {instanceId: string}) {
     return { ...config, resourceDirectory: identity.instanceId };
@@ -611,6 +612,8 @@ describe('verified account identity at the desired-state boundary', () => {
     expect(result.endpoints[0].instanceId).toBe(target.instanceId);
     expect(adapter.getEndpoint(target.instanceId)).not.toBe(original);
     expect(adapter.identify.mock.calls.map(call => [call[0].token, call[2]])).toEqual([['original', ['token']], ['rotated', ['token']]]);
+    // #1250 b115: the saved configuration is identified as `previous` (it may be revoked), the proposed one as `next`.
+    expect(adapter.identify.mock.calls.map(call => call[3])).toEqual([{ role: 'previous' }, { role: 'next' }]);
     expect(original.stopped).toHaveBeenCalledOnce(); await adapter.dispose();
   });
   it('replaces verified different accounts atomically, disabled with a new resource namespace', async () => {
@@ -622,7 +625,13 @@ describe('verified account identity at the desired-state boundary', () => {
     expect(repository.state?.endpoints[0].config.resourceDirectory).toBe(result.endpoints[0].instanceId);
     expect(adapter.created).toHaveLength(1); expect(original.stopped).toHaveBeenCalledOnce(); await adapter.dispose();
   });
-  it.each(['failed','unsupported'])('does not save or reconnect when identity is %s', async token => {
+  it('keeps the reason of a platform that declines identity verification (#1250 b115)', async () => {
+    const { adapter, target } = await fixture(); const revision = adapter.revision;
+    await expect(adapter.patchConfiguration(target.instanceId, revision, { token: 'declined' }))
+      .rejects.toMatchObject({ code: 'unsupported', message: 'platform cannot verify a secret-only change' });
+    expect(adapter.revision).toBe(revision); await adapter.dispose();
+  });
+  it.each(['failed','unsupported','declined'])('does not save or reconnect when identity is %s', async token => {
     const { adapter, repository, target } = await fixture(); await adapter.start(target.instanceId, adapter.revision);
     const original = adapter.getEndpoint(target.instanceId), revision = adapter.revision;
     const writes = repository.compareAndSet.mock.calls.length;

@@ -49,6 +49,39 @@ export class AdapterManagementError extends Error {
   }
 }
 
+/** Cross-copy brand of {@link AdapterIdentityUnsupportedError}: a plugin may bundle its own copy of this package. */
+const IDENTITY_UNSUPPORTED_BRAND = Symbol.for('zhin.js/adapter:identity-unsupported');
+
+/**
+ * A platform's own refusal to verify a credential-only change (#1250 b115), thrown from
+ * `identifyConfiguration`. `reason` is a fixed, credential-free text written by the platform code (never
+ * platform responses or configuration values); Console shows it (masked and bounded) instead of the
+ * generic refusal. Recognized by {@link AdapterIdentityUnsupportedError.is}, not `instanceof`, so an
+ * error thrown by another copy of this package is still recognized.
+ */
+export class AdapterIdentityUnsupportedError extends AdapterManagementError {
+  constructor(readonly reason: string) {
+    super('unsupported', reason);
+    this.name = 'AdapterIdentityUnsupportedError';
+    Object.defineProperty(this, IDENTITY_UNSUPPORTED_BRAND, { value: true });
+  }
+  /** Brand check (works across package copies); requires the `unsupported` code and a string reason. */
+  static is(value: unknown): value is AdapterIdentityUnsupportedError {
+    return value instanceof Error && (value as unknown as Record<symbol, unknown>)[IDENTITY_UNSUPPORTED_BRAND] === true
+      && (value as { code?: unknown }).code === 'unsupported' && typeof (value as { reason?: unknown }).reason === 'string';
+  }
+}
+
+/**
+ * Which configuration an `identifyConfiguration` call reads (#1250 b115). `previous` is the saved
+ * configuration, whose credentials may already be revoked (the reason for the rotation): a platform whose
+ * identity follows from the configuration alone answers it offline and spends its platform call on `next`.
+ * Absent when a caller does not tell (older callers), which platforms treat like `next`.
+ */
+export interface ConfigurationIdentityContext {
+  readonly role: 'previous' | 'next';
+}
+
 /** Credentials are execution-only; neither snapshots nor control responses contain resolved values. */
 export interface EndpointSecretResolver {
   resolve(reference: string, context: Readonly<{ instanceId: string; signal: AbortSignal }>): Promise<string>;

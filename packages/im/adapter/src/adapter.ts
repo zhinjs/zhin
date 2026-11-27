@@ -18,7 +18,7 @@ import {
   type EndpointDesiredRecord, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
   type EndpointCreationContext, type EndpointPreviousIdentity, type EndpointMetadata, type AdapterMutationResult, type EndpointSecretResolver,
   type EndpointExecution, type EndpointAction, type AdapterMutationOptions, type EndpointConfigurationView,
-  type EndpointStartFailure, type EndpointStartPhase, type EndpointFailureCategory,
+  type EndpointStartFailure, type EndpointStartPhase, type EndpointFailureCategory, type ConfigurationIdentityContext,
 } from './adapter-types.js';
 import {
   compareEndpointDirectories, configuredEndpointSeeds, endpointWritebackEntry, isEndpointConfigDivergence, splitEnvironmentReferences,
@@ -126,8 +126,15 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
    * credentials under other names (e.g. a `buvid3` cookie) list them here.
    */
   get configurationCredentialFields(): readonly string[] { return this.configurationIdentityProbeFields; }
+  /**
+   * Read-only account identity for a configuration whose probe fields changed. Called first for the saved
+   * configuration (`context.role === 'previous'`), then for the proposed one (`'next'`). The saved
+   * credentials may already be revoked, so a platform whose identity follows from the configuration alone
+   * should answer `previous` without a platform call and verify only `next`. `context` is optional for
+   * overrides written before it existed.
+   */
   protected identifyConfiguration(_config: Config, _signal: AbortSignal,
-    _changedFields: readonly string[]): Promise<string | undefined> { return Promise.resolve(undefined); }
+    _changedFields: readonly string[], _context?: ConfigurationIdentityContext): Promise<string | undefined> { return Promise.resolve(undefined); }
   /** Pure per-account resource configuration; only used for fresh add/replace identities. */
   protected prepareConfiguration(config: Config, _identity: Readonly<{
     instanceId: string; canonicalId: CapabilityId; endpointId: string;
@@ -578,7 +585,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     if (this.#mutation || this.#revision !== expectedRevision) throw new AdapterManagementError('conflict', 'Endpoint desired state revision conflicts');
     const signal = options?.signal ? AbortSignal.any([options.signal, this.#verificationAbort.signal]) : this.#verificationAbort.signal;
     return sameConfigurationIdentity<Config>({ previous: target.desired, next: input, changedFields, signal,
-      secrets: this.#options.secrets, identify: (config, signal, changed) => this.identifyConfiguration(config, signal, changed),
+      secrets: this.#options.secrets, identify: (config, signal, changed, context) => this.identifyConfiguration(config, signal, changed, context),
     }).then(same => {
       signal.throwIfAborted();
       return same ? commit() : this.replace(instanceId, expectedRevision, { endpointId: target.desired.endpointId, ...input }, options);
