@@ -371,6 +371,64 @@ describe('GatewayPackageService transactions', () => {
     await rm(join(root, 'pnpm-workspace.yaml'), { force: true });
   });
 
+  it('refuses to update a bare name the project does not declare, before touching the instance (#1250)', async () => {
+    const calls: string[][] = [];
+    const instance = new FakeInstance('running');
+    const packages = service({ instance, pm: fakePackageManager({ calls }) });
+    await expect(packages.update(['nonexistent-pkg-xyz'], { principal: owner }))
+      .rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('zhin install nonexistent-pkg-xyz') });
+    await expect(packages.update(['zod', 'nonexistent-pkg-xyz'], { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(calls).toEqual([]);
+    expect(instance.calls).toEqual([]);
+  });
+
+  it('accepts a bare name declared only by a workspace member (#1250)', async () => {
+    const calls: string[][] = [];
+    await writeFile(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    await mkdir(join(root, 'plugins', 'x'), { recursive: true });
+    await writeFile(join(root, 'plugins', 'x', 'package.json'), JSON.stringify({ name: 'x', devDependencies: { 'member-only': '^1.0.0' } }));
+    const packages = service({ pm: fakePackageManager({ calls }) });
+    expect(await packages.update(['member-only'], { principal: owner })).toMatchObject({ ok: true });
+    expect(calls.map(call => call.join(' '))).toEqual(['update -r member-only']);
+    await expect(packages.update(['still-unknown'], { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+  });
+
+  it('finds members of packages/** and below any depth, skipping node_modules and ! exclusions (#1250 review)', async () => {
+    const { declaredDependencyNames, workspaceMemberDirs } = await import('../../src/packages/declared.js');
+    await writeFile(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/**'\n  - 'apps/*/web'\n  - '!packages/skip'\n");
+    const member = async (relative: string, dependency: string) => {
+      await mkdir(join(root, ...relative.split('/')), { recursive: true });
+      await writeFile(join(root, ...relative.split('/'), 'package.json'), JSON.stringify({ name: relative.replace(/\//gu, '-'), dependencies: { [dependency]: '^1.0.0' } }));
+    };
+    await member('packages/api', 'api-dep');
+    await member('packages/a/b/c/d/e/f/deep', 'deep-dep');
+    await member('packages/skip', 'skipped-dep');
+    await member('packages/api/node_modules/inner', 'inner-dep');
+    await member('apps/site/web', 'web-dep');
+    await member('apps/site/other', 'other-dep');
+    await member('data/x/y', 'data-dep');
+    expect(await workspaceMemberDirs(root)).toEqual(['apps/site/web', 'packages/a/b/c/d/e/f/deep', 'packages/api']);
+    const names = await declaredDependencyNames(root);
+    for (const name of ['zod', 'api-dep', 'deep-dep', 'web-dep']) expect(names.has(name)).toBe(true);
+    for (const name of ['skipped-dep', 'inner-dep', 'other-dep', 'data-dep']) expect(names.has(name)).toBe(false);
+    await rm(join(root, 'pnpm-workspace.yaml'), { force: true });
+  });
+
+  it('checks the declared names under the transaction lock (#1250 review)', async () => {
+    const calls: string[][] = [];
+    const instance = new FakeInstance('running');
+    await mkdir(join(root, '.zhin'), { recursive: true });
+    // Another live process (this one) holds the lock: the check waits for the lock instead of reading early.
+    await writeFile(join(root, '.zhin', 'gateway-packages.lock'), JSON.stringify({ pid: process.pid, nonce: 'other' }));
+    const packages = service({ instance, pm: fakePackageManager({ calls }) });
+    await expect(packages.update(['nonexistent-pkg-xyz'], { principal: owner })).rejects.toMatchObject({ code: 'conflict' });
+    await rm(join(root, '.zhin', 'gateway-packages.lock'), { force: true });
+    await expect(packages.update(['nonexistent-pkg-xyz'], { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(await exists(join(root, '.zhin', 'gateway-packages.lock'))).toBe(false);
+    expect(calls).toEqual([]);
+    expect(instance.calls).toEqual([]);
+  });
+
   it('passes removeDependency: false to the workflow on uninstall', async () => {
     const seen: unknown[] = [];
     const workflow: PackageWorkflowPort = {

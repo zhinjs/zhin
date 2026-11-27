@@ -280,3 +280,72 @@ it('projects updated message bodies for legacy readers without changing event pa
   expect(data).toMatchObject({ hasMore: false, nextBeforeSequence: null });
   expect(listBetween).toHaveBeenCalledExactlyOnceWith(conversation, 0, 2, 51);
 });
+
+describe('damaged stored rows (#1250 conversation-migration-bad-row-blocks-start)', () => {
+  async function damage(ids: readonly number[], eventJson: string): Promise<void> {
+    const model = database.models.get('conversation_events')!;
+    for (const id of ids) await model.update({ event_json: eventJson }).where({ id });
+  }
+
+  it('readers skip damaged rows, report each once by id and reason, and keep full pages', async () => {
+    const reported: unknown[] = [];
+    const store = new DatabaseConversationEventStore(database.models.get('conversation_events')!, database.models.get('conversation_event_cursors')!,
+      { onInvalidRow: row => reported.push(row) });
+    for (let index = 1; index <= 55; index += 1) await store.append(message(`m${index}`));
+    await damage([54, 30], '{"truncated secret');
+    await damage([10], JSON.stringify({ type: 'bogus.type', eventId: 'x', timestamp: 1, conversation }));
+    const between = await store.listBetween(conversation, 0, 55, 20);
+    expect(between).toHaveLength(20);
+    expect(between.map(item => item.sequence)).not.toContain(54);
+    expect(between.at(-1)!.sequence).toBe(55);
+    expect(between[0]!.sequence).toBe(35);
+    const messages = await store.listMessages(conversation, undefined, 50);
+    expect(messages).toHaveLength(50);
+    expect(messages.map(item => item.message.ref.id)).not.toEqual(expect.arrayContaining(['m54', 'm30', 'm10']));
+    expect(await store.getMessage({ conversation, id: 'm53' })).toMatchObject({ ref: { id: 'm53' } });
+    expect(await store.getMessage({ conversation, id: 'm54' })).toBeUndefined();
+    // A known event id still deduplicates past the damaged rows.
+    expect(await store.append(message('m55'))).toEqual({ appended: false, sequence: 55 });
+    expect(reported).toEqual(expect.arrayContaining([
+      { table: 'conversation_events', id: '54', reason: 'invalid_event_json' },
+      { table: 'conversation_events', id: '30', reason: 'invalid_event_json' },
+      { table: 'conversation_events', id: '10', reason: 'invalid_event' },
+    ]));
+    // Once per row, however often it is read; never the content.
+    expect(reported).toHaveLength(3);
+    expect(JSON.stringify(reported)).not.toContain('secret');
+  });
+
+  it('stops reporting after the limit with one suppression notice', async () => {
+    const { INVALID_ROW_REPORT_LIMIT } = await import('@zhin.js/im-contract');
+    const reported: { id: string; reason: string }[] = [];
+    const store = new DatabaseConversationEventStore(database.models.get('conversation_events')!, database.models.get('conversation_event_cursors')!,
+      { onInvalidRow: row => reported.push(row) });
+    const total = INVALID_ROW_REPORT_LIMIT + 5;
+    for (let index = 1; index <= total; index += 1) await store.append(message(`m${index}`));
+    await damage(Array.from({ length: total }, (_, index) => index + 1), 'not json');
+    expect(await store.listBetween(conversation, 0, total, total)).toEqual([]);
+    expect(await store.listBetween(conversation, 0, total, total)).toEqual([]);
+    expect(reported).toHaveLength(INVALID_ROW_REPORT_LIMIT + 1);
+    expect(reported.at(-1)).toMatchObject({ id: '*', reason: 'reports_suppressed' });
+  });
+
+  it('the Console history route answers 200 with full pages around damaged rows, including the latest one', async () => {
+    const store = new DatabaseConversationEventStore(database.models.get('conversation_events')!, database.models.get('conversation_event_cursors')!,
+      { onInvalidRow: () => {} });
+    for (let index = 1; index <= 53; index += 1) await store.append(message(`m${index}`));
+    await damage([53], '{"truncated');
+    await damage([20], JSON.stringify({ type: 'message.created', eventId: 'm20' }));
+    const request = await start(runtime(store));
+    const response = await request();
+    expect(response.status).toBe(200);
+    const { data } = await response.json();
+    expect(data.items).toHaveLength(50);
+    expect(data.items.at(-1).message.ref.id).toBe('m52');
+    expect(data.items.map((item: any) => item.message.ref.id)).not.toContain('m20');
+    expect(data.hasMore).toBe(true);
+    const older = await (await request({ sessionKey, beforeSequence: String(data.nextBeforeSequence) })).json();
+    expect(older.data.items.map((item: any) => item.message.ref.id)).toEqual(['m1']);
+    expect(older.data.hasMore).toBe(false);
+  });
+});

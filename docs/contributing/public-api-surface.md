@@ -159,6 +159,7 @@
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；多 Agent 协作改走 `@zhin.js/harness`（ADR 0048） |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
+| `runSupervisedInstance`（`@zhin.js/gateway/supervisor`） | `deprecated` | 保留导出，CLI 已不调用 | `zhin start` / `zhin runtime start` 由 `@zhin.js/gateway/server` 的 `runGateway` 启动网关并监管实例；新代码改用 `runGateway`，一个 minor 周期后删除（#1250） |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
 | `plugin.yml` / Core `PluginManifest` | `removed` | 构建识别、源码类型与仓库重复清单均已删除 | 插件身份与清单只认严格校验的 `package.json#zhin` |
 

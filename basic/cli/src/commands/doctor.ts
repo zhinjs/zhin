@@ -32,6 +32,7 @@ import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
 import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
 import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
+import { CREATE_PROJECT_COMMAND, conflictingConfigMessage, locateProjectRoot, notAProjectMessage, rerunAtRoot } from '../utils/project-root.js';
 import { diagnosePromptCache } from '../utils/prompt-cache-check.js';
 import { loadProviderResolver } from './usage.js';
 import { botInstructionsFile } from '../utils/bot-bootstrap.js';
@@ -115,6 +116,12 @@ export const doctorCommand = new Command('doctor')
       (projectPackage ??= fs.readJSON(projectPackagePath));
 
     if (options.upgradeL4) {
+      const location = diagnoseProjectLocation(cwd, ['zhin', 'doctor', '--upgrade-l4', ...(options.fix ? ['--fix'] : [])]);
+      if (location) {
+        // Outside a project root the environment checks still run (the L4 diagnosis needs the root).
+        printDoctorResults([...await diagnoseEnvironment(), location], options.fix === true);
+        return;
+      }
       const configPath = findConfigFile(cwd);
       let config: Record<string, unknown> = {};
       if (configPath) {
@@ -162,35 +169,15 @@ export const doctorCommand = new Command('doctor')
       return;
     }
 
-    // 1. 检查 Node.js 版本
-    const nodeVersion = process.version;
-    const nodeOk = isNodeVersionSupported(nodeVersion);
-    results.push({
-      name: 'Node.js 版本',
-      status: nodeOk ? 'ok' : 'error',
-      message: formatNodeRequirementMessage(nodeVersion),
-      fix: nodeOk ? undefined : '请升级 Node.js（>=22.19.0）: https://nodejs.org 或 nvm install 22',
-    });
+    // 1–2. Node.js 与 pnpm
+    results.push(...await diagnoseEnvironment());
 
-    // 2. 检查 pnpm（可用性与版本，要求 >=9）
-    try {
-      const { stdout } = await execAsync('pnpm --version');
-      const pnpmVersion = stdout.trim();
-      const pnpmMajor = parseInt(pnpmVersion.split('.')[0], 10);
-      const pnpmOk = Number.isFinite(pnpmMajor) && pnpmMajor >= 9;
-      results.push({
-        name: 'pnpm',
-        status: pnpmOk ? 'ok' : 'error',
-        message: pnpmOk ? `v${pnpmVersion}` : `v${pnpmVersion}（需要 >=9）`,
-        fix: pnpmOk ? undefined : 'npm install -g pnpm@latest 或 corepack enable'
-      });
-    } catch {
-      results.push({
-        name: 'pnpm',
-        status: 'error',
-        message: '未安装',
-        fix: 'npm install -g pnpm（或 corepack enable && corepack prepare pnpm@latest --activate）'
-      });
+    // 2b. 项目位置：非项目目录只报这一条并停下，不跑依赖项目的检查，也不让 --fix 写文件
+    const location = diagnoseProjectLocation(cwd, ['zhin', 'doctor', ...(options.fix ? ['--fix'] : [])]);
+    if (location) {
+      results.push(location);
+      printDoctorResults(results, options.fix === true);
+      return;
     }
 
     // 3. 检查配置文件（存在且可解析；解析失败给出行号）
@@ -392,11 +379,12 @@ export const doctorCommand = new Command('doctor')
         });
       }
     } else {
+      // Not reached after 2b (a project root has a package.json) unless it is removed mid-run.
       results.push({
         name: 'package.json',
         status: 'warn',
-        message: '不存在',
-        fix: 'pnpm init'
+        message: '不存在：实例启动需要依赖 zhin.js 的 package.json',
+        fix: `新建项目用 ${CREATE_PROJECT_COMMAND}；已有配置的目录运行 pnpm init && pnpm add zhin.js`
       });
     }
 
@@ -918,25 +906,83 @@ export const doctorCommand = new Command('doctor')
       results.push(check);
     }
 
-    // 打印结果
-    console.log('');
-    for (const result of results) {
-      const icon = result.status === 'ok' ? '✅' : result.status === 'info' ? 'ℹ️' : result.status === 'warn' ? '⚠️' : '❌';
-      const color = result.status === 'ok' ? chalk.green : result.status === 'info' ? chalk.cyan : result.status === 'warn' ? chalk.yellow : chalk.red;
-      console.log(`${icon} ${chalk.bold(result.name)}: ${color(result.message)}`);
-      // With --fix, an item --fix handled says so in its message; the others still show how to fix them.
-      if (result.fix && (!options.fix || !isAutoFixNote(result.fix))) {
-        console.log(`   ${chalk.gray(options.fix ? '需手动修复:' : '修复:')} ${chalk.cyan(result.fix)}`);
-      }
-    }
-    console.log('');
-    const summary = summarizeDoctorResults(results, options.fix === true);
-    for (const line of summary.lines) {
-      const color = summary.level === 'error' ? chalk.red : summary.level === 'warn' ? chalk.yellow : chalk.green;
-      console.log(line.startsWith('提示') ? chalk.gray(line) : color(line));
-    }
-    if (summary.level === 'error') process.exit(1);
+    printDoctorResults(results, options.fix === true);
   });
+
+/** Node.js and pnpm checks; they hold inside or outside a project. */
+async function diagnoseEnvironment(): Promise<CheckResult[]> {
+  const checks: CheckResult[] = [];
+  // 1. 检查 Node.js 版本
+  const nodeVersion = process.version;
+  const nodeOk = isNodeVersionSupported(nodeVersion);
+  checks.push({
+    name: 'Node.js 版本',
+    status: nodeOk ? 'ok' : 'error',
+    message: formatNodeRequirementMessage(nodeVersion),
+    fix: nodeOk ? undefined : '请升级 Node.js（>=22.19.0）: https://nodejs.org 或 nvm install 22',
+  });
+
+  // 2. 检查 pnpm（可用性与版本，要求 >=9）
+  try {
+    const { stdout } = await execAsync('pnpm --version');
+    const pnpmVersion = stdout.trim();
+    const pnpmMajor = parseInt(pnpmVersion.split('.')[0], 10);
+    const pnpmOk = Number.isFinite(pnpmMajor) && pnpmMajor >= 9;
+    checks.push({
+      name: 'pnpm',
+      status: pnpmOk ? 'ok' : 'error',
+      message: pnpmOk ? `v${pnpmVersion}` : `v${pnpmVersion}（需要 >=9）`,
+      fix: pnpmOk ? undefined : 'npm install -g pnpm@latest 或 corepack enable'
+    });
+  } catch {
+    checks.push({
+      name: 'pnpm',
+      status: 'error',
+      message: '未安装',
+      fix: 'npm install -g pnpm（或 corepack enable && corepack prepare pnpm@latest --activate）'
+    });
+  }
+  return checks;
+}
+
+/** Prints the check list and the closing summary; exits 1 when an item is an error. */
+function printDoctorResults(results: readonly CheckResult[], fix: boolean): void {
+  console.log('');
+  for (const result of results) {
+    const icon = result.status === 'ok' ? '✅' : result.status === 'info' ? 'ℹ️' : result.status === 'warn' ? '⚠️' : '❌';
+    const color = result.status === 'ok' ? chalk.green : result.status === 'info' ? chalk.cyan : result.status === 'warn' ? chalk.yellow : chalk.red;
+    console.log(`${icon} ${chalk.bold(result.name)}: ${color(result.message)}`);
+    // With --fix, an item --fix handled says so in its message; the others still show how to fix them.
+    if (result.fix && (!fix || !isAutoFixNote(result.fix))) {
+      console.log(`   ${chalk.gray(fix ? '需手动修复:' : '修复:')} ${chalk.cyan(result.fix)}`);
+    }
+  }
+  console.log('');
+  const summary = summarizeDoctorResults(results, fix);
+  for (const line of summary.lines) {
+    const color = summary.level === 'error' ? chalk.red : summary.level === 'warn' ? chalk.yellow : chalk.green;
+    console.log(line.startsWith('提示') ? chalk.gray(line) : color(line));
+  }
+  if (summary.level === 'error') process.exit(1);
+}
+
+/**
+ * #1250 `doctor-non-project-advice`: the project checks (and `--fix`, which writes files) run at
+ * a project root only. Outside a project the first item says so and names the scaffold command;
+ * from a sub-directory it names the root. Undefined when `cwd` is a project root.
+ */
+export function diagnoseProjectLocation(cwd: string, command: readonly string[] = ['zhin', 'doctor']): CheckResult | undefined {
+  const root = locateProjectRoot(cwd);
+  if (!root) {
+    return { name: 'Zhin 项目', status: 'error', message: notAProjectMessage(cwd), fix: `${CREATE_PROJECT_COMMAND}（新建项目），或 cd 到已有项目的根目录再运行 zhin doctor` };
+  }
+  if (root !== path.resolve(cwd)) {
+    return { name: 'Zhin 项目', status: 'error', message: `当前目录不是项目根：项目根在 ${root}`, fix: rerunAtRoot(root, command) };
+  }
+  const conflict = conflictingConfigMessage(root);
+  if (conflict) return { name: '配置文件', status: 'error', message: conflict, fix: '合并为一个 zhin.config.yml（或其他单一配置文件）后重新运行 zhin doctor' };
+  return undefined;
+}
 
 /** A `fix` text that only says what `--fix` did or will do (`将写入…`, `已补全…`). */
 function isAutoFixNote(fix: string): boolean {

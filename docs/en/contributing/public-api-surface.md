@@ -143,6 +143,7 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; multi-Agent collaboration goes through `@zhin.js/harness` (ADR 0048) |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
+| `runSupervisedInstance` (`@zhin.js/gateway/supervisor`) | `deprecated` | Still exported; the CLI no longer calls it | `zhin start` / `zhin runtime start` run the gateway with `runGateway` from `@zhin.js/gateway/server`, which supervises the instance; new code uses `runGateway`; removed after one minor cycle (#1250) |
 | `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |
 | `plugin.yml` / Core `PluginManifest` | `removed` | Build detection, source types, and the duplicate repository manifest were deleted | Plugin identity and metadata come only from strictly validated `package.json#zhin` |
 

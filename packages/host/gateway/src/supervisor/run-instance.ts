@@ -1,6 +1,8 @@
 /**
- * Parent side of `zhin runtime start`: runs the instance under an {@link InstanceSupervisor} until it
- * stops for good (signal, clean exit, or crash without restart).
+ * Supervisor helpers for the instance process, and the deprecated {@link runSupervisedInstance}
+ * (the former parent side of `zhin runtime start`, superseded by `runGateway`): runs the instance
+ * under an {@link InstanceSupervisor} until it stops for good (signal, clean exit, or crash
+ * without restart).
  */
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -88,6 +90,10 @@ const KEEP_ALIVE_POLL_MS = 500;
  * Runs the instance under supervision and resolves with the exit code this process should use.
  * Foreground runs share the terminal (`inherit`) and do not restart crashes; `--daemon` captures
  * output into a rotated log file and restarts crashes with storm protection; `--once` never restarts.
+ *
+ * @deprecated `zhin start` / `zhin runtime start` no longer use this: they run the gateway with
+ * `runGateway` from `@zhin.js/gateway/server`, which supervises the instance itself. Kept for
+ * external callers only; new code should use `runGateway`.
  */
 export async function runSupervisedInstance(input: RunSupervisedInstanceOptions): Promise<number> {
   if (!isNodeVersionSupported()) {

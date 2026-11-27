@@ -34,6 +34,7 @@ import { InstanceStartError, type InstanceFailure, type InstancePluginApplyResul
 import type { InstanceLogLine } from '../supervisor/instance-logs.js';
 import { authorizePackages, gatewayPrincipalAllows, type GatewayPackageAction, type GatewayPrincipal } from './authorization.js';
 import { GatewayError } from './errors.js';
+import { declaredDependencyNames } from './declared.js';
 import { ProjectFileSnapshot } from './snapshot.js';
 import { formatOverrideChanges, isZhinPackageName, pinZhinOverrides, readZhinOverrides, releaseZhinOverrides } from '../plugin-management/zhin-overrides.js';
 
@@ -407,6 +408,15 @@ export class GatewayPackageService {
    * so local workspace packages (e.g. `plugins/*`) move with the root (#1250).
    */
   update(packages: readonly unknown[] | 'all', options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
+    // #1250: a bare name nobody declares would "succeed" without changing anything; refused
+    // under the lock and before the instance is stopped. Exact versions of undeclared names still install (below).
+    const precheck = packages === 'all' ? undefined : async (authorized: readonly GatewayAuthorizedPackage[]) => {
+      const declared = await declaredDependencyNames(this.#root);
+      const unknown = authorized.filter(item => item.version === undefined && !declared.has(item.name)).map(item => item.name);
+      if (unknown.length) {
+        throw new GatewayError('invalid_input', `${unknown.join(', ')} 不是本项目的依赖，没有可更新的内容；安装请用 zhin install ${unknown.join(' ')}`);
+      }
+    };
     return this.#transaction('update', packages, options, async (ctx, authorized) => {
       const recursive = await isPnpmWorkspace(this.#root) ? ['-r'] : [];
       // #1250 update-overrides-not-synced: pnpm overrides that pin Zhin packages move with them.
@@ -446,7 +456,7 @@ export class GatewayPackageService {
           throw new GatewayError('conflict', `${item.name} 请求的是 ${item.version}，同步 overrides 并重装后实际安装的是 ${installed?.version ?? '（未安装）'}；已回滚。请检查 package.json 的 pnpm.overrides 与 pnpm-workspace.yaml 的 overrides 中关于 ${item.name} 的条目，或改为升级 zhin.js`);
         }
       }
-    });
+    }, undefined, precheck);
   }
 
   /** {@link install} / {@link uninstall} / {@link update} as an async iterator of its events. */
@@ -465,6 +475,12 @@ export class GatewayPackageService {
     options: GatewayTransactionOptions,
     execute: TransactionBody,
     hot?: HotPluginApply,
+    /**
+     * Runs under the transaction lock, before the instance is stopped or the package manager runs:
+     * it reads the manifests no other dependency transaction can change meanwhile, and a throw
+     * changes nothing.
+     */
+    precheck?: (authorized: readonly GatewayAuthorizedPackage[]) => Promise<void>,
   ): Promise<GatewayPackageTransactionResult> {
     if (this.#active) throw new GatewayError('conflict', '另一个依赖事务正在进行，请等待它结束');
     const id = randomUUID();
@@ -473,6 +489,7 @@ export class GatewayPackageService {
       const authorized = await this.authorize(options.principal, operation, packages);
       const release = await this.#lock();
       try {
+        await precheck?.(authorized);
         await this.#options.beforeTransaction?.().catch(() => undefined);
         return await this.#run(id, operation, authorized, options, execute, hot);
       } finally {
