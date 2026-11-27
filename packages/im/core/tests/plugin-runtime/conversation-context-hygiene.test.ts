@@ -113,6 +113,49 @@ describe('ConversationRuntime context hygiene', () => {
     expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1) [message_id="later"]: 顺便看下 README']);
   });
 
+  it('#1250 b114: a restarted runtime on the same store still keeps the answer and its prompt out of context', async () => {
+    const store = new MemoryConversationEventStore();
+    const before = new ConversationRuntime(store);
+    const now = Date.now();
+    await store.append(message('prompt', '操作确认 回复 y / 同意 允许一次', now));
+    await before.markInteractionAnswer({ conversation, id: 'prompt' } as never);
+    await store.append(message('answer', 'y', now, 'user-1'));
+    await before.markInteractionAnswer({ conversation, id: 'answer' } as never);
+    // Marking twice appends nothing new (idempotent event id).
+    await before.markInteractionAnswer({ conversation, id: 'answer' } as never);
+    await store.append(message('later', '顺便看下 README', now, 'user-1'));
+    const current = await store.append(message('current', 'hi', now, 'user-1'));
+
+    const after = new ConversationRuntime(store);
+    const context = await after.readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1) [message_id="later"]: 顺便看下 README']);
+    expect(context.blocks.some(block => block.eventType === 'message.interaction_answered')).toBe(false);
+  });
+
+  it('#1250 b114: an answer stays excluded after 1000 later marks pushed it out of memory', async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    const now = Date.now();
+    await store.append(message('answer', 'y', now, 'user-1'));
+    await runtime.markInteractionAnswer({ conversation, id: 'answer' } as never);
+    const other = { ...conversation, id: 'user-2' } as ConversationRef;
+    for (let index = 0; index < 1_001; index += 1) await runtime.markInteractionAnswer({ conversation: other, id: `x-${index}` } as never);
+    const current = await store.append(message('current', 'hi', now, 'user-1'));
+    const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(context.blocks).toEqual([]);
+  });
+
+  it('#1250 b114: an answer event stored after the read window is found by its message key', async () => {
+    const store = new MemoryConversationEventStore();
+    const now = Date.now();
+    await store.append(message('answer', 'y', now, 'user-1'));
+    const current = await store.append(message('current', 'hi', now, 'user-1'));
+    // The answer is marked only after the turn's window closed (a concurrent claim).
+    await new ConversationRuntime(store).markInteractionAnswer({ conversation, id: 'answer' } as never);
+    const context = await new ConversationRuntime(store).readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(context.blocks).toEqual([]);
+  });
+
   it("labels the bot's own messages so the model can tell them from members'", async () => {
     const store = new MemoryConversationEventStore();
     const runtime = new ConversationRuntime(store);

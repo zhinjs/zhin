@@ -116,6 +116,7 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
     {pending.length ? <Button type="button" size="sm" variant="outline" onClick={() => void reloadPending(true)}>{sandboxText(locale, '重新读取')}</Button> : null}
     {pending.map(interaction => <section key={`${interaction.generation}:${interaction.id}`}>
       <h3>{sandboxText(locale, '待处理操作')}</h3>
+      {interaction.answerAs?.kind === 'other' ? <p>{sandboxText(locale, '这条提示等待其他成员作答，此处只读。')}</p> : null}
       {props.renderInteraction(interaction.segments, interaction.id, submitted.has(interaction.id), () => {
         setSubmitted(previous => new Set([...previous, interaction.id]));
         void reloadPending();

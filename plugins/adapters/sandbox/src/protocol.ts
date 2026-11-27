@@ -220,7 +220,10 @@ function readSandboxWirePayload(raw: string): SandboxWirePayload & { op?: unknow
 }
 
 export type SandboxWsFrame =
-  /** `retain`: keep receiving the scenes this socket viewed before (a page with several sessions, #1250 b114). */
+  /**
+   * `retain`: keep receiving the scenes this socket explicitly subscribed to before (a page with several
+   * sessions, #1250 b114). A subscribe without it turns retention off; a reconnect starts with none.
+   */
   | { readonly kind: 'subscribe'; readonly conversation: SandboxConversation; readonly retain?: true }
   | { readonly kind: 'message'; readonly message: SandboxParsedMessage }
   | { readonly kind: 'invalid' };

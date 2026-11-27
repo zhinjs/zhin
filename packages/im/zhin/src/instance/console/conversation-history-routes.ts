@@ -5,7 +5,7 @@ import { conversationEventQueryFields, conversationRefKey, readStoredConversatio
 import type { HttpHost } from '@zhin.js/host-http';
 import { encodeStorageIdentity, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseConversationSessionKey } from '@zhin.js/console-protocol';
-import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { parseBoundSandboxSession, SandboxWorkspaceBindingError, sandboxScopeForbiddenResponse, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
 
 const PAGE_SIZE = 50;
@@ -21,7 +21,7 @@ export function registerConversationHistoryRoutes(options: Readonly<{
   snapshots?: SnapshotReader;
 }>): void {
   const { http, base, im, databaseHost } = options;
-  http.route('GET', `${base}/conversations/history`, noStore(async (_request, { url }) => {
+  http.route('GET', `${base}/conversations/history`, noStore(async (_request, { url, principal }) => {
     const sessionKey = url.searchParams.get('sessionKey');
     const connectionId = url.searchParams.get('connectionId');
     const session = sessionKey && !connectionId ? parseConversationSessionKey(sessionKey) : undefined;
@@ -69,7 +69,9 @@ export function registerConversationHistoryRoutes(options: Readonly<{
           ? (await reader.listMessages(conversation, throughSequence + 1, PAGE_SIZE + 1)).map(({ sequence, message }) => ({ sequence,
               event: { type: 'message.created' as const, eventId: message.ref.id, conversation: message.ref.conversation,
                 timestamp: message.timestamp, message } }))
-          : await reader.listBetween(conversation, 0, throughSequence, PAGE_SIZE + 1);
+          // #1250 b114: `message.interaction_answered` is Agent-context bookkeeping, not a chat fact.
+          : (await reader.listBetween(conversation, 0, throughSequence, PAGE_SIZE + 1))
+            .filter(item => item.event.type !== 'message.interaction_answered');
         if (page.some(item => conversationRefKey(item.event.conversation) !== conversationRefKey(conversation))) throw new Error('Conversation history reader returned another scene');
         const hasMore = page.length > PAGE_SIZE;
         const entries = page.slice(-PAGE_SIZE);
@@ -92,7 +94,7 @@ export function registerConversationHistoryRoutes(options: Readonly<{
         } } as const;
       });
       const result = connectionId
-        ? await withSandboxWorkspaceScope(options.snapshots, connectionId, async scope => {
+        ? await withSandboxWorkspaceScope(options.snapshots, { connectionId, principal }, async scope => {
             const bound = parseBoundSandboxSession(scope, sessionKey);
             if (bound.status === 'scope_mismatch') {
               return { status: 403, code: 'history_scope_mismatch', error: '会话不属于当前 Sandbox 账号' } as const;
@@ -104,6 +106,8 @@ export function registerConversationHistoryRoutes(options: Readonly<{
       if (result.status === 200) return jsonResponse(200, { success: true, data: result.data });
       else return jsonResponse(result.status, { success: false, code: result.code, error: result.error });
     } catch (error) {
+      const forbidden = sandboxScopeForbiddenResponse(error);
+      if (forbidden) return forbidden;
       return jsonResponse(503, error instanceof SandboxWorkspaceBindingError
         ? { success: false, code: error.code, error: error.message }
         : { success: false, code: 'history_unavailable', error: '暂时无法读取聊天记录，请稍后重试' });

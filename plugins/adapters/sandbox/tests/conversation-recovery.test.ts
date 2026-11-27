@@ -286,21 +286,31 @@ it('#1250 b114: a recovered prompt keeps the speaker the Host says it was asked 
   const f = fixture();
   try {
     f.respond(0, { generation: 1, pending: [
-      { ...prompt('simulated'), answerAs: { kind: 'sender', senderId: '~sim:dev-user' } },
+      { ...prompt('simulated'), answerAs: { kind: 'simulated', senderId: '~sim:dev-user' } },
       { ...prompt('open'), answerAs: { kind: 'anyone' } },
-      { ...prompt('forged'), answerAs: { kind: 'sender', senderId: 42 } },
+      { ...prompt('mine'), answerAs: { kind: 'self' } },
+      { ...prompt('theirs'), answerAs: { kind: 'other', senderId: 'leaked' } },
+      { ...prompt('forged'), answerAs: { kind: 'simulated', senderId: 42 } },
+      { ...prompt('unprefixed'), answerAs: { kind: 'simulated', senderId: 'real-identity' } },
+      { ...prompt('legacy'), answerAs: { kind: 'sender', senderId: 'x' } },
     ] });
     f.respond(1, page(f.props.sessionKey, [])); await f.settle();
     expect(f.all('interaction').map(element => [element.props.id, element.props.answerAs])).toEqual([
-      ['simulated', { kind: 'sender', senderId: '~sim:dev-user' }], ['open', { kind: 'anyone' }], ['forged', undefined]]);
+      ['simulated', { kind: 'simulated', senderId: '~sim:dev-user' }], ['open', { kind: 'anyone' }], ['mine', { kind: 'self' }],
+      ['theirs', { kind: 'other' }], ['forged', undefined], ['unprefixed', undefined], ['legacy', undefined]]);
+    // Only the card asked of someone else says it is read-only here.
+    expect(f.all('p').map(element => content(element.props.children)).filter(text => text.includes('只读'))).toEqual(['这条提示等待其他成员作答，此处只读。']);
   } finally { f.close(); }
 });
 
 it('#1250 b114: a recovered click answers as the asked simulated speaker or with the chat identity, never invents one', async () => {
   const { SANDBOX_SIMULATED_PREFIX } = await import('../src/protocol.js');
   expect(recovery.SANDBOX_PAGE_SIMULATED_PREFIX).toBe(SANDBOX_SIMULATED_PREFIX);
-  expect(recovery.recoveredAnswerSpeaker({ kind: 'sender', senderId: '~sim:dev-user' })).toEqual({ senderId: '~sim:dev-user', asMe: false });
-  expect(recovery.recoveredAnswerSpeaker({ kind: 'sender', senderId: 'sandbox-identity-1' })).toEqual({ asMe: true });
+  expect(recovery.recoveredAnswerSpeaker({ kind: 'simulated', senderId: '~sim:dev-user' })).toEqual({ senderId: '~sim:dev-user', asMe: false });
+  expect(recovery.recoveredAnswerSpeaker({ kind: 'self' })).toEqual({ asMe: true });
   expect(recovery.recoveredAnswerSpeaker({ kind: 'anyone' })).toBeUndefined();
+  expect(recovery.recoveredAnswerSpeaker({ kind: 'other' })).toBeUndefined();
   expect(recovery.recoveredAnswerSpeaker(undefined)).toBeUndefined();
+  expect(recovery.recoveredPromptAnswerable({ kind: 'other' })).toBe(false);
+  for (const answerAs of [undefined, { kind: 'anyone' }, { kind: 'self' }] as const) expect(recovery.recoveredPromptAnswerable(answerAs)).toBe(true);
 });

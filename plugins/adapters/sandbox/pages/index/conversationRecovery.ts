@@ -1,8 +1,19 @@
 import type { MessageSegment, ConsoleLocale } from '@zhin.js/client';
 import { captureSandboxRequestContext, type SandboxRequestContext } from './sandboxTransport.js';
 
-/** How the Host says a recovered prompt is answered: by anyone, or by the exact sender it asked. */
-export type PendingInteractionAnswerer = Readonly<{ kind: 'anyone' }> | Readonly<{ kind: 'sender'; senderId: string }>;
+/** `SANDBOX_SIMULATED_PREFIX` of `src/protocol.ts` (a Node module the page cannot import); a test keeps them equal. */
+export const SANDBOX_PAGE_SIMULATED_PREFIX = '~sim:';
+
+/**
+ * Who the Host says may answer a recovered prompt, seen from this page's connection (#1250 b114):
+ * anyone; this person's own chat identity (`self`); a simulated sender (`~sim:<id>`, any page may
+ * speak as it); or someone else (`other`: shown read-only, the Host never sends that id).
+ */
+export type PendingInteractionAnswerer =
+  | Readonly<{ kind: 'anyone' }>
+  | Readonly<{ kind: 'self' }>
+  | Readonly<{ kind: 'simulated'; senderId: string }>
+  | Readonly<{ kind: 'other' }>;
 
 export interface PendingInteraction {
   readonly id: string;
@@ -17,24 +28,28 @@ export interface PendingInteraction {
 export function readPendingAnswerer(value: unknown): PendingInteractionAnswerer | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const item = value as Record<string, unknown>;
-  if (item.kind === 'anyone') return { kind: 'anyone' };
-  return item.kind === 'sender' && typeof item.senderId === 'string' && item.senderId.trim()
-    ? { kind: 'sender', senderId: item.senderId.slice(0, 256) } : undefined;
+  if (item.kind === 'anyone' || item.kind === 'self' || item.kind === 'other') return { kind: item.kind };
+  return item.kind === 'simulated' && typeof item.senderId === 'string' && item.senderId.startsWith(SANDBOX_PAGE_SIMULATED_PREFIX)
+    && item.senderId.length > SANDBOX_PAGE_SIMULATED_PREFIX.length
+    ? { kind: 'simulated', senderId: item.senderId.slice(0, 256) } : undefined;
 }
-
-/** `SANDBOX_SIMULATED_PREFIX` of `src/protocol.ts` (a Node module the page cannot import); a test keeps them equal. */
-export const SANDBOX_PAGE_SIMULATED_PREFIX = '~sim:';
 
 /**
  * The speaker fields a click on a recovered prompt carries. A prompt asked of a simulated speaker
  * (`~sim:<id>`) is answered as that speaker — the Host keeps a `~sim:` id as is — whatever the page's
- * sender box says now; one asked of a real chat identity is answered with 「以我的聊天身份发言」.
+ * sender box says now; one asked of this person's own chat identity is answered with
+ * 「以我的聊天身份发言」. `anyone` uses the current speaker; `other` is never clicked (read-only card).
  * The Host still decides whether this socket's speaker may answer; nothing here grants it.
  */
-export function recoveredAnswerSpeaker(answerAs: PendingInteractionAnswerer | undefined, simulatedPrefix = SANDBOX_PAGE_SIMULATED_PREFIX):
+export function recoveredAnswerSpeaker(answerAs: PendingInteractionAnswerer | undefined):
   Readonly<{ senderId: string; asMe: false }> | Readonly<{ asMe: true }> | undefined {
-  if (!answerAs || answerAs.kind === 'anyone') return undefined;
-  return answerAs.senderId.startsWith(simulatedPrefix) ? { senderId: answerAs.senderId, asMe: false } : { asMe: true };
+  if (answerAs?.kind === 'simulated') return { senderId: answerAs.senderId, asMe: false };
+  return answerAs?.kind === 'self' ? { asMe: true } : undefined;
+}
+
+/** Whether this page may click a recovered prompt at all (`other`: someone else answers it). */
+export function recoveredPromptAnswerable(answerAs: PendingInteractionAnswerer | undefined): boolean {
+  return answerAs?.kind !== 'other';
 }
 
 export interface RecoveredDelivery {

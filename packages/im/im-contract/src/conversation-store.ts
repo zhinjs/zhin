@@ -13,6 +13,11 @@ export interface ConversationEventReader {
     limit: number,
   ): Promise<readonly SequencedConversationEvent[]>;
   getCursor(consumer: string, conversation: ConversationRef): Promise<number>;
+  /**
+   * #1250 b114: which of `refs` carry a `message.interaction_answered` event, at any sequence, as
+   * {@link messageRefKey} keys. Optional: a store without it only has the events a read returns.
+   */
+  listInteractionAnswered?(refs: readonly MessageRef[]): Promise<ReadonlySet<string>>;
 }
 
 export interface ConversationEventWriter {
@@ -35,7 +40,7 @@ interface MessageProjection {
 
 function eventMessageRef(event: ConversationEvent): MessageRef | undefined {
   return event.type === 'message.created' || event.type === 'message.updated' ? event.message.ref
-    : event.type === 'message.recalled' ? event.message : undefined;
+    : event.type === 'message.recalled' || event.type === 'message.interaction_answered' ? event.message : undefined;
 }
 
 function projectMessage(state: MessageProjection, entry: SequencedConversationEvent): void {
@@ -72,6 +77,7 @@ export class MemoryConversationEventStore implements ConversationEventStore {
   readonly #events = new Map<string, SequencedConversationEvent>();
   readonly #messages = new Map<string, MessageProjection>();
   readonly #cursors = new Map<string, number>();
+  readonly #answered = new Set<string>();
   #sequence = 0;
 
   async append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>> {
@@ -81,6 +87,10 @@ export class MemoryConversationEventStore implements ConversationEventStore {
     const sequence = ++this.#sequence;
     const stored = Object.freeze({ sequence, event: freezeConversationData(event) });
     this.#events.set(event.eventId, stored);
+    if (event.type === 'message.interaction_answered') {
+      this.#answered.add(messageRefKey(event.message));
+      return Object.freeze({ appended: true, sequence });
+    }
     const ref = eventMessageRef(event);
     if (ref) {
       const key = messageRefKey(ref), state = this.#messages.get(key) ?? { recalled: false };
@@ -123,6 +133,10 @@ export class MemoryConversationEventStore implements ConversationEventStore {
 
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
     return this.#cursors.get(cursorKey(consumer, conversation)) ?? 0;
+  }
+
+  async listInteractionAnswered(refs: readonly MessageRef[]): Promise<ReadonlySet<string>> {
+    return new Set(refs.map(messageRefKey).filter(key => this.#answered.has(key)));
   }
 
   async commitCursor(consumer: string, conversation: ConversationRef, sequence: number): Promise<void> {
@@ -207,6 +221,9 @@ export interface DatabaseConversationEventStoreOptions {
    */
   readonly onInvalidRow?: (row: InvalidConversationEventRow) => void;
 }
+
+/** Message keys per `listInteractionAnswered` query (bounded `IN` lists). */
+const ANSWERED_LOOKUP_BATCH = 200;
 
 /** Distinct bad rows one store reports before going quiet. */
 export const INVALID_ROW_REPORT_LIMIT = 20;
@@ -475,6 +492,25 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     return Object.freeze(events.reverse());
   }
 
+  async listInteractionAnswered(refs: readonly MessageRef[]): Promise<ReadonlySet<string>> {
+    const wanted = new Set(refs.map(messageRefKey)), answered = new Set<string>();
+    const keys = [...wanted];
+    // Only this version writes the type, always with an encoded key: no legacy key to read.
+    for (let start = 0; start < keys.length; start += ANSWERED_LOOKUP_BATCH) {
+      const stored = keys.slice(start, start + ANSWERED_LOOKUP_BATCH).map(databaseTextKey);
+      const rows = await Promise.resolve(this.events.select('id', 'event_json')
+        .where({ $and: [{ event_type: 'message.interaction_answered' }, { message_key: { $in: stored } }] }));
+      for (const row of rows) {
+        // The parsed event names the message: a returned TEXT key may be truncated by some drivers.
+        const event = this.#event(row);
+        if (event?.type !== 'message.interaction_answered') continue;
+        const key = messageRefKey(event.message);
+        if (wanted.has(key)) answered.add(key);
+      }
+    }
+    return answered;
+  }
+
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
     const key = cursorKey(consumer, conversation);
     const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
@@ -568,6 +604,7 @@ export type StoredConversationEventProblem = 'invalid_event_json' | 'invalid_eve
 
 const CONVERSATION_EVENT_TYPES: Readonly<Record<ConversationEvent['type'], true>> = Object.freeze({
   'message.created': true, 'message.updated': true, 'message.recalled': true, 'message.reaction_changed': true,
+  'message.interaction_answered': true,
   'conversation.poked': true, 'member.joined': true, 'member.left': true, 'member.muted': true, 'member.unmuted': true,
   'member.role_changed': true, 'scene.join_requested': true, 'scene.notice_updated': true,
   'member.card_changed': true, 'member.title_changed': true, 'member.remark_changed': true,
@@ -601,7 +638,9 @@ export function isConversationEvent(value: unknown): value is ConversationEvent 
       || typeof message.timestamp !== 'number' || !optionalActor(message.actor)) return false;
     return type === 'message.created' || typeof message.revision === 'number';
   }
-  if (type === 'message.recalled' || type === 'message.reaction_changed') return isMessageRef(value.message);
+  if (type === 'message.recalled' || type === 'message.reaction_changed' || type === 'message.interaction_answered') {
+    return isMessageRef(value.message);
+  }
   if (type === 'scene.join_requested') return isRecord(value.actor) && isString(value.actor.id);
   if (type.startsWith('member.')) return isRecord(value.member) && isString(value.member.id);
   return true;

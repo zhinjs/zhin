@@ -12,10 +12,13 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 
 async function start(target = 'bot', sceneId = 'room', sender = 'configured-owner', answeredBy?: 'anyone') {
   const root = rootPluginId();
-  const connection = { target, owner: 'configured-owner', placeholder: false, socket: { readyState: 1 } };
+  const connection: { target: string; owner: string; placeholder: boolean; socket: { readyState: number }; principalOwner?: string | null } =
+    { target, owner: 'configured-owner', placeholder: false, socket: { readyState: 1 } };
+  const live = { self: undefined as string | undefined, asked: [] as unknown[] };
   const index = { $projection: 'zhin.adapter-index/1',
     describe: () => [{ id: 'canonical-endpoint', name: 'sandbox-slot', admitted: true }],
-    clientAdapter: () => 'sandbox', capabilityProfile: () => ({ default: { runtime: { sandbox: true } } }), clientById: () => ({ connectionById: (id: string) => id === 'live-connection' ? connection : undefined }) };
+    clientAdapter: () => 'sandbox', capabilityProfile: () => ({ default: { runtime: { sandbox: true } } }), clientById: () => ({ connectionById: (id: string) => id === 'live-connection' ? connection : undefined,
+      chatIdentityOf: (id: string, scene: unknown) => { live.asked.push([id, scene]); return live.self; } }) };
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/test', children: [] }]]),
     config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map([[adapterFeatureId, index]]) };
   const snapshots = new SnapshotStore(state), im = new ImRuntime();
@@ -41,7 +44,7 @@ async function start(target = 'bot', sceneId = 'room', sender = 'configured-owne
   const request = (query: Record<string, string> = {}, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/interactions/pending?${new URLSearchParams({
     connectionId: 'live-connection', sessionKey: `sandbox:${target}:group:${sceneId}`, ...query,
   })}`, { headers: { authorization: `Bearer ${token}` } });
-  return { request, im, sent, connection, controller, answer, snapshots, state };
+  return { request, im, sent, connection, live, controller, answer, snapshots, state };
 }
 
 it('reads the actual current prompt using server-owned canonical endpoint, owner and generation', async () => {
@@ -50,7 +53,9 @@ it('reads the actual current prompt using server-owned canonical endpoint, owner
   expect(response.status).toBe(200);
   expect(response.headers.get('cache-control')).toBe('no-store');
   const { data } = await response.json();
-  expect(data).toMatchObject({ generation: 0, pending: [{ generation: 0, answerAs: { kind: 'sender', senderId: 'configured-owner' } }] });
+  // Asked of a real identity that is not the requester's: shown read-only, its id never sent.
+  expect(data).toMatchObject({ generation: 0, pending: [{ generation: 0, answerAs: { kind: 'other' } }] });
+  expect(JSON.stringify(data.pending[0].answerAs)).not.toContain('configured-owner');
   expect(data.pending[0].conversation).toBeUndefined();
   expect(data.pending[0].segments).toEqual(f.sent[0]);
   expect(read).toHaveBeenCalledWith({ endpoint: { adapter: 'sandbox', id: 'canonical-endpoint' }, kind: 'group', id: 'room' }, 0);
@@ -104,7 +109,7 @@ it('reports a projection failure as an error, never as an empty successful pendi
 it('lists the prompt a Sandbox page actually raised: simulated speakers and open prompts, redacted to an allowlist', async () => {
   // The Sandbox never lets a page speak as `owner`: its senders are `~sim:<typed id>` (ADR 0060 §5.4).
   for (const [sender, answeredBy, answerAs] of [
-    ['~sim:dev-user', undefined, { kind: 'sender', senderId: '~sim:dev-user' }],
+    ['~sim:dev-user', undefined, { kind: 'simulated', senderId: '~sim:dev-user' }],
     ['~sim:dev-user', 'anyone', { kind: 'anyone' }],
   ] as const) {
     const f = await start('bot', 'room', sender, answeredBy);
@@ -117,4 +122,29 @@ it('lists the prompt a Sandbox page actually raised: simulated speakers and open
     f.controller.abort(); await f.answer;
     expect((await (await f.request()).json()).data.pending).toEqual([]);
   }
+});
+
+it('#1250 b114 L2: a prompt asked of the requester\'s own chat identity is answerable as self', async () => {
+  const f = await start('bot', 'room', 'console-operator');
+  f.live.self = 'console-operator';
+  const { data } = await (await f.request()).json();
+  expect(data.pending[0].answerAs).toEqual({ kind: 'self' });
+  expect(f.live.asked).toEqual([['live-connection', { endpoint: { adapter: 'sandbox', id: 'canonical-endpoint' }, kind: 'group', id: 'room' }]]);
+  // Another user's identity stays `other`, even when the requester has an identity of their own.
+  f.live.self = 'console-someone-else';
+  expect((await (await f.request()).json()).data.pending[0].answerAs).toEqual({ kind: 'other' });
+});
+
+it('#1250 b114 L1: a connection opened by another Console principal is refused with 403 before any read', async () => {
+  const f = await start(), read = vi.spyOn(f.im, 'listPendingInteractions');
+  f.connection.principalOwner = 'user:someone-else';
+  const refused = await f.request();
+  expect(refused.status).toBe(403);
+  expect(await refused.json()).toMatchObject({ success: false, code: 'sandbox_connection_forbidden' });
+  f.connection.principalOwner = null;
+  expect((await f.request()).status).toBe(403);
+  expect(read).not.toHaveBeenCalled();
+  // The requester's own connection (`operator` is the signed-in user of these requests) is read.
+  f.connection.principalOwner = 'user:operator';
+  expect((await f.request()).status).toBe(200);
 });

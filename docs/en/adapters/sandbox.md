@@ -114,6 +114,15 @@ Send this only after the current connection advertises `ready.protocol: "scoped-
 
 The type is `private`, `group`, or `channel`. This replaces the connection's subscription; the server acknowledges with `type: "subscribed"` and the same `conversation`. Control frames never enter commands, the Agent, or platform message hooks.
 
+Optional `"retain": true` (the Sandbox page always sends it): when the connection later switches conversations, the conversations it **explicitly subscribed to** before (up to 32) keep being delivered to it; each frame's `conversation` says which one it belongs to. A reply still running when the person switches away is then filed under its conversation instead of failing with no live connection. Rules:
+
+- Only conversations the client subscribed to with `subscribe` are retained. The connection's initial `private` + `owner` conversation (shared by every page of the account) is not retained unless this connection subscribed to it, and neither is a conversation reached only by sending into it. Two pages sharing one Sandbox account therefore never receive replies of a conversation the other opened and they never subscribed to.
+- Retention holds while every subscription carries `retain: true`: a later subscription without it turns retention off and clears the retained set; the connection then receives its current conversation only.
+- The retained set lives with the connection, in server memory: after a reconnect (or a page reload) the new connection starts empty and only its current subscription is restored. Background replies sent while disconnected are not replayed; recover them from history or the pending-prompt / task-result panels.
+
+The page files a background frame under its conversation and counts it as unread without switching to it; a conversation missing from the list is added (with its unread count), still without switching. Background errors, speaker roles and pending-prompt refreshes never touch the current view. Legacy clients without `retain` still receive their current conversation only.
+
+
 Subscribed pages receive user-input echoes marked `direction: "inbound"`, with the configured `senderId` and the original `messageId`. These update the view without submitting another input. Legacy clients still send their existing message format and receive replies but do not receive input echoes. New pages connected to an older Host keep the original send path and do not send unsupported control frames. Reconnection restores the subscription without resubmitting messages.
 
 ### Client → server: send a message

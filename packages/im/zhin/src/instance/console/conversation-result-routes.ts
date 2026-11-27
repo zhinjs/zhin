@@ -2,7 +2,7 @@ import { jsonResponse } from '@zhin.js/host-http';
 import { join } from 'node:path';
 import type { HttpHost } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
-import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { parseBoundSandboxSession, SandboxWorkspaceBindingError, sandboxScopeForbiddenResponse, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { noStore } from './no-store.js';
 import { consoleFeatureDisabled } from '@zhin.js/console-protocol';
 
@@ -22,7 +22,7 @@ export function registerConversationResultRoutes(options: Readonly<{
   importAgent?: () => Promise<Pick<typeof import('@zhin.js/agent'), 'FileJournalStore'>>;
 }>): void {
   const importAgent = options.importAgent ?? (() => import('@zhin.js/agent'));
-  options.http.route('GET', `${options.base}/conversations/results`, noStore(async (_request, { url }) => {
+  options.http.route('GET', `${options.base}/conversations/results`, noStore(async (_request, { url, principal }) => {
     const sessionKey = url.searchParams.get('sessionKey') ?? '';
     const connectionId = url.searchParams.get('connectionId') ?? '';
     const cursor = url.searchParams.get('cursor');
@@ -40,7 +40,7 @@ export function registerConversationResultRoutes(options: Readonly<{
       return jsonResponse(400, { success: false, code: 'invalid_result_query', error: '请提供当前连接和有效的 Sandbox 会话' });
     }
     try {
-      return await withSandboxWorkspaceScope(options.snapshots, connectionId, async scope => {
+      return await withSandboxWorkspaceScope(options.snapshots, { connectionId, principal }, async scope => {
         const session = parseBoundSandboxSession(scope, sessionKey);
         if (session.status === 'scope_mismatch') {
           return jsonResponse(403, { success: false, code: 'result_scope_mismatch', error: '会话不属于当前 Sandbox 账号' });
@@ -72,6 +72,8 @@ export function registerConversationResultRoutes(options: Readonly<{
         return jsonResponse(200, { success: true, data });
       });
     } catch (error) {
+      const forbidden = sandboxScopeForbiddenResponse(error);
+      if (forbidden) return forbidden;
       return jsonResponse(503, { success: false,
         code: error instanceof SandboxWorkspaceBindingError ? error.code : 'result_store_unavailable',
         error: error instanceof SandboxWorkspaceBindingError ? error.message : '任务结果暂时无法读取，请稍后重试' });

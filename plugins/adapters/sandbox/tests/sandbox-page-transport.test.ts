@@ -10,7 +10,7 @@ import * as chatIdentity from '../pages/index/chatIdentity.js';
 import * as directories from '../pages/index/workspaceDirectory.js';
 import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
 import * as composer from '../pages/index/composerCommands.js';
-import { recoveredAnswerSpeaker } from '../pages/index/conversationRecovery.js';
+import { recoveredAnswerSpeaker, recoveredPromptAnswerable } from '../pages/index/conversationRecovery.js';
 import { segmentFallbackText, segmentPreviewText } from '../pages/index/segmentFallback.js';
 
 const file = new URL('../pages/index/SandboxChat.tsx', import.meta.url);
@@ -24,7 +24,7 @@ const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,c
   trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,uploadFiles,hostedMedia,uploads,
   senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,commandHints,atSuggestions,
-  directoryStatus,workspaceScope,activeChannel,directoryControllerRef};}`, {
+  directoryStatus,workspaceScope,activeChannel,directoryControllerRef,pendingRefreshEpoch,serverRole};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
 
@@ -79,7 +79,7 @@ function fixture(options: {
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => [] })));
   const bindings = {
-    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax, ...sandboxMedia, recoveredAnswerSpeaker,
+    sandboxText, ...traces, ...playground, ...transport, ...chatIdentity, ...inboundSyntax, ...sandboxMedia, recoveredAnswerSpeaker, recoveredPromptAnswerable,
     useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
     readSandboxCommandHints: options.readSandboxCommandHints ?? (async () => null),
     loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),
@@ -654,15 +654,64 @@ describe('#1250 b114: switching sessions mid-reply and answering a recovered pro
     } finally { f.close(); }
   });
 
+  it('M1: a frame of a session the page does not list is added with one unread, never switched to', () => {
+    const f = fixture();
+    try {
+      f.ready();
+      const active = f.view.activeChannel as playground.PlaygroundSession;
+      const scene = { type: 'private', id: 'someone-elses-session' };
+      f.socket().receive({ ...scene, conversation: scene, messageId: 'foreign-reply', bot: 'stable-bot', timestamp: 10, content: text('not yours') });
+      f.render();
+      expect(f.view.activeChannel).toMatchObject({ id: active.id, type: active.type });
+      expect(f.view.channels.find((row: playground.PlaygroundSession) => row.id === scene.id)).toMatchObject({ unread: 1 });
+      // A later revision of the same reply does not count twice.
+      f.socket().receive({ ...scene, conversation: scene, messageId: 'foreign-reply', bot: 'stable-bot', timestamp: 11, revision: 2, content: text('still not yours') });
+      f.render();
+      expect(f.view.channels.find((row: playground.PlaygroundSession) => row.id === scene.id)).toMatchObject({ unread: 1 });
+      expect(f.view.activeChannel).toMatchObject({ id: active.id, type: active.type });
+    } finally { f.close(); }
+  });
+
+  it('L3/L4: background frames neither refresh pending prompts nor change the speaker role or the notice', () => {
+    const f = fixture();
+    try {
+      f.ready();
+      const [first, second] = f.view.channels as playground.PlaygroundSession[];
+      const background = { type: second!.type, id: second!.id };
+      const epoch = f.view.pendingRefreshEpoch;
+      f.socket().receive({ ...background, conversation: background, messageId: 'bg-reply', bot: 'stable-bot', timestamp: 10, content: text('bg') });
+      f.socket().receive({ ...background, conversation: background, direction: 'inbound', messageId: 'bg-echo', senderId: 'console-u1',
+        simulated: false, senderTrustLevel: 'owner', senderChatRole: 'owner', content: text('typed elsewhere'), timestamp: 11 });
+      f.socket().receive({ type: 'error', conversation: background, id: background.id, content: text('background failure'), timestamp: 12 });
+      f.render();
+      expect(f.view.pendingRefreshEpoch).toBe(epoch);
+      expect(f.view.serverRole).toBeNull();
+      expect(f.view.transportNotice).toBeNull();
+      // The shown session's frames still do all three.
+      const shown = { type: first!.type, id: first!.id };
+      f.socket().receive({ ...shown, conversation: shown, direction: 'inbound', messageId: 'fg-echo', senderId: 'console-u1',
+        simulated: false, senderTrustLevel: 'owner', senderChatRole: 'owner', content: text('typed here'), timestamp: 13 });
+      f.socket().receive({ type: 'error', conversation: shown, id: shown.id, content: text('shown failure'), timestamp: 14 });
+      f.render();
+      expect(f.view.pendingRefreshEpoch).toBe(epoch + 2);
+      expect(f.view.serverRole).toMatchObject({ trustLevel: 'owner' });
+      expect(f.view.transportNotice).toBe('shown failure');
+    } finally { f.close(); }
+  });
+
   it('answers a recovered prompt as the simulated speaker it was asked of, or with the chat identity', () => {
     const f = fixture();
     try {
       f.ready();
       f.view.setSenderId('someone-else'); const view = f.render();
-      view.sendInteractiveAction('zhin:ask:a:0', 'prompt-a', undefined, { kind: 'sender', senderId: '~sim:dev-user' });
-      view.sendInteractiveAction('zhin:ask:b:0', 'prompt-b', undefined, { kind: 'sender', senderId: 'identity-1' });
+      view.sendInteractiveAction('zhin:ask:a:0', 'prompt-a', undefined, { kind: 'simulated', senderId: '~sim:dev-user' });
+      view.sendInteractiveAction('zhin:ask:b:0', 'prompt-b', undefined, { kind: 'self' });
       view.sendInteractiveAction('zhin:ask:c:0', 'prompt-c', undefined, { kind: 'anyone' });
       const [simulated, identity, anyone] = f.socket().frames.slice(-3);
+      // A prompt asked of someone else is never answered from this page.
+      const before = f.socket().frames.length;
+      expect(view.sendInteractiveAction('zhin:ask:d:0', 'prompt-d', undefined, { kind: 'other' })).toBe(false);
+      expect(f.socket().frames).toHaveLength(before);
       expect(simulated).toMatchObject({ senderId: '~sim:dev-user' }); expect(simulated!.asMe).toBeUndefined();
       expect(identity).toMatchObject({ asMe: true });
       expect(anyone).toMatchObject({ senderId: 'someone-else' }); expect(anyone!.asMe).toBeUndefined();

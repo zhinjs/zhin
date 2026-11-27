@@ -1,6 +1,6 @@
 import { HttpBodyError, invalidLocaleResponse, readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import { queryLocale, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
-import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { SandboxWorkspaceBindingError, sandboxScopeForbiddenResponse, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import {
   listWorkspaceConversations,
   saveWorkspaceConversation,
@@ -19,13 +19,13 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
   databaseHost?: DatabaseHost;
 }>): void {
   const { http, base, snapshots, databaseHost } = options;
-  http.route('GET', `${base}/conversations/workspaces`, noStore(async (_request, { url }) => {
+  http.route('GET', `${base}/conversations/workspaces`, noStore(async (_request, { url, principal }) => {
     const connectionId = url.searchParams.get('connectionId');
     if (!connectionId) {
       return jsonResponse(400, { success: false, code: 'invalid_workspace_query', error: '请提供当前 Sandbox 连接' });
     }
     try {
-      const data = await withSandboxWorkspaceScope(snapshots, connectionId, async scope => ({
+      const data = await withSandboxWorkspaceScope(snapshots, { connectionId, principal }, async scope => ({
         scope, items: await listWorkspaceConversations(databaseHost, scope),
       }));
       return jsonResponse(200, { success: true, data });
@@ -33,7 +33,7 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
   }), { summary: 'Read Console conversation workspaces', tags: ['conversations'] });
 
   // Quick commands of the live Sandbox binding (#1250): no store needed, so it also serves pages in browser fallback.
-  http.route('GET', `${base}/conversations/workspaces/commands`, noStore(async (_request, { url }) => {
+  http.route('GET', `${base}/conversations/workspaces/commands`, noStore(async (_request, { url, principal }) => {
     const connectionId = url.searchParams.get('connectionId');
     const kind = url.searchParams.get('type') ?? 'private';
     const id = url.searchParams.get('id');
@@ -43,13 +43,13 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
     const locale = queryLocale(url.searchParams);
     if (!locale) return invalidLocaleResponse();
     try {
-      const data = await withSandboxWorkspaceScope(snapshots, connectionId, async (scope, snapshot) =>
+      const data = await withSandboxWorkspaceScope(snapshots, { connectionId, principal }, async (scope, snapshot) =>
         sandboxQuickCommands(scope, snapshot, { kind, id: id ?? scope.ownerId }, locale));
       return jsonResponse(200, { success: true, data });
     } catch (error) { return workspaceError(error); }
   }), { summary: 'Read the Sandbox composer quick commands for one conversation', tags: ['conversations'] });
 
-  http.route('PUT', `${base}/conversations/workspaces`, noStore(async (request) => {
+  http.route('PUT', `${base}/conversations/workspaces`, noStore(async (request, { principal }) => {
     try {
       const body = await readJsonBody<Record<string, unknown>>(request);
       const input = parseWorkspaceConversation(body?.conversation);
@@ -57,7 +57,7 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
         || (body.expectedRevision !== null && (typeof body.expectedRevision !== 'string' || !body.expectedRevision))) {
         return jsonResponse(400, { success: false, code: 'invalid_workspace_input', error: '请提供完整的会话配置及预期版本' });
       }
-      const data = await withSandboxWorkspaceScope(snapshots, body.connectionId, async scope => ({
+      const data = await withSandboxWorkspaceScope(snapshots, { connectionId: body.connectionId, principal }, async scope => ({
         scope, item: await saveWorkspaceConversation(databaseHost, scope, input, body.expectedRevision as string | null),
       }));
       return jsonResponse(200, { success: true, data });
@@ -66,6 +66,8 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
 }
 
 function workspaceError(error: unknown): Response {
+  const forbidden = sandboxScopeForbiddenResponse(error);
+  if (forbidden) return forbidden;
   if (error instanceof HttpBodyError) {
     return jsonResponse(error.statusCode, { success: false, code: 'invalid_workspace_input', error: error.message });
   } else if (error instanceof WorkspaceRevisionConflictError) {

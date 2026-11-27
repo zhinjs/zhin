@@ -77,3 +77,13 @@ it('reports corrupt delivery storage as unavailable rather than empty history or
   const response = await f.request(); expect(response.status).toBe(503);
   expect((await response.json()).code).toBe('result_store_unavailable');
 });
+
+it('#1250 b114 L1: refuses a connection id that another Console principal opened', async () => {
+  const f = await fixture();
+  (f.connection as { principalOwner?: string | null }).principalOwner = 'user:another-user';
+  const refused = await f.request();
+  expect(refused.status).toBe(403);
+  expect(await refused.json()).toMatchObject({ code: 'sandbox_connection_forbidden' });
+  (f.connection as { principalOwner?: string | null }).principalOwner = 'user:full';
+  expect((await f.request()).status).toBe(200);
+});

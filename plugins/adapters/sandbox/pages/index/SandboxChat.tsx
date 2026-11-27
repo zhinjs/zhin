@@ -31,7 +31,7 @@ import { sandboxStyles } from './styles.js';
 import { workspaceStyles } from './workspaceStyles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
-import { actionOutcomeFeedback, quietOutcomeNotice, readMessageOutcome, recoveredAnswerSpeaker, type PendingInteractionAnswerer } from './conversationRecovery.js';
+import { actionOutcomeFeedback, quietOutcomeNotice, readMessageOutcome, recoveredAnswerSpeaker, recoveredPromptAnswerable, type PendingInteractionAnswerer } from './conversationRecovery.js';
 import {
   agentSessionsPath,
   buildAgentRunReport,
@@ -173,6 +173,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         pending?: Promise<void>; cancelRefresh?: ReturnType<typeof window.setTimeout>;
     } | null>(null)
     const activeChannelRef = useRef(activeChannel)
+    /** The session the person is looking at (read through the ref: socket callbacks outlive renders). */
+    const isActiveScene = (scene: { readonly type?: unknown; readonly id?: unknown }) =>
+        activeChannelRef.current.id === scene.id && activeChannelRef.current.type === scene.type
     const endpointIdRef = useRef(endpointId)
     const directoryModeRef = useRef(directoryStatus.mode)
     const directoryHostRef = useRef<string | null>(null)
@@ -353,7 +356,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }
         if (data.type === 'subscribed') return
         if (data.type === 'error') {
-            setPendingRefreshEpoch((epoch) => epoch + 1)
+            // #1250 b114: an error of a background session neither refreshes nor speaks over the current view.
+            const failedScene = data.conversation
+            const inBackground = !!failedScene && !isActiveScene(failedScene)
+            if (!inBackground) setPendingRefreshEpoch((epoch) => epoch + 1)
             const notice = Array.isArray(data.content)
                 ? String((data.content[0] as { data?: { text?: unknown } } | undefined)?.data?.text ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
                 : String(data.content ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
@@ -363,7 +369,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 setMessages((prev) => setPlaygroundActionFeedback(prev, source.scene, source.cardId, { tone: 'error', text: notice }))
                 return
             }
-            setTransportNotice(notice)
+            if (!inBackground) setTransportNotice(notice)
             return
         }
         // ADR 0064 P1b: Endpoint control operations on an earlier message of a scene.
@@ -389,8 +395,6 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             return
         }
 
-        // A received message invalidates the projection; only Core decides whether a claim remains live.
-        setPendingRefreshEpoch((epoch) => epoch + 1)
         const content: MessageSegment[] = typeof data.content === 'string'
             ? parseTextToSegments(data.content)
             : Array.isArray(data.content) ? data.content as MessageSegment[] : parseTextToSegments(String(data.content ?? ''))
@@ -398,8 +402,14 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         const channelType: Channel['type'] = data.conversation?.type ?? (data.type === 'group' || data.type === 'channel' ? data.type : 'private')
         const sceneId = data.conversation?.id ?? data.id
         const isInput = data.direction === 'inbound'
+        // #1250 b114: a frame of a session other than the one shown (a retained one) is filed there quietly.
+        const inBackground = !isActiveScene({ type: channelType, id: sceneId })
+        // A received message invalidates the projection; only Core decides whether a claim remains live.
+        // Only the shown session's pending prompts are on screen, so only its frames refresh them.
+        if (!inBackground) setPendingRefreshEpoch((epoch) => epoch + 1)
         const speaker = isInput ? readServerSpeaker(data as Record<string, unknown>) : null
-        if (speaker) setServerRole(speaker)
+        // The speaker role belongs to the shown session; a background echo must not repaint it.
+        if (speaker && !inBackground) setServerRole(speaker)
         // Only this page's own messages turn its switch off (the echo reaches every subscriber).
         if (speaker && typeof data.messageId === 'string' && asMeSentRef.current.delete(data.messageId)) {
             const notice = asMeFallbackNotice(speaker)
@@ -418,22 +428,25 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
         // A reply that arrives (or keeps streaming) in a background session counts once as unread.
         const unreadKey = JSON.stringify([channelType, sceneId, data.messageId ?? ''])
-        const background = !isInput && (activeChannelRef.current.id !== sceneId || activeChannelRef.current.type !== channelType)
-            && !(data.messageId && unreadCountedRef.current.has(unreadKey))
-        if (background && data.messageId) {
+        const countsUnread = !isInput && inBackground && !(data.messageId && unreadCountedRef.current.has(unreadKey))
+        if (countsUnread && data.messageId) {
             unreadCountedRef.current.add(unreadKey)
             if (unreadCountedRef.current.size > 500) unreadCountedRef.current.delete(unreadCountedRef.current.values().next().value!)
         }
         setChannels((prev) => {
             if (prev.some((c) => c.id === sceneId && c.type === channelType)) {
-                return background ? prev.map((c) => c.id === sceneId && c.type === channelType ? { ...c, unread: c.unread + 1 } : c) : prev
+                return countsUnread ? prev.map((c) => c.id === sceneId && c.type === channelType ? { ...c, unread: c.unread + 1 } : c) : prev
             }
             const created: Channel = {
-                id: sceneId, name: channelName, type: channelType, unread: 0,
+                id: sceneId, name: channelName, type: channelType, unread: countsUnread ? 1 : 0,
                 runConfig: { ...activeChannelRef.current.runConfig },
             }
-            activeChannelRef.current = created
-            setActiveChannel(created)
+            // #1250 b114 M1: a session the page did not list is added (with its unread count) but never
+            // taken over: switching the view belongs to the person, not to whoever's reply arrived.
+            if (!inBackground) {
+                activeChannelRef.current = created
+                setActiveChannel(created)
+            }
             return [...prev, created]
         })
 
@@ -458,6 +471,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     const sendInteractiveAction = (payload: string, messageId?: string, buttonId?: string, answerAs?: PendingInteractionAnswerer) => {
         if (!connectionRef.current.canExecute) return false
+        // #1250 b114 L2: a prompt asked of someone else is shown read-only; never answer it from here.
+        if (!recoveredPromptAnswerable(answerAs)) return false
         const scene = activeChannelRef.current
         // #1250 sandbox-action-button-id-dropped: the button's own id and its payload, like a platform callback.
         const segments: MessageSegment[] = [sandboxActionSegment(payload, buttonId)]
@@ -1381,7 +1396,8 @@ ${sandboxStyles}`}</style>
                             })
                         }}
                         requestContext={socketRequestContextRef.current ?? undefined}
-                        renderInteraction={(segments, id, submitted, onSubmitted, answerAs) => renderMessageSegments(segments, false, id, submitted, onSubmitted, true, undefined, answerAs)} />
+                        renderInteraction={(segments, id, submitted, onSubmitted, answerAs) => renderMessageSegments(segments, false, id, submitted, onSubmitted,
+                            recoveredPromptAnswerable(answerAs), undefined, answerAs)} />
                 )}
 
                 {showConversationDetails && props.renderConversationDetails && (

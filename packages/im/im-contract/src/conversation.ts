@@ -43,6 +43,13 @@ export type ConversationEvent =
   | (ConversationEventBase & Readonly<{ type: 'message.created'; message: ConversationMessage }>)
   | (ConversationEventBase & Readonly<{ type: 'message.updated'; message: ConversationMessage & { readonly revision: number } }>)
   | (ConversationEventBase & Readonly<{ type: 'message.recalled'; message: MessageRef; actor?: ActorRef; operator?: ActorRef }>)
+  /**
+   * #1250 b114: `message` answered an interaction prompt (an approval `y`, a menu choice) or is a
+   * delivered prompt itself. Append-only bookkeeping, never a chat fact: readers keep such messages
+   * out of Agent context and show nothing for the event. Readers older than this type skip the row
+   * as an invalid event (with their rate-limited warning) instead of failing.
+   */
+  | (ConversationEventBase & Readonly<{ type: 'message.interaction_answered'; message: MessageRef }>)
   | (ConversationEventBase & Readonly<{ type: 'message.reaction_changed'; message: MessageRef; actor?: ActorRef; reaction: string; operation: 'added' | 'removed' }>)
   | (ConversationEventBase & Readonly<{ type: 'conversation.poked'; actor?: ActorRef; target?: ActorRef }>)
   | (ConversationEventBase & Readonly<{ type: 'member.joined'; member: ActorRef; actor?: ActorRef }>)
