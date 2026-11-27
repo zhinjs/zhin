@@ -98,7 +98,7 @@ The adapter comes with a `qq endpoint` command group (used directly in chat, no 
 | `qq endpoint list` | List running and configured endpoints |
 | `qq endpoint remove <name>` | Remove the runtime account and cancel its running operations; retain historical records |
 
-`add` / `cancel` / `remove` require the sender to hold the chat role `owner` at adapter level or above (an account- or conversation-level owner is not enough), or a sender id equal to the configured `notify.id`. Without an owner and without `notify`, those commands do not run. Do not write the removed `master` field: after the chat-role migration, writing it again does not grant a role. The instance removes the field and lists it under Console **Needs attention** until someone imports or ignores it (see [Upgrading to chat roles](../migrations/chat-roles.md)). QR codes are currently delivered as link text (outbound rich media migration pending) — open the link on mobile QQ to scan.
+Only `cancel` accepts either of two senders: someone who holds the chat role `owner` at adapter level or above (an account- or conversation-level owner is not enough), or a sender id equal to the top-level `notify.id` or an `endpoints[].notify.id`. `add` and `remove` accept only an adapter-level or global `owner`. Matching `notify.id` without that owner can cancel a binding in progress, and cannot add or remove an account. Do not write the removed `master` field: after the chat-role migration, writing it again does not grant a role. The instance removes the field and lists it under Console **Needs attention** until someone imports or ignores it (see [Upgrading to chat roles](../migrations/chat-roles.md)). QR codes are currently delivered as link text (outbound rich media migration pending) — open the link on mobile QQ to scan.
 
 ## Environment Variables
 
@@ -153,7 +153,7 @@ qq:
     id: "123456"   # the notified person's id on that platform (a QQ number for ICQQ)
 ```
 
-The notice tells them to reply `qq endpoint add` to re-bind with a QR code, or to open the Console QQ page. When the sender id equals `notify.id`, that person can also run the endpoint management commands, so the reply can come from the notified conversation. Without `notify`, only logs and the Console QQ page show connection state.
+The notice only reports that this bot is offline. A recipient whose id equals `notify.id` cannot run `qq endpoint add` or `remove` because of that match (it is enough only for `cancel`). To bind again, use **Platform actions** on the Console QQ page (writes need `qq:write`; see above), or have an adapter-level or global chat-role `owner` send `qq endpoint add` in chat. Without `notify`, only logs and the Console QQ page show connection state.
 
 ## Troubleshooting
 
