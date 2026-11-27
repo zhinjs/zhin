@@ -27,6 +27,8 @@ The retention period must be a positive integer. It defaults to 30 days. Cleanup
 
 `agent_usage_turns` stores one root turn: owner, trace/turn/session identifiers, principal, origin, complete conversation address, selected model, outcome, timestamps, duration and call count. `agent_usage_calls` stores each reported model response: root ID, actual child turn, call sequence, provider/model, stop reason, duration and numeric input/output/total, cache-read/write and reasoning tokens. Join calls to turns on `root_id = id`.
 
+A perception pre-pass request is a call row too, with the perception service and model as `provider` / `model`. When the instance has no structured usage store (not SQLite, MySQL or PostgreSQL), the first turn logs one `[ai.usage] usage_store | status: unavailable` warning saying the tables are not written; it is not repeated.
+
 Synchronous child calls belong to the same root and retain their own turn IDs. Do not add parent counts to detail counts. Unknown usage is `NULL`; only a proven zero is `0`. Return both totals and known sample counts:
 
 ```sql

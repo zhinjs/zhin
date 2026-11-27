@@ -282,6 +282,8 @@ ai:
 
 Unsupported or failed media is explicitly marked as unrecognized and never silently presented as understood.
 
+Every request that reaches the perception service is a model call of the turn: it appears in the trace's `model_calls` (marked as perception), the `[ai.usage]` summary and `agent_usage_calls`, with the service and model that answered. The trace's `media` lists each item's outcome, the perception service / model, whether the description came from the cache, and the injected description (up to 4000 characters; longer text is cut and its full length recorded). In a turn that can work with other agents, a framework note follows the description: answer from it, and do not ask another agent only to look at the media again. When the turn does hand the work on (`ask` / `delegate`), the original media goes with the request if that agent's model takes images / video / files (within the per-turn image limit), not only text and links.
+
 ### ai.agent
 
 `ai.agent` controls how the AI runs — most importantly, the security policy for execution tools like `bash`:

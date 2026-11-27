@@ -30,6 +30,8 @@ ai:
 | `agent_usage_turns` | 一次根回合 | owner、trace/turn/session 标识、请求人、入口、完整会话地址、选定模型、结果、起止时间、耗时、调用次数 |
 | `agent_usage_calls` | 一次已报告用量的模型响应 | 根回合、实际子回合、调用序号、实际 provider/model、结束原因、耗时、输入/输出/总 token、缓存读写、推理 token |
 
+识图预处理发到识图服务的请求也是一行调用，`provider` / `model` 写识图服务与模型。如果实例没有结构化用量存储（不是 SQLite、MySQL 或 PostgreSQL），首个回合会记一次 `[ai.usage] usage_store | status: unavailable` 警告，说明两表不会写入；之后不再重复。
+
 两表通过 `agent_usage_calls.root_id = agent_usage_turns.id` 关联。同步子 Agent 的调用计入同一个根回合，并保留自己的 `turn_id`；不要把父回合调用次数与明细行数再相加。`selected_model` 是入口选择，明细中的 `model` 是实际调用模型。
 
 用量字段为数值列。`NULL` 表示供应商没有报告或无法证明；明确报告的零值才保存为 `0`。查询总量时同时返回已知样本数，避免把缺报当成零消耗：

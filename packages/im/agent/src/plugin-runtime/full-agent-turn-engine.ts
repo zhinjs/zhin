@@ -5,7 +5,7 @@ import { MessageAliasTable } from '@zhin.js/ai';
 import { isOwnScheduledDelivery, sessionKeyLedgerId } from '../memory/told-ledger.js';
 import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, ownPrivateInbound, plannedReplyTexts, summarizeCountedMessages, unrepresentedConversationBlocks } from '../session/context-provenance.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
-import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
+import { applyInboundMediaInjection, perceptionDelegationNote, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -261,8 +261,29 @@ async function* runInteractiveTurn(
       perception: host.mediaPerception,
       ...(context.turn.input.inboundMediaRoots ? { inboundMediaRoots: context.turn.input.inboundMediaRoots } : {}),
       ...(context.turn.input.inboundMediaOrigins ? { inboundMediaOrigins: context.turn.input.inboundMediaOrigins } : {}),
+      ...(context.turn.origin.kind === 'im' ? {
+        scene: `${context.turn.origin.platform}/${context.turn.origin.scope}/${context.turn.origin.sceneId}`,
+        ...(context.turn.origin.messageId ? { messageId: context.turn.origin.messageId } : {}),
+      } : { scene: context.turn.origin.kind }),
     },
   );
+  // #1250 trace-media-perception-provenance-clipped: each perception request is a model call of this turn
+  // (trace `model_calls`, the `ai.usage` line and the structured usage rows), tagged with its purpose.
+  for (const call of media.perceptionCalls ?? []) {
+    yield Object.freeze({
+      type: 'usage' as const,
+      purpose: 'media_perception' as const,
+      ...(call.provider ? { provider: call.provider } : {}),
+      ...(call.model ? { model: call.model } : {}),
+      durationMs: call.durationMs,
+      ...(call.status === 'failed' ? { stopReason: 'error' } : {}),
+      usage: {
+        promptTokens: call.usage.prompt_tokens,
+        completionTokens: call.usage.completion_tokens,
+        totalTokens: call.usage.total_tokens,
+      },
+    });
+  }
   for (const [index, outcome] of media.outcomes.entries()) {
     yield Object.freeze({
       type: 'media_resolution' as const,
@@ -271,15 +292,18 @@ async function* runInteractiveTurn(
       status: outcome.status,
       code: outcome.code,
       ...(outcome.provenance ? { provenance: { ...outcome.provenance } } : {}),
+      ...(outcome.description ? { description: outcome.description } : {}),
     });
   }
   imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining
     - (media.perceptionItems ?? 0) - media.blocks.filter(block => block.type === 'image').length);
   if (media.perceptionUsage) interactiveRun?.recordUsage(media.perceptionUsage.total_tokens);
   const background = pendingContext ? conversationContextMessage(pendingContext.blocks) : undefined;
+  // #1250 vision-ask-after-perception: with collaboration tools, say the media is already described.
+  const delegationNote = collaboration ? perceptionDelegationNote(media.outcomes) : undefined;
   const userMessages = applyInboundMediaInjection(
     background ? [background, ...prompt.userMessages] : prompt.userMessages,
-    media,
+    delegationNote ? { ...media, textAppends: [...media.textAppends, delegationNote] } : media,
   );
   actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   // #1250: the bot's own reply delivered in this session is history, not new content (ADR 0067 D7);

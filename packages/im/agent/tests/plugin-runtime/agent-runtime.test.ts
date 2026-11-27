@@ -15,8 +15,14 @@ import { createNativeLocalAssetsToolFeature } from '../../src/plugin-runtime/nat
 import { AgentResourceHub } from '../../src/resource-hub/index.js';
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { installAgentPersistence } from '../../src/plugin-runtime/host/persistence-coordinator.js';
 import {
+  DisposeStack,
+  GenerationHandoffStack,
+  Scope,
   SnapshotStore,
+  databaseRootHostToken,
   childPluginId,
   createCapabilitySlot,
   createSnapshotView,
@@ -1592,6 +1598,59 @@ describe('structured usage persistence', () => {
       expect(JSON.stringify(error.mock.calls)).not.toContain('PRIVATE');
       expect(error).toHaveBeenCalledTimes(failing ? 1 : 0);
     } finally { enabled.mockRestore(); error.mockRestore(); await fixture.mcp.stop(); await store.close(); }
+  });
+});
+
+describe('structured usage persistence through the installed SQLite store (#1250 usage-store-never-written)', () => {
+  it('writes agent_usage_turns / agent_usage_calls from a real turn, reading the Root-private store as Runtime Roots resolve it', async () => {
+    const fixture = await createFixture();
+    const dir = await mkdtemp(join(tmpdir(), 'zhin-usage-sqlite-'));
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'usage.sqlite') });
+    const scope = new Scope(rootPluginId());
+    const lifecycle = new DisposeStack(), handoff = new GenerationHandoffStack();
+    scope.provide(databaseRootHostToken, host);
+    handoff.add({ activateNext: () => host.start() });
+    installAgentPersistence({ resources: scope, handoff, lifecycle, admission: { onActivate: () => () => undefined } as never }, {
+      agent: { markMemoryPersistenceReady: vi.fn() }, semanticMemory: null,
+      schedule: { start: vi.fn(async () => undefined), store: { activateDatabase: vi.fn(async () => undefined) },
+        history: { activateRepository: vi.fn(), housekeeping: vi.fn() } },
+    } as never, { sessions: { useDatabase: false }, usage: { retentionDays: 30 } } as never);
+    scope.seal(); lifecycle.seal(); handoff.seal();
+    await handoff.activateNext(new AbortController().signal);
+    const state = stateWithEngine(fixture.snapshot, async function* () {
+      yield { type: 'usage', provider: 'p', model: 'm', usage: { promptTokens: 7, completionTokens: 3, totalTokens: 10 } };
+      yield terminalEvent();
+    });
+    // Same resolver shape as RootRuntime: Root-private tokens are only readable through the Root Scope.
+    const store = new SnapshotStore(state, undefined, undefined,
+      (_state, root, token) => scope.has(token) ? scope.use(token) : state.resources.get(root)?.get(token.id));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      expect((await runtime.execute(fixture.child, externalRequest('sqlite-usage'), selection([]))).status).toBe('completed');
+      const turns = await host.models.get('agent_usage_turns')!.select();
+      const calls = await host.models.get('agent_usage_calls')!.select();
+      expect(turns).toHaveLength(1);
+      expect(turns[0]).toMatchObject({ status: 'completed', call_count: 1 });
+      expect(calls).toMatchObject([{ provider: 'p', model: 'm', input_tokens: 7, output_tokens: 3, total_tokens: 10 }]);
+    } finally {
+      await fixture.mcp.stop(); await store.close(); await lifecycle.dispose(); await host.stop();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('warns once, with the reason, when the generation provides no usage store', async () => {
+    const fixture = await createFixture();
+    const warn = vi.spyOn(getLogger('ai.usage'), 'warn').mockImplementation(() => undefined);
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* () { yield terminalEvent(); }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      await runtime.execute(fixture.child, externalRequest('no-store-1'), selection([]));
+      await runtime.execute(fixture.child, externalRequest('no-store-2'), selection([]));
+      const lines = warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('usage_store'));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('status: unavailable');
+      expect(lines[0]).toMatch(/SQLite/);
+    } finally { warn.mockRestore(); await fixture.mcp.stop(); await store.close(); }
   });
 });
 

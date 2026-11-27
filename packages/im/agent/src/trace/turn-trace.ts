@@ -26,6 +26,13 @@ const MAX_SUBAGENTS = 20;
 const ARGS_SUMMARY_LENGTH = 200;
 const TEXT_SUMMARY_LENGTH = 300;
 export const TRIGGER_TEXT_LENGTH = 120;
+/**
+ * #1250 trace-media-perception-provenance-clipped: upper bound for one perception description in the trace
+ * (`ai.multimodal.perception.maxChars` defaults to 800). Longer text is cut and marked with its full length.
+ */
+export const MEDIA_DESCRIPTION_TRACE_LENGTH = 4_000;
+/** Bound on inbound media items recorded per (sub-)turn. */
+const MAX_MEDIA_ENTRIES = 32;
 
 export type TurnTraceStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'budget_exceeded' | 'unknown';
 export type TurnTraceToolStatus = 'running' | 'ok' | 'failed' | 'denied' | 'cancelled';
@@ -56,6 +63,23 @@ export interface TurnTraceModelCall {
   readonly reasoning_tokens?: number;
   /** Hash of the request's system prompt + tool definitions (#1250); equal hashes share a cacheable prefix. */
   readonly prefix_hash?: string;
+  /** Set when the call was not the turn's own chat request: `media_perception` is the perception pre-pass (#1250). */
+  readonly purpose?: 'media_perception';
+}
+
+/** Terminal state of one inbound media item (#1250 trace-media-perception-provenance-clipped). */
+export interface TurnTraceMediaResolution {
+  readonly index: number;
+  readonly kind: 'image' | 'audio' | 'video' | 'file';
+  readonly status: 'accepted' | 'derived' | 'unsupported' | 'rejected' | 'failed';
+  readonly code: string;
+  /** Which perception model described the item, and whether the description came from its cache. */
+  readonly provenance?: Readonly<{ source: 'media_perception'; provider: string; model: string; cached: boolean }>;
+  /** Redacted perception description, at most {@link MEDIA_DESCRIPTION_TRACE_LENGTH} characters. */
+  readonly description?: string;
+  /** Present when the description was cut: the full length is `description_chars`. */
+  readonly description_truncated?: true;
+  readonly description_chars?: number;
 }
 
 export interface TurnTraceToolCall {
@@ -195,6 +219,8 @@ export interface TurnTrace {
   readonly ended_at?: number;
   readonly duration_ms?: number;
   readonly model_calls: readonly TurnTraceModelCall[];
+  /** Inbound media items of this turn and how each was resolved (#1250). Absent when the turn had none. */
+  readonly media?: readonly TurnTraceMediaResolution[];
   readonly usage: Readonly<{ prompt_tokens: number; completion_tokens: number; total_tokens: number }>;
   /** Estimated prompt cost by segment for the turn's first model request (#729). */
   readonly context_budget?: ContextBudgetReport;
@@ -318,6 +344,7 @@ export class TurnTraceCollector {
   #endedAt: number | undefined;
   #termination: TurnTraceTermination = { status: 'running' };
   readonly #modelCalls: TurnTraceModelCall[] = [];
+  readonly #media: TurnTraceMediaResolution[] = [];
   readonly #toolCalls = new Map<string, MutableToolCall>();
   readonly #extensions: TurnTraceBudgetExtension[] = [];
   #continuations = 0;
@@ -545,11 +572,17 @@ export class TurnTraceCollector {
           ...(event.usage.cacheReadTokens !== undefined ? { cache_read_tokens: event.usage.cacheReadTokens } : {}),
           ...(event.usage.reasoningTokens !== undefined ? { reasoning_tokens: event.usage.reasoningTokens } : {}),
           ...(event.prefixHash ? { prefix_hash: event.prefixHash } : {}),
+          ...(event.purpose ? { purpose: event.purpose } : {}),
         });
         this.#modelCalls.push(call);
-        this.#addTimeline('model_call', `#${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}`);
+        const purpose = call.purpose === 'media_perception'
+          ? ` 识图 ${call.provider ?? '?'}/${call.model ?? '?'}` : '';
+        this.#addTimeline('model_call', `#${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${purpose}`);
         return;
       }
+      case 'media_resolution':
+        this.#recordMedia(event);
+        return;
       case 'tool_call':
         this.#startTool(event.toolUseId, event.toolName, summarizeArgs(event.args));
         this.#addTimeline('tool_call', `${event.toolName} ${summarizeArgs(event.args)}`);
@@ -658,6 +691,7 @@ export class TurnTraceCollector {
         ? { ended_at: this.#endedAt, duration_ms: this.#endedAt - this.#startedAt }
         : {}),
       model_calls: Object.freeze([...this.#modelCalls]),
+      ...(this.#media.length ? { media: Object.freeze([...this.#media]) } : {}),
       usage: Object.freeze(usage),
       ...(this.#contextBudget ? { context_budget: this.#contextBudget } : {}),
       tool_calls: Object.freeze([...this.#toolCalls.values()].map(tool => Object.freeze({ ...tool }))),
@@ -715,6 +749,30 @@ export class TurnTraceCollector {
     this.#addTimeline('end', [termination.status, termination.code, termination.reason].filter(Boolean).join(' '));
   }
 
+  #recordMedia(event: Extract<TurnEvent, { type: 'media_resolution' }>): void {
+    const provenance = event.provenance ? Object.freeze({
+      source: event.provenance.source,
+      provider: clip(scrubSecrets(String(event.provenance.provider)), 200),
+      model: clip(scrubSecrets(String(event.provenance.model)), 200),
+      cached: event.provenance.cached === true,
+    }) : undefined;
+    const raw = typeof event.description === 'string' ? scrubSecrets(event.description.trim()) : '';
+    const chars = Array.from(raw);
+    const truncated = chars.length > MEDIA_DESCRIPTION_TRACE_LENGTH;
+    const entry: TurnTraceMediaResolution = Object.freeze({
+      index: event.index,
+      kind: event.mediaKind,
+      status: event.status,
+      code: clip(scrubSecrets(String(event.code)), 120),
+      ...(provenance ? { provenance } : {}),
+      ...(raw ? { description: truncated ? `${chars.slice(0, MEDIA_DESCRIPTION_TRACE_LENGTH).join('')}…` : raw } : {}),
+      ...(truncated ? { description_truncated: true as const, description_chars: chars.length } : {}),
+    });
+    if (this.#media.length >= MAX_MEDIA_ENTRIES) this.#dropped += 1;
+    else this.#media.push(entry);
+    this.#addTimeline('media_resolution', describeMediaResolution(entry));
+  }
+
   #addTimeline(kind: string, detail: string): void {
     if (this.#timeline.length >= MAX_TIMELINE_ENTRIES) {
       this.#dropped += 1;
@@ -736,6 +794,19 @@ export class TurnTraceCollector {
       ...(this.#principal.trust_level ? { trustLevel: this.#principal.trust_level } : {}),
     };
   }
+}
+
+/** `#0 image derived media_perception · 识图 provider/model · 缓存命中`: never clipped mid-provenance. */
+export function describeMediaResolution(media: TurnTraceMediaResolution): string {
+  const parts = [`#${media.index} ${media.kind} ${media.status} ${media.code}`];
+  if (media.provenance) {
+    parts.push(`识图 ${media.provenance.provider}/${media.provenance.model}`);
+    parts.push(media.provenance.cached ? '缓存命中' : '新调用');
+  }
+  if (media.description !== undefined) {
+    parts.push(media.description_truncated ? `描述 ${media.description_chars} 字符（已截断）` : `描述 ${Array.from(media.description).length} 字符`);
+  }
+  return parts.join(' · ');
 }
 
 /** Redacted, single-line, length-bounded summary of tool arguments. */

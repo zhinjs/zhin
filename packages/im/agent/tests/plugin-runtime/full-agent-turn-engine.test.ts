@@ -601,14 +601,26 @@ describe('FullAgentTurnEngine', () => {
       tools: new TurnToolRuntime(turn, []),
       selection: selection(),
     });
+    const events: unknown[] = [];
     while (true) {
       const step = await stream.next();
       if (step.done) {
         await step.value?.project();
         break;
       }
+      events.push(step.value);
     }
 
+    // #1250 trace-media-perception-provenance-clipped: the perception call is a model call of the turn
+    // (trace `model_calls`, `ai.usage`, usage rows), tagged with its purpose and the answering model.
+    expect(events.filter(event => (event as { type: string }).type === 'usage')).toEqual([expect.objectContaining({
+      type: 'usage', purpose: 'media_perception', provider: 'g', model: 'm',
+      usage: expect.objectContaining({ promptTokens: 300, completionTokens: 12, totalTokens: 312 }),
+    })]);
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'media_resolution', status: 'derived', description: '一个红圈',
+      provenance: { source: 'media_perception', provider: 'g', model: 'm', cached: false },
+    }));
     expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 312);
     expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 2);
     expect(record.mock.calls.reduce((sum, call) => sum + call[1], 0)).toBe(314);

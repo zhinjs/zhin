@@ -20,7 +20,7 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 
 - `input`、`output`、`cache_read`、`cache_write`、`reasoning` 单位均为 token；缓存读写属于输入的分项，思考属于输出的分项，不能重复相加。数值沿用 Provider 经 SDK 归一化后的 usage，不用字符估算替代。
 - `?` 表示没有可证明的数据；`0` 表示明确的零值，或没有记录到模型响应；`>=60` 表示部分调用缺少该字段，已确认的部分合计为 60。旧记录无法证明的零值也会显示为 `?`。
-- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复和协作子回合；`subagent_calls` 是其中其他 Agent 子回合的次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
+- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复、协作子回合，以及识图预处理（`ai.multimodal.perception`）已经发到识图服务的请求（缓存命中不算；失败的请求按保守估算计入）；`subagent_calls` 是其中其他 Agent 子回合的次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
 - 汇总包含当前 trace 中已记录的子回合；`partial` 表示回合未正常完成、子回合结果不完整或记录达到上限；此时显示的只是已记录用量，不能当作全部消耗。它不是整个账号的账单：独立决策、嵌入、图像生成等没有进入该 trace 的调用不在此汇总，Provider 未回传的失败请求用量也无法推算。
 - `ms` 是 trace 记录的回合耗时；`trace` 用于串联日志，`turn` 可以交给 `zhin trace <turn>` 查看已有归档。日志无需归档开关；只开日志不会新增落盘存储。
 
@@ -35,7 +35,7 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 - 一次判断写一行：`calls` 是判断次数，不是模型请求次数。请求阶段切到备用模型时，这一行写备用模型，`ms` 是两次请求的合计，token 是作答那次请求回传的用量。
 - 决策模型没有回传用量时只写 `calls` 和 `ms`。Console「群聊插话」状态的 `judgeDaily` 按天汇总这些调用的次数与 token（进程内存，重启后从当天重新计）。
 
-需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。
+需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时，识图预处理的调用另带 `purpose: media_perception`；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。
 
 ```yaml
 log_level: debug
@@ -537,6 +537,8 @@ ai:
 ### 入站媒体
 
 入站消息里的本机路径（`MediaRef kind: 'path'`，包括平台引用物化出的路径）只在两个条件同时满足时才读：产出这条消息的端点声明了自己的入站媒体目录（`inboundMedia.roots()`，见[端点生命周期](../authoring/endpoint-lifecycle.md#入站媒体目录)），且解析符号链接、`..` 之后的真实路径落在该目录内；即使在目录内，仍要通过文件策略的敏感检查（`.zhin/`、`.env*`、密钥、数据库等）。其他路径一律不读，记录 `op=inbound_media_rejected` 警告（`reason=inbound_path_not_owned` 或 `inbound_path_sensitive`，不含路径），模型看到「这条消息里有个文件无法读取」的占位，整轮照常进行。平台字段 `data.file` 不再被猜成本机路径。引用消息、合并转发只把内容交给模型，不会读其中的本地文件。
+
+URL、内联数据（base64）和平台引用读不到时，`inbound_media_rejected` 的 `reason` 写具体原因：`too_large`（超过 `maxFileBytes`）、`mime_mismatch`（内容不是声明的类型，或不是可识别的媒体）、`invalid_data`（内联数据无法解码）、`scheme_unsupported`（不是 HTTPS 地址）、`host_not_allowed`（私网 / 回环地址、非默认端口、跳转被拒）、`fetch_failed`（非 2xx、超时、连接或 TLS 错误；带 `status`）、`file_unreadable`、`unmaterialized_platform_reference`。日志同时带 `scene`（`平台/会话类型/会话 id`）、`message`（消息 id）、`scheme`，URL 另带 `host`；不记路径、查询串和内联数据。模型看到的占位与回合结局（`media_resolution`）用同一个原因码。
 
 `ZhinAgent` 的旧回合入口（`process()`、`processTurn()`、`processStream()`、`prompt()`，即 `processTextTurn()` 链）拿不到产出端点声明的目录，入站本机路径一律不读（同样只给占位）；仓内只有测试和 Agent eval 使用它们。IM 消息的正式回合走 Plugin Runtime 入站链（`zhin start`），由入口把端点目录写进 `TurnInput.inboundMediaRoots`。
 

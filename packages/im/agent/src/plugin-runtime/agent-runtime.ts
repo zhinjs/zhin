@@ -271,8 +271,20 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
   readonly #ingress = new CapabilityIngress();
   readonly #usageLogger = getLogger('ai.usage');
 
+  #usageStoreMissingWarned = false;
+
   constructor(private readonly options: AgentRuntimeOptions) {
     super();
+  }
+
+  /** Once per runtime: structured usage rows are not written for this Root (#1250 usage-store-never-written). */
+  #warnUsageStoreMissing(): void {
+    if (this.#usageStoreMissingWarned) return;
+    this.#usageStoreMissingWarned = true;
+    try {
+      this.#usageLogger.warn(formatCompact({ op: 'usage_store', status: 'unavailable',
+        detail: '本实例没有结构化用量存储，agent_usage_turns / agent_usage_calls 不会写入（需要 SQLite、MySQL 或 PostgreSQL 数据库；用量仍写入 ai.usage 日志与 trace）' }));
+    } catch { /* Diagnostic only. */ }
   }
 
   /**
@@ -338,7 +350,10 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     let active = true;
     let models: ModelExecutionScope | undefined;
     let mediaPerception: import('../media/perception.js').MediaPerceptionPort | undefined;
-    const usageStore = lease.value.resources.get(lease.value.root)?.get(agentUsageStoreToken.id) as AgentUsageStore | undefined;
+    // #1250 usage-store-never-written: the store is a Root-private resource. A generation snapshot's
+    // resource map leaves Root-private bindings out, so it is read through the Root resolver.
+    const usageStore = readLeasedRootResource(this.requireSnapshots(), lease, agentUsageStoreToken) as AgentUsageStore | undefined;
+    if (!usageStore) this.#warnUsageStoreMissing();
     const selected = { provider: '', model: '' };
     const usage = usageStore ? new AgentUsageCollector(String(owner), request, selected) : undefined;
     let usageStatus = 'failed';

@@ -86,6 +86,8 @@ function setup(options: {
   models?: ActorModelSource;
   tracing?: SubTurnTracing;
   rootModel?: ActorModelSelection;
+  rootMedia?: readonly { kind: 'image' | 'audio' | 'video' | 'file'; source: { kind: 'url' | 'path' | 'base64' | 'platform_ref'; value: string }; mimeType?: string }[];
+  imageInspectionBudget?: { remaining: number };
 }) {
   const inputs: CoreInput[] = [];
   const core = {
@@ -108,7 +110,7 @@ function setup(options: {
     identity: { rootId: 'root', generation: 3, traceId: 'trace', turnId: 'turn-1' },
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'private', sceneId: 'owner', messageId: 'm-1' },
     principal: { subjectId: 'owner', roles: ['owner'] },
-    input: { text: 'hi', locale: 'en', commandPrefix: '!!', commandMenu: '!!menu' },
+    input: { text: 'hi', locale: 'en', commandPrefix: '!!', commandMenu: '!!menu', ...(options.rootMedia ? { media: options.rootMedia } : {}) },
     session: { key: 'im:icqq:bot:private:owner' },
     policy: SHELL_POLICY,
     capabilities: { tools: options.tools.map(tool => tool.name), skills: [] },
@@ -134,6 +136,7 @@ function setup(options: {
     resolveModel: () => options.rootModel ?? { modelId: 'm1', modelCandidates: ['m1'] },
     ...(options.models ? { models: options.models } : {}),
     ...(options.tracing ? { tracing: options.tracing } : {}),
+    ...(options.imageInspectionBudget ? { imageInspectionBudget: options.imageInspectionBudget } : {}),
   });
   const harness: Harness = createHarness({
     guard: createGuardKernel({ isAttenuationOf }),
@@ -415,6 +418,53 @@ describe('actor turn runner', () => {
     expect(result.content).toMatch(/without a reply/);
     expect(result).not.toHaveProperty('reply');
     expect(ctx.inputs[0]!.promptProfile.persona).toMatch(/^You are a focused assistant agent/);
+  });
+});
+
+describe('#1250 vision-ask-after-perception: a delegation carries the human\'s original media', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+  const image = { kind: 'image' as const, source: { kind: 'base64' as const, value: PNG }, mimeType: 'image/png' };
+  function visionScope(input: readonly string[]) {
+    const bundle = executionBundle({
+      model: { id: 'vision-model', provider: 'acct', api: 'fixture', input, contextWindow: 128_000, maxTokens: 8192 } as never,
+      completion: { complete: async () => { throw new Error('no completion expected'); } },
+    });
+    return { acquire: async () => ({ chat: bundle, purpose: 'agent:vision', release: async () => undefined }) as never } as ActorModelSource;
+  }
+
+  it('attaches the root turn\'s image to an ask handled by an image-capable agent', async () => {
+    const budget = { remaining: 4 };
+    const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image],
+      models: visionScope(['text', 'image']), imageInspectionBudget: budget });
+    const { root, detach } = await ctx.attach();
+    await ctx.harness.send('zhin', root, { kind: 'ask', to: 'vision', text: 'Is this the Octocat?' });
+    const message = ctx.inputs[0]!.initialMessages[0]!;
+    expect(message.media).toEqual([expect.objectContaining({ type: 'image', data: expect.objectContaining({ media: expect.objectContaining({ kind: 'base64', value: PNG, mime_type: 'image/png' }) }) })]);
+    expect(JSON.stringify(message.content)).toContain('original image');
+    expect(budget.remaining).toBe(3);
+    await detach({ status: 'completed' });
+  });
+
+  it('sends no media to an agent whose model cannot take it, nor to the entry agent, nor beyond the image budget', async () => {
+    const textOnly = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image], models: visionScope(['text']) });
+    const first = await textOnly.attach();
+    await textOnly.harness.send('zhin', first.root, { kind: 'ask', to: 'vision', text: 'q' });
+    expect(textOnly.inputs[0]!.initialMessages[0]!.media).toBeUndefined();
+    await first.detach({ status: 'completed' });
+
+    const spent = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image],
+      models: visionScope(['text', 'image']), imageInspectionBudget: { remaining: 0 } });
+    const second = await spent.attach();
+    await spent.harness.send('zhin', second.root, { kind: 'ask', to: 'vision', text: 'q' });
+    expect(spent.inputs[0]!.initialMessages[0]!.media).toBeUndefined();
+    await second.detach({ status: 'completed' });
+
+    const entry = setup({ agents: [agentDef('zhin', ALL), agentDef('vision', ALL)], tools: [], rootMedia: [image], models: visionScope(['text', 'image']) });
+    const third = await entry.attach();
+    await entry.runner('zhin', [mailFrom(third.root, { to: 'zhin', from: { kind: 'actor', actor: 'vision' }, kind: 'result',
+      body: { kind: 'result', inReplyTo: 'q', status: 'completed', content: 'yes' } } as never)], new AbortController().signal);
+    expect(entry.inputs[0]!.initialMessages[0]!.media).toBeUndefined();
+    await third.detach({ status: 'completed' });
   });
 });
 

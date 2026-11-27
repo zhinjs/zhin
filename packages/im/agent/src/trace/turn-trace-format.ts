@@ -122,7 +122,22 @@ function renderTrace(
     const reasoning = call.reasoning_tokens ? ` reasoning=${call.reasoning_tokens}` : '';
     const cacheWrite = call.cache_write_tokens !== undefined ? ` cache_write=${call.cache_write_tokens}` : '';
     const model = call.model ? ` model=${modelDisplay(call.provider, call.model, providerLabel)}` : '';
-    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}${cacheWrite}${model}`);
+    const purpose = call.purpose === 'media_perception' ? ' （识图）' : '';
+    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}${cacheWrite}${model}${purpose}`);
+  }
+  if (trace.media?.length) {
+    // #1250 trace-media-perception-provenance-clipped: which perception model described each item, and what it said.
+    lines.push(`${indent}  入站媒体 ${trace.media.length} 项`);
+    for (const media of trace.media) {
+      const source = media.provenance
+        ? ` · 识图 ${modelDisplay(media.provenance.provider, media.provenance.model, providerLabel)} · ${media.provenance.cached ? '缓存命中' : '新调用'}`
+        : '';
+      lines.push(`${indent}    #${media.index} ${media.kind} ${media.status} ${media.code}${source}`);
+      if (media.description !== undefined) {
+        const cut = media.description_truncated ? `（已截断，共 ${media.description_chars} 字符）` : '';
+        lines.push(`${indent}      描述${cut}: ${media.description.replace(/\s+/gu, ' ')}`);
+      }
+    }
   }
 
   if (trace.context_budget) lines.push(...renderContextBudget(trace.context_budget, indent));

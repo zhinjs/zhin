@@ -66,6 +66,7 @@ export function formatTurnUsageLogs(trace: TurnTrace, context: UsageLogContext, 
     const ids = { trace: identity.trace, turn: safe(item.turn_id) };
     const lines = item.model_calls.map(call => formatCompact({ op: 'call', ...ids, index: call.index,
       model: safe(`${call.provider ?? '?'}/${call.model ?? '?'}`), status: safe(call.stop_reason ?? '?'),
+      ...(call.purpose ? { purpose: call.purpose } : {}),
       ...tokens([call]), ms: call.duration_ms === undefined ? '?' : Math.round(call.duration_ms) }));
     const budget = item.context_budget;
     if (budget) lines.push(formatCompact({ op: 'context', ...ids, request: 'first', unit: 'estimated_tokens',

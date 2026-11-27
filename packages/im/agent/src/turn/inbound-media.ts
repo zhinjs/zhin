@@ -15,7 +15,8 @@ import { isMediaBlockRef, type Usage, type MediaContentBlock, type MediaBlockRef
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   inspectMediaBytes,
-  normalizeMediaRefsToPayloads,
+  normalizeMediaRefs,
+  type MediaRefRejection,
 } from '../media/media-normalize.js';
 import { authorizeInboundMediaPath, readInboundMediaFile } from '../media/inbound-media-path.js';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-types.js';
@@ -37,6 +38,21 @@ export interface InboundMediaInjection {
   /** Tokens spent by the perception pre-pass (not part of the turn's own completion usage). */
   readonly perceptionUsage?: Usage;
   readonly perceptionItems?: number;
+  /**
+   * #1250 trace-media-perception-provenance-clipped: one entry per perception request that reached a
+   * provider (cache hits are not calls). The turn engine reports each as a model call of the turn.
+   */
+  readonly perceptionCalls?: readonly InboundPerceptionCall[];
+}
+
+export interface InboundPerceptionCall {
+  readonly kind: TurnMedia['kind'];
+  readonly provider?: string;
+  readonly model?: string;
+  readonly usage: Usage;
+  readonly durationMs: number;
+  /** `failed`: the request reached the provider but no description came back (usage is an estimate). */
+  readonly status: 'completed' | 'failed';
 }
 
 export interface InboundMediaOutcome {
@@ -45,6 +61,8 @@ export interface InboundMediaOutcome {
   readonly code: string;
   /** Where derived text came from (perception pre-pass); the text is untrusted external content. */
   readonly provenance?: InboundMediaProvenance;
+  /** Perception description injected for this item (untrusted; for the turn trace). */
+  readonly description?: string;
 }
 
 export interface InboundMediaProvenance {
@@ -73,6 +91,10 @@ export interface ResolveTurnMediaOptions {
   readonly inboundMediaOrigins?: readonly string[];
   /** Replaces the pinned Node transport that downloads inbound media URLs (tests, embedding hosts). */
   readonly mediaTransport?: NetworkTransport;
+  /** Where the message came from (`platform/scope/scene`), for the rejection log line only. */
+  readonly scene?: string;
+  /** Native id of the inbound message, for the rejection log line only. */
+  readonly messageId?: string;
 }
 
 const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
@@ -104,17 +126,21 @@ async function materializeInboundMedia(
   inboundMediaRoots: readonly string[] | undefined,
   transport?: NetworkTransport,
   inboundMediaOrigins: readonly string[] = [],
-): Promise<Readonly<{ payload?: MediaBinaryPayload; refused?: string }>> {
+): Promise<Readonly<{ payload?: MediaBinaryPayload; refused?: string;
+  rejected?: Readonly<{ reason: MediaRefRejection; scheme: string; host?: string; status?: number }> }>> {
   if (media.kind !== 'path') {
-    const [payload] = await normalizeMediaRefsToPayloads([{ type, media: media as never }], maxBytes, signal, undefined, transport, inboundMediaOrigins);
-    return payload ? { payload } : {};
+    const [result] = await normalizeMediaRefs([{ type, media: media as never }], maxBytes, signal, undefined, transport, inboundMediaOrigins);
+    if (result?.ok) return { payload: result.payload };
+    const { ok: _ok, ...rejected } = result ?? { ok: false as const, reason: 'mime_mismatch' as const, scheme: media.kind };
+    return { rejected };
   }
   const decision = await authorizeInboundMediaPath(media.value, inboundMediaRoots);
   if (!decision.allowed) return { refused: decision.reason };
-  if (typeof media.size === 'number' && media.size > maxBytes) return {};
+  if (typeof media.size === 'number' && media.size > maxBytes) return { rejected: { reason: 'too_large', scheme: 'path' } };
   const bytes = await readInboundMediaFile(decision, maxBytes);
-  const detected = bytes ? inspectMediaBytes(bytes, type === 'file' ? undefined : type) : null;
-  if (!bytes || !detected) return {};
+  if (!bytes) return { rejected: { reason: 'file_unreadable', scheme: 'path' } };
+  const detected = inspectMediaBytes(bytes, type === 'file' ? undefined : type);
+  if (!detected) return { rejected: { reason: 'mime_mismatch', scheme: 'path' } };
   return {
     payload: {
       kind: detected.kind,
@@ -157,6 +183,7 @@ export async function resolveTurnMediaInjection(
     inboundMediaRoots,
     inboundMediaOrigins,
   } = options;
+  const where = { ...(options.scene ? { scene: options.scene } : {}), ...(options.messageId ? { message: options.messageId } : {}) };
   const refs = (turnMedia ?? []).map((entry) => ({
     entry,
     type: entry.kind,
@@ -176,6 +203,7 @@ export async function resolveTurnMediaInjection(
   const outcomes: InboundMediaOutcome[] = [];
   let perceived = 0;
   let perceptionUsage: Usage | undefined;
+  const perceptionCalls: InboundPerceptionCall[] = [];
 
   for (const { entry, type, media: initialMedia } of refs) {
     let media = initialMedia;
@@ -199,18 +227,23 @@ export async function resolveTurnMediaInjection(
       media = resolution.content;
     }
     signal.throwIfAborted();
-    const { payload, refused } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots, options.mediaTransport, inboundMediaOrigins);
+    const { payload, refused, rejected } = await materializeInboundMedia(type, media, config.maxFileBytes, signal, inboundMediaRoots, options.mediaTransport, inboundMediaOrigins);
     signal.throwIfAborted();
     if (refused) {
       // The reason and kind only: the path itself names host layout and stays out of logs and prompt.
-      logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: refused }));
+      logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: refused, ...where, scheme: 'path' }));
       textAppends.push(unreadableLocalFileText(type, refused, media));
       outcomes.push({ kind: type, status: 'rejected', code: refused });
       continue;
     }
     if (!payload) {
-      const code = media.kind === 'file' ? 'unmaterialized_platform_reference' : 'media_validation_failed';
-      logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: code }));
+      // #1250 inbound-media-reject-reason-opaque: the specific reason, scene, and the URL's scheme + host
+      // (never its path, query string or inline data).
+      const code = rejected?.reason ?? 'unmaterialized_platform_reference';
+      logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: code, ...where,
+        ...(rejected ? { scheme: rejected.scheme } : {}),
+        ...(rejected?.host ? { host: rejected.host } : {}),
+        ...(rejected?.status !== undefined ? { status: rejected.status } : {}) }));
       textAppends.push(failureText(type, `rejected:${code}`, media));
       outcomes.push({ kind: type, status: 'rejected', code });
       continue;
@@ -248,9 +281,14 @@ export async function resolveTurnMediaInjection(
           logger.warn(formatCompact({ op: 'inbound_perception_skipped', type, reason: 'max_items_per_turn' }));
         } else {
           perceived += 1;
+          const started = Date.now();
           try {
             const result = await perception.describe(payload, signal);
-            if (result?.usage) perceptionUsage = addUsage(perceptionUsage, result.usage);
+            if (result?.usage) {
+              perceptionUsage = addUsage(perceptionUsage, result.usage);
+              perceptionCalls.push(Object.freeze({ kind: type, provider: result.provider, model: result.model,
+                usage: result.usage, durationMs: Date.now() - started, status: 'completed' as const }));
+            }
             if (result?.text.trim()) {
               textAppends.push(renderPerceptionCaption(type, result.text));
               outcomes.push({
@@ -263,12 +301,18 @@ export async function resolveTurnMediaInjection(
                   model: result.model,
                   cached: result.cached,
                 }),
+                description: result.text.trim(),
               });
               continue;
             }
           } catch (error) {
             // A call that failed after reaching the provider still counts against the quota.
-            if (error instanceof MediaPerceptionFailedError) perceptionUsage = addUsage(perceptionUsage, error.usage);
+            if (error instanceof MediaPerceptionFailedError) {
+              perceptionUsage = addUsage(perceptionUsage, error.usage);
+              perceptionCalls.push(Object.freeze({ kind: type, ...(error.provider ? { provider: error.provider } : {}),
+                ...(error.model ? { model: error.model } : {}), usage: error.usage, durationMs: Date.now() - started,
+                status: 'failed' as const }));
+            }
             signal.throwIfAborted();
             logger.warn(formatCompact({
               op: 'inbound_perception_failed',
@@ -287,7 +331,23 @@ export async function resolveTurnMediaInjection(
   }
 
   if (blocks.length === 0 && textAppends.length === 0 && outcomes.length === 0) return EMPTY_INJECTION;
-  return { blocks, textAppends, outcomes, perceptionItems: perceived, ...(perceptionUsage ? { perceptionUsage } : {}) };
+  return { blocks, textAppends, outcomes, perceptionItems: perceived, ...(perceptionUsage ? { perceptionUsage } : {}),
+    ...(perceptionCalls.length ? { perceptionCalls } : {}) };
+}
+
+/**
+ * #1250 vision-ask-after-perception: framework line after the perception descriptions of a turn whose model
+ * can hand work to other agents. The description already answers "what is in the picture"; asking another
+ * agent to look again costs a sub-turn, and the original media goes with such a request only when that
+ * agent's model can take it.
+ */
+export const PERCEPTION_DELEGATION_NOTE = '[Framework note: the attached media was already described above by the perception model in this turn. '
+  + 'Answer from that description; do not ask or delegate another agent only to look at or confirm it. '
+  + 'If the question needs more than the description gives, the agent you ask receives the original media when its model can take it.]';
+
+/** {@link PERCEPTION_DELEGATION_NOTE} when at least one item of the turn was described by the perception pre-pass. */
+export function perceptionDelegationNote(outcomes: readonly InboundMediaOutcome[]): string | undefined {
+  return outcomes.some(outcome => outcome.provenance?.source === 'media_perception') ? PERCEPTION_DELEGATION_NOTE : undefined;
 }
 
 function addUsage(a: Usage | undefined, b: Usage): Usage {

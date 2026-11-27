@@ -8,7 +8,7 @@
  * tools are offered, its trust narrows the policy, and the mail's budget grant
  * caps and is charged for the model calls the turn makes.
  */
-import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage } from '@zhin.js/ai';
+import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage, type AgentMessage, type MediaContentBlock, type ModelInputModality } from '@zhin.js/ai';
 import {
   agentOf,
   canCall,
@@ -54,6 +54,7 @@ import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../tur
 import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
 import { authorizeActorAttachments, collectTurnAttachments, recordActorAttachments } from '../media/agent-attachments.js';
 import type { OutboundMediaAuthority } from '../media/media-normalize.js';
+import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import type { FileRole } from '../security/file-role-policy.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
 import type {
@@ -385,6 +386,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
     return runWithAgentTurnConfiguration({ ...current, models }, work);
   };
   try {
+    const rootMedia = await delegatedRootMedia(options, run, (models?.chat.model ?? host.getTurnExecution().model).input, turnSignal);
     const result = await withModels(() => collectAgentLoopTurnRun(options.core.runText({
       host,
       sessionId: sessionKey,
@@ -407,7 +409,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
       personaEnhanced: persona,
       modelId: model.modelId,
       modelCandidates: [...model.modelCandidates],
-      initialMessages: [createUserMessage(text)],
+      initialMessages: withRootMedia(createUserMessage(text), rootMedia),
       signal: turnSignal,
       deferredStats: plan.deferredStats,
       deferredController: plan.controller,
@@ -482,6 +484,54 @@ const TRUST_FILE_ROLE: Readonly<Record<InitiatorTrustLevel, FileRole>> = Object.
   trusted_member: 'admin',
   group_member: 'user',
 });
+
+/** Framework line next to the human's media handed to a delegated agent (#1250 vision-ask-after-perception). */
+export const DELEGATED_MEDIA_NOTE = '[The human\'s original image / media from this conversation is attached to this message; look at it directly.]';
+
+/**
+ * #1250 vision-ask-after-perception: an ask / delegate from another agent carries the root turn's media
+ * (the human's own image, video or document) when this agent's model can take that kind, so the agent
+ * looks at the original instead of a second-hand description or link. The entry agent and audio never
+ * get it here; images count against the root turn's image inspection budget.
+ */
+async function delegatedRootMedia(
+  options: ActorTurnRunnerOptions,
+  run: ActorTurnRun,
+  modelInput: readonly ModelInputModality[] | undefined,
+  signal: AbortSignal,
+): Promise<MediaContentBlock[]> {
+  const { rootTurn, directory, imageInspectionBudget } = options;
+  const media = rootTurn.input.media;
+  if (!media?.length || run.agent.name === directory.entry.name) return [];
+  if (!run.batch.some(mail => (mail.kind === 'ask' || mail.kind === 'delegate') && mail.from.kind === 'actor')) return [];
+  const input = new Set<ModelInputModality>(modelInput ?? ['text']);
+  let images = imageInspectionBudget ? imageInspectionBudget.remaining : Number.POSITIVE_INFINITY;
+  const wanted = media.filter(item => {
+    if (item.kind === 'audio' || !input.has(item.kind)) return false;
+    if (item.kind !== 'image') return true;
+    if (images <= 0) return false;
+    images -= 1;
+    return true;
+  });
+  if (!wanted.length) return [];
+  const injection = await resolveTurnMediaInjection(wanted, {
+    ...(rootTurn.ports.references ? { references: rootTurn.ports.references } : {}),
+    signal,
+    providerInput: [...input],
+    ...(rootTurn.input.inboundMediaRoots ? { inboundMediaRoots: rootTurn.input.inboundMediaRoots } : {}),
+    ...(rootTurn.input.inboundMediaOrigins ? { inboundMediaOrigins: rootTurn.input.inboundMediaOrigins } : {}),
+  });
+  if (imageInspectionBudget) {
+    const used = injection.blocks.filter(block => block.type === 'image').length;
+    imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining - used);
+  }
+  return injection.blocks;
+}
+
+function withRootMedia(message: AgentMessage, blocks: readonly MediaContentBlock[]): AgentMessage[] {
+  if (!blocks.length) return [message];
+  return applyInboundMediaInjection([message], { blocks: [...blocks], textAppends: [DELEGATED_MEDIA_NOTE], outcomes: [] });
+}
 
 /** The actor's own media authority: its narrowed filesystem / network policy and its trust's file role. */
 function actorMediaAuthority(policy: Readonly<TurnPolicyContext>, trust: InitiatorTrustLevel): OutboundMediaAuthority {

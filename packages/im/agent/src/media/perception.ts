@@ -116,11 +116,18 @@ const FAILED_PERCEPTION_MEDIA_TOKENS: Readonly<Record<string, number>> = Object.
 /** A perception call that failed after reaching the provider; `usage` is a conservative estimate. */
 export class MediaPerceptionFailedError extends Error {
   readonly usage: Usage;
+  /** The last candidate the request reached (#1250: the failed call is still a model call of the turn). */
+  readonly provider?: string;
+  readonly model?: string;
 
-  constructor(cause: unknown, usage: Usage) {
+  constructor(cause: unknown, usage: Usage, candidate?: Readonly<{ provider: string; model: string }>) {
     super(cause instanceof Error ? cause.message : String(cause), { cause });
     this.name = 'MediaPerceptionFailedError';
     this.usage = usage;
+    if (candidate) {
+      this.provider = candidate.provider;
+      this.model = candidate.model;
+    }
   }
 }
 
@@ -194,6 +201,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         total.total_tokens += usage.total_tokens;
       };
       let lastError: unknown;
+      let lastSent: Readonly<{ provider: string; model: string }> | undefined;
       let empty: MediaPerception | undefined;
       for (const candidate of [config, ...(config.fallbacks ?? [])]) {
         signal?.throwIfAborted();
@@ -212,6 +220,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
             config: resilience, timers: options.timers, onEvent: options.onEvent,
           });
           sent = true;
+          lastSent = { provider: candidate.provider, model: candidate.model };
           const reply = await port.complete(model, { systemPrompt: PERCEPTION_SYSTEM_PROMPT, messages: [user] }, { signal });
           addUsage(perceptionUsageOf(reply.usage));
           const text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
@@ -235,7 +244,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         }
       }
       if (empty) return { ...empty, ...(total.total_tokens ? { usage: total } : {}) };
-      if (total.total_tokens) throw new MediaPerceptionFailedError(lastError, total);
+      if (total.total_tokens) throw new MediaPerceptionFailedError(lastError, total, lastSent);
       throw lastError;
     },
   });
