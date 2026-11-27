@@ -9,7 +9,7 @@ function fixtures(body: string) {
   return webhookRequest(body, { 'x-line-signature': createHmac('sha256', config.channelSecret).update(body).digest('base64') });
 }
 
-it('acknowledges only after actual dispatch finishes and returns 503 for failed admission', async () => {
+it('acknowledges only after the Runtime accepted the event and returns 503 for failed admission', async () => {
   const body = JSON.stringify({ events: [event] });
   let complete!: () => void;
   const admitAccepted = vi.fn(() => new Promise<void>(resolve => { complete = resolve; }));

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ba4823722721d37a -->
+<!-- sync-adapter-docs:sha256=a336e50bf1b67179 -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -117,7 +117,7 @@ pnpm --filter @zhin.js/adapter-dingtalk test
 
 在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
 
-新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。只换 appSecret 时用 appKey + 新 appSecret 调一次 `gettoken` 核验，失败时提示钉钉的 errcode 与 errmsg（已脱敏，不含密钥）。空白或遮蔽的密码不会覆盖既有密码。
 
 读取需要 `dingtalk:read`（`read` 级别，内置角色 `viewer` 及以上都有），写入需要 `dingtalk:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算）；首次迁移还需管理员身份，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
@@ -142,7 +142,7 @@ endpoints:
     appSecret: ${DINGTALK_APP_SECRET}
 ```
 
-连接通过官方网关获取 WSS 地址和临时 ticket，WSS 握手成功后报告 open（与官方 SDK 一致，不要求可选 REGISTERED 帧）。连接失败会拒绝启动；断线由框架统一退避重连，stop 取消网关请求及 socket，防止迟到连接复活。机器人 CALLBACK 在入站链路成功后 ACK；失败或尚未 open 不 ACK，等待服务端重投。连接内缓存五分钟、最多一万条回调 ID 去重；跨进程业务幂等需要应用持久化处理。HTTP 和 Stream 共用消息归一化及统一出站链路。
+连接通过官方网关获取 WSS 地址和临时 ticket，WSS 握手成功后报告 open（与官方 SDK 一致，不要求可选 REGISTERED 帧）。连接失败会拒绝启动；断线由框架统一退避重连，stop 取消网关请求及 socket，防止迟到连接复活。机器人 CALLBACK 在事件交给 Runtime 后立即 ACK，不等待 Agent 回合结束；交接失败或尚未 open 不 ACK，等待服务端重投；交接后的处理失败只记日志。连接内缓存五分钟、最多一万条回调 ID 去重，另按消息 `msgId` 去重（HTTP 回调同样适用，成功交接后保留 24 小时）；跨进程业务幂等需要应用持久化处理。HTTP 和 Stream 共用消息归一化及统一出站链路。
 
 协议依据：[钉钉官方 Stream SDK](https://github.com/open-dingtalk/dingtalk-stream-sdk-nodejs)。本适配器直接实现该网关协议，使用共享 EndpointLifecycle 管理重连和心跳。当前新增模式已经过本地注入传输回归，真实租户验收仍需实际应用验证。
 

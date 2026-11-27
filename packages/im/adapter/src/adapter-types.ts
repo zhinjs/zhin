@@ -49,6 +49,18 @@ export class AdapterManagementError extends Error {
   }
 }
 
+/**
+ * A platform's own refusal to verify a credential-only change (#1250 b115), thrown from
+ * `identifyConfiguration`. `reason` is a fixed, credential-free text written by the platform code (never
+ * platform responses or configuration values); Console shows it as is instead of the generic refusal.
+ */
+export class AdapterIdentityUnsupportedError extends AdapterManagementError {
+  constructor(readonly reason: string) {
+    super('unsupported', reason);
+    this.name = 'AdapterManagementError';
+  }
+}
+
 /** Credentials are execution-only; neither snapshots nor control responses contain resolved values. */
 export interface EndpointSecretResolver {
   resolve(reference: string, context: Readonly<{ instanceId: string; signal: AbortSignal }>): Promise<string>;

@@ -1,5 +1,5 @@
 /**
- * DingTalk webhook HTTP: signature → parse → admit.
+ * DingTalk webhook HTTP: signature → parse → hand off to the Runtime → 200.
  */
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
@@ -54,7 +54,12 @@ export async function handleDingTalkWebhookRequest(
     }
 
     if (event.msgtype && handler.isOpen) {
-      await handler.admit(event);
+      // Waits for the hand-off to the Runtime only, never for the Agent turn (#1250 b115).
+      // A refused hand-off keeps the previous answer: logged, still 200.
+      try { await handler.admit(event); } catch (error) {
+        logger.warn(formatCompact({ op: 'dingtalk_gateway_receive_failed',
+          error: error instanceof Error ? error.message : String(error) }));
+      }
     }
 
     return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });

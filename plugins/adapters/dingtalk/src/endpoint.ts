@@ -18,14 +18,21 @@ export class DingTalkEndpoint extends DingTalkClient implements Endpoint {
     return createEndpointSpecification(this, hooks);
   }
   #startFramework(signal: AbortSignal) { return this.connectTransport(signal); }
+  /**
+   * #1250 b115: the webhook 200 and the Stream ACK settle with the callback (the hand-off to the Runtime),
+   * not with the dispatch it started — a whole Agent turn would outlast DingTalk's timeout and cause a retry.
+   */
   protected override receiveInboundCallback<T>(receive: () => T | Promise<T>): Promise<T> {
-    return this[endpointSpec].events.run(receive);
+    return this[endpointSpec].events.admit(receive);
   }
   protected override publishEvent(name: string, payload: unknown): Promise<unknown> {
     return this[endpointSpec].events.emit(name, payload);
   }
+  /** Resolves once the Runtime holds the event; a later dispatch failure is only logged. */
   protected override publishAccepted(name: string, payload: unknown): Promise<void> {
-    return this[endpointSpec].events.emitAccepted(name, payload).then(() => undefined);
+    return this[endpointSpec].events.handoff(name, payload).then(({ dispatched }) => {
+      this.reportDispatch(dispatched, name);
+    });
   }
   protected override async publishPlatform(name: string, event: unknown): Promise<unknown> {
     await super.publishPlatform(name, event);

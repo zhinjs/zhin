@@ -2,7 +2,7 @@ import { writeConfigurationPath } from './configuration-fields.js';
 import { PluginConsoleRpcError, type PluginConsoleRpcCall, type PluginConsoleRpcInput, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from './provider.js';
 import { isOwnedAdapterDirectory } from './adapter-index.js';
-import { AdapterManagementError, type EndpointExecution, type EndpointMetadata } from './adapter-types.js';
+import { AdapterIdentityUnsupportedError, AdapterManagementError, type EndpointExecution, type EndpointMetadata } from './adapter-types.js';
 import type { AdapterInstance } from './adapter.js';
 import type { AdapterConsoleSpec } from './adapter-console-rpc.js';
 
@@ -139,6 +139,8 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
 /** Fixed, credential-free texts for account failures; conflicts name the CAS that failed. */
 function consoleAccountError(error: unknown, configuration = false): PluginConsoleRpcError {
   if (error instanceof PluginConsoleRpcError) return error;
+  // The platform's fixed, credential-free reason (#1250 b115), e.g. a credential-only change it cannot verify.
+  if (error instanceof AdapterIdentityUnsupportedError) return new PluginConsoleRpcError('unsupported', error.reason);
   if (error instanceof AdapterManagementError) {
     const code = error.code === 'duplicate_entry' || error.code === 'conflict' || error.code === 'closed' ? 'conflict'
       : error.code === 'not_found' ? 'not_found' : error.code === 'invalid_configuration' ? 'invalid_input'

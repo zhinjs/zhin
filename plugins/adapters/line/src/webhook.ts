@@ -1,5 +1,6 @@
 /**
- * LINE webhook HTTP: signature → parse → admit.
+ * LINE webhook HTTP: signature → parse → hand off to the Runtime → 200.
+ * The 200 waits for the hand-off only, never for the dispatch (Agent turn) it starts (#1250 b115).
  */
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';

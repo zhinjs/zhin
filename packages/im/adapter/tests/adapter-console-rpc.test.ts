@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PluginConsoleRpcError } from '@zhin.js/plugin-runtime';
-import { createAdapterConsoleRpc, AdapterManagementError, type AdapterConsoleSpec } from '../src/index.js';
+import { createAdapterConsoleRpc, AdapterIdentityUnsupportedError, AdapterManagementError, type AdapterConsoleSpec } from '../src/index.js';
 import { accountRuntimeFixture } from './account-runtime-fixture.js';
 
 const spec: AdapterConsoleSpec = { adapterKey: 'demo', adapterDisplayName: 'Demo',
@@ -44,6 +44,17 @@ describe('createAdapterConsoleRpc uses the exact owned runtime account authority
     const other = f.otherAdapter.list()[0]!;
     await expect(rpc.methods.get('endpoint-stop')!.handler(f.request({ instanceId: other.instanceId }), call)).rejects.toMatchObject({ code: 'not_found' });
     expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writes + 1);
+  });
+  it('shows the platform reason when it declines to verify a credential-only change (#1250 b115)', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call();
+    await rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic' } }), call);
+    const row = f.adapter.list()[0]!;
+    vi.spyOn(f.adapter, 'update').mockRejectedValueOnce(new AdapterIdentityUnsupportedError('该平台暂不支持只换密钥，请使用替换账号'));
+    await expect(rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values: { token: 'rotated' } }), call))
+      .rejects.toMatchObject({ code: 'unsupported', message: '该平台暂不支持只换密钥，请使用替换账号' });
+    vi.spyOn(f.adapter, 'update').mockRejectedValueOnce(new AdapterManagementError('unsupported', 'Identity cannot be verified; use explicit account replacement'));
+    await expect(rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values: { token: 'rotated' } }), call))
+      .rejects.toMatchObject({ code: 'unsupported', message: '账号操作未能完成，请检查输入并刷新状态' });
   });
   it('rejects missing/undeclared fields, duplicate ids and stale revisions without a second write', async () => {
     const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call(), add = rpc.methods.get('endpoint-add')!;

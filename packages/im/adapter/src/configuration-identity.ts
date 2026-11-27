@@ -1,4 +1,4 @@
-import { AdapterManagementError, type EndpointDesiredRecord, type EndpointSecretResolver } from './adapter-types.js';
+import { AdapterIdentityUnsupportedError, AdapterManagementError, type EndpointDesiredRecord, type EndpointSecretResolver } from './adapter-types.js';
 import { writeConfigurationPath } from './configuration-fields.js';
 import { formatCompact, getLogger, redactSecretText } from '@zhin.js/logger';
 
@@ -76,6 +76,8 @@ export async function sameConfigurationIdentity<Config>(input: {
     if (previous !== undefined) next = await identify(await resolve(input.next), signal, changedFields);
   } catch (cause) {
     signal.throwIfAborted();
+    // A platform that knows it cannot verify this change says so itself (#1250 b115): keep its reason.
+    if (cause instanceof AdapterIdentityUnsupportedError) throw cause;
     const masked = new Set(resolvedSecrets);
     configurationStrings(input.previous.config, changedFields, masked);
     configurationStrings(input.next.config, changedFields, masked);

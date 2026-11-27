@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/line/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2c3d9c90d03e3c60 -->
+<!-- sync-adapter-docs:sha256=f8a5b911f4287e94 -->
 
 # @zhin.js/adapter-line
 
@@ -133,6 +133,8 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 | 事件未到达 | Console 中 Webhook 是否已启用、是否关闭 Auto-reply |
 
 ### Webhook 重放边界
+
+Webhook 在验签、解析通过并把事件交给 Runtime 后立即返回 200，不等待 Agent 回合结束；之后的处理失败只记日志，不影响已返回的 200。交接失败（端点关闭、实例退役）返回 503，由 LINE 重投。
 
 实例内按官方 `webhookEventId` 去重：并发重复请求共享同一次 admission；成功后保留 24 小时，失败释放后可重试。缓存最多 10,000 项，满载时拒绝新 admission，由 HTTP 返回 503；不会驱逐正在处理的事件。重复事件不会重新缓存已消费的 replyToken。未提供事件 ID 的旧事件保持原行为。
 

@@ -2,7 +2,7 @@ import { bindPlatformEndpoint } from '../../src/endpoint-specification.js';
 import { EventEmitter } from 'node:events';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId, type CapabilityId, type RuntimeSnapshot, type TokenId, createCapabilitySlot } from '@zhin.js/plugin-runtime';
-import { Adapter, AdapterIndex, AdapterManagementError, endpointEventGatewayToken, createEndpointSpecification, endpointSpec,
+import { Adapter, AdapterIdentityUnsupportedError, AdapterIndex, AdapterManagementError, endpointEventGatewayToken, createEndpointSpecification, endpointSpec,
   defineAdapter, parseAdapterDefinition, type EndpointCreationContext, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
   type EndpointDesiredRecord, type EndpointPreviousIdentity, type EndpointConnectionInfo, type Endpoint } from '../../src/index.js';
 
@@ -583,6 +583,7 @@ class VerifiedAdapter extends NativeAdapter {
     void fields;
     if (config.token === 'failed') throw new Error('identity verification failed');
     if (config.token === 'unsupported') return undefined;
+    if (config.token === 'declined') throw new AdapterIdentityUnsupportedError('platform cannot verify a secret-only change');
     return config.token === 'other' ? 'platform:other' : 'platform:original';
   });
   protected override identifyConfiguration(config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[]) {
@@ -622,7 +623,13 @@ describe('verified account identity at the desired-state boundary', () => {
     expect(repository.state?.endpoints[0].config.resourceDirectory).toBe(result.endpoints[0].instanceId);
     expect(adapter.created).toHaveLength(1); expect(original.stopped).toHaveBeenCalledOnce(); await adapter.dispose();
   });
-  it.each(['failed','unsupported'])('does not save or reconnect when identity is %s', async token => {
+  it('keeps the reason of a platform that declines identity verification (#1250 b115)', async () => {
+    const { adapter, target } = await fixture(); const revision = adapter.revision;
+    await expect(adapter.patchConfiguration(target.instanceId, revision, { token: 'declined' }))
+      .rejects.toMatchObject({ code: 'unsupported', message: 'platform cannot verify a secret-only change' });
+    expect(adapter.revision).toBe(revision); await adapter.dispose();
+  });
+  it.each(['failed','unsupported','declined'])('does not save or reconnect when identity is %s', async token => {
     const { adapter, repository, target } = await fixture(); await adapter.start(target.instanceId, adapter.revision);
     const original = adapter.getEndpoint(target.instanceId), revision = adapter.revision;
     const writes = repository.compareAndSet.mock.calls.length;
