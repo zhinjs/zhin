@@ -9,6 +9,7 @@ import type { ScheduleJobStore } from './job-store.js';
 import type { JobNotify, ScheduleJob } from './types.js';
 import { parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { buildJobScheduleFromCronInput } from '../schedule-cron.js';
+import { MAX_SCHEDULE_EVERY_MS, scheduleEveryMsError } from './schedule-limits.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('assistant-profile');
@@ -214,6 +215,8 @@ export async function syncProfileHeartbeatToStore(
   }
 
   const job = buildHeartbeatJobFromRoutine(routine, profile.defaults?.notify);
+  // #1250 b113: an interval past 365 days is not saved (`validateAssistantProfile` reports it).
+  if (job.schedule.kind === 'every' && scheduleEveryMsError(job.schedule.everyMs)) return false;
   await upsertProfileJob(store, job);
   return true;
 }
@@ -316,6 +319,9 @@ export function validateAssistantProfile(profile: AssistantProfile): string[] {
   }
   if (profile.routines?.heartbeat?.everyMs != null && profile.routines.heartbeat.everyMs <= 0) {
     errors.push('routines.heartbeat.everyMs must be positive');
+  } else if (profile.routines?.heartbeat?.everyMs != null && scheduleEveryMsError(profile.routines.heartbeat.everyMs)) {
+    // #1250 b113: the same 365-day bound as every other `every` job; such a heartbeat is not synced.
+    errors.push(`routines.heartbeat.everyMs must be at most ${MAX_SCHEDULE_EVERY_MS} (365 days)`);
   }
   for (const key of Object.keys(profile.routines ?? {})) {
     if (key === 'heartbeat') continue;

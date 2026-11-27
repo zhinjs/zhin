@@ -116,6 +116,14 @@ export function parseScheduleAgentField(
  */
 export const MAX_SCHEDULE_AT_DELAY_MS = 365 * 24 * 60 * 60_000;
 
+/**
+ * Longest interval of an `every` job (#1250 b113): 365 days, the bound of `at` above and of the
+ * Agent's scheduler (`MAX_SCHEDULE_EVERY_MS` in `packages/im/agent/src/assistant/schedule-limits.ts`).
+ * A larger one could put the next run past the largest `Date` (8.64e15). `zhin schedule` refuses it
+ * locally with the same text (`MAX_SCHEDULE_EVERY_MS` in `basic/cli/src/commands/schedule.ts`).
+ */
+export const MAX_SCHEDULE_EVERY_MS = 365 * 24 * 60 * 60_000;
+
 const TARGET_REQUIRED = '投递渠道为 im 时需要指定投递目标：zhin schedule add --target <adapter>:<endpoint>:<kind>:<id>，'
   + '或在 assistant.defaults.notify / assistant.profile.yml 的 defaults.notify 中配置默认目标';
 
@@ -159,6 +167,9 @@ function parseScheduleBody(
     const everyMs = input.everyMs;
     if (typeof everyMs !== 'number' || !Number.isSafeInteger(everyMs) || everyMs < 1000) {
       return invalidInput('执行间隔（schedule.everyMs）必须是不小于 1000 的整数毫秒');
+    }
+    if (everyMs > MAX_SCHEDULE_EVERY_MS) {
+      return invalidInput('执行间隔（schedule.everyMs）最多 365 天');
     }
     return { schedule: { kind: 'every', everyMs } };
   }

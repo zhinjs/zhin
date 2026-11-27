@@ -9,6 +9,7 @@ import { testUser, withTestUsers } from '../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import {
   MAX_SCHEDULE_AT_DELAY_MS,
+  MAX_SCHEDULE_EVERY_MS,
   parseAssistantJobInput,
   registerAssistantJobRoutes,
 } from '../../../src/instance/console/assistant-job-routes.js';
@@ -143,6 +144,22 @@ it('bounds schedule.atMs to a future time at most 365 days ahead, the same 365-d
     expect(response.status, String(atMs)).toBe(400);
     expect((await response.json()).error).toContain('365 天');
   }
+  expect(jobs.add).not.toHaveBeenCalled();
+});
+
+it('bounds schedule.everyMs to 365 days, the same bound as at and the Agent scheduler (#1250 b113)', async () => {
+  expect(MAX_SCHEDULE_EVERY_MS).toBe(365 * 24 * 60 * 60_000);
+  expect(parseAssistantJobInput({ prompt: 'p', schedule: { kind: 'every', everyMs: MAX_SCHEDULE_EVERY_MS } }))
+    .toMatchObject({ job: { schedule: { kind: 'every', everyMs: MAX_SCHEDULE_EVERY_MS } } });
+  for (const everyMs of [MAX_SCHEDULE_EVERY_MS + 1, 8.64e15, Number.MAX_SAFE_INTEGER]) {
+    expect(parseAssistantJobInput({ prompt: 'p', schedule: { kind: 'every', everyMs } }), String(everyMs))
+      .toMatchObject({ code: 'invalid_argument', error: '执行间隔（schedule.everyMs）最多 365 天' });
+  }
+
+  const post = await start();
+  const response = await post('', { prompt: 'x', schedule: { kind: 'every', everyMs: Number.MAX_SAFE_INTEGER } });
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toContain('最多 365 天');
   expect(jobs.add).not.toHaveBeenCalled();
 });
 

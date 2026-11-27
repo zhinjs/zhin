@@ -80,12 +80,18 @@ export async function editSlackContent(
   const wire = formatOutboundWire(content);
   const blocks = [...wire.blocks];
   const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
-  const payloadBlocks = blocks.slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE);
+  // #1250 b113: one message holds at most SLACK_MAX_BLOCKS_PER_MESSAGE blocks. A long card used to lose
+  // its buttons (the last blocks) here; the text is cut instead and the buttons stay.
+  const actions = blocks.filter(isActionsBlock);
+  const payloadBlocks = blocks.length <= SLACK_MAX_BLOCKS_PER_MESSAGE
+    ? blocks
+    : actions.length >= SLACK_MAX_BLOCKS_PER_MESSAGE ? blocks.slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE)
+    : [...blocks.filter(block => !isActionsBlock(block)).slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE - actions.length), ...actions];
 
   const updateOpts: { channel: string; ts: string; text: string; blocks?: SlackBlock[] } = {
     channel,
     ts,
-    text: textDelivery.fallbackText || ' ',
+    text: textDelivery.fallbackText || notificationText(payloadBlocks),
   };
   if (payloadBlocks.length > 0) updateOpts.blocks = payloadBlocks;
   await createEndpointOperation({ signal }).run(() => client.chat.update(updateOpts));
@@ -137,21 +143,72 @@ async function postSlackMessage(
     return { ts: requireMessageTimestamp(result) };
   }
 
-  for (let offset = 0; offset < blocks.length; offset += SLACK_MAX_BLOCKS_PER_MESSAGE) {
-    const chunk = blocks.slice(offset, offset + SLACK_MAX_BLOCKS_PER_MESSAGE);
+  // #1250 b113: a card with buttons (a confirmation / approval card) keeps every part where it was sent.
+  // Threading the later parts under the first one put the buttons into a new thread, and a click there
+  // arrives as a message of that thread (another conversation), so it never answered the waiting prompt.
+  const interactive = blocks.some(isActionsBlock);
+  const chunks = splitBlocksIntoMessages(blocks);
+  for (const [index, chunk] of chunks.entries()) {
     const result = await operation.run(() => client.chat.postMessage({
       channel,
-      text: offset === 0 ? (fallbackText || ' ') : ' ',
+      // Each part names its own text in the notification instead of a blank one.
+      text: index === 0 && fallbackText ? fallbackText : notificationText(chunk),
       blocks: chunk,
       ...(threadTs ? { thread_ts: threadTs } : {}),
-      ...(offset === 0 && attachments.length > 0 ? { attachments } : {}),
+      ...(index === 0 && attachments.length > 0 ? { attachments } : {}),
     }));
     const ts = requireMessageTimestamp(result);
     if (!firstTs) firstTs = ts;
-    if (!threadTs) threadTs = ts;
+    if (!threadTs && !interactive) threadTs = ts;
   }
 
   return { ts: firstTs };
+}
+
+function isActionsBlock(block: SlackBlock): boolean {
+  return (block as { type?: unknown }).type === 'actions';
+}
+
+/**
+ * Blocks per message, in order (#1250 b113). The buttons (`actions` blocks) all go on the last message,
+ * together with at least the end of the text before them, never on a message of their own and never
+ * split from each other.
+ */
+function splitBlocksIntoMessages(blocks: readonly SlackBlock[]): SlackBlock[][] {
+  const max = SLACK_MAX_BLOCKS_PER_MESSAGE;
+  const naive = (list: readonly SlackBlock[]) => {
+    const chunks: SlackBlock[][] = [];
+    for (let offset = 0; offset < list.length; offset += max) chunks.push(list.slice(offset, offset + max));
+    return chunks;
+  };
+  const actions = blocks.filter(isActionsBlock);
+  // More button rows than one message holds (not produced by Core's cards): keep the order.
+  if (actions.length >= max) return naive(blocks);
+  const others = actions.length ? blocks.filter(block => !isActionsBlock(block)) : [...blocks];
+  if (others.length + actions.length <= max) return [[...others, ...actions]];
+  const chunks = naive(others);
+  if (actions.length) {
+    const last = chunks[chunks.length - 1]!;
+    if (last.length + actions.length > max) chunks.push(last.splice(max - actions.length));
+    chunks[chunks.length - 1]!.push(...actions);
+  }
+  return chunks;
+}
+
+/** Longest notification text of one part (Slack shows it in notifications and to screen readers). */
+const NOTIFICATION_TEXT_MAX = 300;
+
+/** The plain text of a part's `mrkdwn` sections, cut for the notification; a single space when it has none. */
+function notificationText(blocks: readonly SlackBlock[]): string {
+  const text = blocks
+    .map(block => (block as { type?: unknown; text?: { type?: unknown; text?: unknown } }))
+    .filter(block => block.type === 'section' && block.text?.type === 'mrkdwn' && typeof block.text.text === 'string')
+    .map(block => mrkdwnToPlainFallback(block.text!.text as string))
+    .join('\n')
+    .trim();
+  if (!text) return ' ';
+  const points = Array.from(text);
+  return points.length <= NOTIFICATION_TEXT_MAX ? text : `${points.slice(0, NOTIFICATION_TEXT_MAX).join('')}…`;
 }
 
 function requireMessageTimestamp(result: { ts?: string } | null | undefined): string {

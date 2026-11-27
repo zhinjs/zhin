@@ -20,6 +20,13 @@ export interface UserInteractionView extends UserInteractionContent {
   readonly actions?: readonly UserInteractionAction[];
   /** Copied from the request; rendered as keyboard `data.purpose` so surfaces can label approvals. */
   readonly purpose?: UserInteractionPurpose;
+  /**
+   * #1250 b113: the numbered option list (`1. label …`) is already part of `description` (options with
+   * descriptions), so the card answers by number and shows no buttons. Set by `projectUserInteraction`;
+   * the description text is not searched for it, since a model-written description or an approval
+   * question can contain a numbered list that only looks like the options.
+   */
+  readonly optionsInDescription?: boolean;
 }
 
 export interface UserInteractionProgress extends UserInteractionContent {
@@ -79,9 +86,7 @@ export function renderUserInteraction(
     view.tip?.trim() ? quoteTip(view.tip.trim()) : undefined,
   ].filter((part): part is string => !!part).join('\n\n');
   const actions = view.actions ?? [];
-  const hasInlineOptionList = actions.length > 0
-    && actions.every((action, index) => view.description?.includes(`${index + 1}. ${action.label}`));
-  if (actions.length === 0 || hasInlineOptionList) {
+  if (actions.length === 0 || view.optionsInDescription === true) {
     return [{ type: 'markdown', data: { content: markdown } }];
   }
   const buttons = actions.map((action, index) => ({
@@ -121,10 +126,11 @@ export function projectUserInteraction(
     ? request.options.some((option) => !!option.description)
     : false;
   const actions = actionsFor(request, locale);
+  const listInDescription = !!optionList && (!actions || optionsHaveDescriptions);
   const stepDescription = [
     progress ? `**${progress.index}/${progress.total} · ${request.title}**` : undefined,
     request.description,
-    optionList && (!actions || optionsHaveDescriptions) ? optionList : undefined,
+    listInDescription ? optionList : undefined,
   ].filter((part): part is string => !!part).join('\n\n');
   return Object.freeze({
     title: progress?.title ?? request.title,
@@ -134,6 +140,7 @@ export function projectUserInteraction(
     tip: [request.tip, instruction, progress?.tip].filter(Boolean).join('\n'),
     ...(actions ? { actions: Object.freeze(actions) } : {}),
     ...(request.purpose ? { purpose: request.purpose } : {}),
+    ...(actions && listInDescription ? { optionsInDescription: true } : {}),
   });
 }
 

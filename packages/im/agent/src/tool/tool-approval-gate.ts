@@ -7,6 +7,8 @@ import type { ToolApprovalPolicy } from '@zhin.js/ai/tool-policy';
 import type { AgentStreamBus, AgentStreamPublishContext } from '../event/agent-stream-bus.js';
 import { isApprovalPortAvailable, type ApprovalPort } from '../session/approval-port.js';
 import type { ToolApprovalOnceStore } from './tool-approval-once-store.js';
+import { markdownLiteral } from './approval-presentation.js';
+import { redactApprovalDisplay } from '../decision-events.js';
 
 export type ToolApprovalGatePolicy = ToolApprovalPolicy;
 
@@ -75,8 +77,14 @@ export async function runToolApprovalGate(
     },
   }, publishCtx);
 
-  const question = `工具「${options.toolName}」需要确认后执行。是否继续？`
-    + (options.policy === 'human' ? `\n本次参数：${stableApprovalValue(options.args)}` : '');
+  // #1250 b113: the card is Markdown (Slack mrkdwn / Telegram HTML after the adapter converts it). The
+  // tool name (an MCP server names its own tools) and the model-chosen arguments are shown literally,
+  // one inline code span each, and secrets in the arguments are masked, as on the other approval cards
+  // (`formatApprovalQuestion` / `formatHardGateQuestion`). The remembered scope key keeps the raw values.
+  const question = `工具「${markdownLiteral(options.toolName)}」需要确认后执行。是否继续？`
+    + (options.policy === 'human'
+      ? `\n本次参数：${markdownLiteral(stableApprovalValue(redactApprovalDisplay(options.args)))}`
+      : '');
   let approved = false;
   let failure: string | undefined;
   try {

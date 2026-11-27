@@ -38,6 +38,7 @@ import type { TaskExecutionResult } from '../task-executor.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { ScheduleJob, ScheduleJobState, ScheduleJobUpdate, JobSchedule } from './types.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
+import { scheduleEveryMsError } from './schedule-limits.js';
 import { ScheduleJobAgentError, profileJobAgentMessage } from './schedule-agent.js';
 import { type DeliverResult, type NotificationRouter, parseJobNotify, resolveEffectiveNotify } from './notification-router.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';
@@ -164,13 +165,21 @@ function sameJobSchedule(a: JobSchedule, b: JobSchedule): boolean {
 }
 
 /**
- * Throws when a calendar (cron) schedule cannot be evaluated, so `updateJob` never stores a job
- * that could not fire (#1250 b90). Other kinds are checked by their callers.
+ * Throws when a calendar (cron) schedule cannot be evaluated, or an `every` interval is longer than
+ * 365 days (#1250 b113), so `updateJob` never stores a job that could not fire (#1250 b90). Other
+ * kinds are checked by their callers.
  */
 function assertEvaluableSchedule(schedule: JobSchedule): void {
-  if (!('cron' in schedule)) return;
   // `code: 'schedule_invalid'`: the Console routes answer it as a 400, not an internal error.
   const invalid = (message: string) => Object.assign(new Error(message), { code: 'schedule_invalid' as const });
+  // #1250 b113: an `every` interval past 365 days is refused before it is stored (its next run could
+  // pass the largest Date).
+  if (schedule.kind === 'every') {
+    const error = scheduleEveryMsError(schedule.everyMs);
+    if (error) throw invalid(error);
+    return;
+  }
+  if (!('cron' in schedule)) return;
   let resolved: ResolvedJob | null;
   try {
     resolved = jobScheduleToResolved(schedule);
@@ -704,6 +713,9 @@ export class TimerScheduler {
     updatedAt?: number;
     state?: ScheduleJob['state'];
   }): Promise<ScheduleJob> {
+    // #1250 b113: a too long `every` interval is refused before anything is saved (calendar kinds
+    // keep their earlier handling here: an unevaluable cron is stored and left unscheduled).
+    if (job.schedule?.kind === 'every') assertEvaluableSchedule(job.schedule);
     const now = Date.now();
     const full: ScheduleJob = {
       ...job,

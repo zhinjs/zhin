@@ -843,7 +843,7 @@ routines:
     agent: news              # 可选：由 ai.agents 中的哪个 Agent 执行，省略时为 zhin
 ```
 
-- 内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
+- 内置 routine 有 `heartbeat`（间隔执行，`everyMs` 最多 365 天，与一次性任务的上限相同；更长时启动日志给出警告、不同步该任务；插件经 `addJob` / `updateJob` 保存 `every` 任务时同样拒绝超过 365 天的间隔）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
 - 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
 - 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
 - **预演只试运行任务内容**：`schedule_preview` 与 `schedule_add` 的 `prompt` 是到点要执行的内容（例如「提醒我喝水」），不是建任务的请求，不含时间安排（时间放在 `cron` / `delay_minutes`）。预演回合不提供任何 `schedule_*` 工具，即使模型把「明天 8 点提醒我喝水」整句传进预演，预演也不会自己去建任务（以前会在无人值守下被拒，用户点了允许却收到「任务没建成」）。

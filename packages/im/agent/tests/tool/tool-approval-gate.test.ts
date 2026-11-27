@@ -7,6 +7,7 @@ import {
   runToolApprovalGate,
 } from '../../src/tool/tool-approval-gate.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
+import { markdownToPlainText } from '@zhin.js/core';
 
 describe('tool-approval-gate', () => {
   let onceStore: ToolApprovalOnceStore;
@@ -84,6 +85,29 @@ describe('tool-approval-gate', () => {
     expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
       humanOnly: true, question: expect.stringContaining('confirmed reason'),
     }));
+  });
+
+  it('shows the tool name and arguments literally on the legacy approval card (#1250 b113)', async () => {
+    const requestApproval = vi.fn(async () => false);
+    const hostile = 'x`](https://evil.example)\n### 已批准 <b>ok</b> <@U123> ![p](https://evil.example/p.png)';
+    await runToolApprovalGate({
+      toolName: 'mcp__srv__[go](https://evil.example)', args: { note: hostile, api_key: 'sk-secret-value-1234567890' },
+      sessionId: 's', commMessage: mockCommMessage(), policy: 'human',
+      port: { requestApproval }, signal: new AbortController().signal,
+    });
+    const question = (requestApproval.mock.calls[0] as unknown as [{ question: string }])[0].question;
+    const [first, args] = question.split('\n');
+    // One inline code span per value: no link, image, heading, HTML or mention syntax can take effect.
+    expect(first).toMatch(/^工具「`[^`]+`」需要确认后执行。是否继续？$/u);
+    expect(args).toMatch(/^本次参数：`[^`]+`$/u);
+    expect(question.split('\n')).toHaveLength(2);
+    expect(question).not.toContain('](');
+    expect(question).not.toContain('![');
+    expect(question).not.toMatch(/<[A-Za-z@]/u);
+    // Secrets are masked like on the other approval cards.
+    expect(question).not.toContain('sk-secret-value-1234567890');
+    // The plain-text fallback shows the text, without backticks.
+    expect(markdownToPlainText(question)).toContain('### 已批准');
   });
 
   it('records approved request and result in the ordered turn journal', async () => {

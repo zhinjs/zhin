@@ -760,7 +760,7 @@ routines:
     agent: news              # optional: which ai.agents Agent runs it; zhin when omitted
 ```
 
-- Built-in routines are `heartbeat` (interval), `morningBrief` (08:00 by default), `bedtimeCheck` (22:00 by default) and `weatherReport`; custom keys work too.
+- Built-in routines are `heartbeat` (interval; `everyMs` is at most 365 days, the bound of a one-shot job: a longer one is logged as a warning at startup and not synced, and a plugin saving an `every` job through `addJob` / `updateJob` is refused the same way), `morningBrief` (08:00 by default), `bedtimeCheck` (22:00 by default) and `weatherReport`; custom keys work too.
 - For mainland-China working days use `workday` (it accounts for adjusted working days), not solar `1-5`.
 - Users can also ask the AI in chat to manage jobs with `schedule_add` / `schedule_list` / `schedule_preview`; external systems can inject events via `POST /api/assistant/events` and list jobs with `GET /api/assistant/jobs`. From the command line: [CLI · schedule](../cli/index.md#schedule-persistent-scheduled-tasks).
 - **A preview only tries out the job's content**: `prompt` of `schedule_preview` and `schedule_add` is what runs when the job is due (e.g. "remind me to drink water"), not the request to create the job, and carries no timing (that goes into `cron` / `delay_minutes`). A preview run is offered no `schedule_*` tool, so even when the model passes the whole request ("remind me at 8 tomorrow to drink water") to the preview, the preview does not try to create the job itself (it used to, was refused as unattended, and the user who had allowed it was told the job was not created).
