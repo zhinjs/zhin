@@ -1,7 +1,7 @@
 import { jsonResponse } from '@zhin.js/host-http';
 import { redactChatIdentityBindText } from '@zhin.js/kernel';
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import { conversationEventQueryFields, conversationRefKey, type ConversationEvent, type ConversationRef, type ForwardEntry, type MessageRef, type Segment } from '@zhin.js/im-contract';
+import { conversationEventQueryFields, conversationRefKey, readStoredConversationEvent, type ConversationEvent, type ConversationRef, type ForwardEntry, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import type { HttpHost } from '@zhin.js/host-http';
 import { encodeStorageIdentity, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseConversationSessionKey } from '@zhin.js/console-protocol';
@@ -9,6 +9,8 @@ import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWork
 import { noStore } from './no-store.js';
 
 const PAGE_SIZE = 50;
+/** Recent rows read to find the latest valid event of a scene (damaged rows are skipped). */
+const LATEST_EVENT_PROBE = 20;
 
 /** Projects recorded conversation facts; never dispatches, replays, or reads Agent context. */
 export function registerConversationHistoryRoutes(options: Readonly<{
@@ -40,9 +42,15 @@ export function registerConversationHistoryRoutes(options: Readonly<{
         // Use the same encoded query fields as the canonical writer; opaque Endpoint IDs may contain NUL.
         const scope = { endpoint_adapter: encodeStorageIdentity(endpoint.adapter), endpoint_id: encodeStorageIdentity(endpoint.id),
           conversation_kind: session.kind, conversation_id: encodeStorageIdentity(session.id), query_version: 1 };
-        const [row] = await model.select('id', 'event_json').where(scope).orderBy('id', 'DESC').limit(1);
-        if (!row) return { status: 404, code: 'history_not_recorded', error: '该会话没有保存的聊天记录' } as const;
-        const event = JSON.parse(String(row.event_json)) as ConversationEvent;
+        // The latest valid event names the scene; a damaged row (#1250, kept by the migration) is skipped.
+        const recent = await model.select('id', 'event_json').where(scope).orderBy('id', 'DESC').limit(LATEST_EVENT_PROBE);
+        if (!recent.length) return { status: 404, code: 'history_not_recorded', error: '该会话没有保存的聊天记录' } as const;
+        let row: Record<string, unknown> | undefined, event: ConversationEvent | undefined;
+        for (const candidate of recent) {
+          const read = readStoredConversationEvent(candidate.event_json);
+          if (read.ok) { row = candidate; event = read.event; break; }
+        }
+        if (!row || !event) throw new Error('Conversation history has no readable recent event');
         const conversation = event.conversation;
         const actual = conversationEventQueryFields(event);
         if (Object.entries(scope).some(([key, value]) => actual[key] !== value)) throw new Error('Conversation history identity mismatch');

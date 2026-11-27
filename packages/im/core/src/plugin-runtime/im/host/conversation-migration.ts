@@ -1,6 +1,6 @@
 import { INBOX_MESSAGE_QUERY_COLUMNS, INBOX_TABLE_MESSAGE, encodeStorageIdentity } from '@zhin.js/plugin-runtime';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
-import { CONVERSATION_EVENT_QUERY_MODEL, conversationEventQueryFields, type ConversationEvent } from '@zhin.js/im-contract';
+import { CONVERSATION_EVENT_QUERY_MODEL, conversationEventQueryFields, readStoredConversationEvent } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 export interface ConversationMigrationOptions {
@@ -8,11 +8,18 @@ export interface ConversationMigrationOptions {
   readonly logger?: { warn(message: string): void };
 }
 
-/** The derived query columns of one stored event, or why the row cannot be backfilled. */
+/** Skipped rows reported one by one per start; the rest only count towards the summary. */
+export const MIGRATION_SKIP_REPORT_LIMIT = 20;
+
+/**
+ * The derived query columns of one stored event, or why the row cannot be backfilled: unparsable
+ * JSON (`invalid_event_json`), or JSON that is not a valid event — unknown or missing `type`,
+ * missing address or references (`invalid_event`, the same check the readers apply).
+ */
 function queryFieldsOf(eventJson: unknown): { fields: Record<string, string | number | null> } | { reason: string } {
-  let event: unknown;
-  try { event = JSON.parse(String(eventJson)); } catch { return { reason: 'invalid_event_json' }; }
-  try { return { fields: conversationEventQueryFields(event as ConversationEvent) }; } catch { return { reason: 'invalid_event' }; }
+  const read = readStoredConversationEvent(eventJson);
+  if (!read.ok) return { reason: read.reason };
+  try { return { fields: conversationEventQueryFields(read.event) }; } catch { return { reason: 'invalid_event' }; }
 }
 
 /**
@@ -22,7 +29,9 @@ function queryFieldsOf(eventJson: unknown): { fields: Record<string, string | nu
  * the table and row id, never its content (#1250 `conversation-migration-bad-row-blocks-start`):
  * one damaged row must not keep the instance from starting. The row is left as it is — its
  * `event_json` intact and its derived columns empty (`query_version` stays null) — so it is not
- * lost, is reported again on the next start, and can be repaired or removed by hand.
+ * lost, is reported again on the next start, and can be repaired or removed by hand. The first
+ * {@link MIGRATION_SKIP_REPORT_LIMIT} skipped rows get a warning each, the rest only the closing
+ * summary. Readers (`DatabaseConversationEventStore`, Console history) skip such rows too.
  */
 export async function migrateConversationColumns(database: StructuredDatabase, options: ConversationMigrationOptions = {}): Promise<void> {
   if (!['sqlite', 'mysql', 'pg'].includes(database.dialectName)) return;
@@ -41,7 +50,7 @@ export async function migrateConversationColumns(database: StructuredDatabase, o
       const derived = queryFieldsOf(row.event_json);
       if ('reason' in derived) {
         skipped += 1;
-        (options.logger ?? getLogger('Database')).warn(formatCompact({ op: 'conversation_migration_skip', table: 'conversation_events', id: String(row.id), reason: derived.reason }));
+        if (skipped <= MIGRATION_SKIP_REPORT_LIMIT) (options.logger ?? getLogger('Database')).warn(formatCompact({ op: 'conversation_migration_skip', table: 'conversation_events', id: String(row.id), reason: derived.reason }));
         continue;
       }
       await model.update(derived.fields).where({ id: row.id });
@@ -51,7 +60,8 @@ export async function migrateConversationColumns(database: StructuredDatabase, o
   }
   if (skipped > 0) {
     (options.logger ?? getLogger('Database')).warn(formatCompact({ op: 'conversation_migration_skipped', table: 'conversation_events', skipped,
-      hint: 'rows keep event_json; query_version stays null until repaired' }));
+      ...(skipped > MIGRATION_SKIP_REPORT_LIMIT ? { unlisted: skipped - MIGRATION_SKIP_REPORT_LIMIT } : {}),
+      hint: 'rows keep event_json; query_version stays null until repaired; readers skip them' }));
   }
   // Derived indexes can be rebuilt from event_json; rollback ignores the additive columns/indexes.
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_message_sequence', [

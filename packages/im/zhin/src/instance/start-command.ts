@@ -497,6 +497,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
               durableConversationEventStore = new DatabaseConversationEventStore(
                 events as unknown as ConversationDbModel,
                 cursors as unknown as ConversationDbModel,
+                // #1250: damaged rows are skipped by the readers; reported by id and reason only.
+                { onInvalidRow: row => getLogger('Database').warn(formatCompact({ op: 'conversation_event_skip', ...row })) },
               );
               im.replaceConversationEventStore(durableConversationEventStore);
             }

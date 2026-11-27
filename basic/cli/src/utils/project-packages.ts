@@ -52,9 +52,9 @@ function groupOf(name: string, manifest: Record<string, unknown>): ProjectPackag
 }
 
 /**
- * The project root for `cwd`: the nearest directory up the tree holding a Zhin config file
- * (`zhin.config.yml`), else the nearest whose package.json depends on `zhin.js`, else `cwd`.
- * Run from `plugins/foo/` it still finds the project, not the member package.
+ * The project root for `cwd` ({@link locateProjectRoot}: the nearest directory with a package.json
+ * plus a Zhin config file or a `zhin.js` dependency, a pnpm workspace member resolving to its
+ * workspace root), else `cwd`. Run from `plugins/foo/` it still finds the project.
  */
 export function findProjectRoot(cwd: string): string {
   return locateProjectRoot(cwd) ?? path.resolve(cwd);

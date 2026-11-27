@@ -409,7 +409,7 @@ export class GatewayPackageService {
    */
   update(packages: readonly unknown[] | 'all', options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
     // #1250: a bare name nobody declares would "succeed" without changing anything; refused
-    // before the instance is stopped. Exact versions of undeclared names still install (below).
+    // under the lock and before the instance is stopped. Exact versions of undeclared names still install (below).
     const precheck = packages === 'all' ? undefined : async (authorized: readonly GatewayAuthorizedPackage[]) => {
       const declared = await declaredDependencyNames(this.#root);
       const unknown = authorized.filter(item => item.version === undefined && !declared.has(item.name)).map(item => item.name);
@@ -475,7 +475,11 @@ export class GatewayPackageService {
     options: GatewayTransactionOptions,
     execute: TransactionBody,
     hot?: HotPluginApply,
-    /** Runs after authorization, before the lock and the instance stop; a throw changes nothing. */
+    /**
+     * Runs under the transaction lock, before the instance is stopped or the package manager runs:
+     * it reads the manifests no other dependency transaction can change meanwhile, and a throw
+     * changes nothing.
+     */
     precheck?: (authorized: readonly GatewayAuthorizedPackage[]) => Promise<void>,
   ): Promise<GatewayPackageTransactionResult> {
     if (this.#active) throw new GatewayError('conflict', '另一个依赖事务正在进行，请等待它结束');
@@ -483,9 +487,9 @@ export class GatewayPackageService {
     this.#active = id;
     try {
       const authorized = await this.authorize(options.principal, operation, packages);
-      await precheck?.(authorized);
       const release = await this.#lock();
       try {
+        await precheck?.(authorized);
         await this.#options.beforeTransaction?.().catch(() => undefined);
         return await this.#run(id, operation, authorized, options, execute, hot);
       } finally {

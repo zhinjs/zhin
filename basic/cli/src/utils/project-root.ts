@@ -4,10 +4,19 @@
  * (`zhin start`, `zhin console …`) or diagnose a project (`zhin doctor`) locate the project root
  * first instead of taking `process.cwd()` as it is, so a run from a sub-directory or an
  * unrelated directory never leaves a stray `.zhin/gateway.db` behind.
+ *
+ * A project root always has a `package.json` (the instance resolves `zhin.js/instance` from it):
+ * - the directory itself: `package.json` plus a Root config file (any of
+ *   `ROOT_CONFIG_FILE_NAMES`), or a `package.json` that depends on `zhin.js`;
+ * - a directory above it: `package.json` plus `zhin.config.*` (the generic `config.*` names are
+ *   too common to claim a parent directory), or a `package.json` that depends on `zhin.js`.
+ * The nearest such directory wins, unless it is a member of the pnpm workspace above it
+ * (`pnpm-workspace.yaml#packages`) whose root is itself a project: then the workspace root wins.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { findConfigFile } from '@zhin.js/gateway/project';
+import { ROOT_CONFIG_FILE_NAMES } from '@zhin.js/plugin-runtime';
+import { expandWorkspaceBraces, workspaceGlobToRegExp, workspacePackageGlobs } from './workspace-packages.js';
 
 /** The command that scaffolds a new project (the `create-zhin-app` package). */
 export const CREATE_PROJECT_COMMAND = 'npm create zhin-app';
@@ -22,18 +31,56 @@ export function declaresZhin(dir: string): boolean {
   }
 }
 
+/** Root config files present in `dir` (several of them is a conflict the instance refuses). */
+export function rootConfigFilesIn(dir: string): string[] {
+  return ROOT_CONFIG_FILE_NAMES.filter(name => fs.existsSync(path.join(dir, name)));
+}
+
 /**
- * The project root for `cwd`, or undefined when there is none: the nearest directory up the
- * tree holding a Zhin config file (`zhin.config.yml`), else the nearest whose package.json
- * depends on `zhin.js`. Run from `plugins/foo/` it finds the project, not the member package.
+ * Whether `dir` is a project root candidate. `nearby` is true for the directory the command runs
+ * in, where the generic `config.*` names count too.
+ */
+function isProjectDir(dir: string, nearby: boolean): boolean {
+  if (!fs.existsSync(path.join(dir, 'package.json'))) return false;
+  const configs = rootConfigFilesIn(dir);
+  if (configs.some(name => nearby || name.startsWith('zhin.config.'))) return true;
+  return declaresZhin(dir);
+}
+
+/** Whether `member` is a package of the pnpm workspace rooted at `workspaceRoot`. */
+export function isWorkspaceMember(workspaceRoot: string, member: string): boolean {
+  const relative = path.relative(workspaceRoot, member).split(path.sep).join('/');
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return false;
+  const globs = workspacePackageGlobs(workspaceRoot);
+  const matches = (list: readonly string[]): boolean =>
+    list.flatMap(expandWorkspaceBraces).some(glob => workspaceGlobToRegExp(glob).test(relative));
+  return matches(globs.filter(glob => !glob.startsWith('!')))
+    && !matches(globs.filter(glob => glob.startsWith('!')).map(glob => glob.slice(1)));
+}
+
+/** The nearest directory above `dir` holding a `pnpm-workspace.yaml`. */
+function enclosingWorkspace(dir: string): string | undefined {
+  for (let current = path.dirname(dir); ; current = path.dirname(current)) {
+    if (fs.existsSync(path.join(current, 'pnpm-workspace.yaml'))) return current;
+    if (path.dirname(current) === current) return undefined;
+  }
+}
+
+/**
+ * The project root for `cwd`, or undefined when there is none (see the module comment). Run from
+ * `plugins/foo/` it finds the project, not the member package; a stray `config.json` in a parent
+ * directory never takes over a project below it.
  */
 export function locateProjectRoot(cwd: string): string | undefined {
-  let byManifest: string | undefined;
-  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
-    if (findConfigFile(dir)) return dir;
-    if (!byManifest && declaresZhin(dir)) byManifest = dir;
-    if (path.dirname(dir) === dir) return byManifest;
+  const start = path.resolve(cwd);
+  let nearest: string | undefined;
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (isProjectDir(dir, dir === start)) { nearest = dir; break; }
+    if (path.dirname(dir) === dir) return undefined;
   }
+  const workspace = enclosingWorkspace(nearest);
+  if (workspace && isWorkspaceMember(workspace, nearest) && isProjectDir(workspace, workspace === start)) return workspace;
+  return nearest;
 }
 
 export type ProjectRootCheck =
@@ -46,30 +93,55 @@ export interface RequireProjectRootOptions {
    * fails and names the root. `'nearest'`: use the root found up the tree.
    */
   readonly from?: 'root' | 'nearest';
-  /** The command to suggest re-running at the root (e.g. `zhin start`). */
-  readonly command?: string;
+  /** The command to suggest re-running at the root, arguments included (e.g. `['zhin', 'start', '--foreground']`). */
+  readonly command?: readonly string[];
+}
+
+/** `value` quoted for the shell the user runs (POSIX single quotes; double quotes on Windows) when it needs it. */
+export function shellQuote(value: string, platform: NodeJS.Platform = process.platform): string {
+  if (value !== '' && /^[\w@%+=:,./-]+$/u.test(value)) return value;
+  if (platform === 'win32') return `"${value.replace(/"/gu, '""')}"`;
+  return `'${value.replace(/'/gu, `'\\''`)}'`;
+}
+
+/** `cd <root> && <command…>`, every part quoted as needed. */
+export function rerunAtRoot(root: string, command: readonly string[]): string {
+  return `cd ${shellQuote(root)} && ${command.map(part => shellQuote(part)).join(' ')}`;
 }
 
 /** Message for a directory with no project anywhere up the tree. */
 export function notAProjectMessage(cwd: string): string {
-  return `${path.resolve(cwd)} 不是 Zhin 项目（本目录及上级目录都没有 zhin.config.yml 或依赖 zhin.js 的 package.json）。`
+  const resolved = path.resolve(cwd);
+  const configs = rootConfigFilesIn(resolved);
+  if (configs.length > 0 && !fs.existsSync(path.join(resolved, 'package.json'))) {
+    return `${resolved} 有配置文件 ${configs.join(', ')}，但缺少 package.json：实例从项目的 package.json 解析 zhin.js，`
+      + `请运行 pnpm init && pnpm add zhin.js（或用 ${CREATE_PROJECT_COMMAND} 新建项目）。`;
+  }
+  return `${resolved} 不是 Zhin 项目（本目录及上级目录都没有带 package.json 的 zhin.config.yml，也没有依赖 zhin.js 的 package.json）。`
     + `新建项目：${CREATE_PROJECT_COMMAND}；已有项目请先 cd 到项目根目录再运行。`;
 }
 
+/** Message when the project root holds more than one Root config file, else undefined. */
+export function conflictingConfigMessage(root: string): string | undefined {
+  const configs = rootConfigFilesIn(root);
+  return configs.length > 1
+    ? `项目根 ${root} 同时有多个配置文件（${configs.join(', ')}），实例只接受一个：请合并后只保留其中一个`
+    : undefined;
+}
+
 /**
- * Checks that `cwd` is (or, with `from: 'nearest'`, is inside) a Zhin project whose root has a
- * package.json. Reads files only; never creates anything.
+ * Checks that `cwd` is (or, with `from: 'nearest'`, is inside) a Zhin project (see the module
+ * comment) with a single Root config file. Reads files only; never creates anything.
  */
 export function requireProjectRoot(cwd: string, options: RequireProjectRootOptions = {}): ProjectRootCheck {
   const resolved = path.resolve(cwd);
   const root = locateProjectRoot(resolved);
   if (!root) return { ok: false, message: notAProjectMessage(resolved) };
   if ((options.from ?? 'root') === 'root' && root !== resolved) {
-    const rerun = options.command ? `：cd ${root} && ${options.command}` : '';
+    const rerun = options.command ? `：${rerunAtRoot(root, options.command)}` : '';
     return { ok: false, message: `当前目录不是项目根：项目根在 ${root}，请在那里运行${rerun}` };
   }
-  if (!fs.existsSync(path.join(root, 'package.json'))) {
-    return { ok: false, message: `项目根 ${root} 缺少 package.json（新建项目：${CREATE_PROJECT_COMMAND}）` };
-  }
+  const conflict = conflictingConfigMessage(root);
+  if (conflict) return { ok: false, message: conflict };
   return { ok: true, root };
 }

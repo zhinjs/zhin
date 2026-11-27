@@ -757,6 +757,54 @@ describe('doctor outside a project (#1250 doctor-non-project-advice)', () => {
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 
+  it('--upgrade-l4 outside a project still runs the Node.js and pnpm checks before stopping', async () => {
+    const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-l4-not-project-')));
+    try {
+      const { output, exited } = await doctorIn(directory, ['--upgrade-l4']);
+      expect(output).toContain('Node.js 版本');
+      expect(output).toContain('pnpm');
+      expect(output).toContain('不是 Zhin 项目');
+      expect(output).not.toContain('L4 升级诊断');
+      expect(exited).toBe(true);
+      expect(fs.readdirSync(directory)).toEqual([]);
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('from a sub-directory suggests the quoted root with the same flags', async () => {
+    const parent = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-quoted-')));
+    const root = path.join(parent, 'my bot');
+    try {
+      fs.mkdirSync(path.join(root, 'plugins', 'x'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'bot', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+      const { output } = await doctorIn(path.join(root, 'plugins', 'x'), ['--fix']);
+      const quoted = process.platform === 'win32' ? `"${root}"` : `'${root}'`;
+      expect(output).toContain(`cd ${quoted} && zhin doctor --fix`);
+    } finally { fs.rmSync(parent, { recursive: true, force: true }); }
+  });
+
+  it('reports two config files at the root instead of throwing', async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-two-configs-')));
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'bot', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+      fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
+      fs.writeFileSync(path.join(root, 'config.json'), '{}');
+      const { output, exited } = await doctorIn(root);
+      expect(output).toContain('同时有多个配置文件');
+      expect(output).not.toContain('Multiple Root config files');
+      expect(exited).toBe(true);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('a config file without package.json is reported as missing package.json', async () => {
+    const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-config-only-')));
+    try {
+      fs.writeFileSync(path.join(directory, 'zhin.config.yml'), 'plugins: {}\n');
+      const { output, exited } = await doctorIn(directory);
+      expect(output).toContain('缺少 package.json');
+      expect(exited).toBe(true);
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('gateway storage diagnosis does not create .zhin/ in a project without one', async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-storage-')));
     try {

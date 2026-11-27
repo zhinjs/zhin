@@ -61,7 +61,7 @@ const target = (): GatewayTarget => ({ root: resolve(process.cwd()) });
  * project, or from one of its sub-directories, reports where to run instead (exit 1) before
  * anything is probed, spawned or written.
  */
-function projectTarget(command: string): GatewayTarget | undefined {
+function projectTarget(command: readonly string[]): GatewayTarget | undefined {
   const project = requireProjectRoot(process.cwd(), { command });
   if (project.ok) return { root: project.root };
   process.stderr.write(`zhin: ${project.message}\n`);
@@ -111,12 +111,18 @@ export const startCommand = new Command('start')
   .allowExcessArguments(true)
   .action(async (_options, command: Command) => {
     const { foreground, rest } = splitStartArguments(command.args);
-    if (foreground || isSupervisedInstanceProcess()) {
+    // The supervised instance child is spawned at the root by the gateway: no check there.
+    if (isSupervisedInstanceProcess()) {
       await runtimeCommand.parseAsync(['start', ...rest], { from: 'user' });
       return;
     }
-    const project = projectTarget('zhin start');
+    // Checked here (not only in `runtime start`) so the suggested command keeps `--foreground`.
+    const project = projectTarget(['zhin', 'start', ...command.args]);
     if (!project) return;
+    if (foreground) {
+      await runtimeCommand.parseAsync(['start', ...rest], { from: 'user' });
+      return;
+    }
     const { root } = project;
     try {
       const parsed = parseStartOptions(rest);
@@ -172,7 +178,7 @@ export const restartCommand = new Command('restart')
   .description('重启实例（网关保持运行）；--gateway 重启网关本身')
   .option('--gateway', '重启网关进程（仅后台网关，沿用原启动参数；前台网关会提示 systemd / PM2 等替代命令并以非 0 退出）')
   .action(async (options: { gateway?: boolean }) => {
-    const project = projectTarget(`zhin restart${options.gateway ? ' --gateway' : ''}`);
+    const project = projectTarget(['zhin', 'restart', ...(options.gateway ? ['--gateway'] : [])]);
     if (!project) return;
     const { root } = project;
     try {

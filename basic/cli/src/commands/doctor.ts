@@ -32,7 +32,7 @@ import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
 import { DEFAULT_HTTP_PORT, InvalidHttpPortError, resolveHttpConfig } from '@zhin.js/host-http';
 import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
-import { CREATE_PROJECT_COMMAND, locateProjectRoot, notAProjectMessage } from '../utils/project-root.js';
+import { CREATE_PROJECT_COMMAND, conflictingConfigMessage, locateProjectRoot, notAProjectMessage, rerunAtRoot } from '../utils/project-root.js';
 import { diagnosePromptCache } from '../utils/prompt-cache-check.js';
 import { loadProviderResolver } from './usage.js';
 import { botInstructionsFile } from '../utils/bot-bootstrap.js';
@@ -116,9 +116,10 @@ export const doctorCommand = new Command('doctor')
       (projectPackage ??= fs.readJSON(projectPackagePath));
 
     if (options.upgradeL4) {
-      const location = diagnoseProjectLocation(cwd);
+      const location = diagnoseProjectLocation(cwd, ['zhin', 'doctor', '--upgrade-l4', ...(options.fix ? ['--fix'] : [])]);
       if (location) {
-        printDoctorResults([location], options.fix === true);
+        // Outside a project root the environment checks still run (the L4 diagnosis needs the root).
+        printDoctorResults([...await diagnoseEnvironment(), location], options.fix === true);
         return;
       }
       const configPath = findConfigFile(cwd);
@@ -168,39 +169,11 @@ export const doctorCommand = new Command('doctor')
       return;
     }
 
-    // 1. 检查 Node.js 版本
-    const nodeVersion = process.version;
-    const nodeOk = isNodeVersionSupported(nodeVersion);
-    results.push({
-      name: 'Node.js 版本',
-      status: nodeOk ? 'ok' : 'error',
-      message: formatNodeRequirementMessage(nodeVersion),
-      fix: nodeOk ? undefined : '请升级 Node.js（>=22.19.0）: https://nodejs.org 或 nvm install 22',
-    });
-
-    // 2. 检查 pnpm（可用性与版本，要求 >=9）
-    try {
-      const { stdout } = await execAsync('pnpm --version');
-      const pnpmVersion = stdout.trim();
-      const pnpmMajor = parseInt(pnpmVersion.split('.')[0], 10);
-      const pnpmOk = Number.isFinite(pnpmMajor) && pnpmMajor >= 9;
-      results.push({
-        name: 'pnpm',
-        status: pnpmOk ? 'ok' : 'error',
-        message: pnpmOk ? `v${pnpmVersion}` : `v${pnpmVersion}（需要 >=9）`,
-        fix: pnpmOk ? undefined : 'npm install -g pnpm@latest 或 corepack enable'
-      });
-    } catch {
-      results.push({
-        name: 'pnpm',
-        status: 'error',
-        message: '未安装',
-        fix: 'npm install -g pnpm（或 corepack enable && corepack prepare pnpm@latest --activate）'
-      });
-    }
+    // 1–2. Node.js 与 pnpm
+    results.push(...await diagnoseEnvironment());
 
     // 2b. 项目位置：非项目目录只报这一条并停下，不跑依赖项目的检查，也不让 --fix 写文件
-    const location = diagnoseProjectLocation(cwd);
+    const location = diagnoseProjectLocation(cwd, ['zhin', 'doctor', ...(options.fix ? ['--fix'] : [])]);
     if (location) {
       results.push(location);
       printDoctorResults(results, options.fix === true);
@@ -406,7 +379,7 @@ export const doctorCommand = new Command('doctor')
         });
       }
     } else {
-      // Reached only with a Zhin config file and no package.json (see 2b).
+      // Not reached after 2b (a project root has a package.json) unless it is removed mid-run.
       results.push({
         name: 'package.json',
         status: 'warn',
@@ -936,6 +909,42 @@ export const doctorCommand = new Command('doctor')
     printDoctorResults(results, options.fix === true);
   });
 
+/** Node.js and pnpm checks; they hold inside or outside a project. */
+async function diagnoseEnvironment(): Promise<CheckResult[]> {
+  const checks: CheckResult[] = [];
+  // 1. 检查 Node.js 版本
+  const nodeVersion = process.version;
+  const nodeOk = isNodeVersionSupported(nodeVersion);
+  checks.push({
+    name: 'Node.js 版本',
+    status: nodeOk ? 'ok' : 'error',
+    message: formatNodeRequirementMessage(nodeVersion),
+    fix: nodeOk ? undefined : '请升级 Node.js（>=22.19.0）: https://nodejs.org 或 nvm install 22',
+  });
+
+  // 2. 检查 pnpm（可用性与版本，要求 >=9）
+  try {
+    const { stdout } = await execAsync('pnpm --version');
+    const pnpmVersion = stdout.trim();
+    const pnpmMajor = parseInt(pnpmVersion.split('.')[0], 10);
+    const pnpmOk = Number.isFinite(pnpmMajor) && pnpmMajor >= 9;
+    checks.push({
+      name: 'pnpm',
+      status: pnpmOk ? 'ok' : 'error',
+      message: pnpmOk ? `v${pnpmVersion}` : `v${pnpmVersion}（需要 >=9）`,
+      fix: pnpmOk ? undefined : 'npm install -g pnpm@latest 或 corepack enable'
+    });
+  } catch {
+    checks.push({
+      name: 'pnpm',
+      status: 'error',
+      message: '未安装',
+      fix: 'npm install -g pnpm（或 corepack enable && corepack prepare pnpm@latest --activate）'
+    });
+  }
+  return checks;
+}
+
 /** Prints the check list and the closing summary; exits 1 when an item is an error. */
 function printDoctorResults(results: readonly CheckResult[], fix: boolean): void {
   console.log('');
@@ -962,14 +971,16 @@ function printDoctorResults(results: readonly CheckResult[], fix: boolean): void
  * a project root only. Outside a project the first item says so and names the scaffold command;
  * from a sub-directory it names the root. Undefined when `cwd` is a project root.
  */
-export function diagnoseProjectLocation(cwd: string): CheckResult | undefined {
+export function diagnoseProjectLocation(cwd: string, command: readonly string[] = ['zhin', 'doctor']): CheckResult | undefined {
   const root = locateProjectRoot(cwd);
   if (!root) {
     return { name: 'Zhin 项目', status: 'error', message: notAProjectMessage(cwd), fix: `${CREATE_PROJECT_COMMAND}（新建项目），或 cd 到已有项目的根目录再运行 zhin doctor` };
   }
   if (root !== path.resolve(cwd)) {
-    return { name: 'Zhin 项目', status: 'error', message: `当前目录不是项目根：项目根在 ${root}`, fix: `cd ${root} && zhin doctor` };
+    return { name: 'Zhin 项目', status: 'error', message: `当前目录不是项目根：项目根在 ${root}`, fix: rerunAtRoot(root, command) };
   }
+  const conflict = conflictingConfigMessage(root);
+  if (conflict) return { name: '配置文件', status: 'error', message: conflict, fix: '合并为一个 zhin.config.yml（或其他单一配置文件）后重新运行 zhin doctor' };
   return undefined;
 }
 

@@ -87,7 +87,7 @@ runtimeCommand.command('start')
   .action(async (_options, command) => {
     // Process supervision belongs to the executable, not the reusable startup API.
     // #1250: nothing (no `.zhin/`, no port) outside a project root.
-    const project = isSupervisedInstanceProcess() ? undefined : requireProjectRoot(process.cwd(), { command: 'zhin start' });
+    const project = isSupervisedInstanceProcess() ? undefined : requireProjectRoot(process.cwd(), { command: ['zhin', 'runtime', 'start', ...command.args] });
     if (project && !project.ok) {
       process.stderr.write(`zhin: ${project.message}\n`);
       process.exitCode = 1;

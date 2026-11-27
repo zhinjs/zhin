@@ -192,12 +192,64 @@ export interface ConversationDbModel {
   update(patch: Record<string, unknown>): { where(query: Record<string, unknown>): unknown };
 }
 
-/** Durable implementation; composition roots supply DatabaseHost models. */
+/** A stored row the reader skipped: its id and why, never its content. */
+export interface InvalidConversationEventRow {
+  readonly table: 'conversation_events';
+  readonly id: string;
+  readonly reason: StoredConversationEventProblem;
+}
+
+export interface DatabaseConversationEventStoreOptions {
+  /**
+   * Where skipped rows are reported (default: `console.warn`). Each row id is reported once, the
+   * first {@link INVALID_ROW_REPORT_LIMIT} of them per store; after that one notice (id `*`,
+   * reason `reports_suppressed`) says the rest go unreported.
+   */
+  readonly onInvalidRow?: (row: InvalidConversationEventRow) => void;
+}
+
+/** Distinct bad rows one store reports before going quiet. */
+export const INVALID_ROW_REPORT_LIMIT = 20;
+
+/**
+ * Durable implementation; composition roots supply DatabaseHost models.
+ *
+ * A row whose `event_json` does not parse or is not a valid event (#1250: such rows are kept, not
+ * deleted, by `migrateConversationColumns`) is skipped by every reader with a rate-limited report,
+ * so one damaged row never makes a conversation's history unreadable. Limited pages read on past
+ * skipped rows, so a page still holds `limit` valid events while there are more.
+ */
 export class DatabaseConversationEventStore implements ConversationEventStore {
+  readonly #reported = new Set<string>();
+  readonly #report: (row: InvalidConversationEventRow) => void;
+  #suppressedNoticeSent = false;
+
   constructor(
     private readonly events: ConversationDbModel,
     private readonly cursors: ConversationDbModel,
-  ) {}
+    options: DatabaseConversationEventStoreOptions = {},
+  ) {
+    this.#report = options.onInvalidRow ?? (row => {
+      console.warn(`[conversation-store] skipped stored event | table: ${row.table} | id: ${row.id} | reason: ${row.reason}`);
+    });
+  }
+
+  /** The row's event, or undefined (reported, rate-limited) when the row is damaged. */
+  #event(row: Record<string, unknown>): ConversationEvent | undefined {
+    const read = readStoredConversationEvent(row.event_json);
+    if (read.ok) return freezeConversationData(read.event);
+    const id = String(row.id);
+    if (!this.#reported.has(id)) {
+      if (this.#reported.size < INVALID_ROW_REPORT_LIMIT) {
+        this.#reported.add(id);
+        try { this.#report({ table: 'conversation_events', id, reason: read.reason }); } catch { /* reporting never breaks a read */ }
+      } else if (!this.#suppressedNoticeSent) {
+        this.#suppressedNoticeSent = true;
+        try { this.#report({ table: 'conversation_events', id: '*', reason: 'reports_suppressed' }); } catch { /* reporting never breaks a read */ }
+      }
+    }
+    return undefined;
+  }
 
   async append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>> {
     assertMessageUpdate(event);
@@ -234,24 +286,35 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   async listMessages(conversation: ConversationRef, beforeSequence: number | undefined, limit: number): Promise<readonly SequencedConversationMessage[]> {
     const cap = Math.max(0, Math.floor(limit));
     if (!cap) return [];
-    const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
+    const select = async (storedKey: string, before: number | undefined): Promise<Record<string, unknown>[]> => {
       let rows = this.events.select('id', 'event_json').where({ $and: [
         { conversation_key: storedKey }, { message_key: { $ne: '' } },
         { $or: [{ event_type: 'message.created' }, { event_type: null }] },
-        ...(beforeSequence === undefined ? [] : [{ id: { $lt: beforeSequence } }]),
+        ...(before === undefined ? [] : [{ id: { $lt: before } }]),
       ] });
       rows = rows.orderBy?.('id', 'DESC') ?? rows;
       rows = rows.limit?.(cap) ?? rows;
       return Promise.resolve(rows);
     };
     const key = conversationRefKey(conversation);
-    const encoded = await select(databaseTextKey(key));
-    const legacy = await toleratePostgresNul(() => select(key), []);
-    const creations = uniqueEventRows([...encoded, ...legacy])
-      .map(row => ({ sequence: Number(row.id), event: parseConversationEvent(row.event_json) }))
-      .filter((entry): entry is SequencedConversationEvent & { event: Extract<ConversationEvent, { type: 'message.created' }> } =>
-        entry.event.type === 'message.created' && sameConversation(entry.event.conversation, conversation))
-      .sort((left, right) => right.sequence - left.sequence).slice(0, cap).reverse();
+    type Creation = { sequence: number; event: Extract<ConversationEvent, { type: 'message.created' }> };
+    const creations: Creation[] = [];
+    // Reads on past rows that are skipped (damaged) or belong elsewhere, so `cap` stays a real page size.
+    for (let before = beforeSequence; ;) {
+      const encoded = await select(databaseTextKey(key), before);
+      const legacy = await toleratePostgresNul(() => select(key, before), []);
+      const rows = uniqueEventRows([...encoded, ...legacy]).sort((left, right) => Number(right.id) - Number(left.id)).slice(0, cap);
+      for (const row of rows) {
+        const event = this.#event(row);
+        if (event?.type === 'message.created' && sameConversation(event.conversation, conversation)) {
+          creations.push({ sequence: Number(row.id), event });
+        }
+      }
+      if (creations.length >= cap || rows.length < cap) break;
+      before = Number(rows.at(-1)?.id);
+    }
+    creations.sort((left, right) => right.sequence - left.sequence).splice(cap);
+    creations.reverse();
     const states = await this.#messageStates(conversation, creations.map(entry => entry.event.message.ref));
     return creations.flatMap(entry => {
       const state = states.get(messageRefKey(entry.event.message.ref));
@@ -297,7 +360,8 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     const oldRecalls = await toleratePostgresNul(() => legacyRecalls(conversationKey), []);
     const selected = new Set(keys);
     for (const row of uniqueEventRows([...encoded, ...legacy, ...recalls, ...oldRecalls]).sort((left, right) => Number(left.id) - Number(right.id))) {
-      const event = freezeConversationData(parseConversationEvent(row.event_json));
+      const event = this.#event(row);
+      if (!event) continue;
       const ref = eventMessageRef(event);
       if (!ref || !selected.has(messageRefKey(ref))) continue;
       const key = messageRefKey(ref), state = states.get(key) ?? { recalled: false };
@@ -366,8 +430,9 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     if (!ids.length) return states;
     const rows = await this.events.select('id', 'event_json').where({ id: { $in: ids } });
     for (const row of rows.sort((left, right) => Number(left.id) - Number(right.id))) {
-      const event = freezeConversationData(parseConversationEvent(row.event_json)), ref = eventMessageRef(event);
-      if (!ref || !selected.has(messageRefKey(ref))) continue;
+      const event = this.#event(row);
+      const ref = event && eventMessageRef(event);
+      if (!event || !ref || !selected.has(messageRefKey(ref))) continue;
       const key = messageRefKey(ref), state = states.get(key) ?? { recalled: false };
       projectMessage(state, { sequence: Number(row.id), event }); states.set(key, state);
     }
@@ -380,26 +445,34 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     throughInclusive: number,
     limit: number,
   ): Promise<readonly SequencedConversationEvent[]> {
+    const cap = Math.max(0, Math.floor(limit));
     const key = conversationRefKey(conversation);
-    const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
+    const select = async (storedKey: string, through: number): Promise<Record<string, unknown>[]> => {
       let selection = this.events.select('id', 'event_json')
         .where({
           conversation_key: storedKey,
-          id: { $gt: afterExclusive, $lte: throughInclusive },
+          id: { $gt: afterExclusive, $lte: through },
         });
       selection = selection.orderBy?.('id', 'DESC') ?? selection;
-      selection = selection.limit?.(Math.max(0, Math.floor(limit))) ?? selection;
+      selection = selection.limit?.(cap) ?? selection;
       return Promise.resolve(selection);
     };
-    const encoded = await select(databaseTextKey(key));
-    const legacy = await toleratePostgresNul(() => select(key), []);
-    const rows = [...encoded, ...legacy]
-      .sort((left, right) => Number(right.id) - Number(left.id))
-      .slice(0, Math.max(0, Math.floor(limit)));
-    return Object.freeze(rows.map((row) => Object.freeze({
-      sequence: Number(row.id),
-      event: freezeConversationData(parseConversationEvent(row.event_json)),
-    })).reverse());
+    const events: SequencedConversationEvent[] = [];
+    // Reads on past skipped (damaged) rows so the page still holds `cap` events while there are more.
+    for (let through = throughInclusive; cap > 0;) {
+      const encoded = await select(databaseTextKey(key), through);
+      const legacy = await toleratePostgresNul(() => select(key, through), []);
+      const rows = [...encoded, ...legacy]
+        .sort((left, right) => Number(right.id) - Number(left.id))
+        .slice(0, cap);
+      for (const row of rows) {
+        const event = this.#event(row);
+        if (event && events.length < cap) events.push(Object.freeze({ sequence: Number(row.id), event }));
+      }
+      if (events.length >= cap || rows.length < cap) break;
+      through = Number(rows.at(-1)?.id) - 1;
+    }
+    return Object.freeze(events.reverse());
   }
 
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
@@ -459,9 +532,9 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
       return (await Promise.resolve(limited))[0];
     };
     const encoded = await select(databaseTextKey(eventId));
-    if (encoded && parseConversationEvent(encoded.event_json).eventId === eventId) return encoded;
+    if (encoded && this.#event(encoded)?.eventId === eventId) return encoded;
     const legacy = await toleratePostgresNul(() => select(eventId), undefined);
-    return legacy && parseConversationEvent(legacy.event_json).eventId === eventId ? legacy : undefined;
+    return legacy && this.#event(legacy)?.eventId === eventId ? legacy : undefined;
   }
 }
 
@@ -490,9 +563,60 @@ async function toleratePostgresNul<T>(operation: () => Promise<T>, fallback: T):
   }
 }
 
-function parseConversationEvent(value: unknown): ConversationEvent {
-  if (typeof value !== 'string') throw new TypeError('Conversation event row has invalid JSON');
-  return JSON.parse(value) as ConversationEvent;
+/** Why a stored `event_json` is not an event (`reports_suppressed` only marks the end of reports). */
+export type StoredConversationEventProblem = 'invalid_event_json' | 'invalid_event' | 'reports_suppressed';
+
+const CONVERSATION_EVENT_TYPES: Readonly<Record<ConversationEvent['type'], true>> = Object.freeze({
+  'message.created': true, 'message.updated': true, 'message.recalled': true, 'message.reaction_changed': true,
+  'conversation.poked': true, 'member.joined': true, 'member.left': true, 'member.muted': true, 'member.unmuted': true,
+  'member.role_changed': true, 'scene.join_requested': true, 'scene.notice_updated': true,
+  'member.card_changed': true, 'member.title_changed': true, 'member.remark_changed': true,
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const isString = (value: unknown): value is string => typeof value === 'string';
+const optionalActor = (value: unknown): boolean => value === undefined || (isRecord(value) && isString(value.id));
+
+function isConversationRef(value: unknown): value is ConversationRef {
+  if (!isRecord(value) || !isRecord(value.endpoint) || !isString(value.endpoint.adapter) || !isString(value.endpoint.id)) return false;
+  if (!isString(value.kind) || !isString(value.id)) return false;
+  if (value.parent !== undefined && !(isRecord(value.parent) && isString(value.parent.kind) && isString(value.parent.id))) return false;
+  return value.threadId === undefined || isString(value.threadId);
+}
+
+const isMessageRef = (value: unknown): value is MessageRef => isRecord(value) && isString(value.id) && isConversationRef(value.conversation);
+
+/**
+ * Whether `value` has the shape every reader relies on: a known `type`, `eventId`, `timestamp`,
+ * a conversation address and the type's own references (message body, message ref, member).
+ */
+export function isConversationEvent(value: unknown): value is ConversationEvent {
+  if (!isRecord(value) || !isString(value.type) || !Object.hasOwn(CONVERSATION_EVENT_TYPES, value.type)) return false;
+  if (!isString(value.eventId) || typeof value.timestamp !== 'number' || !Number.isFinite(value.timestamp)) return false;
+  if (!isConversationRef(value.conversation) || !optionalActor(value.actor)) return false;
+  const type = value.type as ConversationEvent['type'];
+  if (type === 'message.created' || type === 'message.updated') {
+    const message = value.message;
+    if (!isRecord(message) || !isMessageRef(message.ref) || !Array.isArray(message.segments)
+      || typeof message.timestamp !== 'number' || !optionalActor(message.actor)) return false;
+    return type === 'message.created' || typeof message.revision === 'number';
+  }
+  if (type === 'message.recalled' || type === 'message.reaction_changed') return isMessageRef(value.message);
+  if (type === 'scene.join_requested') return isRecord(value.actor) && isString(value.actor.id);
+  if (type.startsWith('member.')) return isRecord(value.member) && isString(value.member.id);
+  return true;
+}
+
+/** A stored `event_json` as an event, or why it is not one. */
+export function readStoredConversationEvent(value: unknown):
+  | { readonly ok: true; readonly event: ConversationEvent }
+  | { readonly ok: false; readonly reason: Exclude<StoredConversationEventProblem, 'reports_suppressed'> } {
+  // Some drivers hand TEXT back as bytes.
+  const text = typeof value === 'string' ? value : value instanceof Uint8Array ? new TextDecoder().decode(value) : undefined;
+  if (text === undefined) return { ok: false, reason: 'invalid_event_json' };
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { return { ok: false, reason: 'invalid_event_json' }; }
+  return isConversationEvent(parsed) ? { ok: true, event: parsed } : { ok: false, reason: 'invalid_event' };
 }
 
 /**
