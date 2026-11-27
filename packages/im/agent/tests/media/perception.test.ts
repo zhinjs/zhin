@@ -301,6 +301,8 @@ describe('perception fallback chain', () => {
     ]);
     expect(calls[0]!.usage.total_tokens).toBeGreaterThan(1_000);
     expect(result?.usage?.total_tokens).toBe(calls[0]!.usage.total_tokens + 110);
+    // The description names the same id as its request.
+    expect(result?.provider).toBe('svc-backup');
     const again: MediaPerceptionCall[] = [];
     await port.describe(image(), undefined, call => again.push(call));
     expect(again).toEqual([]);

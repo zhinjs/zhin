@@ -234,6 +234,8 @@ export async function resolveTurnMediaInjection(
         maxChars: 0,
       }, signal);
       if (resolution.status !== 'resolved' || !isMediaBlockRef(resolution.content)) {
+        // #1250: the log line keeps one reason for every unreadable platform reference (`detail` says why);
+        // the placeholder and the outcome keep the resolver's own code, so the turn's result stays specific.
         const code = resolution.status === 'resolved' ? 'invalid_platform_media' : resolution.code;
         logger.warn(formatCompact({ op: 'inbound_media_rejected', type, reason: 'unmaterialized_platform_reference', ...where,
           scheme: 'platform', detail: code }));

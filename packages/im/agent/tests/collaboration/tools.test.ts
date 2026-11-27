@@ -22,6 +22,7 @@ import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress
 import type { CollaborationAgent, CollaborationDirectory } from '../../src/collaboration/contracts.js';
 import { MAX_AGENT_REPLY_CHARS, MIN_DELEGATION_BUDGET, applyDelegationBudgetFloor, createCollaborationTools } from '../../src/collaboration/tools.js';
 import { recordActorAttachments, resolveAttachmentRefs } from '../../src/media/agent-attachments.js';
+import { recordDelegatedMediaSkips } from '../../src/collaboration/delegated-media-notice.js';
 import { createDelegatedReads, noteResultAdmitted, takeConsumedResult } from '../../src/collaboration/delegation-waiters.js';
 import { agentLoop, createUserMessage, EMPTY_TOKEN_USAGE, z, type AgentMessage, type AssistantMessage, type LlmCompletionPort, type LlmTool } from '@zhin.js/ai';
 import { mergeToolOutboundElements } from '../../src/media/media-tool-bridge.js';
@@ -183,6 +184,25 @@ describe('collaboration tools: attach_media (#1250 vision-ask-after-perception)'
     expect(await call(tools, 'delegate', { agent: 'vision', brief: 'x', attach_media: 1 })).toMatch(/attach_media must be true or false/);
     await attached.detach({ status: 'completed' });
     expect(seen.map(mail => (mail.body as { attachMedia?: true }).attachMedia)).toEqual([undefined, true, true]);
+  });
+
+  it('tells the asking model when the media did not go along, and why (ask and a waited delegate)', async () => {
+    const { tools, attached } = await setup([ceiling('zhin'), ceiling('vision')], {
+      vision: async (mail, _signal, harness) => {
+        // What the actor turn runner records for a mail whose requested media was left out.
+        if ((mail.body as { attachMedia?: true }).attachMedia) recordDelegatedMediaSkips(harness, [mail.id], ['model_input', 'limit']);
+        return { status: 'completed', content: 'ok' };
+      },
+    });
+    const asked = await call(tools, 'ask', { agent: 'vision', question: 'look', attach_media: true });
+    expect(asked).toMatch(/\[Media not attached to vision: that agent's model does not take this kind of media; the media limit for this request \(count or size\) is used up\.\]$/u);
+    // Outside the agent's own (external) reply.
+    expect(asked.indexOf('[Media not attached')).toBeGreaterThan(asked.indexOf('[end external_content]'));
+    const delegated = await call(tools, 'delegate', { agent: 'vision', brief: 'look', attach_media: true });
+    expect(delegated).toContain('[Media not attached to vision:');
+    // Taken once; a request without attach_media gets no note.
+    expect(await call(tools, 'ask', { agent: 'vision', question: 'plain' })).not.toContain('Media not attached');
+    await attached.detach({ status: 'completed' });
   });
 });
 

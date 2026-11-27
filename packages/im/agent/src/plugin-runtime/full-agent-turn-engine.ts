@@ -254,7 +254,7 @@ async function* runInteractiveTurn(
   // #1250: every perception request is a model call of this turn (trace `model_calls`, `ai.usage`, usage rows),
   // one per candidate tried, also when the turn is cancelled while media is being described.
   const perceptionCalls: InboundPerceptionCall[] = [];
-  let media: Awaited<ReturnType<typeof resolveTurnMediaInjection>>;
+  let media: Awaited<ReturnType<typeof resolveTurnMediaInjection>> | undefined;
   try {
   media = await resolveTurnMediaInjection(
     context.turn.input.media,
@@ -274,6 +274,18 @@ async function* runInteractiveTurn(
     },
   );
   } finally {
+    // #1250: a resolution that throws (the turn was cancelled during perception) has no `perceptionUsage`;
+    // the requests already sent are charged their reported or estimated tokens here. A resolution that
+    // returns is charged below (`perceptionUsage`), so this never charges twice.
+    if (!media) {
+      const spent = perceptionCalls.reduce((sum, call) => sum + call.usage.total_tokens, 0);
+      if (spent > 0) {
+        try {
+          if (interactiveRun) interactiveRun.recordUsage(spent);
+          else host.usageQuota.record(quotaSubject, spent);
+        } catch { /* Accounting must not replace the cancellation. */ }
+      }
+    }
     for (const call of perceptionCalls) yield perceptionUsageEvent(call);
   }
   for (const [index, outcome] of media.outcomes.entries()) {
@@ -715,7 +727,7 @@ export async function deliverUnexecutedFollowup(
 }
 
 /**
- * One perception request as a `usage` event (#1250): `stop` / `error` / `cancelled` as its stop reason, and an
+ * One perception request as a `usage` event (#1250): `stop` / `error` / `aborted` as its stop reason, and an
  * estimate (failed or cancelled request, provider reported nothing) marked as not reported, so usage rows store
  * unknown instead of a provider figure.
  */

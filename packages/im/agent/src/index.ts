@@ -769,8 +769,8 @@ export {
 } from './media/index.js';
 export type { AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig, OutboundMediaAuthority, OutboundMediaCapabilities } from './media/index.js';
 export type { ImageAssetPublisher, PublishedImage, R2ImageStorageConfig } from './media/image-assets.js';
-export { createLlmMediaPerceptionPort, resolvePerceptionConfig } from './media/index.js';
-export type { MediaPerception, MediaPerceptionPort, PerceptionMediaKind, ResolvedPerceptionConfig } from './media/index.js';
+export { createLlmMediaPerceptionPort, MediaPerceptionFailedError, resolvePerceptionConfig } from './media/index.js';
+export type { MediaPerception, MediaPerceptionCall, MediaPerceptionPort, PerceptionMediaKind, ResolvedPerceptionConfig } from './media/index.js';
 
 
 export {

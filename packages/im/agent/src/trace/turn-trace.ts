@@ -577,7 +577,9 @@ export class TurnTraceCollector {
         this.#modelCalls.push(call);
         const purpose = call.purpose === 'media_perception'
           ? ` 识图 ${call.provider ?? '?'}/${call.model ?? '?'}` : '';
-        this.#addTimeline('model_call', `#${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${purpose}`);
+        // An unreported (estimated) figure prints as `?`, as in the call list and `[ai.usage]` (#1250).
+        this.#addTimeline('model_call', `#${call.index} in=${call.reported?.input === false ? '?' : call.prompt_tokens}`
+          + ` out=${call.reported?.output === false ? '?' : call.completion_tokens}${purpose}`);
         return;
       }
       case 'media_resolution':

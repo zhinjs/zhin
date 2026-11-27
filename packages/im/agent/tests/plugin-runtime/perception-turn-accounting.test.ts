@@ -111,7 +111,7 @@ function harness(options: { perception: MediaPerceptionPort; signal?: AbortSigna
     } finally { agentEvents.clear(); }
     return { events };
   }
-  return { run, inputs };
+  return { run, inputs, record: host.usageQuota.record };
 }
 
 const usageEvents = (events: Array<Record<string, unknown>>) => events.filter(event => event.type === 'usage');
@@ -143,6 +143,31 @@ describe('perception requests are model calls of the turn (#1250)', () => {
     expect(error).toBeDefined();
     expect(usageEvents(events)).toEqual([expect.objectContaining({ provider: 'svc-a', stopReason: 'aborted',
       usage: expect.objectContaining({ reported: { input: false, output: false, totalTokens: false } }) })]);
+  });
+
+  it('a turn cancelled during perception charges the quota the estimate of the requests already sent, once', async () => {
+    const controller = new AbortController();
+    const cancelling: MediaPerceptionPort = {
+      ...fallbackPort,
+      describe: async (_payload, _signal, observe) => {
+        observe?.({ provider: 'svc-a', model: 'primary', status: 'failed', usage: estimate, usageReported: false, durationMs: 4 });
+        controller.abort(new Error('stopped'));
+        observe?.({ provider: 'svc-b', model: 'backup', status: 'cancelled', usage: { prompt_tokens: 700, completion_tokens: 0, total_tokens: 700 }, usageReported: false, durationMs: 2 });
+        throw new Error('aborted');
+      },
+    };
+    const { run, record } = harness({ perception: cancelling, signal: controller.signal });
+    const { error } = await run();
+    expect(error).toBeDefined();
+    const charged = record.mock.calls.map(call => call[1] as number);
+    expect(charged.reduce((sum, tokens) => sum + tokens, 0)).toBe(1_750);
+  });
+
+  it('a completed turn charges the perception usage once, not again from the per-request estimates', async () => {
+    const { run, record } = harness({ perception: fallbackPort });
+    await run();
+    const charged = record.mock.calls.map(call => call[1] as number);
+    expect(charged.reduce((sum, tokens) => sum + tokens, 0)).toBe(1_362);
   });
 });
 

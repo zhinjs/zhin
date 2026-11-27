@@ -334,6 +334,31 @@ describe('resolveTurnMediaInjection', () => {
     } finally { warn.mockRestore(); }
   });
 
+  it('平台引用解析失败：日志 reason 统一为 unmaterialized_platform_reference，结局与占位保留解析器的具体码', async () => {
+    const { getLogger } = await import('@zhin.js/logger');
+    const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
+    try {
+      const injection = await resolveMedia([
+        { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-1' }, referenceKey: 'ref-1' },
+        { kind: 'image', source: { kind: 'platform_ref', value: 'opaque-2' }, referenceKey: 'ref-2' },
+      ], { scene: 'qq/group/42', references: {
+        resolve: async key => key === 'ref-1'
+          ? { status: 'expired', code: 'reference_expired' }
+          : { status: 'forbidden', code: 'reference_forbidden' },
+      }, signal: new AbortController().signal, providerInput: ['text', 'image'] });
+      expect(injection.outcomes).toEqual([
+        { kind: 'image', status: 'failed', code: 'reference_expired' },
+        { kind: 'image', status: 'rejected', code: 'reference_forbidden' },
+      ]);
+      expect(injection.textAppends).toEqual(['[Media failed:reference_expired: image]', '[Media failed:reference_forbidden: image]']);
+      const lines = warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('inbound_media_rejected'));
+      expect(lines).toHaveLength(2);
+      for (const line of lines) expect(line).toContain('reason: unmaterialized_platform_reference');
+      expect(lines[0]).toContain('detail: reference_expired');
+      expect(lines[1]).toContain('detail: reference_forbidden');
+    } finally { warn.mockRestore(); }
+  });
+
   it('path 超过 maxFileBytes 且未声明大小 → too_large（不是 file_unreadable）', async () => {
     const { DEFAULT_MULTIMODAL_CONFIG } = await import('../../src/media/media-types.js');
     const file = path.join(root, 'huge.png');

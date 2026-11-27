@@ -37,6 +37,11 @@ export {
 export interface MediaPerception {
   /** Description text, already trimmed to `maxChars`. */
   readonly text: string;
+  /**
+   * The provider that described it, under the same id its request is reported with
+   * ({@link MediaPerceptionCall.provider}, the service id when the port knows it): trace provenance and
+   * `model_calls` name one id (#1250).
+   */
   readonly provider: string;
   readonly model: string;
   /** The description came from the per-port cache (same bytes seen before). */
@@ -108,8 +113,9 @@ export interface LlmMediaPerceptionOptions {
   readonly timers?: ProviderTimers;
   readonly onEvent?: (event: ProviderResilienceEvent) => void;
   /**
-   * The provider id a request is reported under ({@link MediaPerceptionCall.provider}) for a candidate's
-   * Profile id: the service id, as chat calls report theirs (#1250). Absent or unknown = the Profile id.
+   * The provider id a request and its description are reported under ({@link MediaPerceptionCall.provider},
+   * {@link MediaPerception.provider}) for a candidate's Profile id: the service id, as chat calls report
+   * theirs (#1250). Absent or unknown = the Profile id.
    */
   readonly callProvider?: (profileId: string) => string | undefined;
 }
@@ -239,6 +245,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
       for (const candidate of [config, ...(config.fallbacks ?? [])]) {
         signal?.throwIfAborted();
         let sentAt: number | undefined;
+        const provider = options.callProvider?.(candidate.provider) ?? candidate.provider;
         try {
           const model = await runtime.model(candidate.provider, candidate.model);
           if (!(model.input ?? ['text']).includes(payload.kind)) {
@@ -261,10 +268,10 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
             const completion = estimatePromptTokens(answer);
             return { prompt_tokens: promptEstimate, completion_tokens: completion, total_tokens: promptEstimate + completion };
           })();
-          record({ provider: options.callProvider?.(candidate.provider) ?? candidate.provider, model: candidate.model, status: 'completed',
+          record({ provider, model: candidate.model, status: 'completed',
             usage: reported ?? estimated!, usageReported: Boolean(reported), durationMs: Date.now() - sentAt });
           const text = truncatePerceptionText(answer, config.maxChars);
-          const result = { text, provider: candidate.provider, model: candidate.model };
+          const result = { text, provider, model: candidate.model };
           // 空回答同样计费，但不写缓存；继续尝试下一个候选。
           if (!text) {
             empty = { ...result, cached: false };
@@ -275,7 +282,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         } catch (error) {
           // 取消属于当前回合，不能借备用模型启动新的请求；已发出的请求仍记一次调用。
           if (sentAt !== undefined) {
-            record({ provider: options.callProvider?.(candidate.provider) ?? candidate.provider, model: candidate.model, status: signal?.aborted ? 'cancelled' : 'failed',
+            record({ provider, model: candidate.model, status: signal?.aborted ? 'cancelled' : 'failed',
               usage: { prompt_tokens: promptEstimate, completion_tokens: 0, total_tokens: promptEstimate },
               usageReported: false, durationMs: Date.now() - sentAt });
           }

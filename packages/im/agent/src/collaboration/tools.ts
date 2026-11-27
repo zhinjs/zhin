@@ -23,6 +23,7 @@ import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import { renderAttachmentNote, takeActorAttachments, type AgentAttachment } from '../media/agent-attachments.js';
 import { renderExternalContent } from '../security/trust-level.js';
 import { awaitDelegatedResult, beginDelegationSend } from './delegation-waiters.js';
+import { renderDelegatedMediaNotice, takeDelegatedMediaSkips } from './delegated-media-notice.js';
 import {
   COLLABORATION_TOOL_NAMES,
   type CollaborationToolName,
@@ -216,6 +217,12 @@ function clip(content: string): string {
 }
 
 /** Framework-written attachment lines after the (external) reply text (#1250). */
+/** #1250: `attach_media: true` but (some) media did not go along: say why, outside the agent's reply. */
+function mediaNotice(harness: object, agent: string, mailId: string | undefined): string {
+  const notice = renderDelegatedMediaNotice(agent, takeDelegatedMediaSkips(harness, mailId));
+  return notice ? `\n${notice}` : '';
+}
+
 function withAttachments(text: string, agent: string, attachments: readonly AgentAttachment[]): string {
   const note = renderAttachmentNote(agent, attachments);
   return note ? `${text}\n\n${note}` : text;
@@ -334,7 +341,8 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
         const reply = outcome.reply ?? { status: 'failed' as const, content: '' };
         const content = reply.content.trim() || '(empty reply)';
         return withAttachments(
-          `agent ${resolved.name} replied (${reply.status}):\n${renderExternalContent('agent_reply', clip(content))}${budgetNote(floored?.raised ?? [])}`,
+          `agent ${resolved.name} replied (${reply.status}):\n${renderExternalContent('agent_reply', clip(content))}${budgetNote(floored?.raised ?? [])}`
+            + mediaNotice(harness, resolved.name, outcome.mailId),
           resolved.name,
           takeActorAttachments(harness, outcome.mailId),
         );
@@ -419,7 +427,8 @@ export const createCollaborationTools: CreateCollaborationTools = (binding, opti
         if (back?.body.kind === 'result') {
           const content = back.body.content.trim() || '(empty reply)';
           return withAttachments(
-            `agent ${toActor} finished (${back.body.status}, mail ${outcome.mail.id}):\n${renderExternalContent('agent_reply', clip(content))}${raised}`,
+            `agent ${toActor} finished (${back.body.status}, mail ${outcome.mail.id}):\n${renderExternalContent('agent_reply', clip(content))}${raised}`
+              + mediaNotice(harness, toActor, outcome.mail.id),
             toActor,
             takeActorAttachments(harness, outcome.mail.id),
           );

@@ -63,8 +63,9 @@ describe('scoped perception against real SDK completion with mocked HTTP', () =>
     const calls: Array<{ provider: string; status: string }> = [];
     const result = await port.describe(payload, undefined, call => calls.push(call));
     expect(calls.map(call => [call.provider, call.status])).toEqual([['svc-google', 'failed'], ['svc-openai', 'completed']]);
-    // Provenance (and the description cache) keep the Profile id.
-    expect(result).toMatchObject({ provider: 'backup' });
+    // Provenance names the same service id as the request (trace `media[].provenance` matches `model_calls`).
+    expect(result).toMatchObject({ provider: 'svc-openai' });
+    expect(await port.describe(payload)).toMatchObject({ provider: 'svc-openai', cached: true });
   });
 
   it('does not send a backup after the turn is cancelled', async () => {

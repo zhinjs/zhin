@@ -53,6 +53,25 @@ describe('perception pre-pass in the turn trace', () => {
     expect(logs.details[0]).toContain('purpose: media_perception');
   });
 
+  it('zhin trace prints an estimated call as `?` and says the totals include estimates (#1250)', () => {
+    const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' }, () => 0);
+    trace.record({ type: 'usage', purpose: 'media_perception', provider: 'g', model: 'vision', stopReason: 'aborted',
+      usage: { promptTokens: 1_050, completionTokens: 0, totalTokens: 1_050, reported: { input: false, output: false, totalTokens: false } } });
+    trace.record({ type: 'usage', provider: 'p', model: 'chat', usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 } });
+    trace.record({ type: 'turn_end', output: [], usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 } });
+    const text = formatTurnTrace(trace.snapshot());
+    expect(text).toMatch(/#1 in=\? out=\? .*识图/u);
+    expect(text).not.toMatch(/#1 in=1050/u);
+    expect(text).toMatch(/#2 in=100 out=10/u);
+    expect(text).toMatch(/合计 1160（含估算）/u);
+    // Consistent with `[ai.usage]`: the unreported call shows `?` there too.
+    expect(formatTurnUsageLogs(trace.snapshot(), { traceId: 'tr', scene: 'x' }).details[0]).toContain('input: ?');
+
+    const plain = new TurnTraceCollector({ turnId: 't2', sessionKey: 's' }, () => 0);
+    plain.record({ type: 'usage', provider: 'p', model: 'chat', usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110 } });
+    expect(formatTurnTrace(plain.snapshot())).not.toContain('含估算');
+  });
+
   it('redacts credentials in a description (#1250)', () => {
     const trace = new TurnTraceCollector({ turnId: 't', sessionKey: 's' });
     const secret = 'sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';

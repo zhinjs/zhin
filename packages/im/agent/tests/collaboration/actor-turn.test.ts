@@ -32,6 +32,14 @@ import { takeActorAttachments } from '../../src/media/agent-attachments.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { PromptController } from '../../src/turn/prompt-controller.js';
 import { executionBundle } from '../helpers/execution-bundle.js';
+import { takeDelegatedMediaSkips } from '../../src/collaboration/delegated-media-notice.js';
+import { resolveTurnMediaInjection } from '../../src/turn/inbound-media.js';
+
+// Counts the delegated media resolutions (#1250); behaviour is the real one.
+vi.mock('../../src/turn/inbound-media.js', async (original) => {
+  const actual = await original<typeof import('../../src/turn/inbound-media.js')>();
+  return { ...actual, resolveTurnMediaInjection: vi.fn(actual.resolveTurnMediaInjection) };
+});
 
 const SHELL_POLICY: TurnPolicyContext = Object.freeze({
   permissions: ['owner'],
@@ -86,7 +94,8 @@ function setup(options: {
   models?: ActorModelSource;
   tracing?: SubTurnTracing;
   rootModel?: ActorModelSelection;
-  rootMedia?: readonly { kind: 'image' | 'audio' | 'video' | 'file'; source: { kind: 'url' | 'path' | 'base64' | 'platform_ref'; value: string }; mimeType?: string }[];
+  rootMedia?: readonly { kind: 'image' | 'audio' | 'video' | 'file'; source: { kind: 'url' | 'path' | 'base64' | 'platform_ref'; value: string }; mimeType?: string; referenceKey?: string }[];
+  references?: { resolve(key: string, options: unknown, signal?: AbortSignal): Promise<any> };
   imageInspectionBudget?: { remaining: number };
 }) {
   const inputs: CoreInput[] = [];
@@ -115,7 +124,8 @@ function setup(options: {
     policy: SHELL_POLICY,
     capabilities: { tools: options.tools.map(tool => tool.name), skills: [] },
     signal: options.rootSignal ?? new AbortController().signal,
-    ports: { journal: options.journal ?? { append: async () => undefined }, approval },
+    ports: { journal: options.journal ?? { append: async () => undefined }, approval,
+      ...(options.references ? { references: options.references as never } : {}) },
   });
   const byName = new Map(options.agents.map(agent => [agent.name, agent]));
   const directory: CollaborationDirectory = { entry: options.agents[0]!, get: name => byName.get(name), list: () => options.agents };
@@ -536,6 +546,117 @@ describe('#1250 vision-ask-after-perception: a delegation carries the human\'s o
     await sized.harness.send('zhin', second.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
     expect(mediaOf(sized.inputs[0]!)).toHaveLength(1);
     await second.detach({ status: 'completed' });
+  });
+
+  /** A platform reference whose bytes arrive when the test says so. */
+  function heldReference(base64: string) {
+    const calls: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    return {
+      calls,
+      release,
+      port: {
+        resolve: async (key: string) => {
+          calls.push(key);
+          await gate;
+          return { status: 'resolved', content: { kind: 'base64', value: base64, mime_type: 'image/png' } };
+        },
+      },
+    };
+  }
+  const refImage = (key: string) => ({ kind: 'image' as const, source: { kind: 'platform_ref' as const, value: `token-${key}` }, mimeType: 'image/png', referenceKey: key });
+
+  it('an actor cancelled while the media resolves stops waiting, gives the reservation back, and leaves the shared resolution running', async () => {
+    const held = heldReference(PNG);
+    const ctx = setup({ agents: agents(), tools: [], rootMedia: [refImage('ref-1')], references: held.port, models: visionScope(['text', 'image']) });
+    const { root, detach } = await ctx.attach();
+    const ask = mailFrom(root, { to: 'vision', kind: 'ask', body: { kind: 'ask', question: 'look?', attachMedia: true } } as never);
+    const controller = new AbortController();
+    const running = ctx.runner('vision', [ask], controller.signal);
+    await vi.waitFor(() => expect(held.calls).toHaveLength(1));
+    controller.abort(new Error('stopped'));
+    const settled = await Promise.race([running.then(result => result.status),
+      new Promise(resolve => setTimeout(() => resolve('still waiting'), 200))]);
+    expect(settled).toBe('cancelled');
+    expect(ctx.inputs).toHaveLength(0);
+    // Retry to the same agent: the reservation was given back, and the same resolution is reused.
+    const retry = ctx.runner('vision', [{ ...ask, id: 'x2' } as Mail], new AbortController().signal);
+    held.release();
+    await retry;
+    expect(mediaOf(ctx.inputs[0]!)).toEqual([expect.objectContaining({ type: 'image' })]);
+    expect(held.calls).toHaveLength(1);
+    await detach({ status: 'completed' });
+  });
+
+  it('a failed actor turn gives the media back: a retry to the same agent attaches it again', async () => {
+    let runs = 0;
+    const flaky: Script = async function* (input) {
+      runs += 1;
+      if (runs === 1) throw new Error('provider down');
+      return yield* reply('done')(input);
+    };
+    const ctx = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text', 'image']), script: flaky });
+    const { root, detach } = await ctx.attach();
+    const ask = mailFrom(root, { to: 'vision', kind: 'ask', body: { kind: 'ask', question: 'look?', attachMedia: true } } as never);
+    expect((await ctx.runner('vision', [ask], new AbortController().signal)).status).toBe('failed');
+    expect((await ctx.runner('vision', [{ ...ask, id: 'x2' } as Mail], new AbortController().signal)).status).toBe('completed');
+    expect(ctx.inputs.map(input => mediaOf(input)?.length)).toEqual([1, 1]);
+    // A completed turn keeps it: a third ask carries none, and says why.
+    await ctx.runner('vision', [{ ...ask, id: 'x3' } as Mail], new AbortController().signal);
+    expect(mediaOf(ctx.inputs[2]!)).toBeUndefined();
+    expect(takeDelegatedMediaSkips(ctx.harness, 'x3')).toEqual(['already_attached']);
+    await detach({ status: 'completed' });
+  });
+
+  it('skips an item of known size that cannot fit before resolving it, and keeps only blocks an agent received', async () => {
+    const resolutions = vi.mocked(resolveTurnMediaInjection);
+    const big = Buffer.concat([PNG_BYTES, Buffer.alloc(11 * 1024 * 1024)]).toString('base64');
+    const heavy = { kind: 'image' as const, source: { kind: 'base64' as const, value: big }, mimeType: 'image/png' };
+    const known = setup({ agents: agents(), tools: [], rootMedia: [heavy, heavy], models: visionScope(['text', 'image']) });
+    const first = await known.attach();
+    resolutions.mockClear();
+    await known.harness.send('zhin', first.root, { kind: 'ask', to: 'vision', text: 'q', attachMedia: true });
+    expect(mediaOf(known.inputs[0]!)).toHaveLength(1);
+    // The second 11 MiB item is never decoded: its size is known and the bound is passed.
+    expect(resolutions).toHaveBeenCalledTimes(1);
+    await first.detach({ status: 'completed' });
+
+    // Platform references: sizes are unknown until resolved.
+    const heldA = heldReference(big);
+    const heldB = heldReference(big);
+    let runs = 0;
+    const failFirst: Script = async function* (input) {
+      runs += 1;
+      if (runs === 1) throw new Error('provider down');
+      return yield* reply('done')(input);
+    };
+    const refs = { resolve: (key: string, ...rest: [unknown, AbortSignal?]) => (key === 'ref-a' ? heldA : heldB).port.resolve(key, ...rest) };
+    heldA.release();
+    heldB.release();
+    const unknown = setup({ agents: agents(), tools: [], rootMedia: [refImage('ref-a'), refImage('ref-b')], references: refs as never,
+      models: visionScope(['text', 'image']), script: failFirst });
+    const second = await unknown.attach();
+    const ask = mailFrom(second.root, { to: 'vision', kind: 'ask', body: { kind: 'ask', question: 'look?', attachMedia: true } } as never);
+    expect((await unknown.runner('vision', [ask], new AbortController().signal)).status).toBe('failed');
+    expect(takeDelegatedMediaSkips(unknown.harness, 'x1')).toEqual(['limit']);
+    await unknown.runner('critic', [{ ...ask, id: 'x2', to: 'critic' } as Mail], new AbortController().signal);
+    expect(mediaOf(unknown.inputs[1]!)).toHaveLength(1);
+    // The item that was handed over is reused; the one that did not fit was not kept and resolves again.
+    expect(heldA.calls).toHaveLength(1);
+    expect(heldB.calls).toHaveLength(2);
+    await second.detach({ status: 'completed' });
+  });
+
+  it('tells the asker why requested media was not attached', async () => {
+    const textOnly = setup({ agents: agents(), tools: [], rootMedia: [image], models: visionScope(['text']) });
+    const { root, detach } = await textOnly.attach();
+    const ask = mailFrom(root, { to: 'vision', kind: 'ask', body: { kind: 'ask', question: 'look?', attachMedia: true } } as never);
+    await textOnly.runner('vision', [ask], new AbortController().signal);
+    expect(takeDelegatedMediaSkips(textOnly.harness, 'x1')).toEqual(['model_input']);
+    await textOnly.runner('vision', [{ ...ask, id: 'x2', body: { kind: 'ask', question: 'plain' } } as Mail], new AbortController().signal);
+    expect(takeDelegatedMediaSkips(textOnly.harness, 'x2')).toEqual([]);
+    await detach({ status: 'completed' });
   });
 
   it('a failed item does not keep later readable ones out', async () => {
