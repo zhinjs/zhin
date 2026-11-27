@@ -96,7 +96,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | --- | --- |
 | Architecture Layers (`pnpm check:architecture`) | Layer dependency direction (basic -> kernel -> ai -> core -> agent -> zhin) |
 | Dependency Policy (`pnpm check:dependency-policy`) | Scaffold dependency policy, Changesets config, and internal peer ranges |
-| Release Plan (`pnpm check:release-plan`) | Patch only; the gate rejects minor/major, including bumps inferred through dependency propagation |
+| Release Plan (`pnpm check:release-plan`) | Patch by default. A minor passes only after the owner approves it and `approvedNonPatchReleases` in `.changeset/version-policy.json` names that exact version. Major, and any unapproved minor (including bumps inferred through dependency propagation), is rejected |
 | No Koa Import (`pnpm check:no-koa`) | Plugins must not directly import koa |
 | Install Size (`pnpm check:install-size`) | zhin.js IM core production `node_modules` <= 10MB |
 

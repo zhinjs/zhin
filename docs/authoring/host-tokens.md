@@ -160,7 +160,7 @@ export default defineCommand({
 | --- | --- |
 | `hasResource(context, token)` | `context.use(token)` 能成功时返回 `true`，不抛错。优先用上下文的 `has()`，没有时退回试探 `use()` |
 | `context.has?.(token)` | 内置的构造 / 能力上下文（命令、工具、中间件、`@zhin.js/testing` 的假插件）都提供 `has()`；它是可选成员，自己手写的上下文不必实现 |
-| `usageSubjectFromMessage(message)` | 按和 Agent 回合相同的规则生成 `onBehalfOf`：平台优先取 `clientAdapter`，账号优先取 `endpointId`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`，发送者有 `master` 角色时 `owner` 为 `true`。**消息没有发送者时返回 `undefined`**（不抛错），这时不计入任何人的配额 |
+| `usageSubjectFromMessage(message)` | 按和 Agent 回合相同的规则生成 `onBehalfOf`：平台优先取 `clientAdapter`，账号优先取 `endpointId`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`，只有发送者是**全局**聊天角色 `owner` 时 `owner` 才为 `true`（账号层或会话层的 owner 不算）。**消息没有发送者时返回 `undefined`**（不抛错），这时不计入任何人的配额。会话缺少平台、账号或 id，或 `kind` 不是 `private` / `group` / `channel` 时抛 `TypeError` |
 | `isAiCompletionQuotaError(error)` | 判断是否为超额错误（`scope` 为 `user` 或 `group`，`retryAfterSeconds` 为建议等待秒数），`message` 可以直接回复给用户；不需要导入 `@zhin.js/agent` |
 
 ::: tip 和 Agent 包的关系

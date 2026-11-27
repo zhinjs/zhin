@@ -21,7 +21,7 @@ Zhin.js Juejin comment adapter (Plugin Runtime): lets AI help you reply to comme
 ## Read this first
 
 - **It acts as your account**: Juejin has no open comment API, so sending uses your login cookie. The cookie can **only be injected through an environment variable** (e.g. `cookie: ${JUEJIN_COOKIE}`) and is never written to the data directory. A cookie is equivalent to your password: **never put it in `zhin.config.yml` as plaintext, never commit it, never paste it into logs or issues**. There is no QR login.
-- **Review before sending**: `sendMode` is only `review` (default) or `off`. AI replies only go into a draft queue and are **never posted automatically**; they are sent only when you click "Send" on the Console "Juejin comment review" page or a master runs `juejin-draft send <id>`. There is no auto-send.
+- **Review before sending**: `sendMode` is only `review` (default) or `off`. AI replies only go into a draft queue and are **never posted automatically**; they are sent only when you click "Send" on the Console "Juejin comment review" page or someone with the chat role `owner` runs `juejin-draft send <id>`. There is no auto-send.
 - **Replies only, never top-level comments**: egress can only reply to an existing comment thread (or a reply inside it) under a whitelisted article.
 - **Whitelisted articles only**: only articles listed in `articles` are polled (list only your own); empty means no polling. No sitewide search, no other people's comment sections. Follow Juejin's terms; do not use it for marketing or spam.
 - **Risk trips the circuit breaker**: on rate-limit / captcha / risk-control / non-JSON responses the endpoint stops polling and sending immediately and does not retry; check the account manually, then restart.
@@ -37,7 +37,7 @@ Zhin.js Juejin comment adapter (Plugin Runtime): lets AI help you reply to comme
 | Filter your own comments (login uid, or the API's author flag) | ✅ |
 | AI replies go to the draft queue (`review`) | ✅ |
 | Draft persistence (survives restarts; interrupted sends are flagged) | ✅ (`data/juejin/<account>/drafts.json`, mode 600) |
-| Send after master approval (`juejin-draft send` → `interact_api/v1/reply/publish`) | ⚠️ implemented but **unverified live** (send interval + circuit breaker; an unclear result is never treated as "not sent") |
+| Send after a chat-role `owner` approves (`juejin-draft send` → `interact_api/v1/reply/publish`) | ⚠️ implemented but **unverified live** (send interval + circuit breaker; an unclear result is never treated as "not sent") |
 | Edit / drop drafts before approval | ✅ |
 | Cookie expiry detection (`err_no 403 must login`) | ✅ |
 | Console "Juejin comment review" page | ✅ |
@@ -85,7 +85,7 @@ With the Console installed, the navigation shows "Juejin comment review": login 
 | `juejin:review` | Send / edit / discard drafts |
 | `juejin:login` | Re-check login |
 
-Approval commands only accept the chat role `owner` (granted on the chat adapter you use, see [Chat roles](../concepts/chat-roles.md)).
+Approval commands only accept the chat role `owner` (granted on the chat adapter you use, see [Chat roles](../concepts/chat-roles.md)). Do not write the removed `master` field: after the chat-role migration, writing it again does not grant a role. The instance removes the field and lists it under Console **Needs attention** until someone imports or ignores it (see [Upgrading to chat roles](../migrations/chat-roles.md)).
 
 ## Conversations and messages
 

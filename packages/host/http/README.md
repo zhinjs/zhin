@@ -87,12 +87,16 @@ request.headers, url: context.url, remoteAddress: context.remoteAddress })`.
 ```yaml
 http:
   host: 127.0.0.1
-  port: 8086
+  port: 8068                    # default when http.port is omitted (DEFAULT_HTTP_PORT)
   token: ${HTTP_TOKEN}          # bootstrap: creates the first owner, rejected afterwards
   corsOrigins:
     - https://example.test
-  base: /api                    # auth prefix
+  base: /api                    # API mount path
 ```
+
+When `http.port` is omitted the gateway listens on **8068**, the same value the scaffold writes.
+Early 1.x runtimes defaulted to 8086; a project that already sets `http.port` keeps that port.
+`http.tokens` is removed: startup fails while it is still in the config.
 
 The legacy Koa `@zhin.js/host-router` stack and the `@zhin.js/host-api` management-plane plugin have
 been removed; the management-plane REST/RPC/SSE is now assembled by `@zhin.js/cli` (Console Host) on

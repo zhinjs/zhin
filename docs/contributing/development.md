@@ -87,7 +87,7 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | --- | --- |
 | Architecture Layers（`pnpm check:architecture`） | 分层依赖方向（basic → kernel → ai → core → agent → zhin） |
 | Dependency Policy（`pnpm check:dependency-policy`） | 脚手架依赖策略、Changesets 配置与内部 peer 范围 |
-| Release Plan（`pnpm check:release-plan`） | 只允许 patch；minor/major（含依赖传播）均由门禁拒绝 |
+| Release Plan（`pnpm check:release-plan`） | 默认只放行 patch。minor 须经所有者批准，并在 `.changeset/version-policy.json` 的 `approvedNonPatchReleases` 里登记精确目标版本；major，以及未经批准的 minor（含依赖传播）一律拒绝 |
 | No Koa Import（`pnpm check:no-koa`） | 插件不得直接 import koa |
 | Install Size（`pnpm check:install-size`） | zhin.js IM 核心 production `node_modules` ≤ 10MB |
 
