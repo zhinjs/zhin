@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=45c39ca425edc4dd -->
+<!-- sync-adapter-docs:sha256=3d6deec315f21e90 -->
 
 # @zhin.js/adapter-slack
 
@@ -131,6 +131,13 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 ### 出站（Markdown → mrkdwn）
 
 通用 Markdown（如 `**粗体**`）会转换为 Slack mrkdwn，并通过 Block Kit `section` 发送。
+
+### 长消息与卡片拆分
+
+- 一条 Slack 消息最多 48 个 Block。超出时按顺序拆成多条，每条都带自己的通知文字；不超出时块顺序保持不变。
+- 不带按钮的长回复：后续各条挂到第一条消息的话题（thread）下。
+- 带按钮的卡片（确认 / 选择 / 审批）：所有按钮放在最后一条、与正文末尾同一条消息；正文较长时，前面的正文按 48 块一条切分，最后一条只放能和按钮一起装下的正文。这类卡片的各条**不挂到话题下**，都留在卡片原来的会话里（在自动建的话题里点按钮，点击会作为另一个会话的消息到达，等待中的确认收不到回答）。按钮行多到装不下正文时（Core 的卡片不会产生），按原顺序直接拆分，每条仍不超过 48 块。
+- 编辑消息（如流式回复、卡片状态更新）只修改**第一条**：多条拆分发送的卡片，后续各条保持不变。编辑内容超过 48 块时截掉正文，在截断处加一段「[内容过长，已截断]」，按钮保留在最后。
 
 ### 入站（mrkdwn → Markdown）
 
