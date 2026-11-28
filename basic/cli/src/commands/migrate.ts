@@ -36,7 +36,7 @@ import {
   type ProjectRetiredImportScanLimits,
 } from '../utils/retired-packages-check.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
-import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS, REMOVED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
+import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS, REMOVED_PROJECT_SCRIPTS, removedProjectScriptReplacement } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
@@ -339,6 +339,8 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     const current = pkg.scripts[name];
     if (!isLegacyScript(REMOVED_PROJECT_SCRIPTS, name, current)) continue;
     console.log(chalk.cyan(`  ${options.dryRun ? '[dry-run]' : '·'} scripts.${name}: "${current}" → 删除（旧版 zhin migrate 写入，当前脚手架没有这个脚本）`));
+    const replacement = removedProjectScriptReplacement(name);
+    if (replacement) console.log(chalk.cyan(`      ${replacement}`));
     if (!options.dryRun) delete pkg.scripts[name];
     changed = true;
   }
@@ -852,7 +854,6 @@ export const migrateCommand = new Command('migrate')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
   .option('--no-install', '跳过最后一步依赖安装')
   .option('--include-pinned', '把精确版本等已锁定的 zhin 依赖也升级到 registry 最新版本（精确版本保持精确；默认保留）', false)
-  .option('--allow-outdated-cli', '正在运行的 @zhin.js/cli 比 registry 最新版本旧时仍继续迁移（默认停止：旧 CLI 按旧规则改写项目）', false)
   .addHelpText('after', `
 配置格式迁移 / Config format migration (configVersion 2):
   启动报 "configVersion must be 2" 或检测到 v1 配置时，先停止 Bot，再运行：
@@ -891,14 +892,10 @@ Note: "zhin runtime migrate" migrates legacy plugin capability code, not the con
     // One registry lookup for the whole run: the CLI check and the upgrade ask for the same releases.
     const lookup = cachedRegistryLookup(npmRegistryLookup);
     const freshness = checkCliFreshness({ lookup });
+    // #1250 b116 M3: a warning, never a stop — dry-run and a real run both continue.
     if (freshness.status === 'outdated') {
-      const blocking = !dryRun && !options.allowOutdatedCli;
-      for (const line of formatOutdatedCliAdvice(freshness, { blocking })) console.log(blocking ? chalk.red(line) : chalk.yellow(line));
+      for (const line of formatOutdatedCliAdvice(freshness)) console.log(chalk.yellow.bold(line));
       console.log('');
-      if (blocking) {
-        process.exitCode = 1;
-        return;
-      }
     } else if (freshness.status === 'unknown') {
       console.log(chalk.gray(`  · 无法从 registry 查询 @zhin.js/cli 的最新版本，按当前 CLI${freshness.running ? ` ${freshness.running}` : ''} 的迁移规则继续`));
       console.log('');

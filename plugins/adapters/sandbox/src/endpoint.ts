@@ -34,8 +34,13 @@ import { SANDBOX_MEDIA_PUBLIC_PREFIX, isSandboxMediaPath } from './media-url.js'
  * 多个 Sandbox endpoint 共用同一个 HTTP Host 时，同 path 的所有 WS listener 都会被回调（入站重复、
  * 出站互窜，一条消息被每个账号各处理一次）。所以每个 endpoint 只挂自己的路径：
  * - 每个 endpoint 都挂 `/sandbox/<id>`（确定的地址，Console 页面按账号连这个）；
- * - 第一个启动的 endpoint 另外挂 `/sandbox`（保持默认地址兼容）。
- * 同名（同一账号跨 generation 交接）可以共享路径：旧 generation 的 listener 由 admission 关闭，不会重复投递。
+ * - `/sandbox`（默认地址）在任一时刻只属于一个 owner：最早启动、仍在运行的那个账号。
+ *   默认账号停止（停用、删除、改名）时，`/sandbox` 交给仍在运行的下一个账号（按启动顺序），由它补挂
+ *   listener（#1250 b116 H1：否则改名 x→y 时 y 启动在先、x 释放在后，`/sandbox` 就没人接管而 404）。
+ *
+ * owner 是 endpoint 的 canonical id（插件实例 + 账号）：同一 owner 跨 generation 交接时共享路径（旧
+ * generation 的 listener 由 admission 关闭，不会重复投递）；不同插件实例里的同名账号是不同 owner，
+ * 后来者退到 `/sandbox/<id>-2`、`-3`，也不会共挂 `/sandbox`。
  *
  * #1250 sandbox-second-account-duplicates-replies：认领表不能以插件拿到的 HttpHost 对象为键。
  * `CapabilityContext.use(httpHostToken)` 每次调用都会经 `bindGenerationAdmission` 生成一个新的
@@ -44,14 +49,31 @@ import { SANDBOX_MEDIA_PUBLIC_PREFIX, isSandboxMediaPath } from './media-url.js'
  * 认领表放在 `globalThis` 上，插件模块热重载后仍是同一张表。endpoint stop() 时必须 release。
  */
 interface SandboxWsPathClaim {
+  readonly owner: string;
+  readonly holders: Set<symbol>;
+}
+
+interface SandboxWsAccountClaim {
+  readonly owner: string;
   readonly name: string;
-  readonly owners: Set<symbol>;
+  readonly path: string;
+  /** Called when `/sandbox` passes to this account's owner after it started (hand-over on release). */
+  readonly onDefault?: () => void;
+  serving: boolean;
+}
+
+interface SandboxWsHostClaims {
+  readonly paths: Map<string, SandboxWsPathClaim>;
+  /** Running accounts in start order. */
+  readonly accounts: Map<symbol, SandboxWsAccountClaim>;
+  /** The owner `/sandbox` belongs to; sticky while any of its accounts runs. */
+  defaultOwner?: string;
 }
 
 export const SANDBOX_DEFAULT_WS_PATH = '/sandbox';
 
-type SandboxWsPathRegistry = WeakMap<object, Map<string, SandboxWsPathClaim>>;
-const SANDBOX_WS_PATH_REGISTRY = Symbol.for('zhin.adapter-sandbox.ws-path-claims');
+type SandboxWsPathRegistry = WeakMap<object, SandboxWsHostClaims>;
+const SANDBOX_WS_PATH_REGISTRY = Symbol.for('zhin.adapter-sandbox.ws-path-claims.v2');
 
 function sandboxWsPathRegistry(): SandboxWsPathRegistry {
   const holder = globalThis as { [SANDBOX_WS_PATH_REGISTRY]?: SandboxWsPathRegistry };
@@ -67,12 +89,12 @@ function httpHostIdentity(http: HttpHost): object {
   return http;
 }
 
-function sandboxWsClaims(http: HttpHost): Map<string, SandboxWsPathClaim> {
+function sandboxWsClaims(http: HttpHost): SandboxWsHostClaims {
   const registry = sandboxWsPathRegistry();
   const key = httpHostIdentity(http);
   let claims = registry.get(key);
   if (!claims) {
-    claims = new Map();
+    claims = { paths: new Map(), accounts: new Map() };
     registry.set(key, claims);
   }
   return claims;
@@ -87,46 +109,86 @@ export interface SandboxWsEndpointListing {
   readonly default: boolean;
 }
 
-/** Every Sandbox account currently mounted on `http`, by id. */
+/** Every Sandbox account currently mounted on `http` (one entry per owner), by id. */
 export function listSandboxWsEndpoints(http: HttpHost): readonly SandboxWsEndpointListing[] {
   const claims = sandboxWsClaims(http);
-  const defaultOwner = claims.get(SANDBOX_DEFAULT_WS_PATH)?.name;
   const listed = new Map<string, SandboxWsEndpointListing>();
-  for (const [path, claim] of claims) {
-    if (path === SANDBOX_DEFAULT_WS_PATH || listed.has(claim.name)) continue;
-    listed.set(claim.name, Object.freeze({ id: claim.name, path, default: claim.name === defaultOwner }));
+  for (const account of claims.accounts.values()) {
+    if (listed.has(account.owner)) continue;
+    listed.set(account.owner, Object.freeze({ id: account.name, path: account.path, default: account.owner === claims.defaultOwner }));
   }
-  return Object.freeze([...listed.values()].sort((a, b) => a.id.localeCompare(b.id)));
+  return Object.freeze([...listed.values()].sort((a, b) => a.id.localeCompare(b.id) || a.path.localeCompare(b.path)));
+}
+
+export interface SandboxWsPathClaimOptions {
+  /**
+   * Who the claim belongs to (default: `name`). Claims of one owner share their paths (a generation
+   * hand-over of one endpoint); another owner with the same name gets `/sandbox/<name>-2`, ….
+   */
+  readonly owner?: string;
+  /** `/sandbox` passed to this claim after it was made: mount its listener now. */
+  readonly onDefault?: () => void;
+}
+
+export interface SandboxWsPathClaimResult {
+  /** The first path served: {@link SANDBOX_DEFAULT_WS_PATH} while this claim holds it, else its own. */
+  readonly path: string;
+  /** The claim's own `/sandbox/<name>` path. */
+  readonly ownPath: string;
+  /** Every path this claim serves now (`/sandbox` first once handed to it). */
+  readonly paths: readonly string[];
+  readonly release: () => void;
 }
 
 /**
- * Claims the paths endpoint `name` mounts on `http`: its own `/sandbox/<name>` (another name's claim
- * pushes it to `-2`, `-3`, …) and {@link SANDBOX_DEFAULT_WS_PATH} when that is free or already its own.
+ * Claims the paths endpoint `name` mounts on `http`: its own `/sandbox/<name>` (another owner's claim
+ * pushes it to `-2`, `-3`, …) and {@link SANDBOX_DEFAULT_WS_PATH} when no running owner holds it or
+ * it is already this owner's. When the default owner's last claim is released, `/sandbox` passes to
+ * the owner of the earliest claim still held and its claims' `onDefault` run.
  */
 export function claimSandboxWsPaths(
   http: HttpHost,
   name: string,
-): { readonly path: string; readonly paths: readonly string[]; readonly release: () => void } {
+  options: SandboxWsPathClaimOptions = {},
+): SandboxWsPathClaimResult {
   const claims = sandboxWsClaims(http);
-  const ownPath = (candidate: string) => !claims.has(candidate) || claims.get(candidate)?.name === name;
+  const owner = options.owner ?? name;
+  const ownPath = (candidate: string) => !claims.paths.has(candidate) || claims.paths.get(candidate)?.owner === owner;
   const base = `${SANDBOX_DEFAULT_WS_PATH}/${encodeURIComponent(name)}`;
   let named = base;
   for (let index = 2; !ownPath(named); index += 1) named = `${base}-${index}`;
-  const paths = ownPath(SANDBOX_DEFAULT_WS_PATH) ? [SANDBOX_DEFAULT_WS_PATH, named] : [named];
-  const owner = Symbol(name);
-  const held = paths.map((path) => {
-    const claim = claims.get(path) ?? { name, owners: new Set<symbol>() };
-    claim.owners.add(owner);
-    claims.set(path, claim);
-    return [path, claim] as const;
-  });
+  const holder = Symbol(name);
+  const pathClaim = claims.paths.get(named) ?? { owner, holders: new Set<symbol>() };
+  pathClaim.holders.add(holder);
+  claims.paths.set(named, pathClaim);
+  if (claims.defaultOwner === undefined) claims.defaultOwner = owner;
+  const account: SandboxWsAccountClaim = {
+    owner, name, path: named, serving: claims.defaultOwner === owner,
+    ...(options.onDefault ? { onDefault: options.onDefault } : {}),
+  };
+  claims.accounts.set(holder, account);
+  const paths = () => Object.freeze(account.serving ? [SANDBOX_DEFAULT_WS_PATH, named] : [named]);
+  let released = false;
   return {
-    path: paths[0]!,
-    paths: Object.freeze(paths),
+    get path() { return paths()[0]!; },
+    ownPath: named,
+    get paths() { return paths(); },
     release: () => {
-      for (const [path, claim] of held) {
-        claim.owners.delete(owner);
-        if (claim.owners.size === 0 && claims.get(path) === claim) claims.delete(path);
+      if (released) return;
+      released = true;
+      claims.accounts.delete(holder);
+      account.serving = false;
+      pathClaim.holders.delete(holder);
+      if (pathClaim.holders.size === 0 && claims.paths.get(named) === pathClaim) claims.paths.delete(named);
+      if (claims.defaultOwner !== owner || [...claims.accounts.values()].some(other => other.owner === owner)) return;
+      // Hand `/sandbox` to the next running account, in start order.
+      const next = claims.accounts.values().next().value as SandboxWsAccountClaim | undefined;
+      claims.defaultOwner = next?.owner;
+      if (!next) return;
+      for (const heir of claims.accounts.values()) {
+        if (heir.owner !== next.owner || heir.serving) continue;
+        heir.serving = true;
+        try { heir.onDefault?.(); } catch { /* the heir logs its own mount failure */ }
       }
     },
   };
@@ -414,14 +476,34 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     if (this.#started) return;
     this.#started = true;
     // 多 endpoint 同 path 会被全部回调（入站重复、出站互窜），每个账号只挂自己认领的路径。
-    const claim = claimSandboxWsPaths(this.#options.http, this.#options.defaults.id);
+    const releases: Array<() => void> = [];
+    const mount = (path: string) => {
+      releases.push(this.#options.http.ws(path).onConnection((connection) => {
+        this.#acceptConnection(connection);
+      }));
+    };
+    const claim = claimSandboxWsPaths(this.#options.http, this.#options.defaults.id, {
+      owner: `${String(this.#options.id)}\0${this.#options.defaults.id}`,
+      // #1250 b116 H1: the account that held `/sandbox` stopped; this one serves it from now on.
+      onDefault: () => {
+        if (!this.#started) return;
+        try {
+          mount(SANDBOX_DEFAULT_WS_PATH);
+        } catch (error) {
+          this.#logger.warn(formatCompact({ op: 'sandbox_default_path_mount_failed',
+            error: error instanceof Error ? error.message : String(error) }));
+          return;
+        }
+        this.wsPathValue = claim.path;
+        this.#wsPaths = claim.paths;
+        this.#logger.info(`ws took over ${SANDBOX_DEFAULT_WS_PATH}`);
+      },
+    });
     this.#wsPathRelease = claim.release;
     this.wsPathValue = claim.path;
     this.#wsPaths = claim.paths;
-    const releases = claim.paths.map(path => this.#options.http.ws(path).onConnection((connection) => {
-      this.#acceptConnection(connection);
-    }));
-    this.#wsHandleRelease = () => { for (const release of releases.reverse()) release(); };
+    for (const path of claim.paths) mount(path);
+    this.#wsHandleRelease = () => { for (const release of releases.splice(0).reverse()) release(); };
     if (!this.#options.defaults.randomNamePerConnection) {
       this.#ensurePlaceholder(this.#options.defaults.id, this.#options.defaults.owner);
     }

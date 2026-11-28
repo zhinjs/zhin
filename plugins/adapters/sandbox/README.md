@@ -147,7 +147,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 
 ### 连接
 
-- **地址**：每个 Sandbox 账号（endpoint）都挂在自己的 `ws://<host>:<port>/sandbox/<endpoint id>`；同一个 HTTP Host 上第一个启动的账号另外挂在默认地址 `/sandbox`。启动日志会打印 `ws mounted <path>`。每条路径只属于一个账号，一条消息只被它处理一次（多个账号同在 `/sandbox` 时每条消息会被每个账号各处理一次，#1250）。`ready` 帧的 `endpoints` 列出这个 Host 上的全部账号（`id`、`path`、`default`）；Console 会话页有多个账号时在左下角显示账号选择，切换后连到所选账号的路径（记在本浏览器里，账号不存在时回到 `/sandbox`）。同一账号在热重载交接时共用这些路径；不同插件实例里重名的账号依次退到 `-2`、`-3`。
+- **地址**：每个 Sandbox 账号（endpoint）都挂在自己的 `ws://<host>:<port>/sandbox/<endpoint id>`；默认地址 `/sandbox` 由同一个 HTTP Host 上最早启动、仍在运行的账号另外挂上；它停用、删除或改名后，`/sandbox` 交给仍在运行的下一个账号（按启动顺序），只要 Host 上还有 Sandbox 账号在运行，`/sandbox` 就能连上。启动日志会打印 `ws mounted <path>`，接管时打印 `ws took over /sandbox`。每条路径只属于一个账号，一条消息只被它处理一次（多个账号同在 `/sandbox` 时每条消息会被每个账号各处理一次，#1250）。`ready` 帧的 `endpoints` 列出这个 Host 上的全部账号（`id`、`path`、`default`）；Console 会话页有多个账号时在左下角显示账号选择，切换后连到所选账号的路径（按 Host 记在本浏览器里；断线不会清掉选择，连续连不上时页面先连 `/sandbox` 查看 `endpoints`，确认账号已不存在才回到 `/sandbox`）。同一账号在热重载交接时共用这些路径；不同插件实例里重名的账号是不同账号，依次退到 `-2`、`-3`，也不会共挂 `/sandbox`。
 - **鉴权**：Host 需要凭据时（已配置 `http.token` 或已完成初始化），握手请求需带 Console 凭据：`Authorization: Bearer <会话或 API 令牌>` 或查询参数 `?token=`，并且该账号要有 `endpoint.operate` 权限（所有者、管理员、运营），否则返回 `401`。初始化令牌不能连接。
 - **多连接**：同一 endpoint 的浏览器连接可以并存，共用已配置的 `owner`；`connectionId` 只标识连接，不改变 Bot 或 Agent 会话身份。关闭一个页面只移除该连接，不取消或重跑任务；endpoint 停止时关闭全部连接（`1001`），generation 退役继续由 Host 关闭（`1012`）。
 - **会话投递**：每个连接订阅一个 `type` + `id`；默认订阅 `private` + `owner`，发送普通消息也会更新该连接的订阅。回复只投递到同会话的连接。无匹配连接时不确认发送，所有发送尝试失败时保留结果未知，不自动重试。

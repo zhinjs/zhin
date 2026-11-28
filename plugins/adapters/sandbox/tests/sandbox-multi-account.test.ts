@@ -49,17 +49,19 @@ function admissionState(gate: GenerationAdmissionGate): SnapshotState {
   };
 }
 
-async function account(view: HttpHost, id: string) {
+async function account(view: HttpHost, id: string, feature = 'zhin.adapter') {
   const receive = vi.fn(async (_input: unknown) => Object.freeze({ matched: true }));
   const events = vi.fn(async (event: EndpointEvent) => event.name === 'message.receive' ? receive(event.payload) : undefined);
   const harness = await createEndpointHarness(() => new SandboxWsEndpoint({
-    id: capabilityId(rootPluginId(), featureId('zhin.adapter'), id),
+    id: capabilityId(rootPluginId(), featureId(feature), id),
     http: view, defaults: resolveSandboxEndpoint({ id, owner: 'sandbox-user' }),
   }), { name: id, capabilities: ['inbound', 'outbound'], operations: sandboxOperations, gateway: createTestEndpointEventGateway({ receive: events }) });
   await harness.start();
   harness.open();
-  cleanups.push(() => harness.stop());
-  return { harness, endpoint: harness.endpoint as SandboxWsEndpoint, receive };
+  let stopped = false;
+  const stop = async () => { if (stopped) return; stopped = true; await harness.stop(); };
+  cleanups.push(stop);
+  return { harness, endpoint: harness.endpoint as SandboxWsEndpoint, receive, stop };
 }
 
 async function connect(port: number, path: string) {
@@ -120,7 +122,105 @@ describe('Sandbox accounts sharing one HTTP Host', () => {
     expect(own.ready).toMatchObject({ endpoint: 'sandbox-bot' });
   });
 
-  it('releases every claimed path on stop and lets the same account take them over again', () => {
+  it('hands `/sandbox` to the account still running when the first one stops (#1250 b116 H1)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const gate = createGenerationAdmissionGate();
+    stores.push(new SnapshotStore(admissionState(gate)));
+    const first = await account(bindGenerationAdmission<HttpHost>(http, gate), 'sandbox-bot');
+    const second = await account(bindGenerationAdmission<HttpHost>(http, gate), 'sandbox-bot2');
+    const { port } = await http.listen();
+    await first.stop();
+    expect(second.endpoint.paths).toEqual(['/sandbox', '/sandbox/sandbox-bot2']);
+    expect(second.endpoint.path).toBe('/sandbox');
+
+    const page = await connect(port, '/sandbox');
+    expect(page.ready).toMatchObject({
+      endpoint: 'sandbox-bot2',
+      endpoints: [{ id: 'sandbox-bot2', path: '/sandbox/sandbox-bot2', default: true }],
+    });
+    page.client.send(JSON.stringify({ type: 'private', id: 'sandbox-user', content: 'hello', messageId: 'm-after' }));
+    await vi.waitFor(() => expect(second.receive).toHaveBeenCalledTimes(1));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(second.receive).toHaveBeenCalledTimes(1);
+    expect(first.receive).not.toHaveBeenCalled();
+  });
+
+  it('keeps `/sandbox` reachable across a single-account rename (y starts before x stops)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const gate = createGenerationAdmissionGate();
+    stores.push(new SnapshotStore(admissionState(gate)));
+    const x = await account(bindGenerationAdmission<HttpHost>(http, gate), 'x');
+    const y = await account(bindGenerationAdmission<HttpHost>(http, gate), 'y');
+    expect(y.endpoint.paths).toEqual(['/sandbox/y']);
+    await x.stop();
+    expect(y.endpoint.paths).toEqual(['/sandbox', '/sandbox/y']);
+
+    const { port } = await http.listen();
+    const page = await connect(port, '/sandbox');
+    expect(page.ready).toMatchObject({ endpoint: 'y', endpoints: [{ id: 'y', path: '/sandbox/y', default: true }] });
+    page.client.send(JSON.stringify({ type: 'private', id: 'sandbox-user', content: '/restart', messageId: 'm-renamed' }));
+    await vi.waitFor(() => expect(y.receive).toHaveBeenCalledTimes(1));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(y.receive).toHaveBeenCalledTimes(1);
+    expect(x.receive).not.toHaveBeenCalled();
+    // The renamed account's own path keeps working too.
+    const own = await connect(port, '/sandbox/y');
+    expect(own.ready).toMatchObject({ endpoint: 'y' });
+  });
+
+  it('gives a same-named account of another plugin instance its own path, never `/sandbox` (#1250 b116)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const gate = createGenerationAdmissionGate();
+    stores.push(new SnapshotStore(admissionState(gate)));
+    const left = await account(bindGenerationAdmission<HttpHost>(http, gate), 'sandbox-bot');
+    const right = await account(bindGenerationAdmission<HttpHost>(http, gate), 'sandbox-bot', 'other.adapter');
+    expect(left.endpoint.paths).toEqual(['/sandbox', '/sandbox/sandbox-bot']);
+    expect(right.endpoint.paths).toEqual(['/sandbox/sandbox-bot-2']);
+    expect(listSandboxWsEndpoints(http)).toEqual([
+      { id: 'sandbox-bot', path: '/sandbox/sandbox-bot', default: true },
+      { id: 'sandbox-bot', path: '/sandbox/sandbox-bot-2', default: false },
+    ]);
+
+    const { port } = await http.listen();
+    const page = await connect(port, '/sandbox');
+    page.client.send(JSON.stringify({ type: 'private', id: 'sandbox-user', content: 'hello', messageId: 'm-dup' }));
+    await vi.waitFor(() => expect(left.receive).toHaveBeenCalledTimes(1));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(left.receive).toHaveBeenCalledTimes(1);
+    expect(right.receive).not.toHaveBeenCalled();
+  });
+
+  it('shares paths within one owner and moves `/sandbox` to another owner only when that owner is gone', () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const handed: string[] = [];
+    const a1 = claimSandboxWsPaths(http, 'a', { owner: 'plugin-1/a', onDefault: () => handed.push('a1') });
+    const b = claimSandboxWsPaths(http, 'b', { owner: 'plugin-1/b', onDefault: () => handed.push('b') });
+    // Generation hand-over of `a`: same owner, shares `/sandbox` and `/sandbox/a`.
+    const a2 = claimSandboxWsPaths(http, 'a', { owner: 'plugin-1/a', onDefault: () => handed.push('a2') });
+    // Another plugin instance's `a`: its own path, no `/sandbox`.
+    const other = claimSandboxWsPaths(http, 'a', { owner: 'plugin-2/a', onDefault: () => handed.push('other') });
+    expect(a2.paths).toEqual(['/sandbox', '/sandbox/a']);
+    expect(other.paths).toEqual(['/sandbox/a-2']);
+    a1.release();
+    expect(handed).toEqual([]);
+    expect(a2.paths).toEqual(['/sandbox', '/sandbox/a']);
+    a2.release();
+    // In start order: `b` started before `plugin-2/a`.
+    expect(handed).toEqual(['b']);
+    expect(b.paths).toEqual(['/sandbox', '/sandbox/b']);
+    expect(other.paths).toEqual(['/sandbox/a-2']);
+    b.release();
+    expect(handed).toEqual(['b', 'other']);
+    expect(other.paths).toEqual(['/sandbox', '/sandbox/a-2']);
+    other.release();
+    expect(listSandboxWsEndpoints(http)).toEqual([]);
+  });
+
+  it('releases every claimed path on stop and hands `/sandbox` on to the account still running', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const gate = createGenerationAdmissionGate();
@@ -134,10 +234,14 @@ describe('Sandbox accounts sharing one HTTP Host', () => {
     one.release();
     expect(listSandboxWsEndpoints(http).map(entry => entry.id)).toEqual(['a', 'b']);
     handover.release();
-    expect(listSandboxWsEndpoints(http)).toEqual([{ id: 'b', path: '/sandbox/b', default: false }]);
+    // #1250 b116 H1: `/sandbox` passes to the account still running instead of going unserved.
+    expect(listSandboxWsEndpoints(http)).toEqual([{ id: 'b', path: '/sandbox/b', default: true }]);
+    expect(two.paths).toEqual(['/sandbox', '/sandbox/b']);
     const later = claimSandboxWsPaths(http, 'c');
+    expect(later.paths).toEqual(['/sandbox/c']);
+    two.release();
     expect(later.paths).toEqual(['/sandbox', '/sandbox/c']);
-    two.release(); later.release();
+    later.release();
     expect(listSandboxWsEndpoints(http)).toEqual([]);
   });
 

@@ -131,7 +131,7 @@ export async function renderCommandFeedback(
 }
 
 /** #1250 owner-hints-dead-end-sandbox-only: only local simulation adapters (capability profiles) are loaded. */
-function snapshotIsSimulationOnly(snapshot: RuntimeSnapshot): boolean {
+export function snapshotIsSimulationOnly(snapshot: RuntimeSnapshot): boolean {
   try {
     const index = snapshot.projections.get(adapterFeatureId);
     return isAdapterIndex(index) && isSimulationOnlyAdapterIndex(index);

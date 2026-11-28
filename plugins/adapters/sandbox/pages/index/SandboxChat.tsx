@@ -7,7 +7,7 @@ import {
 } from '@zhin.js/client';
 import { renderSandboxSegments, type SandboxSegmentRenderContext } from './segments/index.js';
 import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, readSandboxWsPath, sandboxEndpointOptions, submitSandboxFrame, writeSandboxWsPath,
-  SANDBOX_DEFAULT_WS_PATH, SANDBOX_SCOPED_PROTOCOL, type SandboxEndpointOption, type SandboxRequestContext } from './sandboxTransport.js';
+  SANDBOX_DEFAULT_WS_PATH, SANDBOX_PATH_PROBE_AFTER_FAILURES, SANDBOX_SCOPED_PROTOCOL, type SandboxEndpointOption, type SandboxRequestContext } from './sandboxTransport.js';
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import { isApprovalPrompt, readSandboxCommandHints, type SandboxCommandHints } from './composerCommands.js';
@@ -100,6 +100,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [endpointId, setBotName] = useState('sandbox-bot')
     /** #1250: every Sandbox account the Host serves (`ready.endpoints`); more than one offers a choice. */
     const [sandboxEndpoints, setSandboxEndpoints] = useState<readonly SandboxEndpointOption[]>([])
+    /** The listed account path this page talks to (the default account's own path on `/sandbox`). */
+    const [endpointPath, setEndpointPath] = useState('')
+    /** The path the current socket connected to. */
+    const socketPathRef = useRef<string>(SANDBOX_DEFAULT_WS_PATH)
     const [connected, setConnected] = useState(false)
     const [canExecute, setCanExecute] = useState(false)
     const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'error'>('saved')
@@ -345,7 +349,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             readyIdentityRef.current = { host, ownerId: data.id, endpoint: readyEndpoint }
             endpointIdRef.current = readyEndpoint
             setBotName(endpointIdRef.current)
-            setSandboxEndpoints(sandboxEndpointOptions(data.endpoints))
+            const listedEndpoints = sandboxEndpointOptions(data.endpoints)
+            setSandboxEndpoints(listedEndpoints)
+            setEndpointPath(socketPathRef.current === SANDBOX_DEFAULT_WS_PATH
+                ? listedEndpoints.find((entry) => entry.default)?.path ?? ''
+                : socketPathRef.current)
             connectionRef.current = { protocol: data.protocol, connectionId: data.connectionId, ownerId: data.id, canExecute: data.canExecute !== false }
             setReadyConnectionId(data.connectionId)
             setCanExecute(data.canExecute !== false)
@@ -544,6 +552,14 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         let attempt = 0
         /** Ignore close events from a socket we intentionally replaced (login/base change). */
         let replaceInFlight = false
+        /**
+         * #1250 b116 M1: sockets to the chosen account path that closed before `ready`, in a row, on
+         * `chosenFailureHost`. A close alone never forgets the choice (a Host restart, a network blip or
+         * a 401 look the same); after {@link SANDBOX_PATH_PROBE_AFTER_FAILURES} the next attempt asks
+         * `/sandbox` for `ready.endpoints`, and only a list without the chosen path forgets it.
+         */
+        let chosenFailures = 0
+        let chosenFailureHost: string | undefined
 
         const connect = () => {
             if (closed) return
@@ -569,8 +585,16 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             connectionRef.current = { canExecute: false }
             setCanExecute(false)
             setConnected(false)
-            // #1250: the account this viewer chose has its own path; `/sandbox` is the Host's first account.
-            const wsPath = readSandboxWsPath() ?? SANDBOX_DEFAULT_WS_PATH
+            // #1250: the account this viewer chose (on this Host) has its own path; `/sandbox` is the Host's default account.
+            if (chosenFailureHost !== nextHost) {
+                chosenFailureHost = nextHost
+                chosenFailures = 0
+            }
+            const chosenPath = readSandboxWsPath(nextHost)
+            const chosen = chosenPath !== undefined && chosenPath !== SANDBOX_DEFAULT_WS_PATH ? chosenPath : undefined
+            // The chosen path kept failing: ask `/sandbox` which accounts exist before giving up on it.
+            const probing = chosen !== undefined && chosenFailures >= SANDBOX_PATH_PROBE_AFTER_FAILURES
+            const wsPath = chosen !== undefined && !probing ? chosen : SANDBOX_DEFAULT_WS_PATH
             const wsUrl = buildSandboxWebSocketUrl(nextHost, wsPath)
             let readyOnSocket = false
             // This page owns one connection; replacing its credentials must retire only that socket.
@@ -585,6 +609,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 replaceInFlight = false
             }
             const ws = new WebSocket(wsUrl)
+            socketPathRef.current = wsPath
             socketRequestContextRef.current = requestContext
             wsRef.current = ws
             void loadTrace()
@@ -597,7 +622,25 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 if (wsRef.current !== ws) return
                 try {
                     const payload = JSON.parse(String(event.data))
-                    if (payload?.type === 'ready') readyOnSocket = true
+                    if (payload?.type === 'ready') {
+                        readyOnSocket = true
+                        if (!probing) chosenFailures = 0
+                        else {
+                            const listed = Array.isArray(payload.endpoints)
+                                && sandboxEndpointOptions(payload.endpoints).some((entry) => entry.path === chosen)
+                            if (listed) {
+                                // The account exists (it was a passing failure): go back to it, without
+                                // taking over this socket's account identity on the page.
+                                chosenFailures = 0
+                                attempt = 0
+                                connect()
+                                return
+                            }
+                            // Confirmed gone (removed, renamed; or a Host without per-account paths): fall back.
+                            writeSandboxWsPath(nextHost, undefined)
+                            chosenFailures = 0
+                        }
+                    }
                     handleInboundPayload(payload)
                 }
                 catch (err) { console.error('[Sandbox] Failed to parse message:', err); setInlineNotices((n) => ({ ...n, parse: true })) }
@@ -614,8 +657,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 connectionRef.current = { canExecute: false }
                 wsRef.current = null
                 if (closed || replaceInFlight) return
-                // A chosen account that is gone (removed, renamed) never answers: fall back to `/sandbox`.
-                if (!readyOnSocket && wsPath !== SANDBOX_DEFAULT_WS_PATH) writeSandboxWsPath(undefined)
+                // Never forget the choice on a close: see `chosenFailures`.
+                if (!readyOnSocket && !probing && chosen !== undefined) chosenFailures += 1
                 const delay = Math.min(8_000, 500 * 2 ** attempt)
                 attempt += 1
                 retryTimer = setTimeout(connect, delay)
@@ -674,10 +717,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     }, [])
 
     /** #1250: talk to another Sandbox account — reconnect to its own path (one account per socket). */
-    const selectSandboxEndpoint = (id: string) => {
-        const target = sandboxEndpoints.find((entry) => entry.id === id)
-        if (!target || target.id === endpointIdRef.current) return
-        writeSandboxWsPath(target.path)
+    const selectSandboxEndpoint = (key: string) => {
+        // Keyed by path: two plugin instances may each run an account of the same id (#1250 b116).
+        const target = sandboxEndpoints.find((entry) => entry.path === key) ?? sandboxEndpoints.find((entry) => entry.id === key)
+        if (!target || target.path === endpointPath) return
+        writeSandboxWsPath(socketRequestContextRef.current?.apiBase || window.location.origin, target.path)
         reconnectRef.current?.()
     }
 
@@ -1138,8 +1182,9 @@ ${sandboxStyles}`}</style>
                     {sandboxEndpoints.length > 1 ? (
                         <SelectField
                             aria-label={sandboxText(locale, "Sandbox 账号")}
-                            value={endpointId}
-                            options={sandboxEndpoints.map((entry) => ({ value: entry.id, label: entry.id }))}
+                            value={endpointPath}
+                            options={sandboxEndpoints.map((entry) => ({ value: entry.path,
+                                label: sandboxEndpoints.some((other) => other !== entry && other.id === entry.id) ? `${entry.id} (${entry.path})` : entry.id }))}
                             onValueChange={(value) => selectSandboxEndpoint(String(value))}
                         />
                     ) : <strong>{endpointId}</strong>}

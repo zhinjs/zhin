@@ -22,12 +22,14 @@ describe('migrate CLI freshness (#1250 migrate-runs-installed-old-cli)', () => {
     expect(checkCliFreshness({ running: undefined, lookup: registry('1.10.0') })).toEqual({ status: 'unknown' });
   });
 
-  it('advises running the latest CLI first, and the escape hatch only when it blocks', () => {
+  it('advises the latest CLI first, explains the release-age gate and never offers a stop or an escape hatch', () => {
     const outdated = { status: 'outdated', running: '1.9.2', latest: '1.10.0' } as const;
-    const blocking = formatOutdatedCliAdvice(outdated, { blocking: true }).join('\n');
-    expect(blocking).toContain('npx @zhin.js/cli@latest migrate');
-    expect(blocking).toContain('pnpm add @zhin.js/cli@latest');
-    expect(blocking).toContain('zhin migrate --allow-outdated-cli');
-    expect(formatOutdatedCliAdvice(outdated, { blocking: false }).join('\n')).not.toContain('zhin migrate --allow-outdated-cli');
+    const advice = formatOutdatedCliAdvice(outdated).join('\n');
+    expect(advice.indexOf('npx @zhin.js/cli@latest migrate')).toBeGreaterThan(-1);
+    expect(advice.indexOf('npx @zhin.js/cli@latest migrate')).toBeLessThan(advice.indexOf('pnpm add @zhin.js/cli@latest'));
+    expect(advice).toContain('pnpm dlx @zhin.js/cli@latest migrate');
+    expect(advice).toContain('minimumReleaseAge');
+    expect(advice).toContain('继续');
+    expect(advice).not.toContain('--allow-outdated-cli');
   });
 });

@@ -219,36 +219,41 @@ describe('migrate runs with an up-to-date CLI (#1250 migrate-runs-installed-old-
   };
   const output = () => vi.mocked(console.log).mock.calls.map(args => args.join(' ')).join('\n');
 
-  it('stops before changing anything when the running CLI is older than the registry release', async () => {
-    const original = project();
+  it('only warns when the running CLI is older than the registry release, then migrates (#1250 b116 M3)', async () => {
+    project();
     cliRelease.latest = '99.0.0';
     const { migrateCommand } = await import('../src/commands/migrate.js');
     await migrateCommand.parseAsync(['node', 'zhin']);
-    expect(process.exitCode).toBe(1);
-    expect(execSync).not.toHaveBeenCalled();
-    expect(readFileSync(join(directory, 'package.json'), 'utf8')).toBe(original);
-    expect(readdirSync(directory).sort()).toEqual(['package.json', 'pnpm-lock.yaml']);
+    expect(process.exitCode).toBe(0);
     expect(output()).toContain('registry 最新版本是 99.0.0');
-    expect(output()).toContain('npx @zhin.js/cli@latest migrate');
-    expect(output()).toContain('pnpm add @zhin.js/cli@latest');
-    expect(output()).toContain('--allow-outdated-cli');
+    // The latest CLI is the first advice; the release-age caveat says why npx / dlx.
+    const advice = output();
+    expect(advice.indexOf('npx @zhin.js/cli@latest migrate')).toBeGreaterThan(-1);
+    expect(advice.indexOf('npx @zhin.js/cli@latest migrate')).toBeLessThan(advice.indexOf('pnpm add @zhin.js/cli@latest'));
+    expect(advice).toContain('pnpm dlx @zhin.js/cli@latest migrate');
+    expect(advice).toContain('minimumReleaseAge');
+    expect(advice).not.toContain('--allow-outdated-cli');
+    // It carried on: installed and upgraded the project.
+    expect(execSync).toHaveBeenCalledOnce();
+    expect(JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).dependencies['zhin.js']).toBe('^9.4.2');
   });
 
-  it('only warns in a dry-run, and continues with --allow-outdated-cli', async () => {
-    project();
+  it('only warns in a dry-run too, and changes nothing', async () => {
+    const original = project();
     cliRelease.latest = '99.0.0';
     const { migrateCommand } = await import('../src/commands/migrate.js');
     await migrateCommand.parseAsync(['node', 'zhin', '--dry-run']);
     expect(process.exitCode).toBe(0);
     expect(output()).toContain('registry 最新版本是 99.0.0');
     expect(output()).toContain('dry-run 结束');
+    expect(execSync).not.toHaveBeenCalled();
+    expect(readFileSync(join(directory, 'package.json'), 'utf8')).toBe(original);
+  });
 
-    vi.resetModules();
-    const again = await import('../src/commands/migrate.js');
-    await again.migrateCommand.parseAsync(['node', 'zhin', '--allow-outdated-cli']);
-    expect(process.exitCode).toBe(0);
-    expect(execSync).toHaveBeenCalledOnce();
-    expect(JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).dependencies['zhin.js']).toBe('^9.4.2');
+  it('no longer accepts --allow-outdated-cli', async () => {
+    project();
+    const { migrateCommand } = await import('../src/commands/migrate.js');
+    expect(migrateCommand.options.some(option => option.long === '--allow-outdated-cli')).toBe(false);
   });
 
   it('continues silently with a current CLI', async () => {

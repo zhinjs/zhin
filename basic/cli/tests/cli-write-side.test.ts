@@ -698,9 +698,17 @@ describe('migrate', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true, includePinned: true })).toBe(true);
     expect(log.mock.calls.flat().join('\n')).toContain('[dry-run] scripts.daemon: "zhin start --mode production --no-watch" → 删除');
+    // #1250 b116: the dry-run says what to run instead.
+    const replacement = '改用 `pnpm start`（前台运行）或 `zhin start --mode production --no-watch`（后台运行';
+    expect(log.mock.calls.flat().join('\n')).toContain(replacement);
     expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts.daemon).toBe('zhin start --mode production --no-watch');
+    log.mockClear();
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
-    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts).not.toHaveProperty('daemon');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    expect(pkg.scripts).not.toHaveProperty('daemon');
+    // …and the real run too; the `pnpm start` it names exists afterwards.
+    expect(log.mock.calls.flat().join('\n')).toContain(replacement);
+    expect(pkg.scripts.start).toBeTruthy();
 
     for (const custom of ['zhin start --mode production --no-watch --foreground', 'pm2 start zhin']) {
       write(custom);

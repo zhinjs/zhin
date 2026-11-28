@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import { inboundOutcomeSink } from '@zhin.js/core/runtime';
 import { tryHandleIngressCommands, type IngressCommandsContext } from '../../src/plugin-runtime/ingress/ingress-management-stage.js';
 import { OwnerApprovalRuntime } from '../../src/security/owner-approval-runtime.js';
+import { adapterFeatureId } from '@zhin.js/adapter';
+import { describeGlobalOwnerRequired } from '@zhin.js/permission';
 
 /**
  * zhinjs/zhin#1250: approval-card, owner `/approve` and group-rule commands from a sender
@@ -96,6 +98,15 @@ describe('Agent ingress refusals of unauthorized senders (#1250)', () => {
     expect(await tryHandleIngressCommands(owner.input)).toBe(true);
     expect(owner.reply).toHaveBeenCalledWith(expect.stringContaining('私聊'));
     expect(owner.outcomes).toEqual([]);
+  });
+
+  it('tells a non-owner of a Sandbox-only project to use the Sandbox identity (#1250 b116)', async () => {
+    const memberDm = run({ content: '/approve always bash', kind: 'private' });
+    const simulation = { default: { delivery: { send: true }, runtime: { sandbox: true } } };
+    const adapters = { $projection: 'zhin.adapter-index/1', describe: () => [{ id: 'sandbox' }], capabilityProfile: () => simulation };
+    const input = { ...memberDm.input, snapshot: { projections: new Map([[adapterFeatureId, adapters]]) } } as unknown as IngressCommandsContext;
+    expect(await tryHandleIngressCommands(input)).toBe(true);
+    expect(memberDm.reply).toHaveBeenCalledWith(describeGlobalOwnerRequired('zh-CN', { privateChat: true, simulationOnly: true }));
   });
 
   it('passes ordinary messages on (no refusal, no outcome)', async () => {

@@ -39,21 +39,18 @@ export function checkCliFreshness(
 }
 
 /**
- * What to do about an outdated CLI, one line each. `blocking`: migrate stops here (a real run
- * without `--allow-outdated-cli`); otherwise it continues (dry-run, or the flag given).
+ * What to do about an outdated CLI, one line each. Advice only (#1250 b116 M3): migrate never stops
+ * here — a project may lock an exact CLI on purpose, and pnpm's `minimumReleaseAge` may keep a fresh
+ * release out of the project for days (CI would fail after every release otherwise).
  */
-export function formatOutdatedCliAdvice(
-  freshness: Extract<CliFreshness, { status: 'outdated' }>,
-  options: { readonly blocking: boolean },
-): string[] {
+export function formatOutdatedCliAdvice(freshness: Extract<CliFreshness, { status: 'outdated' }>): string[] {
   return [
-    `  ${options.blocking ? '✗' : '!'} 正在运行的 ${CLI_PACKAGE} 是 ${freshness.running}，registry 最新版本是 ${freshness.latest}。`,
+    `  ! 正在运行的 ${CLI_PACKAGE} 是 ${freshness.running}，registry 最新版本是 ${freshness.latest}。`,
     '    迁移规则随 CLI 发布：旧 CLI 会按旧规则改写项目，也不会清理旧版多写的内容。',
-    '    先用最新 CLI 执行迁移（不需要先改项目）：',
-    `      npx ${CLI_PACKAGE}@latest migrate        （pnpm 项目也可用 pnpm dlx ${CLI_PACKAGE}@latest migrate）`,
-    `    或先把项目里的 CLI 升到最新，再运行 npx zhin migrate：pnpm add ${CLI_PACKAGE}@latest`,
-    options.blocking
-      ? '    确需用当前 CLI 迁移：zhin migrate --allow-outdated-cli'
-      : '    下面按当前 CLI 的规则继续（dry-run 或 --allow-outdated-cli）。',
+    '    建议用最新 CLI 执行迁移（不需要先改项目）：',
+    `      npx ${CLI_PACKAGE}@latest migrate        （或 pnpm dlx ${CLI_PACKAGE}@latest migrate）`,
+    `    也可以先把项目里的 CLI 升到最新再运行 npx zhin migrate：pnpm add ${CLI_PACKAGE}@latest`,
+    '    项目启用了 minimumReleaseAge 时，刚发布的版本可能装不进项目，这时请用上面的 npx / pnpm dlx。',
+    '    下面按当前 CLI 的规则继续。',
   ];
 }

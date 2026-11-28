@@ -10,14 +10,13 @@ description: "安全升级 Zhin：兼容边界、升级前准备、执行步骤�
 日常的补丁升级通常只需要：
 
 ```bash
-pnpm add @zhin.js/cli@latest # 先升级 CLI：迁移规则随 CLI 发布
-npx zhin migrate --dry-run   # 先看会改什么
-npx zhin migrate             # 执行升级
+npx @zhin.js/cli@latest migrate --dry-run  # 用最新 CLI 预演（迁移规则随 CLI 发布）
+npx @zhin.js/cli@latest migrate            # 执行升级（pnpm 项目也可用 pnpm dlx @zhin.js/cli@latest migrate）
 npx zhin doctor && pnpm test # 检查
 npx zhin start --once --mode test  # 装配冒烟
 ```
 
-`npx zhin migrate` 运行的是项目里**已安装的** CLI，迁移规则随 CLI 一起发布：旧 CLI 会按旧规则改写项目（例如 1.9.x 会多写一个 `daemon` 脚本，并在没有 `minimumReleaseAge` 的项目里写入钉死版本的 `minimumReleaseAgeExclude`），所以要先升级 CLI，再执行 migrate。不想先改项目时，也可以直接用最新 CLI 执行：`npx @zhin.js/cli@latest migrate`（或 `pnpm dlx @zhin.js/cli@latest migrate`）。新版 migrate 在动手前会比较正在运行的 CLI 与 registry 上最新的 `@zhin.js/cli`：落后时 `--dry-run` 只提示，正式执行会停下并给出上面两种做法；确需用当前 CLI 迁移时加 `--allow-outdated-cli`。新版 migrate 还会清理旧版多写的内容，并在 `--dry-run` 中列出：值与旧 CLI 写入的完全一致的 `scripts.daemon`（改过的保留），以及不受 `minimumReleaseAge` 限制的项目里 zhin 包的 `name@版本` 排除条目（其他条目保留）。
+`npx zhin migrate` 运行的是项目里**已安装的** CLI，迁移规则随 CLI 一起发布：旧 CLI 会按旧规则改写项目（例如 1.9.x 会多写一个 `daemon` 脚本，并在没有 `minimumReleaseAge` 的项目里写入钉死版本的 `minimumReleaseAgeExclude`），所以首选直接用最新 CLI 执行：`npx @zhin.js/cli@latest migrate`（或 `pnpm dlx @zhin.js/cli@latest migrate`），不需要先改项目；也可以先 `pnpm add @zhin.js/cli@latest` 再运行 `npx zhin migrate`。项目启用了 `minimumReleaseAge`（pnpm 发布冷却）时，刚发布的 CLI 可能还装不进项目，这时用 npx / pnpm dlx。新版 migrate 在动手前会比较正在运行的 CLI 与 registry 上最新的 `@zhin.js/cli`：落后时 `--dry-run` 和正式执行都只打印醒目的黄色提示（给出上面的做法），然后按当前 CLI 的规则继续，不会中断——项目锁定的精确版本和发布冷却都照常生效，CI 也不会因为新版本发布而失败。新版 migrate 还会清理旧版多写的内容，并在 `--dry-run` 中列出：值与旧 CLI 写入的完全一致的 `scripts.daemon`（改过的保留），以及不受 `minimumReleaseAge` 限制的项目里 zhin 包的 `name@版本` 排除条目（其他条目保留）。
 
 生产环境请按下文完整流程执行，并在升级前做好备份。升级前先停止 Bot，避免依赖目录在运行中被替换。
 
@@ -152,7 +151,7 @@ zhin doctor
 
 ## 执行升级
 
-1. 在副本或预发布环境先把 CLI 升到最新（`pnpm add @zhin.js/cli@latest`，或之后都用 `npx @zhin.js/cli@latest migrate`），再运行 `zhin migrate --dry-run`。
+1. 在副本或预发布环境用最新 CLI 预演：`npx @zhin.js/cli@latest migrate --dry-run`（或 `pnpm dlx`；也可以先 `pnpm add @zhin.js/cli@latest` 再运行 `zhin migrate --dry-run`）。
 2. 进入维护窗口，停止 Bot 和会产生新副作用的入口（必须在升级依赖之前）。
 3. 执行 `zhin migrate`，审阅 package、scripts 与目录变化。
 4. 运行 `zhin doctor`、类型检查、测试和 `zhin start --once --mode test`。

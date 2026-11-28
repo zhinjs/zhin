@@ -40,16 +40,42 @@ export function captureSandboxRequestContext(): SandboxRequestContext {
   return Object.freeze({ apiBase: getSandboxApiBase(), headers: Object.freeze(getSandboxAuthHeaders()) });
 }
 
-/** The path the first Sandbox account on a Host serves; every account also serves `/sandbox/<id>`. */
+/** The path one Sandbox account on a Host serves (the earliest still running); every account also serves `/sandbox/<id>`. */
 export const SANDBOX_DEFAULT_WS_PATH = '/sandbox';
 
-/** Per-viewer choice of the Sandbox account (its WebSocket path); a convenience, never authoritative. */
+/**
+ * Per-viewer choice of the Sandbox account (its WebSocket path), one per Host (`apiBase`): a
+ * convenience, never authoritative. The full key is `zhin_sandbox_ws_path:<apiBase>`.
+ */
 export const SANDBOX_WS_PATH_STORAGE_KEY = 'zhin_sandbox_ws_path';
+
+/** Storage key of the account choice for one Host. */
+export function sandboxWsPathStorageKey(apiBase: string): string {
+  return `${SANDBOX_WS_PATH_STORAGE_KEY}:${apiBase.replace(/\/+$/u, '')}`;
+}
+
+/**
+ * One path segment: unreserved characters and well-formed `%XX` escapes only. No `\` (the URL
+ * parser treats it as `/`), no `.` / `..` segment and no `%2e` (either case), so a segment can never
+ * climb out of `/sandbox/` (#1250 b116 M2: `/sandbox/..\terminal` resolved to `/terminal`).
+ */
+const SANDBOX_WS_SEGMENT = /^(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})+$/u;
 
 /** `/sandbox` or one account's `/sandbox/<id>`: nothing else is ever connected to. */
 export function isSandboxWsPath(value: unknown): value is string {
-  return typeof value === 'string' && /^\/sandbox(?:\/[^/?#\s]+)?$/u.test(value);
+  if (typeof value !== 'string') return false;
+  if (value === SANDBOX_DEFAULT_WS_PATH) return true;
+  const prefix = `${SANDBOX_DEFAULT_WS_PATH}/`;
+  if (!value.startsWith(prefix)) return false;
+  const segment = value.slice(prefix.length);
+  return SANDBOX_WS_SEGMENT.test(segment) && segment !== '.' && segment !== '..' && !/%2e/iu.test(segment);
 }
+
+/**
+ * Sockets to the chosen account path that close before `ready`, in a row, before the page asks
+ * `/sandbox` whether that account still exists (#1250 b116 M1).
+ */
+export const SANDBOX_PATH_PROBE_AFTER_FAILURES = 3;
 
 /** One Sandbox account on the connected Host (`ready.endpoints`, #1250). */
 export interface SandboxEndpointOption {
@@ -68,34 +94,41 @@ export function sandboxEndpointOptions(value: unknown): readonly SandboxEndpoint
   }));
 }
 
-/** The account path this viewer chose, if any (storage may be unavailable). */
-export function readSandboxWsPath(): string | undefined {
+/** The account path this viewer chose on Host `apiBase`, if any (storage may be unavailable). */
+export function readSandboxWsPath(apiBase: string): string | undefined {
   try {
-    const stored = typeof localStorage === 'undefined' ? null : localStorage.getItem(SANDBOX_WS_PATH_STORAGE_KEY);
+    const stored = typeof localStorage === 'undefined' ? null : localStorage.getItem(sandboxWsPathStorageKey(apiBase));
     return isSandboxWsPath(stored) ? stored : undefined;
   } catch {
     return undefined;
   }
 }
 
-/** Remembers (or with `undefined` forgets) the chosen account path. */
-export function writeSandboxWsPath(path: string | undefined): void {
+/** Remembers (or with `undefined` forgets) the chosen account path on Host `apiBase`. */
+export function writeSandboxWsPath(apiBase: string, path: string | undefined): void {
   try {
     if (typeof localStorage === 'undefined') return;
-    if (path && isSandboxWsPath(path)) localStorage.setItem(SANDBOX_WS_PATH_STORAGE_KEY, path);
-    else if (typeof localStorage.removeItem === 'function') localStorage.removeItem(SANDBOX_WS_PATH_STORAGE_KEY);
-    else localStorage.setItem(SANDBOX_WS_PATH_STORAGE_KEY, '');
+    const key = sandboxWsPathStorageKey(apiBase);
+    if (path && isSandboxWsPath(path)) localStorage.setItem(key, path);
+    else if (typeof localStorage.removeItem === 'function') localStorage.removeItem(key);
+    else localStorage.setItem(key, '');
   } catch { /* silent-ok: the choice is a per-viewer convenience */ }
 }
 
 /**
  * Browser WebSocket cannot set Authorization reliably; pass token in query when needed.
  * Uses stored Console API base so Remote Console (different origin) still hits the bot Host.
+ * `path` must be a Sandbox path ({@link isSandboxWsPath}) that the URL parser keeps as is; anything
+ * else connects to {@link SANDBOX_DEFAULT_WS_PATH}.
  */
 export function buildSandboxWebSocketUrl(base?: string, path: string = SANDBOX_DEFAULT_WS_PATH): string {
   const apiBase = (base ?? getSandboxApiBase()).replace(/\/+$/u, '');
   const origin = apiBase || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
-  const wsUrl = new URL(isSandboxWsPath(path) ? path : SANDBOX_DEFAULT_WS_PATH, `${origin}/`);
+  let wsUrl = new URL(isSandboxWsPath(path) ? path : SANDBOX_DEFAULT_WS_PATH, `${origin}/`);
+  const resolved = wsUrl.pathname;
+  if (resolved !== path || (resolved !== SANDBOX_DEFAULT_WS_PATH && !resolved.startsWith(`${SANDBOX_DEFAULT_WS_PATH}/`))) {
+    wsUrl = new URL(SANDBOX_DEFAULT_WS_PATH, `${origin}/`);
+  }
   wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   const token = getSandboxBearerToken();
   if (token) wsUrl.searchParams.set('token', token);

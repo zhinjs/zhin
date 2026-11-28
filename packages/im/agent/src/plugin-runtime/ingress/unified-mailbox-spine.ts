@@ -831,7 +831,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
     if (!asClear && await tryHandleIngressCommands({
       message, turnAccess, ownerId, effectiveEndpoint, agent: options.agent, groupRules: this.#groupRules,
-      toolApprovalIm: options.toolApprovalIm, reply,
+      toolApprovalIm: options.toolApprovalIm, reply, snapshot,
     })) {
       reportInboundOutcome(message, { outcome: 'command_replied', reason: 'executed', stage: 'agent_gate', command: 'agent' });
       return true;
