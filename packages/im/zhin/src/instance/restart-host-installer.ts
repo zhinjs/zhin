@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, isSimulationOnlyAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
 import { isConfirmWord, type ChatRoleService } from '@zhin.js/core';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
 import { describeGlobalOwnerRequired } from '@zhin.js/permission';
@@ -218,7 +218,9 @@ export function installRestartHost(options: InstallRestartHostOptions): RootReso
             input: command.input, kind: scene?.kind, text, reason, command: 'restart', authorized });
           if (!allowed || !session || !scene) {
             audit('restart', 'denied', 'not-global-owner');
-            return unauthorized(describeGlobalOwnerRequired(locale, { bindCommand: command.formatCommand('bind') }), 'not-global-owner');
+            // #1250 owner-hints-dead-end-sandbox-only: a Sandbox-only project cannot bind or claim.
+            return unauthorized(describeGlobalOwnerRequired(locale, { bindCommand: command.formatCommand('bind'),
+              simulationOnly: isAdapterIndex(adapters) && isSimulationOnlyAdapterIndex(adapters) }), 'not-global-owner');
           }
           if (!options.restartSupported()) {
             audit('restart', 'denied', 'unsupported');

@@ -10,11 +10,13 @@ An upgrade changes dependencies, Feature APIs, configuration, durable data and t
 A routine patch upgrade usually needs only:
 
 ```bash
-npx zhin migrate --dry-run   # see what would change
-npx zhin migrate             # upgrade
+npx @zhin.js/cli@latest migrate --dry-run  # rehearse with the latest CLI (migration rules ship with it)
+npx @zhin.js/cli@latest migrate            # upgrade (or pnpm dlx @zhin.js/cli@latest migrate)
 npx zhin doctor && pnpm test # check
 npx zhin start --once --mode test  # assembly smoke test
 ```
+
+`npx zhin migrate` runs the CLI **installed in the project**, and the migration rules ship with the CLI: an older CLI rewrites the project by its older rules (1.9.x, for example, adds a `daemon` script and writes pinned `minimumReleaseAgeExclude` entries even where no `minimumReleaseAge` is set). So prefer running the latest CLI directly: `npx @zhin.js/cli@latest migrate` (or `pnpm dlx @zhin.js/cli@latest migrate`), which needs no change to the project first; alternatively `pnpm add @zhin.js/cli@latest`, then `npx zhin migrate`. When the project enables `minimumReleaseAge` (pnpm's release cooldown), a just-published CLI may not install into the project yet; use npx / pnpm dlx then. Before changing anything, migrate now compares the running CLI with the registry's latest `@zhin.js/cli`: when it is behind, both `--dry-run` and a real run print a prominent yellow warning with those options and then continue by the current CLI's rules. It never stops, so a locked exact version and the release cooldown keep working, and CI does not fail after every new release. Migrate also cleans up what older releases added, listing it in `--dry-run`: a `scripts.daemon` whose value is exactly what the old CLI wrote (a changed one stays), and the Zhin `name@version` exclusions in a project that no `minimumReleaseAge` gate applies to (other entries stay).
 
 For production, follow the full flow below and take a backup first. Stop the Bot before upgrading so dependency directories are not replaced under a running process.
 
@@ -154,7 +156,7 @@ Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key 
 
 ## Execute
 
-1. Run `zhin migrate --dry-run` on a copy or staging environment.
+1. On a copy or staging environment, rehearse with the latest CLI: `npx @zhin.js/cli@latest migrate --dry-run` (or `pnpm dlx`; alternatively `pnpm add @zhin.js/cli@latest`, then `zhin migrate --dry-run`).
 2. Enter a maintenance window and stop the Bot and any ingress that creates new side effects (before upgrading dependencies).
 3. Run `zhin migrate` and review package, script, and directory changes.
 4. Run doctor, type checks, tests, and `zhin start --once --mode test`.

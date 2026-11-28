@@ -135,6 +135,49 @@ export function syncReleaseAgeExclusions(dir: string, releases: ReadonlyMap<stri
   return added;
 }
 
+/**
+ * A `name@<exact version>` entry for a Zhin package — the only form `zhin migrate` writes (older
+ * CLIs, 1.9.x, wrote the same). Bare names, patterns, ranges and other packages are the user's own.
+ */
+function isZhinPinnedExclusion(entry: string): boolean {
+  const at = entry.lastIndexOf('@');
+  if (at <= 0) return false;
+  const name = entry.slice(0, at);
+  return isZhinPackage(name) && !name.includes('*') && semver.valid(entry.slice(at + 1)) !== null;
+}
+
+/**
+ * #1250 migrate-runs-installed-old-cli: removes the Zhin `name@version` entries from
+ * `pnpm-workspace.yaml#minimumReleaseAgeExclude` of a project where pnpm's release-age gate does not
+ * apply (no `minimumReleaseAge`, or 0, under the pnpm the project pins). Older CLIs wrote them even
+ * there; today's migrate does not, so they are dead entries left over from an earlier migration.
+ * Every other entry (bare names, patterns, other packages) stays; an emptied list is removed.
+ * Returns the removed entries (printed; written unless `dryRun`).
+ */
+export function pruneReleaseAgeExclusions(dir: string, dryRun: boolean): string[] {
+  if (!fs.existsSync(path.join(dir, WORKSPACE_FILE))) return [];
+  const doc = readWorkspace(dir);
+  const list = doc?.get('minimumReleaseAgeExclude');
+  if (!doc || !isSeq(list)) return [];
+  const removed: string[] = [];
+  const kept = list.items.filter((item) => {
+    const entry = isScalar(item) && typeof item.value === 'string' ? item.value : undefined;
+    if (entry === undefined || !isZhinPinnedExclusion(entry)) return true;
+    removed.push(entry);
+    return false;
+  });
+  if (removed.length === 0) return [];
+  for (const entry of removed) {
+    console.log(chalk.cyan(`  ${dryRun ? '[dry-run]' : '·'} ${WORKSPACE_FILE} minimumReleaseAgeExclude: - ${entry}（未启用 minimumReleaseAge，旧版 zhin migrate 多写的条目）`));
+  }
+  if (!dryRun) {
+    if (kept.length > 0) list.items = kept;
+    else doc.delete('minimumReleaseAgeExclude');
+    fs.writeFileSync(path.join(dir, WORKSPACE_FILE), doc.toString({ lineWidth: 0 }));
+  }
+  return removed;
+}
+
 /** Where the project sets `minimumReleaseAge` and to what (minutes). */
 export interface ConfiguredReleaseAge {
   readonly minutes: number;

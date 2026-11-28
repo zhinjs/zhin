@@ -24,7 +24,7 @@ const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,c
   trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,uploadFiles,hostedMedia,uploads,
   senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,commandHints,atSuggestions,
-  directoryStatus,workspaceScope,activeChannel,directoryControllerRef,pendingRefreshEpoch,serverRole};}`, {
+  directoryStatus,workspaceScope,activeChannel,directoryControllerRef,pendingRefreshEpoch,serverRole,sandboxEndpoints,selectSandboxEndpoint};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
 
@@ -565,6 +565,86 @@ describe('Sandbox page transport boundary', () => {
       expect(second.frames).toEqual([{ op: 'subscribe', conversation: { type: 'private', id: 'sandbox-user' }, retain: true }]);
       expect(f.render().messages).toHaveLength(1);
     } finally { f.close(); }
+  });
+
+  it('connects to the chosen Sandbox account path and forgets it only once `/sandbox` confirms it is gone (#1250 b116 M1)', () => {
+    const f = fixture();
+    const key = transport.sandboxWsPathStorageKey('http://localhost');
+    try {
+      const first = f.socket();
+      expect(new URL(first.url).pathname).toBe('/sandbox');
+      first.open();
+      const endpoints = [{ id: 'sandbox-bot', path: '/sandbox/sandbox-bot', default: true }, { id: 'sandbox-bot2', path: '/sandbox/sandbox-bot2' }];
+      first.receive({ type: 'ready', id: 'owner', endpoint: 'sandbox-bot', protocol: transport.SANDBOX_SCOPED_PROTOCOL, canExecute: true, timestamp: 1,
+        endpoints: [...endpoints, { id: 'evil', path: 'https://elsewhere.example/sandbox' }] });
+      f.render();
+      expect(f.view.sandboxEndpoints.map((entry: { id: string }) => entry.id)).toEqual(['sandbox-bot', 'sandbox-bot2']);
+      f.view.selectSandboxEndpoint('sandbox-bot2');
+      // Stored per Host (apiBase), never under the bare key.
+      expect(f.storage.get(key)).toBe('/sandbox/sandbox-bot2');
+      expect(f.storage.has(transport.SANDBOX_WS_PATH_STORAGE_KEY)).toBe(false);
+      const second = f.socket();
+      expect(second).not.toBe(first); expect(first.readyState).toBe(3);
+      expect(new URL(second.url).pathname).toBe('/sandbox/sandbox-bot2');
+      second.open();
+      second.receive({ type: 'ready', id: 'owner', endpoint: 'sandbox-bot2', protocol: transport.SANDBOX_SCOPED_PROTOCOL, canExecute: true, timestamp: 2, endpoints });
+      expect(f.render().endpointId).toBe('sandbox-bot2');
+      // Choosing the account already connected does not reconnect.
+      f.view.selectSandboxEndpoint('sandbox-bot2');
+      expect(f.socket()).toBe(second);
+
+      // A Host restart / network blip / 401: closing before `ready` keeps the choice.
+      const failChosen = (times: number) => {
+        for (let index = 0; index < times; index += 1) {
+          f.dispatch('zhin:api-base-changed');
+          const socket = f.socket();
+          expect(new URL(socket.url).pathname).toBe('/sandbox/sandbox-bot2');
+          socket.close();
+          expect(f.storage.get(key)).toBe('/sandbox/sandbox-bot2');
+        }
+      };
+      failChosen(transport.SANDBOX_PATH_PROBE_AFTER_FAILURES);
+      // Then the page asks `/sandbox`; the account is still listed, so it goes back to it.
+      f.dispatch('zhin:api-base-changed');
+      const probe = f.socket();
+      expect(new URL(probe.url).pathname).toBe('/sandbox');
+      probe.open();
+      probe.receive({ type: 'ready', id: 'owner', endpoint: 'sandbox-bot', protocol: transport.SANDBOX_SCOPED_PROTOCOL, canExecute: true, timestamp: 3, endpoints });
+      const back = f.socket();
+      expect(back).not.toBe(probe);
+      expect(new URL(back.url).pathname).toBe('/sandbox/sandbox-bot2');
+      expect(f.storage.get(key)).toBe('/sandbox/sandbox-bot2');
+      // The probe's `ready` did not switch the page to the default account.
+      expect(f.render().endpointId).toBe('sandbox-bot2');
+      back.close();
+
+      // The account really was removed: `/sandbox` no longer lists it, so the page forgets it there.
+      failChosen(transport.SANDBOX_PATH_PROBE_AFTER_FAILURES - 1);
+      f.dispatch('zhin:api-base-changed');
+      const confirm = f.socket();
+      expect(new URL(confirm.url).pathname).toBe('/sandbox');
+      confirm.open();
+      confirm.receive({ type: 'ready', id: 'owner', endpoint: 'sandbox-bot', protocol: transport.SANDBOX_SCOPED_PROTOCOL, canExecute: true, timestamp: 4,
+        endpoints: [endpoints[0]] });
+      expect(f.socket()).toBe(confirm);
+      expect(f.storage.get(key) ?? '').toBe('');
+      expect(f.render().endpointId).toBe('sandbox-bot');
+    } finally { f.close(); }
+  });
+
+  it('keeps the account choice of each Host apart (#1250 b116)', () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => storage.set(k, v),
+      removeItem: (k: string) => storage.delete(k) });
+    try {
+      transport.writeSandboxWsPath('http://host-a:8086', '/sandbox/a');
+      expect(transport.readSandboxWsPath('http://host-a:8086/')).toBe('/sandbox/a');
+      expect(transport.readSandboxWsPath('http://host-b:8086')).toBeUndefined();
+      transport.writeSandboxWsPath('http://host-b:8086', '/sandbox/b');
+      transport.writeSandboxWsPath('http://host-a:8086', undefined);
+      expect(transport.readSandboxWsPath('http://host-a:8086')).toBeUndefined();
+      expect(transport.readSandboxWsPath('http://host-b:8086')).toBe('/sandbox/b');
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('drops the old protocol capability immediately when the Host connection changes', () => {

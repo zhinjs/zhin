@@ -149,6 +149,9 @@ it('uses the operation prefix and language without changing owner-only private a
     expect(denied).not.toContain('「!bind <code>」');
     expect(denied).toContain('「claim <code>」');
     expect(denied).not.toMatch(/master|plugin configuration/);
+    // #1250 b116: only local simulation adapters loaded — the Sandbox identity, not bind codes.
+    expect(runtime.handleCommand({ ...context, subjectId: 'other', senderIsGlobalOwner: false, simulationOnly: true }, '!approve always bash'))
+      .toBe(describeGlobalOwnerRequired('en', { privateChat: true, simulationOnly: true }));
     expect(runtime.handleCommand(context, '!approve rule [')).toContain('Invalid regular expression');
     expect(runtime.handleCommand(context, '!approve revoke rule missing')).toContain('no custom rules');
     expect(runtime.handleCommand(context, '!approve rule ^中文命令')).toContain('Added rule');

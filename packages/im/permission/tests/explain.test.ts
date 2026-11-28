@@ -62,6 +62,25 @@ describe('shared refusal texts (#1250 第 78 批)', () => {
     expect(describeDeniedPermit('owner@global', 'zh-CN')).toContain('此功能需要全局聊天主人');
   });
 
+  it('points a Sandbox-only project at 「以我的聊天身份发言」 instead of bind / claim codes (#1250 owner-hints-dead-end-sandbox-only)', () => {
+    const zh = describeGlobalOwnerRequired('zh-CN', { simulationOnly: true });
+    expect(zh).toMatch(/^仅全局聊天主人（global owner）可使用此指令。当前只装了模拟适配器（Sandbox）/u);
+    expect(zh).toContain('在 Console 的 Sandbox 打开「以我的聊天身份发言」并发一条消息');
+    expect(zh).toContain('console-<用户 id>');
+    expect(zh).toContain('Console「聊天角色」页把全局 owner 授予这个身份');
+    expect(zh).not.toContain('绑定 <码>');
+    expect(zh).not.toContain('认领 <码>');
+    const en = describeGlobalOwnerRequired('en', { simulationOnly: true, bindCommand: '/bind' });
+    expect(en).toMatch(/^Only a global chat owner can use this command\. Only simulation adapters \(the Sandbox\) are loaded/u);
+    expect(en).toContain('"Speak as my chat identity"');
+    expect(en).not.toMatch(/bind <code>|claim <code>/u);
+    expect(describeGlobalOwnerRequired('zh-CN', { privateChat: true, simulationOnly: true })).toContain('私聊中使用');
+    // The same text from a declarative `owner@global` permit; without the flag nothing changes.
+    expect(describeCommandDenial('owner@global', 'zh-CN', { simulationOnly: true })).toBe(zh);
+    expect(describeDeniedPermit('owner@global', 'en', { simulationOnly: true })).toContain('"Speak as my chat identity"');
+    expect(describeGlobalOwnerRequired('zh-CN', { simulationOnly: false })).toBe(describeGlobalOwnerRequired('zh-CN'));
+  });
+
   it('names the bare bind word: 绑定 <码> needs no command prefix (#1250 bind-hint-omits-command-prefix)', () => {
     const zh = '先私聊机器人发送「绑定 <码>」（不需要命令前缀）把聊天身份绑定到 Console 账号';
     expect(describeGlobalOwnerRequired('zh-CN')).toContain(zh);

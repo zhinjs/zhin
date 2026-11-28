@@ -6,7 +6,8 @@ import {
   type ConsoleLocale,
 } from '@zhin.js/client';
 import { renderSandboxSegments, type SandboxSegmentRenderContext } from './segments/index.js';
-import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport.js';
+import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, readSandboxWsPath, sandboxEndpointOptions, submitSandboxFrame, writeSandboxWsPath,
+  SANDBOX_DEFAULT_WS_PATH, SANDBOX_PATH_PROBE_AFTER_FAILURES, SANDBOX_SCOPED_PROTOCOL, type SandboxEndpointOption, type SandboxRequestContext } from './sandboxTransport.js';
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import { isApprovalPrompt, readSandboxCommandHints, type SandboxCommandHints } from './composerCommands.js';
@@ -97,6 +98,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     ))
     const [inputText, setInputText] = useState('')
     const [endpointId, setBotName] = useState('sandbox-bot')
+    /** #1250: every Sandbox account the Host serves (`ready.endpoints`); more than one offers a choice. */
+    const [sandboxEndpoints, setSandboxEndpoints] = useState<readonly SandboxEndpointOption[]>([])
+    /** The listed account path this page talks to (the default account's own path on `/sandbox`). */
+    const [endpointPath, setEndpointPath] = useState('')
+    /** The path the current socket connected to. */
+    const socketPathRef = useRef<string>(SANDBOX_DEFAULT_WS_PATH)
     const [connected, setConnected] = useState(false)
     const [canExecute, setCanExecute] = useState(false)
     const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'error'>('saved')
@@ -180,7 +187,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const directoryModeRef = useRef(directoryStatus.mode)
     const directoryHostRef = useRef<string | null>(null)
     const readyWorkingDirectoryRef = useRef('')
-    const readyIdentityRef = useRef<{ host: string; ownerId: string } | null>(null)
+    const readyIdentityRef = useRef<{ host: string; ownerId: string; endpoint?: string } | null>(null)
+    /** Reconnects the page's socket now (set by the connection effect). */
+    const reconnectRef = useRef<(() => void) | null>(null)
     const socketRequestContextRef = useRef<SandboxRequestContext | null>(null)
     const directoryControllerRef = useRef<ReturnType<typeof createWorkspaceDirectoryController> | null>(null)
     if (!directoryControllerRef.current) directoryControllerRef.current = createWorkspaceDirectoryController({
@@ -316,7 +325,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         senderName?: string; senderRole?: 'master' | 'admin' | 'member';
         senderChatRole?: string; senderTrustLevel?: string; consoleUser?: boolean;
         simulated?: boolean; displaySenderId?: string; asMeUnavailable?: string;
-        revision?: number; streaming?: boolean;
+        revision?: number; streaming?: boolean; endpoints?: unknown;
         conversation?: { type: Channel['type']; id: string };
         emoji?: string; reactionId?: string; op?: string;
     }) => {
@@ -327,16 +336,24 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             const requestContext = socketRequestContextRef.current ?? captureSandboxRequestContext()
             const host = requestContext.apiBase || window.location.origin
             const previousIdentity = readyIdentityRef.current
-            if (previousIdentity && (previousIdentity.host !== host || previousIdentity.ownerId !== data.id)) {
+            const readyEndpoint = data.endpoint || data.bot || 'sandbox-bot'
+            // Another account (#1250) is another bot: its conversations never mix with this one's.
+            if (previousIdentity && (previousIdentity.host !== host || previousIdentity.ownerId !== data.id
+                || (previousIdentity.endpoint !== undefined && previousIdentity.endpoint !== readyEndpoint))) {
                 const fresh = createDefaultPlaygroundState(data.workingDirectory?.trim())
                 activeChannelRef.current = fresh.sessions[0]!
                 setActiveChannel(fresh.sessions[0]!)
                 setChannels([...fresh.sessions])
                 setMessages([])
             }
-            readyIdentityRef.current = { host, ownerId: data.id }
-            endpointIdRef.current = data.endpoint || data.bot || 'sandbox-bot'
+            readyIdentityRef.current = { host, ownerId: data.id, endpoint: readyEndpoint }
+            endpointIdRef.current = readyEndpoint
             setBotName(endpointIdRef.current)
+            const listedEndpoints = sandboxEndpointOptions(data.endpoints)
+            setSandboxEndpoints(listedEndpoints)
+            setEndpointPath(socketPathRef.current === SANDBOX_DEFAULT_WS_PATH
+                ? listedEndpoints.find((entry) => entry.default)?.path ?? ''
+                : socketPathRef.current)
             connectionRef.current = { protocol: data.protocol, connectionId: data.connectionId, ownerId: data.id, canExecute: data.canExecute !== false }
             setReadyConnectionId(data.connectionId)
             setCanExecute(data.canExecute !== false)
@@ -535,6 +552,14 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         let attempt = 0
         /** Ignore close events from a socket we intentionally replaced (login/base change). */
         let replaceInFlight = false
+        /**
+         * #1250 b116 M1: sockets to the chosen account path that closed before `ready`, in a row, on
+         * `chosenFailureHost`. A close alone never forgets the choice (a Host restart, a network blip or
+         * a 401 look the same); after {@link SANDBOX_PATH_PROBE_AFTER_FAILURES} the next attempt asks
+         * `/sandbox` for `ready.endpoints`, and only a list without the chosen path forgets it.
+         */
+        let chosenFailures = 0
+        let chosenFailureHost: string | undefined
 
         const connect = () => {
             if (closed) return
@@ -560,7 +585,18 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             connectionRef.current = { canExecute: false }
             setCanExecute(false)
             setConnected(false)
-            const wsUrl = buildSandboxWebSocketUrl(nextHost)
+            // #1250: the account this viewer chose (on this Host) has its own path; `/sandbox` is the Host's default account.
+            if (chosenFailureHost !== nextHost) {
+                chosenFailureHost = nextHost
+                chosenFailures = 0
+            }
+            const chosenPath = readSandboxWsPath(nextHost)
+            const chosen = chosenPath !== undefined && chosenPath !== SANDBOX_DEFAULT_WS_PATH ? chosenPath : undefined
+            // The chosen path kept failing: ask `/sandbox` which accounts exist before giving up on it.
+            const probing = chosen !== undefined && chosenFailures >= SANDBOX_PATH_PROBE_AFTER_FAILURES
+            const wsPath = chosen !== undefined && !probing ? chosen : SANDBOX_DEFAULT_WS_PATH
+            const wsUrl = buildSandboxWebSocketUrl(nextHost, wsPath)
+            let readyOnSocket = false
             // This page owns one connection; replacing its credentials must retire only that socket.
             const previous = wsRef.current
             if (previous) {
@@ -573,6 +609,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 replaceInFlight = false
             }
             const ws = new WebSocket(wsUrl)
+            socketPathRef.current = wsPath
             socketRequestContextRef.current = requestContext
             wsRef.current = ws
             void loadTrace()
@@ -583,7 +620,29 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             }
             ws.onmessage = (event) => {
                 if (wsRef.current !== ws) return
-                try { handleInboundPayload(JSON.parse(String(event.data))) }
+                try {
+                    const payload = JSON.parse(String(event.data))
+                    if (payload?.type === 'ready') {
+                        readyOnSocket = true
+                        if (!probing) chosenFailures = 0
+                        else {
+                            const listed = Array.isArray(payload.endpoints)
+                                && sandboxEndpointOptions(payload.endpoints).some((entry) => entry.path === chosen)
+                            if (listed) {
+                                // The account exists (it was a passing failure): go back to it, without
+                                // taking over this socket's account identity on the page.
+                                chosenFailures = 0
+                                attempt = 0
+                                connect()
+                                return
+                            }
+                            // Confirmed gone (removed, renamed; or a Host without per-account paths): fall back.
+                            writeSandboxWsPath(nextHost, undefined)
+                            chosenFailures = 0
+                        }
+                    }
+                    handleInboundPayload(payload)
+                }
                 catch (err) { console.error('[Sandbox] Failed to parse message:', err); setInlineNotices((n) => ({ ...n, parse: true })) }
             }
             ws.onclose = () => {
@@ -598,6 +657,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 connectionRef.current = { canExecute: false }
                 wsRef.current = null
                 if (closed || replaceInFlight) return
+                // Never forget the choice on a close: see `chosenFailures`.
+                if (!readyOnSocket && !probing && chosen !== undefined) chosenFailures += 1
                 const delay = Math.min(8_000, 500 * 2 ** attempt)
                 attempt += 1
                 retryTimer = setTimeout(connect, delay)
@@ -626,6 +687,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             connect()
         }
 
+        reconnectRef.current = () => { attempt = 0; connect() }
         connect()
         if (typeof window !== 'undefined') {
             window.addEventListener('storage', onAuthOrStorage)
@@ -636,6 +698,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }
         return () => {
             closed = true
+            reconnectRef.current = null
             retireTraceReads()
             directoryControllerRef.current?.retire()
             if (retryTimer) clearTimeout(retryTimer)
@@ -652,6 +715,15 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             setConnected(false)
         }
     }, [])
+
+    /** #1250: talk to another Sandbox account — reconnect to its own path (one account per socket). */
+    const selectSandboxEndpoint = (key: string) => {
+        // Keyed by path: two plugin instances may each run an account of the same id (#1250 b116).
+        const target = sandboxEndpoints.find((entry) => entry.path === key) ?? sandboxEndpoints.find((entry) => entry.id === key)
+        if (!target || target.path === endpointPath) return
+        writeSandboxWsPath(socketRequestContextRef.current?.apiBase || window.location.origin, target.path)
+        reconnectRef.current?.()
+    }
 
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
     useEffect(() => { setPreviewSegments(inputText.trim() ? parseTextToSegments(inputText) : []) }, [inputText])
@@ -1107,7 +1179,15 @@ ${sandboxStyles}`}</style>
                 </div>
                 <div className="agent-playground-endpoint">
                     <span>{directoryLoading ? sandboxText(locale, "正在读取会话目录") : directoryStatus.mode === 'server' && !directoryStatus.error ? sandboxText(locale, "Host 会话目录") : persistenceStatus === 'saved' ? sandboxText(locale, "会话已持久化") : sandboxText(locale, "会话保存失败")}</span>
-                    <strong>{endpointId}</strong>
+                    {sandboxEndpoints.length > 1 ? (
+                        <SelectField
+                            aria-label={sandboxText(locale, "Sandbox 账号")}
+                            value={endpointPath}
+                            options={sandboxEndpoints.map((entry) => ({ value: entry.path,
+                                label: sandboxEndpoints.some((other) => other !== entry && other.id === entry.id) ? `${entry.id} (${entry.path})` : entry.id }))}
+                            onValueChange={(value) => selectSandboxEndpoint(String(value))}
+                        />
+                    ) : <strong>{endpointId}</strong>}
                 </div>
             </nav>
 

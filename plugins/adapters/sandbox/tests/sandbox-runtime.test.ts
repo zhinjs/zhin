@@ -82,9 +82,10 @@ describe('sandbox plugin runtime adapter', () => {
 
     const other = await createEndpoint('other-bot');
     await other.start();
+    // Each account serves its own `/sandbox/<id>`; the first one also `/sandbox` (#1250).
     expect(ws.mock.calls.map(([path]) => path)).toEqual([
-      '/sandbox',
-      '/sandbox',
+      '/sandbox', '/sandbox/demo-bot',
+      '/sandbox', '/sandbox/demo-bot',
       '/sandbox/other-bot',
     ]);
 

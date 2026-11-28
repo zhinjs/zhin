@@ -39,6 +39,25 @@ export const LEGACY_PROJECT_SCRIPTS: Readonly<Record<string, readonly string[]>>
   build: Object.freeze(['zhin build']),
 });
 
+/**
+ * Scripts older CLIs added that the scaffold no longer has (#1250 migrate-runs-installed-old-cli):
+ * `zhin migrate` 1.9.x wrote `daemon`. Removed only while the value is exactly what that CLI wrote
+ * (whitespace aside); a script the user changed is theirs and stays.
+ */
+export const REMOVED_PROJECT_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  daemon: Object.freeze(['zhin start --mode production --no-watch']),
+});
+
+/**
+ * What to run instead of a removed script (#1250 b116), printed when migrate removes it (dry-run
+ * too). Migrate keeps or adds the scaffold's `start` ({@link RECOMMENDED_START_SCRIPTS}), so
+ * `pnpm start` is always there afterwards.
+ */
+export function removedProjectScriptReplacement(name: string): string | undefined {
+  if (name !== 'daemon') return undefined;
+  return '改用 `pnpm start`（前台运行）或 `zhin start --mode production --no-watch`（后台运行，用 `zhin status` / `zhin logs` / `zhin stop` 管理）';
+}
+
 function normalizeScript(script: string): string {
   return script.trim().replace(/\s+/gu, ' ');
 }

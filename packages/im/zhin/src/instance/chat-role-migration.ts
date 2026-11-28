@@ -35,7 +35,7 @@ import { basename, dirname, join } from 'node:path';
 import {
   higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatIdentity, type ChatRole,
 } from '@zhin.js/core';
-import { adapterFeatureId, isAdapterIndex, declaresLocalSimulation } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, isSimulationOnlyAdapterIndex, declaresLocalSimulation } from '@zhin.js/adapter';
 import {
   readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type FeatureConfigLevel, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -299,9 +299,17 @@ export function simulatedAdapterAliases(snapshot: Pick<RuntimeSnapshot, 'project
  */
 export function chatAdapterLandscape(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined):
   Readonly<{ simulated: readonly string[]; simulationOnly: boolean }> {
-  const kinds = [...classifyAdapters(snapshot)];
-  const simulated = Object.freeze(kinds.filter(([, kind]) => kind === 'simulated').map(([alias]) => alias).sort());
-  return Object.freeze({ simulated, simulationOnly: simulated.length > 0 && kinds.every(([, kind]) => kind === 'simulated') });
+  const simulated = Object.freeze([...classifyAdapters(snapshot)].filter(([, kind]) => kind === 'simulated').map(([alias]) => alias).sort());
+  // #1250 b116: the same verdict as the command refusals (`config`, `restart`, permits): one
+  // implementation, `isSimulationOnlyAdapterIndex` (capability profiles; fails closed).
+  return Object.freeze({ simulated, simulationOnly: snapshotIsSimulationOnly(snapshot) });
+}
+
+function snapshotIsSimulationOnly(snapshot: Pick<RuntimeSnapshot, 'projections'> | undefined): boolean {
+  try {
+    const index = snapshot?.projections.get(adapterFeatureId);
+    return isAdapterIndex(index) && isSimulationOnlyAdapterIndex(index);
+  } catch { return false; }
 }
 
 function classifyAdapters(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>> {

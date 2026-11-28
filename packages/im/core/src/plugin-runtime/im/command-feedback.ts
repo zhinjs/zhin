@@ -1,3 +1,4 @@
+import { adapterFeatureId, isAdapterIndex, isSimulationOnlyAdapterIndex } from '@zhin.js/adapter';
 import type { CommandDispatchResult, CommandExecutionLimit, CommandIndex, CommandMenuPage, CommandValidationIssue } from '@zhin.js/command';
 import { readOperationInputResources } from '@zhin.js/feature-kit';
 import type { ConversationRef } from '@zhin.js/im-contract';
@@ -62,7 +63,7 @@ const feedbackMessages = createMessages({
   identity: { 'zh-CN': '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。', en: 'This command was not accepted because a trusted identity or valid execution context is missing. Ask an administrator to check the adapter and runtime.' },
 });
 
-function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: string, bindCommand?: string): string {
+function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: string, bindCommand?: string, simulationOnly = false): string {
   if (feedback.status === 'invalid') {
     return [...feedback.issues.map(issue => issue.message), feedback.help].filter(Boolean).join('\n');
   }
@@ -70,7 +71,7 @@ function defaultFeedback(feedback: CommandFeedback, locale: Locale, standing?: s
   // where roles come from, `private()` asks for a private chat; the rest keep the generic sentence.
   if (feedback.status === 'denied') return describeCommandDenial(feedback.permit, locale, {
     ...(standing ? { standing } : {}), ...(feedback.reason ? { reason: feedback.reason } : {}),
-    ...(bindCommand ? { bindCommand } : {}) });
+    ...(bindCommand ? { bindCommand } : {}), ...(simulationOnly ? { simulationOnly } : {}) });
   const reason = feedback.limit?.reason;
   const waitMs = feedback.limit?.retryAfterMs;
   return reason === 'cooldown'
@@ -125,7 +126,16 @@ export async function renderCommandFeedback(
       logger.warn(formatCompact({ op: 'command_feedback_error', generation: snapshot.generation, status: feedback.status }));
     }
   }
-  return { content: defaultFeedback(feedback, resolveLocale(message.locale), message.sender?.platform?.standing, bindCommand), owner: result.owner };
+  return { content: defaultFeedback(feedback, resolveLocale(message.locale), message.sender?.platform?.standing, bindCommand,
+    feedback.status === 'denied' && snapshotIsSimulationOnly(snapshot)), owner: result.owner };
+}
+
+/** #1250 owner-hints-dead-end-sandbox-only: only local simulation adapters (capability profiles) are loaded. */
+export function snapshotIsSimulationOnly(snapshot: RuntimeSnapshot): boolean {
+  try {
+    const index = snapshot.projections.get(adapterFeatureId);
+    return isAdapterIndex(index) && isSimulationOnlyAdapterIndex(index);
+  } catch { return false; }
 }
 
 export interface CommandMenuPresentationInput {

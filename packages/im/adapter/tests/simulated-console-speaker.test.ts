@@ -11,7 +11,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec,
-  declaresLocalSimulation, isTrustedSimulationAdapter, TRUSTED_SIMULATION_ADAPTER_PACKAGES,
+  declaresLocalSimulation, isSimulationOnlyAdapterIndex, isTrustedSimulationAdapter, TRUSTED_SIMULATION_ADAPTER_PACKAGES,
   type AdapterContext, type Endpoint, type EndpointEventGateway, type SimulatedConsoleSpeakerHost,
 } from '../src/index.js';
 
@@ -81,5 +81,23 @@ describe('simulated Console speaker port (#1250 M2)', () => {
     expect(isTrustedSimulationAdapter(simulation, '@evil/adapter-sandbox')).toBe(false);
     expect(isTrustedSimulationAdapter(simulation, undefined)).toBe(false);
     expect(isTrustedSimulationAdapter(platform, '@zhin.js/adapter-sandbox')).toBe(false);
+  });
+
+  it('tells a Sandbox-only project from capability profiles, never adapter names (#1250 owner-hints-dead-end-sandbox-only)', () => {
+    const simulation = { default: { delivery: { send: true }, runtime: { sandbox: true } } } as never;
+    const platform = { default: { delivery: { send: true } } } as never;
+    const index = (profiles: Record<string, unknown>) => ({
+      describe: () => Object.keys(profiles).map(id => ({ id })),
+      capabilityProfile: (id: string) => profiles[id] as never,
+    });
+    expect(isSimulationOnlyAdapterIndex(index({ a: simulation, b: simulation }))).toBe(true);
+    // A real platform next to the Sandbox: bind / claim codes work there.
+    expect(isSimulationOnlyAdapterIndex(index({ sandbox: simulation, qq: platform }))).toBe(false);
+    // An adapter merely named "sandbox" is not a simulation.
+    expect(isSimulationOnlyAdapterIndex(index({ sandbox: platform }))).toBe(false);
+    expect(isSimulationOnlyAdapterIndex(index({}))).toBe(false);
+    expect(isSimulationOnlyAdapterIndex(undefined)).toBe(false);
+    // Fails closed on an unreadable index.
+    expect(isSimulationOnlyAdapterIndex({ describe: () => { throw new Error('gone'); }, capabilityProfile: () => undefined })).toBe(false);
   });
 });

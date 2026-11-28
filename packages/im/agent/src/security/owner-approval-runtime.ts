@@ -32,6 +32,11 @@ export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
    * a private chat.
    */
   readonly onUnauthorized?: (reason: string) => void;
+  /**
+   * #1250 b116: only local simulation adapters are loaded (`isSimulationOnlyAdapterIndex`); the
+   * refusal then points at the Sandbox's 「以我的聊天身份发言」 instead of bind codes.
+   */
+  readonly simulationOnly?: boolean;
 }
 
 export class OwnerApprovalRuntime {
@@ -91,7 +96,7 @@ export class OwnerApprovalRuntime {
     if (context.scope !== 'private' || !address || !context.senderIsGlobalOwner) {
       if (!context.senderIsGlobalOwner) context.onUnauthorized?.('not_global_owner');
       // #1250: 「绑定 <码>」 needs no command prefix, so the refusal does not depend on it.
-      return describeGlobalOwnerRequired(locale, { privateChat: true });
+      return describeGlobalOwnerRequired(locale, { privateChat: true, ...(context.simulationOnly ? { simulationOnly: true } : {}) });
     }
 
     if (/^approve\s+always\s+bash\s*$/iu.test(text)) {

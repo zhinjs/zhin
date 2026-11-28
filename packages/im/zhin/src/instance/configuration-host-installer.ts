@@ -1,4 +1,4 @@
-import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, isSimulationOnlyAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, defineCommand, type CommandContext, type CommandParams } from '@zhin.js/command';
 import type { ConsoleConfigApplicationStatus } from '@zhin.js/console-protocol';
 import { readOperationSession } from '@zhin.js/feature-kit';
@@ -101,6 +101,13 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       const adapters = command.project<AdapterIndex>(adapterFeatureId);
       return !!session && session.scene.kind === 'private' && isAdapterIndex(adapters) && options.authorize(session, adapters);
     };
+    // #1250 owner-hints-dead-end-sandbox-only: read from capability profiles, never adapter names.
+    const simulationOnly = (command: CommandContext): boolean => {
+      try {
+        const adapters = command.project<AdapterIndex>(adapterFeatureId);
+        return isAdapterIndex(adapters) && isSimulationOnlyAdapterIndex(adapters);
+      } catch { return false; }
+    };
     const register = (action: '' | 'fields' | 'get' | 'set' | 'unset', params: CommandParams, execute: (command: CommandContext) => Promise<string> | string) => {
       const description = action ? `${action}Description` as const : 'description';
       context.addFeature(commandFeatureId, action ? `config/${action}` : 'config', defineCommand({
@@ -113,7 +120,8 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
           // outside a private chat (zhinjs/zhin#1250).
           const denied = () => unauthorizedCommandReply({
             input: command.input, kind: readOperationSession(command.input)?.scene.kind,
-            text: describeGlobalOwnerRequired(command.locale, { bindCommand: command.formatCommand('bind') }),
+            text: describeGlobalOwnerRequired(command.locale, { bindCommand: command.formatCommand('bind'),
+              simulationOnly: simulationOnly(command) }),
             reason: 'not-global-owner', command: 'config' });
           let authorized: boolean;
           try { authorized = allowed(command); } catch { authorized = false; }

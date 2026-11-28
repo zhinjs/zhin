@@ -1,5 +1,7 @@
+import { adapterFeatureId, isAdapterIndex, isSimulationOnlyAdapterIndex } from '@zhin.js/adapter';
 import { isOwner } from '@zhin.js/core';
 import type { Message, SendContent } from '@zhin.js/core/runtime';
+import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { managementCommandText } from '../../index.js';
 import type { TurnAccessContext } from '../../turn/index.js';
@@ -21,6 +23,16 @@ export interface IngressCommandsContext {
   readonly groupRules: GroupRuleImChannel;
   readonly toolApprovalIm?: ImApprovalChannelPort;
   readonly reply: (content: SendContent) => Promise<Awaited<ReturnType<Message['$reply']>>>;
+  /** The operation's snapshot: whether only local simulation adapters are loaded (owner refusal hint). */
+  readonly snapshot?: RuntimeSnapshot;
+}
+
+/** #1250 b116: only local simulation adapters (capability profiles) are loaded; fails closed. */
+function simulationOnly(snapshot: RuntimeSnapshot | undefined): boolean {
+  try {
+    const index = snapshot?.projections.get(adapterFeatureId);
+    return isAdapterIndex(index) && isSimulationOnlyAdapterIndex(index);
+  } catch { return false; }
 }
 
 /**
@@ -98,6 +110,7 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
           locale: message.locale,
           commandPrefix: message.commandPrefix,
           onUnauthorized,
+          ...(simulationOnly(input.snapshot) ? { simulationOnly: true } : {}),
         },
         message.content,
       )

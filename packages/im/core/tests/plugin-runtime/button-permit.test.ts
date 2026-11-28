@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { PermissionHost, describeDeniedPermit, permissionHostToken } from '@zhin.js/permission';
+import { adapterFeatureId } from '@zhin.js/adapter';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { JsxButtonRegistry } from '../../src/plugin-runtime/im/interactive-router.js';
 import { inboundOutcomeSink } from '../../src/plugin-runtime/im/inbound-outcome-ledger.js';
@@ -62,6 +63,25 @@ describe('<Button permit> (ADR 0056 §5: the clicker is checked by the shared ev
     expect(onClick).not.toHaveBeenCalled();
     expect(JSON.stringify(member.replies)).toContain('你不能使用这个按钮');
     expect(member.outcomes).toEqual([{ outcome: 'permission_denied', reason: 'button_permit', stage: 'interaction', reply: 'yes' }]);
+  });
+
+  it('points a Sandbox-only project at the Sandbox identity when an owner@global button is refused (#1250 b116)', async () => {
+    const host = new PermissionHost();
+    const simulation = { default: { delivery: { send: true }, runtime: { sandbox: true } } };
+    const adapters = { $projection: 'zhin.adapter-index/1', describe: () => [{ id: 'sandbox' }], capabilityProfile: () => simulation };
+    const current = { ...snapshot(host), projections: new Map([[adapterFeatureId, adapters]]) } as unknown as RuntimeSnapshot;
+    const registry = new JsxButtonRegistry();
+    const onClick = vi.fn(() => 'x');
+    const dm = { endpoint: conversation.endpoint, kind: 'private' as const, id: 'm' };
+    const batch = registry.prepare({ requester: root, conversation: dm } as never, current);
+    const payload = (batch.bind({ label: 'x', onClick, permit: ['owner@global'] }) as { data: { rows: { payload: string }[][] } }).data.rows[0]![0]!.payload;
+    batch.activate(new Set([payload]));
+    const member = click({ id: 'm' }, dm);
+    await registry.dispatch(member.message, payload, current);
+    expect(onClick).not.toHaveBeenCalled();
+    const reply = JSON.stringify(member.replies);
+    expect(reply).toContain(JSON.stringify(describeDeniedPermit('owner@global', 'zh-CN', { simulationOnly: true })).slice(1, -1));
+    expect(reply).not.toContain(JSON.stringify(describeDeniedPermit('owner@global', 'zh-CN')).slice(1, -1));
   });
 
   it('fails closed without a Permission host and rejects removed spellings or payload buttons', async () => {
