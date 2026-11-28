@@ -58,6 +58,13 @@ export interface PermitDenialOptions {
   readonly bindCommand?: string;
   /** The endpoint's command prefix; kept for callers, no longer read (see {@link bindCommand}). */
   readonly commandPrefix?: string;
+  /**
+   * #1250 owner-hints-dead-end-sandbox-only: only local simulation adapters are loaded (the caller
+   * reads it from capability profiles, `isSimulationOnlyAdapterIndex` in `@zhin.js/adapter`). Bind and
+   * claim codes never work there, so a global owner is made through the Sandbox's
+   * 「以我的聊天身份发言」 identity instead.
+   */
+  readonly simulationOnly?: boolean;
 }
 
 /** Joins sentences: no separator after full-width punctuation, a space in English. */
@@ -70,8 +77,9 @@ function requiresGlobalOwner(values: readonly string[]): boolean {
   return values.length > 0 && values.every((value) => value === 'owner@global');
 }
 
-/** Where a global owner is granted (#1250: `绑定 <码>` needs no command prefix). */
-function globalOwnerGrant(locale: Locale, _options: Pick<PermitDenialOptions, 'bindCommand' | 'commandPrefix'>): string {
+/** Where a global owner is granted (#1250: `绑定 <码>` needs no command prefix; a Sandbox-only project uses the Sandbox identity). */
+function globalOwnerGrant(locale: Locale, options: Pick<PermitDenialOptions, 'bindCommand' | 'commandPrefix' | 'simulationOnly'>): string {
+  if (options.simulationOnly === true) return permissionMessages(locale, 'globalOwnerGrantSimulation');
   return permissionMessages(locale, 'globalOwnerGrant', { bind: permissionMessages(locale, 'bindWord') });
 }
 
@@ -131,9 +139,9 @@ export function describeCommandDenial(permit: string | undefined, locale?: Local
 /**
  * The refusal of a host-wide ability that needs a **global** chat owner (ADR 0056 §2: restart,
  * configuration, owner approvals, `owner@global` permits), with where a global owner is granted.
- * `privateChat`: the ability also needs a private chat; `bindCommand` / `commandPrefix`: as in {@link PermitDenialOptions}.
+ * `privateChat`: the ability also needs a private chat; `bindCommand` / `commandPrefix` / `simulationOnly`: as in {@link PermitDenialOptions}.
  */
-export function describeGlobalOwnerRequired(locale?: Locale, options: Readonly<{ privateChat?: boolean; bindCommand?: string; commandPrefix?: string }> = {}): string {
+export function describeGlobalOwnerRequired(locale?: Locale, options: Readonly<{ privateChat?: boolean; bindCommand?: string; commandPrefix?: string; simulationOnly?: boolean }> = {}): string {
   const resolved = resolveLocale(locale);
   return sentences(resolved, permissionMessages(resolved, options.privateChat ? 'globalOwnerPrivateOnly' : 'globalOwnerOnly'), globalOwnerGrant(resolved, options));
 }

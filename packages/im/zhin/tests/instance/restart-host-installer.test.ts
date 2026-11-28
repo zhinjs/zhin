@@ -61,6 +61,8 @@ class Modules implements ModuleRuntime {
 async function createRestartFixture(options: {
   locale?: 'zh-CN' | 'en';
   restartSupported?: boolean;
+  /** The only adapter declares a local simulation (`runtime.sandbox`): a Sandbox-only project. */
+  simulation?: boolean;
 } = {}) {
   let clock = 1_000_000;
   const audit = vi.fn();
@@ -128,6 +130,7 @@ async function createRestartFixture(options: {
   modules.values.set(source, {
     default: defineAdapter({
       capabilities: ['inbound', 'outbound'],
+      ...(options.simulation ? { profile: { default: { delivery: { send: true }, runtime: { sandbox: true } } } } : {}),
       createAdapter: () => new Platform(),
     }),
   });
@@ -230,6 +233,20 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
         actor: 'chat:platform:carol', action: 'instance.chat:restart', outcome: 'denied',
         detail: { reason: 'not-global-owner' },
       }));
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('points a Sandbox-only project at 「以我的聊天身份发言」 instead of bind / claim codes (#1250 owner-hints-dead-end-sandbox-only)', async () => {
+    const f = await createRestartFixture({ locale: 'zh-CN', simulation: true });
+    try {
+      await f.receive('!!重启', { sender: 'stranger', kind: 'private', conversationId: 'stranger' });
+      const text = lastReplyText(f.client);
+      expect(text).toBe(describeGlobalOwnerRequired('zh-CN', { simulationOnly: true }));
+      expect(text).toContain('以我的聊天身份发言');
+      expect(text).not.toContain('认领 <码>');
+      expect(f.requestRestart).not.toHaveBeenCalled();
     } finally {
       await f.close();
     }

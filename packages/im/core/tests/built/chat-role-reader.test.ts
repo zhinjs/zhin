@@ -146,6 +146,17 @@ describe('command denial text (ADR 0060 §5.3)', () => {
     expect((await renderCommandFeedback(denied('group'), message(), snapshot))?.content).toBe('没有权限执行此指令。');
   });
 
+  it('a Sandbox-only project is pointed at 「以我的聊天身份发言」 for an owner@global permit (#1250 owner-hints-dead-end-sandbox-only)', async () => {
+    const index = (profile: unknown) => ({ $projection: 'zhin.adapter-index/1', describe: () => [{ id: 'e' }], capabilityProfile: () => profile });
+    const withIndex = (profile: unknown) => ({ root: 'root', generation: 1, resources: new Map(),
+      projections: new Map([['zhin.adapter', index(profile)]]) }) as never;
+    const simulation = { default: { delivery: { send: true }, runtime: { sandbox: true } } };
+    expect((await renderCommandFeedback(denied('owner@global'), message(), withIndex(simulation)))?.content)
+      .toBe(describeGlobalOwnerRequired('zh-CN', { simulationOnly: true }));
+    expect((await renderCommandFeedback(denied('owner@global'), message(), withIndex({ default: { delivery: { send: true } } })))?.content)
+      .toBe(describeGlobalOwnerRequired('zh-CN'));
+  });
+
   it('renders nothing in a group or channel when the sender lacks the permission; place and Bot conditions still answer (#1250)', async () => {
     for (const kind of ['group', 'channel']) {
       for (const permit of ['owner@global', 'trusted', 'role(admin)', 'platform:admin', 'platform-role:r1', 'user(u9)', 'custom.permit']) {

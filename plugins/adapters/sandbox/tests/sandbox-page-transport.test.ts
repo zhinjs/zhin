@@ -24,7 +24,7 @@ const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,c
   trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,uploadFiles,hostedMedia,uploads,
   senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,commandHints,atSuggestions,
-  directoryStatus,workspaceScope,activeChannel,directoryControllerRef,pendingRefreshEpoch,serverRole};}`, {
+  directoryStatus,workspaceScope,activeChannel,directoryControllerRef,pendingRefreshEpoch,serverRole,sandboxEndpoints,selectSandboxEndpoint};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
 
@@ -564,6 +564,37 @@ describe('Sandbox page transport boundary', () => {
       f.ready();
       expect(second.frames).toEqual([{ op: 'subscribe', conversation: { type: 'private', id: 'sandbox-user' }, retain: true }]);
       expect(f.render().messages).toHaveLength(1);
+    } finally { f.close(); }
+  });
+
+  it('connects to the chosen Sandbox account path and falls back to /sandbox when it is gone (#1250)', () => {
+    const f = fixture();
+    try {
+      const first = f.socket();
+      expect(new URL(first.url).pathname).toBe('/sandbox');
+      first.open();
+      first.receive({ type: 'ready', id: 'owner', endpoint: 'sandbox-bot', protocol: transport.SANDBOX_SCOPED_PROTOCOL, canExecute: true, timestamp: 1,
+        endpoints: [{ id: 'sandbox-bot', path: '/sandbox/sandbox-bot', default: true }, { id: 'sandbox-bot2', path: '/sandbox/sandbox-bot2' },
+          { id: 'evil', path: 'https://elsewhere.example/sandbox' }] });
+      f.render();
+      expect(f.view.sandboxEndpoints.map((entry: { id: string }) => entry.id)).toEqual(['sandbox-bot', 'sandbox-bot2']);
+      f.view.selectSandboxEndpoint('sandbox-bot2');
+      expect(f.storage.get(transport.SANDBOX_WS_PATH_STORAGE_KEY)).toBe('/sandbox/sandbox-bot2');
+      const second = f.socket();
+      expect(second).not.toBe(first); expect(first.readyState).toBe(3);
+      expect(new URL(second.url).pathname).toBe('/sandbox/sandbox-bot2');
+      second.open();
+      second.receive({ type: 'ready', id: 'owner', endpoint: 'sandbox-bot2', protocol: transport.SANDBOX_SCOPED_PROTOCOL, canExecute: true, timestamp: 2 });
+      expect(f.render().endpointId).toBe('sandbox-bot2');
+      // Choosing the account already connected does not reconnect.
+      f.view.selectSandboxEndpoint('sandbox-bot2');
+      expect(f.socket()).toBe(second);
+      // The account was removed: its path never answers, so the page forgets it and uses /sandbox.
+      f.dispatch('zhin:api-base-changed');
+      const third = f.socket();
+      expect(new URL(third.url).pathname).toBe('/sandbox/sandbox-bot2');
+      third.close();
+      expect(f.storage.get(transport.SANDBOX_WS_PATH_STORAGE_KEY) ?? '').toBe('');
     } finally { f.close(); }
   });
 

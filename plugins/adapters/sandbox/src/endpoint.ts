@@ -31,51 +31,102 @@ import { mountSandboxMediaRoutes, sandboxMediaActor } from './media-routes.js';
 import { SANDBOX_MEDIA_PUBLIC_PREFIX, isSandboxMediaPath } from './media-url.js';
 
 /**
- * 多 sandbox endpoint 共用同一个 HttpHost 时，同 path 的所有 WS listener
- * 都会被回调（入站重复、出站互窜）。按 endpoint 名隔离挂载路径：
- * 首个占用 `/sandbox`（保持 Console 默认兼容），其余退到 `/sandbox/<name>`。
- * 认领记录按 HttpHost 隔离，endpoint stop() 时必须 release。
+ * 多个 Sandbox endpoint 共用同一个 HTTP Host 时，同 path 的所有 WS listener 都会被回调（入站重复、
+ * 出站互窜，一条消息被每个账号各处理一次）。所以每个 endpoint 只挂自己的路径：
+ * - 每个 endpoint 都挂 `/sandbox/<id>`（确定的地址，Console 页面按账号连这个）；
+ * - 第一个启动的 endpoint 另外挂 `/sandbox`（保持默认地址兼容）。
+ * 同名（同一账号跨 generation 交接）可以共享路径：旧 generation 的 listener 由 admission 关闭，不会重复投递。
+ *
+ * #1250 sandbox-second-account-duplicates-replies：认领表不能以插件拿到的 HttpHost 对象为键。
+ * `CapabilityContext.use(httpHostToken)` 每次调用都会经 `bindGenerationAdmission` 生成一个新的
+ * admission 绑定外壳，两个账号拿到的是两个不同对象，按对象去重永远不生效。这里以外壳背后同一个
+ * Host 共享的 token registry 为键（一个 Host 表面的所有外壳、所有 listener 共用它），
+ * 认领表放在 `globalThis` 上，插件模块热重载后仍是同一张表。endpoint stop() 时必须 release。
  */
 interface SandboxWsPathClaim {
   readonly name: string;
   readonly owners: Set<symbol>;
 }
 
-const claimedWsPaths = new WeakMap<HttpHost, Map<string, SandboxWsPathClaim>>();
+export const SANDBOX_DEFAULT_WS_PATH = '/sandbox';
 
-function claimSandboxWsPath(
-  http: HttpHost,
-  name: string,
-): { readonly path: string; readonly release: () => void } {
-  let claims = claimedWsPaths.get(http);
+type SandboxWsPathRegistry = WeakMap<object, Map<string, SandboxWsPathClaim>>;
+const SANDBOX_WS_PATH_REGISTRY = Symbol.for('zhin.adapter-sandbox.ws-path-claims');
+
+function sandboxWsPathRegistry(): SandboxWsPathRegistry {
+  const holder = globalThis as { [SANDBOX_WS_PATH_REGISTRY]?: SandboxWsPathRegistry };
+  return holder[SANDBOX_WS_PATH_REGISTRY] ??= new WeakMap();
+}
+
+/** The object every admission-bound view of one HTTP Host shares (see above); the view itself otherwise. */
+function httpHostIdentity(http: HttpHost): object {
+  try {
+    const registry: unknown = http.tokenRegistry;
+    if (registry && typeof registry === 'object') return registry;
+  } catch { /* a Host without a registry is its own identity */ }
+  return http;
+}
+
+function sandboxWsClaims(http: HttpHost): Map<string, SandboxWsPathClaim> {
+  const registry = sandboxWsPathRegistry();
+  const key = httpHostIdentity(http);
+  let claims = registry.get(key);
   if (!claims) {
     claims = new Map();
-    claimedWsPaths.set(http, claims);
+    registry.set(key, claims);
   }
-  const candidates = ['/sandbox', `/sandbox/${encodeURIComponent(name)}`];
-  let path = candidates.find(
-    (candidate) => !claims!.has(candidate) || claims!.get(candidate)?.name === name,
-  );
-  if (!path) {
-    let index = 2;
-    path = `/sandbox/${encodeURIComponent(name)}-${index}`;
-    while (claims.has(path)) {
-      index += 1;
-      path = `/sandbox/${encodeURIComponent(name)}-${index}`;
-    }
+  return claims;
+}
+
+/** One Sandbox account reachable on an HTTP Host (`ready.endpoints`). */
+export interface SandboxWsEndpointListing {
+  readonly id: string;
+  /** The account's own path (`/sandbox/<id>`); pages connect here to talk to this account. */
+  readonly path: string;
+  /** This account also serves {@link SANDBOX_DEFAULT_WS_PATH}. */
+  readonly default: boolean;
+}
+
+/** Every Sandbox account currently mounted on `http`, by id. */
+export function listSandboxWsEndpoints(http: HttpHost): readonly SandboxWsEndpointListing[] {
+  const claims = sandboxWsClaims(http);
+  const defaultOwner = claims.get(SANDBOX_DEFAULT_WS_PATH)?.name;
+  const listed = new Map<string, SandboxWsEndpointListing>();
+  for (const [path, claim] of claims) {
+    if (path === SANDBOX_DEFAULT_WS_PATH || listed.has(claim.name)) continue;
+    listed.set(claim.name, Object.freeze({ id: claim.name, path, default: claim.name === defaultOwner }));
   }
+  return Object.freeze([...listed.values()].sort((a, b) => a.id.localeCompare(b.id)));
+}
+
+/**
+ * Claims the paths endpoint `name` mounts on `http`: its own `/sandbox/<name>` (another name's claim
+ * pushes it to `-2`, `-3`, …) and {@link SANDBOX_DEFAULT_WS_PATH} when that is free or already its own.
+ */
+export function claimSandboxWsPaths(
+  http: HttpHost,
+  name: string,
+): { readonly path: string; readonly paths: readonly string[]; readonly release: () => void } {
+  const claims = sandboxWsClaims(http);
+  const ownPath = (candidate: string) => !claims.has(candidate) || claims.get(candidate)?.name === name;
+  const base = `${SANDBOX_DEFAULT_WS_PATH}/${encodeURIComponent(name)}`;
+  let named = base;
+  for (let index = 2; !ownPath(named); index += 1) named = `${base}-${index}`;
+  const paths = ownPath(SANDBOX_DEFAULT_WS_PATH) ? [SANDBOX_DEFAULT_WS_PATH, named] : [named];
   const owner = Symbol(name);
-  const claim = claims.get(path) ?? { name, owners: new Set<symbol>() };
-  claim.owners.add(owner);
-  claims.set(path, claim);
-  const claimed = path;
-  const registry = claims;
+  const held = paths.map((path) => {
+    const claim = claims.get(path) ?? { name, owners: new Set<symbol>() };
+    claim.owners.add(owner);
+    claims.set(path, claim);
+    return [path, claim] as const;
+  });
   return {
-    path: claimed,
+    path: paths[0]!,
+    paths: Object.freeze(paths),
     release: () => {
-      claim.owners.delete(owner);
-      if (claim.owners.size === 0 && registry.get(claimed) === claim) {
-        registry.delete(claimed);
+      for (const [path, claim] of held) {
+        claim.owners.delete(owner);
+        if (claim.owners.size === 0 && claims.get(path) === claim) claims.delete(path);
       }
     },
   };
@@ -319,6 +370,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   readonly #readiness = createSandboxReadinessGate(probeShellIsolation);
   #wsHandleRelease?: () => void;
   #wsPathRelease?: () => void;
+  /** Every path this endpoint serves (its own `/sandbox/<id>`, plus `/sandbox` for the first one). */
+  #wsPaths: readonly string[] = [];
   readonly #media: SandboxMediaStore;
   #mediaRoutesRelease?: () => void;
   #mediaSweep?: ReturnType<typeof setInterval>;
@@ -347,6 +400,11 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     });
   }
 
+  /** Every WebSocket path this endpoint serves while started (`path` is the first of them). */
+  get paths(): readonly string[] {
+    return this.#wsPaths;
+  }
+
   /** The Sandbox transport is the mounted local listener, not a remote account. */
   get #transportState(): 'open' | 'idle' {
     return this.#started && this.#wsHandleRelease ? 'open' : 'idle';
@@ -355,14 +413,15 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   #start(): void {
     if (this.#started) return;
     this.#started = true;
-    // 多 endpoint 同 path 会被全部回调（入站重复、出站互窜），按名隔离。
-    const claim = claimSandboxWsPath(this.#options.http, this.#options.defaults.id);
+    // 多 endpoint 同 path 会被全部回调（入站重复、出站互窜），每个账号只挂自己认领的路径。
+    const claim = claimSandboxWsPaths(this.#options.http, this.#options.defaults.id);
     this.#wsPathRelease = claim.release;
     this.wsPathValue = claim.path;
-    const handle = this.#options.http.ws(claim.path);
-    this.#wsHandleRelease = handle.onConnection((connection) => {
+    this.#wsPaths = claim.paths;
+    const releases = claim.paths.map(path => this.#options.http.ws(path).onConnection((connection) => {
       this.#acceptConnection(connection);
-    });
+    }));
+    this.#wsHandleRelease = () => { for (const release of releases.reverse()) release(); };
     if (!this.#options.defaults.randomNamePerConnection) {
       this.#ensurePlaceholder(this.#options.defaults.id, this.#options.defaults.owner);
     }
@@ -370,7 +429,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     this.#sweepMedia();
     this.#mediaSweep = setInterval(() => this.#sweepMedia(), MEDIA_SWEEP_INTERVAL_MS);
     this.#mediaSweep.unref?.();
-    this.#logger.info(`ws mounted ${claim.path}`);
+    this.#logger.info(`ws mounted ${claim.paths.join(', ')}`);
   }
 
   #openEndpoint(): void {
@@ -391,6 +450,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
     this.#wsHandleRelease = undefined;
     this.#wsPathRelease?.();
     this.#wsPathRelease = undefined;
+    this.#wsPaths = [];
     this.#mediaRoutesRelease?.();
     this.#mediaRoutesRelease = undefined;
     if (this.#mediaSweep) clearInterval(this.#mediaSweep);
@@ -777,6 +837,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
         canExecute,
         // Whether 「以我的聊天身份发言」 can work on this socket (a signed-in Console user).
         consoleUser: consoleUser !== undefined,
+        // #1250: every Sandbox account on this Host and the path that reaches it; the page offers the
+        // choice and connects to the chosen account's own path (one listener per path, one reply).
+        endpoints: listSandboxWsEndpoints(this.#options.http),
         shellIsolation,
         content: [{
           type: 'text',

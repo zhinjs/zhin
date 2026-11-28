@@ -40,14 +40,62 @@ export function captureSandboxRequestContext(): SandboxRequestContext {
   return Object.freeze({ apiBase: getSandboxApiBase(), headers: Object.freeze(getSandboxAuthHeaders()) });
 }
 
+/** The path the first Sandbox account on a Host serves; every account also serves `/sandbox/<id>`. */
+export const SANDBOX_DEFAULT_WS_PATH = '/sandbox';
+
+/** Per-viewer choice of the Sandbox account (its WebSocket path); a convenience, never authoritative. */
+export const SANDBOX_WS_PATH_STORAGE_KEY = 'zhin_sandbox_ws_path';
+
+/** `/sandbox` or one account's `/sandbox/<id>`: nothing else is ever connected to. */
+export function isSandboxWsPath(value: unknown): value is string {
+  return typeof value === 'string' && /^\/sandbox(?:\/[^/?#\s]+)?$/u.test(value);
+}
+
+/** One Sandbox account on the connected Host (`ready.endpoints`, #1250). */
+export interface SandboxEndpointOption {
+  readonly id: string;
+  readonly path: string;
+  readonly default: boolean;
+}
+
+/** The accounts a `ready` frame lists; an older Host lists none. */
+export function sandboxEndpointOptions(value: unknown): readonly SandboxEndpointOption[] {
+  if (!Array.isArray(value)) return [];
+  return Object.freeze(value.flatMap((item) => {
+    const entry = item as { id?: unknown; path?: unknown; default?: unknown } | null;
+    return entry && typeof entry.id === 'string' && entry.id && isSandboxWsPath(entry.path)
+      ? [Object.freeze({ id: entry.id, path: entry.path, default: entry.default === true })] : [];
+  }));
+}
+
+/** The account path this viewer chose, if any (storage may be unavailable). */
+export function readSandboxWsPath(): string | undefined {
+  try {
+    const stored = typeof localStorage === 'undefined' ? null : localStorage.getItem(SANDBOX_WS_PATH_STORAGE_KEY);
+    return isSandboxWsPath(stored) ? stored : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Remembers (or with `undefined` forgets) the chosen account path. */
+export function writeSandboxWsPath(path: string | undefined): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (path && isSandboxWsPath(path)) localStorage.setItem(SANDBOX_WS_PATH_STORAGE_KEY, path);
+    else if (typeof localStorage.removeItem === 'function') localStorage.removeItem(SANDBOX_WS_PATH_STORAGE_KEY);
+    else localStorage.setItem(SANDBOX_WS_PATH_STORAGE_KEY, '');
+  } catch { /* silent-ok: the choice is a per-viewer convenience */ }
+}
+
 /**
  * Browser WebSocket cannot set Authorization reliably; pass token in query when needed.
  * Uses stored Console API base so Remote Console (different origin) still hits the bot Host.
  */
-export function buildSandboxWebSocketUrl(base?: string): string {
+export function buildSandboxWebSocketUrl(base?: string, path: string = SANDBOX_DEFAULT_WS_PATH): string {
   const apiBase = (base ?? getSandboxApiBase()).replace(/\/+$/u, '');
   const origin = apiBase || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
-  const wsUrl = new URL('/sandbox', `${origin}/`);
+  const wsUrl = new URL(isSandboxWsPath(path) ? path : SANDBOX_DEFAULT_WS_PATH, `${origin}/`);
   wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   const token = getSandboxBearerToken();
   if (token) wsUrl.searchParams.set('token', token);

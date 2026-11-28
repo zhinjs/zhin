@@ -105,6 +105,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "新建会话": "New conversation",
   "会话已持久化": "Conversation saved",
   "会话保存失败": "Could not save conversation",
+  "Sandbox 账号": "Sandbox account",
   "{0} 条消息": "{0} messages",
   "停止当前任务": "Stop current task",
   "重新运行上一个任务": "Rerun previous task",

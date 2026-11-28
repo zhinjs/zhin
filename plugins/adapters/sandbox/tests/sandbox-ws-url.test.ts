@@ -34,6 +34,14 @@ describe('buildSandboxWebSocketUrl', () => {
     expect(buildSandboxWebSocketUrl()).toBe('ws://127.0.0.1:8086/sandbox?token=secret');
   });
 
+  it('connects to one account path and never to anything but a Sandbox path', () => {
+    Object.defineProperty(globalThis, 'localStorage', { value: mockStorage({}), configurable: true });
+    Object.defineProperty(globalThis, 'window', { value: { location: { origin: 'http://localhost:8086' } }, configurable: true });
+    expect(buildSandboxWebSocketUrl(undefined, '/sandbox/sandbox-bot2')).toBe('ws://localhost:8086/sandbox/sandbox-bot2');
+    expect(buildSandboxWebSocketUrl(undefined, '//evil.example/x')).toBe('ws://localhost:8086/sandbox');
+    expect(buildSandboxWebSocketUrl(undefined, '/api/other')).toBe('ws://localhost:8086/sandbox');
+  });
+
   it('falls back to window origin without token', () => {
     Object.defineProperty(globalThis, 'localStorage', { value: mockStorage({}), configurable: true });
     Object.defineProperty(globalThis, 'window', {

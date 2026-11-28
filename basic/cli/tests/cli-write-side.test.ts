@@ -689,6 +689,28 @@ describe('migrate', () => {
     expect(pkg.scripts.daemon).toBe('zhin start --daemon');
   });
 
+  it('删除旧版 CLI 写入的 daemon 脚本，用户改过的保留，dry-run 中列出 (#1250)', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    const write = (daemon: string) => fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo', dependencies: { 'zhin.js': '1.0.0' }, scripts: { daemon },
+    }, null, 2));
+    write('zhin start --mode production --no-watch');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true, includePinned: true })).toBe(true);
+    expect(log.mock.calls.flat().join('\n')).toContain('[dry-run] scripts.daemon: "zhin start --mode production --no-watch" → 删除');
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts.daemon).toBe('zhin start --mode production --no-watch');
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts).not.toHaveProperty('daemon');
+
+    for (const custom of ['zhin start --mode production --no-watch --foreground', 'pm2 start zhin']) {
+      write(custom);
+      log.mockClear();
+      upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
+      expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts.daemon).toBe(custom);
+      expect(log.mock.calls.flat().join('\n')).not.toContain('scripts.daemon');
+    }
+  });
+
   it('补齐缺失的启动 scripts（zhin start）', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', dependencies: { 'zhin.js': '1.0.0' } }, null, 2));
@@ -1361,6 +1383,33 @@ describe('migrate: release-age exclusions, allowBuilds and retired packages (#12
     const output = run(bot({ packageManager: 'pnpm@10.30.0' }), '10.30.0');
     expect(workspace()).not.toHaveProperty('minimumReleaseAgeExclude');
     expect(output).toContain('项目未设置 minimumReleaseAge（packageManager 固定的 pnpm 10 默认不启用），不写 minimumReleaseAgeExclude');
+  });
+
+  it('removes the pinned Zhin exclusions an older CLI wrote where no minimumReleaseAge applies, keeping the user\'s own entries (#1250)', () => {
+    const left = "packages:\n  - '.'\n# old migrate\nminimumReleaseAgeExclude:\n  - zhin.js@1.9.2\n  - '@zhin.js/cli@1.9.2'\n  - '@zhin.js/adapter-icqq'\n  - '@zhin.js/*'\n  - left-pad@1.3.0\n";
+    const pkgPath = bot({ packageManager: 'pnpm@10.30.0' }, left);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // The dry-run lists every entry it would remove and writes nothing.
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true, includePinned: true, pnpmVersion: () => '10.30.0' });
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('[dry-run] pnpm-workspace.yaml minimumReleaseAgeExclude: - zhin.js@1.9.2');
+    expect(preview).toContain('[dry-run] pnpm-workspace.yaml minimumReleaseAgeExclude: - @zhin.js/cli@1.9.2');
+    expect(preview).not.toContain('- left-pad@1.3.0');
+    expect(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8')).toBe(left);
+    log.mockRestore();
+
+    run(pkgPath, '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toEqual(['@zhin.js/adapter-icqq', '@zhin.js/*', 'left-pad@1.3.0']);
+    expect(fs.readFileSync(path.join(tmp, 'pnpm-workspace.yaml'), 'utf8')).toContain('# old migrate');
+
+    // Only Zhin pins: the list goes away once nothing is left in it.
+    run(bot({ packageManager: 'pnpm@10.30.0' }, "packages:\n  - '.'\nminimumReleaseAgeExclude:\n  - zhin.js@1.9.2\n"), '10.30.0');
+    expect(workspace()).toEqual({ packages: ['.'], allowBuilds: { 'node-pty': true, ssh2: true, 'cpu-features': true } });
+  });
+
+  it('keeps the exclusions where the release-age gate applies', () => {
+    run(bot({ packageManager: 'pnpm@10.30.0' }, "packages:\n  - '.'\nminimumReleaseAge: 1440\nminimumReleaseAgeExclude:\n  - zhin.js@1.9.2\n"), '10.30.0');
+    expect(workspace().minimumReleaseAgeExclude).toContain('zhin.js@1.9.2');
   });
 
   it('writes minimumReleaseAgeExclude without a packageManager pin although the local pnpm is 10 (CI may run pnpm 11)', () => {

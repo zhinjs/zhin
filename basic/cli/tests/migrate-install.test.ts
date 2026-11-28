@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { execSync } = vi.hoisted(() => ({ execSync: vi.fn((_command: string, _options?: unknown) => '') }));
+// The registry's latest @zhin.js/cli: older than the running CLI unless a test says otherwise.
+const cliRelease = vi.hoisted(() => ({ latest: '0.0.1' }));
 
 /** A fake installer: links every declared dependency into node_modules at `version`. */
 function installEverything(version = '9.4.2', overrides: Record<string, string> = {}) {
@@ -20,7 +22,7 @@ function installEverything(version = '9.4.2', overrides: Record<string, string> 
 vi.mock('child_process', () => ({ execSync }));
 vi.mock('../src/utils/registry-version.js', async importOriginal => ({
   ...await importOriginal<typeof import('../src/utils/registry-version.js')>(),
-  npmRegistryLookup: () => ({ version: '9.4.2', dependencies: {} }),
+  npmRegistryLookup: (name: string) => ({ version: name === '@zhin.js/cli' ? cliRelease.latest : '9.4.2', dependencies: {} }),
 }));
 
 let directory: string;
@@ -29,6 +31,7 @@ let previousExitCode: typeof process.exitCode;
 
 beforeEach(() => {
   vi.resetModules();
+  cliRelease.latest = '0.0.1';
   execSync.mockReset();
   execSync.mockImplementation(installEverything());
   previousCwd = process.cwd();
@@ -204,5 +207,55 @@ describe('migrate keeps the current scaffold layout (#1250)', () => {
     const { migrateCommand } = await import('../src/commands/migrate.js');
     await migrateCommand.parseAsync(['node', 'zhin', '--no-install']);
     for (const file of ['SOUL.md', 'TOOLS.md', 'AGENTS.md']) expect(readdirSync(directory)).toContain(file);
+  });
+});
+
+describe('migrate runs with an up-to-date CLI (#1250 migrate-runs-installed-old-cli)', () => {
+  const project = () => {
+    const original = JSON.stringify({ dependencies: { 'zhin.js': '^1.1.0' } }, null, 2);
+    writeFileSync(join(directory, 'package.json'), original);
+    writeFileSync(join(directory, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+    return original;
+  };
+  const output = () => vi.mocked(console.log).mock.calls.map(args => args.join(' ')).join('\n');
+
+  it('stops before changing anything when the running CLI is older than the registry release', async () => {
+    const original = project();
+    cliRelease.latest = '99.0.0';
+    const { migrateCommand } = await import('../src/commands/migrate.js');
+    await migrateCommand.parseAsync(['node', 'zhin']);
+    expect(process.exitCode).toBe(1);
+    expect(execSync).not.toHaveBeenCalled();
+    expect(readFileSync(join(directory, 'package.json'), 'utf8')).toBe(original);
+    expect(readdirSync(directory).sort()).toEqual(['package.json', 'pnpm-lock.yaml']);
+    expect(output()).toContain('registry 最新版本是 99.0.0');
+    expect(output()).toContain('npx @zhin.js/cli@latest migrate');
+    expect(output()).toContain('pnpm add @zhin.js/cli@latest');
+    expect(output()).toContain('--allow-outdated-cli');
+  });
+
+  it('only warns in a dry-run, and continues with --allow-outdated-cli', async () => {
+    project();
+    cliRelease.latest = '99.0.0';
+    const { migrateCommand } = await import('../src/commands/migrate.js');
+    await migrateCommand.parseAsync(['node', 'zhin', '--dry-run']);
+    expect(process.exitCode).toBe(0);
+    expect(output()).toContain('registry 最新版本是 99.0.0');
+    expect(output()).toContain('dry-run 结束');
+
+    vi.resetModules();
+    const again = await import('../src/commands/migrate.js');
+    await again.migrateCommand.parseAsync(['node', 'zhin', '--allow-outdated-cli']);
+    expect(process.exitCode).toBe(0);
+    expect(execSync).toHaveBeenCalledOnce();
+    expect(JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).dependencies['zhin.js']).toBe('^9.4.2');
+  });
+
+  it('continues silently with a current CLI', async () => {
+    project();
+    const { migrateCommand } = await import('../src/commands/migrate.js');
+    await migrateCommand.parseAsync(['node', 'zhin', '--no-install']);
+    expect(process.exitCode).toBe(0);
+    expect(output()).not.toContain('registry 最新版本是');
   });
 });

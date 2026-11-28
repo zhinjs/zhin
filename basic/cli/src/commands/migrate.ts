@@ -36,7 +36,7 @@ import {
   type ProjectRetiredImportScanLimits,
 } from '../utils/retired-packages-check.js';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
-import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
+import { isLegacyScript, LEGACY_PROJECT_SCRIPTS, RECOMMENDED_PROJECT_SCRIPTS, REMOVED_PROJECT_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 import { isAiEnabledInConfig, withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { cachedRegistryLookup, npmRegistryLookup, type RegistryLookup } from '../utils/registry-version.js';
@@ -50,9 +50,11 @@ import {
   formatInstalledVersionRows,
   configuredReleaseAge,
   releaseAgeGateMayApply,
+  pruneReleaseAgeExclusions,
   snapshotInstalledVersions,
   syncReleaseAgeExclusions,
 } from '../utils/installed-versions.js';
+import { checkCliFreshness, formatOutdatedCliAdvice } from '../utils/cli-freshness.js';
 import { semver } from '../plugin-check/semver.js';
 import { isMap, isScalar, parseDocument } from 'yaml';
 import { isSymbolicLink, listWorkspacePackageDirs, workspaceRelative } from '../utils/workspace-packages.js';
@@ -305,11 +307,15 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
     const pnpmMajor = pinnedPnpmMajor(pkg);
     if (releaseAgeGateMayApply(dir, pkg, pnpmMajor)) {
       syncReleaseAgeExclusions(dir, releases, options.dryRun);
-    } else if (releases.size > 0 && fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
-      const configured = configuredReleaseAge(dir, pkg, pnpmMajor);
-      console.log(chalk.gray(configured
-        ? `  · ${configured.source} 的 minimumReleaseAge 为 ${configured.minutes}（不拦新版本），不写 minimumReleaseAgeExclude`
-        : `  · 项目未设置 minimumReleaseAge${pnpmMajor === undefined ? '' : `（packageManager 固定的 pnpm ${pnpmMajor} 默认不启用）`}，不写 minimumReleaseAgeExclude`));
+    } else {
+      // #1250 migrate-runs-installed-old-cli: older CLIs (1.9.x) wrote the exclusions here too.
+      if (pruneReleaseAgeExclusions(dir, options.dryRun).length > 0) options.yamlChanged?.add('pnpm-workspace.yaml');
+      if (releases.size > 0 && fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
+        const configured = configuredReleaseAge(dir, pkg, pnpmMajor);
+        console.log(chalk.gray(configured
+          ? `  · ${configured.source} 的 minimumReleaseAge 为 ${configured.minutes}（不拦新版本），不写 minimumReleaseAgeExclude`
+          : `  · 项目未设置 minimumReleaseAge${pnpmMajor === undefined ? '' : `（packageManager 固定的 pnpm ${pnpmMajor} 默认不启用）`}，不写 minimumReleaseAgeExclude`));
+      }
     }
   }
 
@@ -326,6 +332,15 @@ export function upgradePackageJson(pkgPath: string, options: UpgradePackageJsonO
       }
       changed = true;
     }
+  }
+  // #1250 migrate-runs-installed-old-cli: scripts an older CLI added that the scaffold no longer
+  // has (`daemon`), removed only while they are exactly what that CLI wrote.
+  for (const name of Object.keys(REMOVED_PROJECT_SCRIPTS)) {
+    const current = pkg.scripts[name];
+    if (!isLegacyScript(REMOVED_PROJECT_SCRIPTS, name, current)) continue;
+    console.log(chalk.cyan(`  ${options.dryRun ? '[dry-run]' : '·'} scripts.${name}: "${current}" → 删除（旧版 zhin migrate 写入，当前脚手架没有这个脚本）`));
+    if (!options.dryRun) delete pkg.scripts[name];
+    changed = true;
   }
 
   // 确保 engines.node
@@ -837,6 +852,7 @@ export const migrateCommand = new Command('migrate')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
   .option('--no-install', '跳过最后一步依赖安装')
   .option('--include-pinned', '把精确版本等已锁定的 zhin 依赖也升级到 registry 最新版本（精确版本保持精确；默认保留）', false)
+  .option('--allow-outdated-cli', '正在运行的 @zhin.js/cli 比 registry 最新版本旧时仍继续迁移（默认停止：旧 CLI 按旧规则改写项目）', false)
   .addHelpText('after', `
 配置格式迁移 / Config format migration (configVersion 2):
   启动报 "configVersion must be 2" 或检测到 v1 配置时，先停止 Bot，再运行：
@@ -870,10 +886,28 @@ Note: "zhin runtime migrate" migrates legacy plugin capability code, not the con
       console.log('');
     }
 
+    // 0. #1250 migrate-runs-installed-old-cli: the migration rules ship with the CLI. `npx zhin migrate`
+    //    runs the project's installed CLI; an older one rewrites the project by its older rules.
+    // One registry lookup for the whole run: the CLI check and the upgrade ask for the same releases.
+    const lookup = cachedRegistryLookup(npmRegistryLookup);
+    const freshness = checkCliFreshness({ lookup });
+    if (freshness.status === 'outdated') {
+      const blocking = !dryRun && !options.allowOutdatedCli;
+      for (const line of formatOutdatedCliAdvice(freshness, { blocking })) console.log(blocking ? chalk.red(line) : chalk.yellow(line));
+      console.log('');
+      if (blocking) {
+        process.exitCode = 1;
+        return;
+      }
+    } else if (freshness.status === 'unknown') {
+      console.log(chalk.gray(`  · 无法从 registry 查询 @zhin.js/cli 的最新版本，按当前 CLI${freshness.running ? ` ${freshness.running}` : ''} 的迁移规则继续`));
+      console.log('');
+    }
+
     // 1. 升级 package.json：先升级根目录（overrides 与 minimumReleaseAgeExclude 只按根目录自己的
     //    目标版本），再升级工作区里的包（共用同一次 registry 查询；根目录保留的包，成员也保留）。
     console.log(chalk.bold.blue('1. 升级依赖与 scripts'));
-    const { updatedFiles } = upgradeProjectDependencies(cwd, { dryRun, includePinned: !!options.includePinned });
+    const { updatedFiles } = upgradeProjectDependencies(cwd, { dryRun, includePinned: !!options.includePinned, lookup });
     if (updatedFiles.length > 0 && !dryRun) {
       console.log(chalk.green(`  ✓ ${updatedFiles.join('、')} 已更新`));
     } else if (dryRun && collectZhinDeps(fs.readJsonSync(pkgPath)).length > 0) {

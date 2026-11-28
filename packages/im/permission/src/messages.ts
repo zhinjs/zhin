@@ -36,6 +36,12 @@ export const permissionMessages = createMessages({
     en: 'Global owners are granted on the Console "Chat roles" page; first bind your chat identity to a Console account: send 「{bind} <code>」 to the bot in a private chat (no command prefix needed). While there is no global owner, the deployer can also send 「claim <code>」 to the bot in a private chat (no command prefix needed; zhin status shows the code).',
   },
   bindWord: { 'zh-CN': '绑定', en: 'bind' },
+  // #1250 owner-hints-dead-end-sandbox-only: only simulation adapters (the Sandbox) are loaded, where
+  // bind and claim codes are refused. The same path as `zhin status` and the Console home page.
+  globalOwnerGrantSimulation: {
+    'zh-CN': '当前只装了模拟适配器（Sandbox），绑定与认领在这里都不被接受：在 Console 的 Sandbox 打开「以我的聊天身份发言」并发一条消息（会为你的 Console 账号建立 console-<用户 id> 身份），再到 Console「聊天角色」页把全局 owner 授予这个身份。',
+    en: 'Only simulation adapters (the Sandbox) are loaded, where bind and claim codes are refused: turn on "Speak as my chat identity" in the Console Sandbox and send a message (it creates the identity console-<user id> for your Console account), then grant that identity global owner on the Console "Chat roles" page.',
+  },
   deniedConversationManager: {
     'zh-CN': '群聊和频道里需要本会话的 zhin 聊天角色 admin（或 owner）；私聊中可以直接管理本会话。请联系本机器人的主人授予，或由主人在 Console「聊天角色」页授予。',
     en: 'In a group or channel this needs the zhin chat role admin (or owner) of this conversation; in a private chat you manage your own conversation. Ask the owner of this bot to grant one, in chat or on the Console "Chat roles" page.',

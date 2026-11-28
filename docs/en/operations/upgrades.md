@@ -10,11 +10,14 @@ An upgrade changes dependencies, Feature APIs, configuration, durable data and t
 A routine patch upgrade usually needs only:
 
 ```bash
+pnpm add @zhin.js/cli@latest # upgrade the CLI first: migration rules ship with it
 npx zhin migrate --dry-run   # see what would change
 npx zhin migrate             # upgrade
 npx zhin doctor && pnpm test # check
 npx zhin start --once --mode test  # assembly smoke test
 ```
+
+`npx zhin migrate` runs the CLI **installed in the project**, and the migration rules ship with the CLI: an older CLI rewrites the project by its older rules (1.9.x, for example, adds a `daemon` script and writes pinned `minimumReleaseAgeExclude` entries even where no `minimumReleaseAge` is set). So upgrade the CLI first, then run migrate. To leave the project untouched until then, run the latest CLI directly: `npx @zhin.js/cli@latest migrate` (or `pnpm dlx @zhin.js/cli@latest migrate`). Before changing anything, migrate now compares the running CLI with the registry's latest `@zhin.js/cli`: when it is behind, `--dry-run` only warns and a real run stops with those two options; add `--allow-outdated-cli` to migrate with the current CLI anyway. Migrate also cleans up what older releases added, listing it in `--dry-run`: a `scripts.daemon` whose value is exactly what the old CLI wrote (a changed one stays), and the Zhin `name@version` exclusions in a project that no `minimumReleaseAge` gate applies to (other entries stay).
 
 For production, follow the full flow below and take a backup first. Stop the Bot before upgrading so dependency directories are not replaced under a running process.
 
@@ -154,7 +157,7 @@ Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key 
 
 ## Execute
 
-1. Run `zhin migrate --dry-run` on a copy or staging environment.
+1. On a copy or staging environment, upgrade the CLI first (`pnpm add @zhin.js/cli@latest`, or use `npx @zhin.js/cli@latest migrate` from here on), then run `zhin migrate --dry-run`.
 2. Enter a maintenance window and stop the Bot and any ingress that creates new side effects (before upgrading dependencies).
 3. Run `zhin migrate` and review package, script, and directory changes.
 4. Run doctor, type checks, tests, and `zhin start --once --mode test`.

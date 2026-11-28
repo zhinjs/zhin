@@ -39,6 +39,15 @@ export const LEGACY_PROJECT_SCRIPTS: Readonly<Record<string, readonly string[]>>
   build: Object.freeze(['zhin build']),
 });
 
+/**
+ * Scripts older CLIs added that the scaffold no longer has (#1250 migrate-runs-installed-old-cli):
+ * `zhin migrate` 1.9.x wrote `daemon`. Removed only while the value is exactly what that CLI wrote
+ * (whitespace aside); a script the user changed is theirs and stays.
+ */
+export const REMOVED_PROJECT_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  daemon: Object.freeze(['zhin start --mode production --no-watch']),
+});
+
 function normalizeScript(script: string): string {
   return script.trim().replace(/\s+/gu, ' ');
 }

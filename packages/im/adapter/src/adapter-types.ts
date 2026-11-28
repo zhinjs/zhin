@@ -285,6 +285,26 @@ export function declaresLocalSimulation(profile: AdapterCapabilityProfile | unde
   return !!profile && resolveStaticCapabilities(profile, []).runtime?.sandbox === true;
 }
 
+/**
+ * #1250 owner-hints-dead-end-sandbox-only: whether every Endpoint an Adapter index describes is a
+ * local simulation ({@link declaresLocalSimulation}) and there is at least one — a project where
+ * only the Sandbox talks to the bot, so bind and claim codes (sent from a real platform) never work.
+ * Read from capability profiles, never from adapter names. Fails closed: an unreadable index or
+ * profile counts as not simulation-only.
+ */
+export function isSimulationOnlyAdapterIndex(index: {
+  describe(): readonly { readonly id: CapabilityId | string }[];
+  capabilityProfile(id: CapabilityId): AdapterCapabilityProfile | undefined;
+} | undefined): boolean {
+  if (!index) return false;
+  try {
+    const rows = index.describe();
+    return rows.length > 0 && rows.every(row => declaresLocalSimulation(index.capabilityProfile(row.id as CapabilityId)));
+  } catch {
+    return false;
+  }
+}
+
 /** Whether the owning plugin's package is one of {@link TRUSTED_SIMULATION_ADAPTER_PACKAGES}. */
 export function isTrustedSimulationAdapterPackage(packageName: string | undefined): boolean {
   return typeof packageName === 'string' && TRUSTED_SIMULATION_ADAPTER_PACKAGES.includes(packageName);
